@@ -1,0 +1,15 @@
+[Unit]
+Description=ErsatzTV YML Syncer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/ersatztv-yml-syncer-0.0.1
+ExecStart=/usr/bin/node src/main.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

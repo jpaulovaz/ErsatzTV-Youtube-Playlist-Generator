@@ -1,0 +1,25 @@
+{
+  "name": "ersatztv-yml-syncer",
+  "version": "0.0.1",
+  "description": "Gerador e sincronizador de arquivos YML para ErsatzTV usando playlists do YouTube.",
+  "main": "src/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/main.js",
+    "sync": "node src/cli-sync.js",
+    "check": "node --check src/main.js && node --check src/server.js && node --check src/syncService.js && node --check src/config.js && node --check src/logger.js && node --check src/scheduler.js && node --check src/utils.js && node --check src/cli-sync.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "ersatztv",
+    "youtube",
+    "yt-dlp",
+    "playlist",
+    "scheduler",
+    "yml"
+  ],
+  "author": "",
+  "license": "MIT"
+}

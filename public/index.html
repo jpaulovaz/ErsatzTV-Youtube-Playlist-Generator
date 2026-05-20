@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ErsatzTV YML Syncer 0.0.1</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>ErsatzTV YML Syncer</h1>
+      <p>Versao 0.0.1 - conversao do script Python para Node.js com interface e agendador.</p>
+    </div>
+    <div class="status-pill" id="runningPill">Carregando...</div>
+  </header>
+
+  <main class="layout">
+    <section class="card status-card">
+      <div class="card-header">
+        <h2>Status</h2>
+        <button id="runNowBtn" class="primary">Executar agora</button>
+      </div>
+      <div class="grid metrics">
+        <div>
+          <span>Estado</span>
+          <strong id="syncState">-</strong>
+        </div>
+        <div>
+          <span>Etapa atual</span>
+          <strong id="syncStep">-</strong>
+        </div>
+        <div>
+          <span>Ultima execucao</span>
+          <strong id="lastRun">-</strong>
+        </div>
+        <div>
+          <span>Proxima execucao</span>
+          <strong id="nextRun">-</strong>
+        </div>
+      </div>
+      <pre id="lastSummary" class="summary"></pre>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>Configuracao</h2>
+        <button id="saveBtn" class="primary">Salvar configuracao</button>
+      </div>
+
+      <form id="configForm">
+        <h3>Servidor da interface</h3>
+        <div class="form-grid two">
+          <label>Host
+            <input name="server.host" type="text" placeholder="0.0.0.0">
+          </label>
+          <label>Porta
+            <input name="server.port" type="number" min="1" max="65535">
+          </label>
+        </div>
+
+        <h3>Caminhos</h3>
+        <div class="form-grid">
+          <label>Diretorio base dos YML
+            <input name="paths.baseDir" type="text">
+          </label>
+          <label>Script de stream
+            <input name="paths.streamScriptPath" type="text">
+          </label>
+          <label>Caminho do yt-dlp
+            <input name="paths.ytDlpPath" type="text">
+          </label>
+        </div>
+
+        <h3>ErsatzTV</h3>
+        <div class="form-grid two">
+          <label>URL
+            <input name="ersatztv.url" type="text">
+          </label>
+          <label>Library ID
+            <input name="ersatztv.libraryId" type="number" min="1">
+          </label>
+          <label>Playout ID
+            <input name="ersatztv.playoutId" type="number" min="1">
+          </label>
+          <label>Timeout API (segundos)
+            <input name="ersatztv.apiTimeoutSeconds" type="number" min="1">
+          </label>
+          <label>Espera apos scan (segundos)
+            <input name="ersatztv.scanWaitSeconds" type="number" min="0">
+          </label>
+        </div>
+
+        <h3>Agendador</h3>
+        <div class="form-grid two">
+          <label class="check-row">
+            <input name="scheduler.enabled" type="checkbox">
+            <span>Ativar execucao periodica</span>
+          </label>
+          <label>Intervalo (minutos)
+            <input name="scheduler.intervalMinutes" type="number" min="1">
+          </label>
+          <label class="check-row">
+            <input name="scheduler.runOnStartup" type="checkbox">
+            <span>Executar ao iniciar a interface</span>
+          </label>
+        </div>
+
+        <h3>Limpeza automatica</h3>
+        <p class="warning">A limpeza replica o comportamento do script Python: pode remover pastas de playlists desativadas dentro do diretorio base. Use somente se esse diretorio for exclusivo deste app.</p>
+        <div class="form-grid two">
+          <label class="check-row">
+            <input name="cleanup.removeDisabledPlaylistFolders" type="checkbox">
+            <span>Remover pastas de playlists desativadas</span>
+          </label>
+          <label class="check-row">
+            <input name="cleanup.removeMissingVideos" type="checkbox">
+            <span>Remover YML de videos ausentes</span>
+          </label>
+          <label class="check-row">
+            <input name="cleanup.removeEmptyArtistFolders" type="checkbox">
+            <span>Remover pastas de artistas vazias</span>
+          </label>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>Playlists</h2>
+        <button id="addPlaylistBtn">Adicionar playlist</button>
+      </div>
+      <div id="playlistList" class="playlist-list"></div>
+    </section>
+
+    <section class="card logs-card">
+      <div class="card-header">
+        <h2>Logs</h2>
+        <button id="clearLogsBtn">Limpar logs</button>
+      </div>
+      <pre id="logs" class="logs"></pre>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
