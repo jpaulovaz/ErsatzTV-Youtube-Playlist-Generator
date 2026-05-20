@@ -127,8 +127,8 @@ function addPlaylistRow(playlist = { name: '', url: '', enabled: true, libraryId
       <label>Playout ID
         <input data-field="playoutId" type="number" min="1" value="">
       </label>
-      <label>Cookies desta playlist opcional
-        <input data-field="cookiesPath" type="text" placeholder="Vazio usa o cookies global">
+      <label>Caminho do cookies.txt desta playlist
+        <input data-field="cookiesPath" type="text" placeholder="Vazio usa o caminho global">
       </label>
       <label class="check-row">
         <input data-field="enabled" type="checkbox">
@@ -136,6 +136,7 @@ function addPlaylistRow(playlist = { name: '', url: '', enabled: true, libraryId
       </label>
     </div>
     <div class="playlist-actions">
+      <button type="button" class="primary" data-action="run">Executar esta biblioteca</button>
       <button type="button" data-action="cleanup">Limpar YML ausentes</button>
       <button type="button" data-action="scan">Scan biblioteca</button>
       <button type="button" data-action="empty-trash">Limpar lixo ErsatzTV</button>
@@ -152,6 +153,7 @@ function addPlaylistRow(playlist = { name: '', url: '', enabled: true, libraryId
   row.querySelector('[data-field="enabled"]').checked = playlist.enabled !== false;
 
   row.querySelector('[data-action="remove"]').addEventListener('click', () => row.remove());
+  row.querySelector('[data-action="run"]').addEventListener('click', () => runPlaylistAction(row, 'run'));
   row.querySelector('[data-action="cleanup"]').addEventListener('click', () => runPlaylistAction(row, 'cleanup'));
   row.querySelector('[data-action="scan"]').addEventListener('click', () => runPlaylistAction(row, 'scan'));
   row.querySelector('[data-action="empty-trash"]').addEventListener('click', () => runPlaylistAction(row, 'empty-trash'));
@@ -182,7 +184,11 @@ async function runPlaylistAction(row, action) {
   }
 
   const payload = await api(`/api/playlists/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
-  showToast(payload.result && payload.result.ok === false ? 'Acao enviada, mas a API retornou falha. Veja os logs.' : 'Acao executada. Veja os logs.');
+  if (action === 'run') {
+    showToast(payload.message || 'Sincronizacao da playlist iniciada. Acompanhe pelos logs.');
+  } else {
+    showToast(payload.result && payload.result.ok === false ? 'Acao enviada, mas a API retornou falha. Veja os logs.' : 'Acao executada. Veja os logs.');
+  }
   await refreshAll();
 }
 

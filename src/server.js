@@ -3,7 +3,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const { URL } = require('url');
 const { ROOT_DIR, loadConfig, saveConfig } = require('./config');
-const { runSync, manualCleanupPlaylist, runPlaylistApiAction, getState } = require('./syncService');
+const { runSync, manualCleanupPlaylist, runPlaylistApiAction, findPlaylist, getState } = require('./syncService');
 const scheduler = require('./scheduler');
 const logger = require('./logger');
 
@@ -98,6 +98,31 @@ async function handlePlaylistAction(req, res, url) {
   }
 
   const config = await loadConfig();
+
+  if (action === 'run') {
+    const currentState = getState();
+    if (currentState.running) {
+      sendJson(res, 409, { ok: false, error: 'Ja existe uma operacao em execucao.' });
+      return true;
+    }
+
+    const playlist = findPlaylist(config, playlistName);
+    if (!playlist) {
+      sendJson(res, 404, { ok: false, error: 'Playlist nao encontrada na configuracao.' });
+      return true;
+    }
+
+    runSync(config, { trigger: 'manual-playlist', playlistName }).catch((error) => {
+      logger.error(`Execucao manual da playlist falhou: ${error.message}`);
+    });
+
+    sendJson(res, 202, {
+      ok: true,
+      message: `Sincronizacao iniciada para ${playlist.folderName}.`
+    });
+    return true;
+  }
+
   let result;
 
   if (action === 'cleanup') {

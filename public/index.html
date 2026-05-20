@@ -3,16 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ErsatzTV YML Syncer 0.0.2</title>
+  <title>ErsatzTV YML Syncer 0.0.3</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <h1>ErsatzTV YML Syncer</h1>
-      <p>Versao 0.0.2 - geracao de YML, script de stream por playlist, interface e agendador.</p>
+    <div class="topbar-inner">
+      <div>
+        <h1>ErsatzTV YML Syncer</h1>
+        <p>Versao 0.0.3 - geracao de YML, script de stream por playlist, interface e agendador.</p>
+      </div>
+      <div class="status-pill" id="runningPill">Carregando...</div>
     </div>
-    <div class="status-pill" id="runningPill">Carregando...</div>
   </header>
 
   <main class="layout">
@@ -68,11 +70,12 @@
             <input name="paths.ytDlpPath" type="text">
           </label>
           <label>Arquivo cookies.txt global opcional
-            <input name="paths.cookiesPath" type="text" placeholder="Deixe vazio para nao usar cookies">
+            <input name="paths.cookiesPath" type="text" placeholder="Ex.: /home/usuario/youtube/cookies.txt">
           </label>
           <label>Nome do script criado em cada playlist
             <input name="paths.streamScriptName" type="text" placeholder="stream-yt.sh">
           </label>
+          <p class="hint wide">Use aqui o caminho de um arquivo cookies.txt em formato Netscape. Nao cole o conteudo bruto dos cookies neste campo.</p>
           <label class="wide">User-Agent usado pelo yt-dlp
             <textarea name="stream.userAgent" rows="2"></textarea>
           </label>
@@ -125,7 +128,7 @@
       <div class="card-header">
         <div>
           <h2>Playlists / Bibliotecas</h2>
-          <p>Cada playlist pode apontar para uma Library ID e um Playout ID diferentes no ErsatzTV.</p>
+          <p>Cada playlist pode apontar para uma Library ID e um Playout ID diferentes no ErsatzTV e pode ser executada separadamente.</p>
         </div>
         <button id="addPlaylistBtn">Adicionar playlist</button>
       </div>

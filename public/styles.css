@@ -15,6 +15,12 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -24,17 +30,22 @@ body {
 }
 
 .topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 24px 32px;
   border-bottom: 1px solid var(--line);
   background: rgba(15, 23, 42, 0.92);
   position: sticky;
   top: 0;
   z-index: 5;
   backdrop-filter: blur(10px);
+}
+
+.topbar-inner {
+  width: min(100% - 32px, 1240px);
+  margin: 0 auto;
+  padding: 24px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
 }
 
 h1,
@@ -66,14 +77,15 @@ p {
 }
 
 .layout {
-  max-width: 1240px;
+  width: min(100% - 32px, 1240px);
   margin: 0 auto;
-  padding: 28px;
+  padding: 28px 0;
   display: grid;
   gap: 22px;
 }
 
 .card {
+  min-width: 0;
   background: rgba(17, 24, 39, 0.88);
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -108,6 +120,7 @@ p {
 }
 
 .metrics div {
+  min-width: 0;
   padding: 16px;
   background: var(--panel-soft);
   border-radius: 14px;
@@ -128,6 +141,7 @@ p {
 }
 
 label {
+  min-width: 0;
   display: grid;
   gap: 7px;
   color: #cbd5e1;
@@ -144,6 +158,7 @@ button {
 
 input,
 textarea {
+  min-width: 0;
   width: 100%;
   color: var(--text);
   background: #020617;
@@ -163,6 +178,7 @@ textarea:focus {
 }
 
 input[type="checkbox"] {
+  flex: 0 0 auto;
   width: 18px;
   height: 18px;
   accent-color: var(--accent-strong);
@@ -201,6 +217,7 @@ button.danger {
 }
 
 .status-pill {
+  flex: 0 0 auto;
   white-space: nowrap;
   padding: 9px 13px;
   border-radius: 999px;
@@ -249,6 +266,7 @@ button.danger {
 }
 
 .playlist-row {
+  min-width: 0;
   display: grid;
   gap: 14px;
   background: #020617;
@@ -259,9 +277,30 @@ button.danger {
 
 .playlist-fields {
   display: grid;
-  grid-template-columns: 1.1fr 2fr 0.55fr 0.55fr 1.3fr auto;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 12px;
   align-items: end;
+}
+
+.playlist-fields label:nth-child(1) {
+  grid-column: span 3;
+}
+
+.playlist-fields label:nth-child(2) {
+  grid-column: span 5;
+}
+
+.playlist-fields label:nth-child(3),
+.playlist-fields label:nth-child(4) {
+  grid-column: span 2;
+}
+
+.playlist-fields label:nth-child(5) {
+  grid-column: span 9;
+}
+
+.playlist-fields label:nth-child(6) {
+  grid-column: span 3;
 }
 
 .playlist-actions {
@@ -270,13 +309,23 @@ button.danger {
   gap: 10px;
 }
 
+.hint,
 .warning {
   padding: 12px 14px;
-  border: 1px solid rgba(249, 115, 22, 0.5);
   border-radius: 12px;
+  font-size: 13px;
+}
+
+.hint {
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.08);
+  color: #bae6fd;
+}
+
+.warning {
+  border: 1px solid rgba(249, 115, 22, 0.5);
   background: rgba(249, 115, 22, 0.12);
   color: #fed7aa;
-  font-size: 13px;
   margin-bottom: 12px;
 }
 
@@ -289,7 +338,7 @@ button.danger {
   border: 1px solid var(--accent);
   border-radius: 12px;
   padding: 12px 14px;
-  max-width: 420px;
+  max-width: min(420px, calc(100vw - 48px));
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
 
@@ -298,7 +347,7 @@ button.danger {
 }
 
 @media (max-width: 980px) {
-  .topbar,
+  .topbar-inner,
   .card-header {
     align-items: flex-start;
     flex-direction: column;
@@ -310,11 +359,26 @@ button.danger {
     grid-template-columns: 1fr;
   }
 
-  .wide {
+  .playlist-fields label:nth-child(n) {
     grid-column: auto;
   }
 
+  .wide {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .topbar-inner,
   .layout {
+    width: min(100% - 20px, 1240px);
+  }
+
+  .card {
     padding: 16px;
+  }
+
+  .playlist-actions button {
+    width: 100%;
   }
 }

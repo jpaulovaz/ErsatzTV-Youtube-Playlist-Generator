@@ -325,8 +325,47 @@ async function scanPlaylistLibrary(config, playlist) {
   return result;
 }
 
+function getCountSnapshot(summary) {
+  return {
+    videosSkipped: summary.videosSkipped,
+    filesCreated: summary.filesCreated,
+    filesUpdated: summary.filesUpdated,
+    filesMoved: summary.filesMoved,
+    filesUnchanged: summary.filesUnchanged
+  };
+}
+
+function getCountDelta(summary, before) {
+  return {
+    videosSkipped: summary.videosSkipped - before.videosSkipped,
+    filesCreated: summary.filesCreated - before.filesCreated,
+    filesUpdated: summary.filesUpdated - before.filesUpdated,
+    filesMoved: summary.filesMoved - before.filesMoved,
+    filesUnchanged: summary.filesUnchanged - before.filesUnchanged
+  };
+}
+
 async function processPlaylist(config, playlist, summary) {
   const playlistDir = getPlaylistDir(config, playlist);
+  const playlistSummary = {
+    name: playlist.folderName,
+    sourceName: playlist.name,
+    enabled: playlist.enabled !== false,
+    libraryId: playlist.libraryId || null,
+    playoutId: playlist.playoutId || null,
+    videosFound: 0,
+    videosSkipped: 0,
+    filesCreated: 0,
+    filesUpdated: 0,
+    filesMoved: 0,
+    filesUnchanged: 0,
+    scanRequested: false,
+    scanSkippedReason: null,
+    scan: null,
+    failed: false,
+    error: null
+  };
+
   await fs.mkdir(playlistDir, { recursive: true });
   await ensurePlaylistStreamScript(config, playlist);
 
@@ -337,23 +376,73 @@ async function processPlaylist(config, playlist, summary) {
     videos = await fetchPlaylistVideos(config, playlist);
   } catch (error) {
     summary.playlistsFailed += 1;
+    playlistSummary.failed = true;
+    playlistSummary.error = error.message;
+    summary.playlists.push(playlistSummary);
     await logger.error(`${error.message} Nenhum arquivo sera removido automaticamente.`);
-    return;
+    return playlistSummary;
   }
 
   const existingIndex = await readExistingYmlIndex(playlistDir);
   summary.videosFound += videos.length;
+  playlistSummary.videosFound = videos.length;
+
+  const before = getCountSnapshot(summary);
 
   for (const video of videos) {
     await writeVideoYml(config, playlist, playlistDir, existingIndex, video, summary);
   }
 
-  const scan = await scanPlaylistLibrary(config, playlist);
-  summary.api.scans.push({ playlist: playlist.folderName, libraryId: playlist.libraryId || null, ...scan });
+  Object.assign(playlistSummary, getCountDelta(summary, before));
+
+  const hasNewOrMovedYml = playlistSummary.filesCreated > 0 || playlistSummary.filesMoved > 0;
+  if (hasNewOrMovedYml) {
+    const scan = await scanPlaylistLibrary(config, playlist);
+    playlistSummary.scanRequested = true;
+    playlistSummary.scan = scan;
+    summary.api.scans.push({ playlist: playlist.folderName, libraryId: playlist.libraryId || null, ...scan });
+  } else {
+    const reason = 'Nenhum YML novo ou movido nesta rodada.';
+    playlistSummary.scanSkippedReason = reason;
+    summary.api.scansSkipped.push({ playlist: playlist.folderName, libraryId: playlist.libraryId || null, reason });
+    await logger.info(`Scan automatico ignorado para ${playlist.folderName}: ${reason}`);
+  }
+
   summary.playlistsProcessed += 1;
+  summary.playlists.push(playlistSummary);
+  return playlistSummary;
+}
+
+function createRunSummary(options) {
+  return {
+    startedAt: state.startedAt,
+    finishedAt: null,
+    trigger: options.trigger || 'manual',
+    targetPlaylist: options.playlistName ? sanitizeName(decodeURIComponent(String(options.playlistName))) : null,
+    playlistsProcessed: 0,
+    playlistsFailed: 0,
+    videosFound: 0,
+    videosSkipped: 0,
+    filesCreated: 0,
+    filesUpdated: 0,
+    filesMoved: 0,
+    filesUnchanged: 0,
+    playlists: [],
+    api: {
+      scans: [],
+      scansSkipped: []
+    }
+  };
 }
 
 async function runSync(config, options = {}) {
+  const targetPlaylist = options.playlistName ? findPlaylist(config, options.playlistName) : null;
+  if (options.playlistName && !targetPlaylist) {
+    const error = new Error('Playlist nao encontrada na configuracao.');
+    error.statusCode = 404;
+    throw error;
+  }
+
   if (state.running) {
     const error = new Error('Sincronizacao ja esta em execucao.');
     error.code = 'SYNC_ALREADY_RUNNING';
@@ -366,33 +455,19 @@ async function runSync(config, options = {}) {
   state.finishedAt = null;
   state.lastError = null;
 
-  const summary = {
-    startedAt: state.startedAt,
-    finishedAt: null,
-    trigger: options.trigger || 'manual',
-    playlistsProcessed: 0,
-    playlistsFailed: 0,
-    videosFound: 0,
-    videosSkipped: 0,
-    filesCreated: 0,
-    filesUpdated: 0,
-    filesMoved: 0,
-    filesUnchanged: 0,
-    api: {
-      scans: []
-    }
-  };
+  const summary = createRunSummary(options);
 
   try {
-    await logger.info(`Sincronizacao iniciada (${summary.trigger}).`);
+    const scope = targetPlaylist ? ` para ${targetPlaylist.folderName}` : '';
+    await logger.info(`Sincronizacao iniciada (${summary.trigger})${scope}.`);
 
     state.currentStep = 'prepare-base-dir';
     await fs.mkdir(config.paths.baseDir, { recursive: true });
 
-    const activePlaylists = getPlaylistsWithFolders(config);
+    const playlistsToProcess = targetPlaylist ? [targetPlaylist] : getPlaylistsWithFolders(config);
 
-    state.currentStep = 'process-playlists';
-    for (const playlist of activePlaylists) {
+    for (const playlist of playlistsToProcess) {
+      state.currentStep = `process-playlist:${playlist.folderName}`;
       await processPlaylist(config, playlist, summary);
     }
 
@@ -559,5 +634,6 @@ module.exports = {
   runSync,
   manualCleanupPlaylist,
   runPlaylistApiAction,
+  findPlaylist,
   getState
 };
