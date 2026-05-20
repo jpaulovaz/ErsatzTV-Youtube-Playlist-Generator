@@ -26,11 +26,17 @@ function secondsToDuration(seconds) {
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const secs = Math.floor(total % 60);
-  return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 function yamlDoubleQuoted(value) {
   return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function shellCommandQuote(value) {
+  const text = String(value || '');
+  if (/^[A-Za-z0-9_/:.,@%+=-]+$/.test(text)) return text;
+  return `'${text.replace(/'/g, `'\\''`)}'`;
 }
 
 async function pathExists(targetPath) {
@@ -82,19 +88,20 @@ async function removeEmptyDirectories(targetPath, stopAtPath, logger) {
   const normalizedStop = path.resolve(stopAtPath);
   const normalizedTarget = path.resolve(targetPath);
 
-  if (normalizedTarget === normalizedStop) return;
+  if (normalizedTarget === normalizedStop) return 0;
 
+  let removed = 0;
   let entries = [];
   try {
     entries = await fs.readdir(normalizedTarget, { withFileTypes: true });
   } catch (error) {
-    if (error.code === 'ENOENT') return;
+    if (error.code === 'ENOENT') return 0;
     throw error;
   }
 
   for (const entry of entries) {
     if (entry.isDirectory()) {
-      await removeEmptyDirectories(path.join(normalizedTarget, entry.name), normalizedStop, logger);
+      removed += await removeEmptyDirectories(path.join(normalizedTarget, entry.name), normalizedStop, logger);
     }
   }
 
@@ -102,11 +109,14 @@ async function removeEmptyDirectories(targetPath, stopAtPath, logger) {
     const after = await fs.readdir(normalizedTarget);
     if (after.length === 0 && normalizedTarget !== normalizedStop) {
       await fs.rmdir(normalizedTarget);
+      removed += 1;
       if (logger) await logger.info(`GC Pasta Artista: Removido ${normalizedTarget}`);
     }
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
   }
+
+  return removed;
 }
 
 function isDangerousBaseDir(baseDir) {
@@ -127,6 +137,7 @@ module.exports = {
   extractArtistAndTitle,
   secondsToDuration,
   yamlDoubleQuoted,
+  shellCommandQuote,
   pathExists,
   listDirectories,
   walkFiles,

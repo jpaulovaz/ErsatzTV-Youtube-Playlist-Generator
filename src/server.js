@@ -3,7 +3,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const { URL } = require('url');
 const { ROOT_DIR, loadConfig, saveConfig } = require('./config');
-const { runSync, getState } = require('./syncService');
+const { runSync, manualCleanupPlaylist, runPlaylistApiAction, getState } = require('./syncService');
 const scheduler = require('./scheduler');
 const logger = require('./logger');
 
@@ -88,7 +88,34 @@ async function serveStatic(req, res, pathname) {
   }
 }
 
+async function handlePlaylistAction(req, res, url) {
+  const parts = url.pathname.split('/').filter(Boolean);
+  const playlistName = parts[2];
+  const action = parts[3];
+
+  if (req.method !== 'POST' || parts.length !== 4 || parts[0] !== 'api' || parts[1] !== 'playlists') {
+    return false;
+  }
+
+  const config = await loadConfig();
+  let result;
+
+  if (action === 'cleanup') {
+    result = await manualCleanupPlaylist(config, playlistName);
+  } else {
+    result = await runPlaylistApiAction(config, playlistName, action);
+  }
+
+  sendJson(res, 202, { ok: true, result });
+  return true;
+}
+
 async function handleApi(req, res, url) {
+  if (url.pathname.startsWith('/api/playlists/')) {
+    const handled = await handlePlaylistAction(req, res, url);
+    if (handled) return;
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/config') {
     const config = await loadConfig();
     sendJson(res, 200, config);
@@ -107,7 +134,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/run') {
     const state = getState();
     if (state.running) {
-      sendJson(res, 409, { ok: false, error: 'Sincronizacao ja esta em execucao.' });
+      sendJson(res, 409, { ok: false, error: 'Ja existe uma operacao em execucao.' });
       return;
     }
 
@@ -163,7 +190,7 @@ function createServer() {
     } catch (error) {
       await logger.error(`Erro no servidor: ${error.message}`);
       if (!res.headersSent) {
-        sendJson(res, 500, { ok: false, error: error.message });
+        sendJson(res, error.statusCode || 500, { ok: false, error: error.message });
       } else {
         res.end();
       }

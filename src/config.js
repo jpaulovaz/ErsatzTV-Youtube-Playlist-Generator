@@ -5,6 +5,9 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const CONFIG_DIR = path.join(ROOT_DIR, 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 
+const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const DEFAULT_STREAM_FORMAT = 'best[height<=720][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]';
+
 const DEFAULT_CONFIG = {
   server: {
     host: '0.0.0.0',
@@ -12,21 +15,27 @@ const DEFAULT_CONFIG = {
   },
   paths: {
     baseDir: '/home/joaopaulovaz/comerciais/videclipes/youtube/youtube',
-    streamScriptPath: '/home/joaopaulovaz/comerciais/videclipes/youtube/stream-yt.sh',
-    ytDlpPath: '/usr/local/bin/yt-dlp'
+    ytDlpPath: '/usr/local/bin/yt-dlp',
+    cookiesPath: '/home/joaopaulovaz/comerciais/videclipes/youtube/cookies.txt',
+    streamScriptName: 'stream-yt.sh'
+  },
+  stream: {
+    userAgent: DEFAULT_USER_AGENT,
+    format: DEFAULT_STREAM_FORMAT,
+    useHlsMpegTs: true
   },
   ersatztv: {
     url: 'http://localhost:8409',
-    libraryId: 27,
-    playoutId: 33,
-    apiTimeoutSeconds: 10,
-    scanWaitSeconds: 30
+    apiTimeoutSeconds: 10
   },
   playlists: [
     {
       name: 'Mix_Principal',
       url: 'https://www.youtube.com/watch?v=u2ah9tWTkmk&list=PLHg022HMFzFCRq-5ZVR3hiiCkGPJ3Ur1D',
-      enabled: true
+      enabled: true,
+      libraryId: 27,
+      playoutId: 33,
+      cookiesPath: ''
     }
   ],
   scheduler: {
@@ -35,8 +44,6 @@ const DEFAULT_CONFIG = {
     runOnStartup: false
   },
   cleanup: {
-    removeDisabledPlaylistFolders: true,
-    removeMissingVideos: true,
     removeEmptyArtistFolders: true
   }
 };
@@ -67,15 +74,48 @@ function deepMerge(base, override) {
   return result;
 }
 
+function toOptionalPositiveNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return null;
+  return Math.floor(number);
+}
+
 function normalizeConfig(raw) {
-  const config = deepMerge(DEFAULT_CONFIG, raw || {});
+  const rawConfig = raw && typeof raw === 'object' ? raw : {};
+  const config = deepMerge(DEFAULT_CONFIG, rawConfig);
+
+  const legacyLibraryId = toOptionalPositiveNumber(rawConfig.ersatztv && rawConfig.ersatztv.libraryId);
+  const legacyPlayoutId = toOptionalPositiveNumber(rawConfig.ersatztv && rawConfig.ersatztv.playoutId);
+  const legacyStreamScriptPath = rawConfig.paths && rawConfig.paths.streamScriptPath;
 
   config.server.port = Number(config.server.port) || DEFAULT_CONFIG.server.port;
-  config.ersatztv.libraryId = Number(config.ersatztv.libraryId) || DEFAULT_CONFIG.ersatztv.libraryId;
-  config.ersatztv.playoutId = Number(config.ersatztv.playoutId) || DEFAULT_CONFIG.ersatztv.playoutId;
+  config.paths.baseDir = String(config.paths.baseDir || DEFAULT_CONFIG.paths.baseDir).trim();
+  config.paths.ytDlpPath = String(config.paths.ytDlpPath || DEFAULT_CONFIG.paths.ytDlpPath).trim();
+  config.paths.cookiesPath = String(config.paths.cookiesPath || '').trim();
+  config.paths.streamScriptName = String(config.paths.streamScriptName || DEFAULT_CONFIG.paths.streamScriptName)
+    .replace(/[\\/]/g, '')
+    .trim() || DEFAULT_CONFIG.paths.streamScriptName;
+
+  if (!config.paths.cookiesPath && legacyStreamScriptPath) {
+    config.paths.cookiesPath = DEFAULT_CONFIG.paths.cookiesPath;
+  }
+
+  config.stream = config.stream && typeof config.stream === 'object' ? config.stream : clone(DEFAULT_CONFIG.stream);
+  config.stream.userAgent = String(config.stream.userAgent || DEFAULT_USER_AGENT).trim();
+  config.stream.format = String(config.stream.format || DEFAULT_STREAM_FORMAT).trim();
+  config.stream.useHlsMpegTs = config.stream.useHlsMpegTs !== false;
+
+  config.ersatztv = config.ersatztv && typeof config.ersatztv === 'object' ? config.ersatztv : clone(DEFAULT_CONFIG.ersatztv);
+  config.ersatztv.url = String(config.ersatztv.url || DEFAULT_CONFIG.ersatztv.url).trim().replace(/\/+$/, '');
   config.ersatztv.apiTimeoutSeconds = Math.max(1, Number(config.ersatztv.apiTimeoutSeconds) || 10);
-  config.ersatztv.scanWaitSeconds = Math.max(0, Number(config.ersatztv.scanWaitSeconds) || 0);
+  delete config.ersatztv.libraryId;
+  delete config.ersatztv.playoutId;
+  delete config.ersatztv.scanWaitSeconds;
+
   config.scheduler.intervalMinutes = Math.max(1, Number(config.scheduler.intervalMinutes) || 60);
+  config.scheduler.enabled = Boolean(config.scheduler.enabled);
+  config.scheduler.runOnStartup = Boolean(config.scheduler.runOnStartup);
 
   if (!Array.isArray(config.playlists)) {
     config.playlists = [];
@@ -85,9 +125,17 @@ function normalizeConfig(raw) {
     .map((playlist) => ({
       name: String(playlist.name || '').trim(),
       url: String(playlist.url || '').trim(),
-      enabled: playlist.enabled !== false
+      enabled: playlist.enabled !== false,
+      libraryId: toOptionalPositiveNumber(playlist.libraryId) || legacyLibraryId,
+      playoutId: toOptionalPositiveNumber(playlist.playoutId) || legacyPlayoutId,
+      cookiesPath: String(playlist.cookiesPath || '').trim()
     }))
     .filter((playlist) => playlist.name && playlist.url);
+
+  config.cleanup = config.cleanup && typeof config.cleanup === 'object' ? config.cleanup : {};
+  config.cleanup.removeEmptyArtistFolders = config.cleanup.removeEmptyArtistFolders !== false;
+  delete config.cleanup.removeDisabledPlaylistFolders;
+  delete config.cleanup.removeMissingVideos;
 
   return config;
 }
@@ -119,6 +167,8 @@ module.exports = {
   ROOT_DIR,
   CONFIG_PATH,
   DEFAULT_CONFIG,
+  DEFAULT_USER_AGENT,
+  DEFAULT_STREAM_FORMAT,
   loadConfig,
   saveConfig,
   normalizeConfig

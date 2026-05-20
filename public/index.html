@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ErsatzTV YML Syncer 0.0.1</title>
+  <title>ErsatzTV YML Syncer 0.0.2</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <header class="topbar">
     <div>
       <h1>ErsatzTV YML Syncer</h1>
-      <p>Versao 0.0.1 - conversao do script Python para Node.js com interface e agendador.</p>
+      <p>Versao 0.0.2 - geracao de YML, script de stream por playlist, interface e agendador.</p>
     </div>
     <div class="status-pill" id="runningPill">Carregando...</div>
   </header>
@@ -59,16 +59,29 @@
           </label>
         </div>
 
-        <h3>Caminhos</h3>
-        <div class="form-grid">
+        <h3>Caminhos e stream</h3>
+        <div class="form-grid two">
           <label>Diretorio base dos YML
             <input name="paths.baseDir" type="text">
           </label>
-          <label>Script de stream
-            <input name="paths.streamScriptPath" type="text">
-          </label>
           <label>Caminho do yt-dlp
             <input name="paths.ytDlpPath" type="text">
+          </label>
+          <label>Arquivo cookies.txt global opcional
+            <input name="paths.cookiesPath" type="text" placeholder="Deixe vazio para nao usar cookies">
+          </label>
+          <label>Nome do script criado em cada playlist
+            <input name="paths.streamScriptName" type="text" placeholder="stream-yt.sh">
+          </label>
+          <label class="wide">User-Agent usado pelo yt-dlp
+            <textarea name="stream.userAgent" rows="2"></textarea>
+          </label>
+          <label class="wide">Formato yt-dlp do stream
+            <textarea name="stream.format" rows="2"></textarea>
+          </label>
+          <label class="check-row">
+            <input name="stream.useHlsMpegTs" type="checkbox">
+            <span>Usar --hls-use-mpegts no script de stream</span>
           </label>
         </div>
 
@@ -77,17 +90,8 @@
           <label>URL
             <input name="ersatztv.url" type="text">
           </label>
-          <label>Library ID
-            <input name="ersatztv.libraryId" type="number" min="1">
-          </label>
-          <label>Playout ID
-            <input name="ersatztv.playoutId" type="number" min="1">
-          </label>
           <label>Timeout API (segundos)
             <input name="ersatztv.apiTimeoutSeconds" type="number" min="1">
-          </label>
-          <label>Espera apos scan (segundos)
-            <input name="ersatztv.scanWaitSeconds" type="number" min="0">
           </label>
         </div>
 
@@ -106,20 +110,12 @@
           </label>
         </div>
 
-        <h3>Limpeza automatica</h3>
-        <p class="warning">A limpeza replica o comportamento do script Python: pode remover pastas de playlists desativadas dentro do diretorio base. Use somente se esse diretorio for exclusivo deste app.</p>
+        <h3>Limpeza manual</h3>
+        <p class="warning">A execucao agendada nao remove YML. A remocao de videos ausentes acontece somente pelo botao de limpeza de cada playlist.</p>
         <div class="form-grid two">
           <label class="check-row">
-            <input name="cleanup.removeDisabledPlaylistFolders" type="checkbox">
-            <span>Remover pastas de playlists desativadas</span>
-          </label>
-          <label class="check-row">
-            <input name="cleanup.removeMissingVideos" type="checkbox">
-            <span>Remover YML de videos ausentes</span>
-          </label>
-          <label class="check-row">
             <input name="cleanup.removeEmptyArtistFolders" type="checkbox">
-            <span>Remover pastas de artistas vazias</span>
+            <span>Remover pastas de artistas vazias apos limpeza manual</span>
           </label>
         </div>
       </form>
@@ -127,7 +123,10 @@
 
     <section class="card">
       <div class="card-header">
-        <h2>Playlists</h2>
+        <div>
+          <h2>Playlists / Bibliotecas</h2>
+          <p>Cada playlist pode apontar para uma Library ID e um Playout ID diferentes no ErsatzTV.</p>
+        </div>
         <button id="addPlaylistBtn">Adicionar playlist</button>
       </div>
       <div id="playlistList" class="playlist-list"></div>

@@ -7,10 +7,10 @@ const {
   extractArtistAndTitle,
   secondsToDuration,
   yamlDoubleQuoted,
-  listDirectories,
+  shellCommandQuote,
+  pathExists,
   walkFiles,
-  removeEmptyDirectories,
-  isDangerousBaseDir
+  removeEmptyDirectories
 } = require('./utils');
 
 const state = {
@@ -21,10 +21,6 @@ const state = {
   lastResult: null,
   lastError: null
 };
-
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -97,9 +93,11 @@ async function apiRequest(url, method = 'POST', timeoutSeconds = 10) {
   }
 }
 
-function getActivePlaylists(config) {
+function getPlaylistsWithFolders(config, options = {}) {
+  const includeDisabled = Boolean(options.includeDisabled);
+
   return (config.playlists || [])
-    .filter((playlist) => playlist.enabled !== false)
+    .filter((playlist) => includeDisabled || playlist.enabled !== false)
     .map((playlist) => ({
       ...playlist,
       folderName: sanitizeName(playlist.name)
@@ -107,78 +105,119 @@ function getActivePlaylists(config) {
     .filter((playlist) => playlist.folderName && playlist.url);
 }
 
-function buildYmlContent(config, videoId, durationSeconds) {
-  const script = `${config.paths.streamScriptPath} https://www.youtube.com/watch?v=${videoId}`;
+function getEffectiveCookiesPath(config, playlist) {
+  return String((playlist && playlist.cookiesPath) || config.paths.cookiesPath || '').trim();
+}
+
+function getPlaylistDir(config, playlist) {
+  return path.join(config.paths.baseDir, playlist.folderName);
+}
+
+function getPlaylistScriptPath(config, playlist) {
+  return path.join(getPlaylistDir(config, playlist), config.paths.streamScriptName || 'stream-yt.sh');
+}
+
+function findPlaylist(config, identifier) {
+  const decoded = decodeURIComponent(String(identifier || ''));
+  const targetFolder = sanitizeName(decoded);
+  const playlists = getPlaylistsWithFolders(config, { includeDisabled: true });
+
+  return playlists.find((playlist) => (
+    playlist.name === decoded ||
+    playlist.folderName === decoded ||
+    playlist.folderName === targetFolder
+  ));
+}
+
+function buildYtDlpCommonArgs(config, playlist) {
+  const args = [];
+  const cookiesPath = getEffectiveCookiesPath(config, playlist);
+
+  if (cookiesPath) {
+    args.push('--cookies', cookiesPath);
+  }
+
+  if (config.stream && config.stream.userAgent) {
+    args.push('--add-header', `User-Agent: ${config.stream.userAgent}`);
+  }
+
+  return args;
+}
+
+function buildStreamScriptContent(config, playlist) {
+  const cookiesPath = getEffectiveCookiesPath(config, playlist);
+  const lines = [
+    '#!/usr/bin/env bash',
+    'set -euo pipefail',
+    '',
+    'URL="${1:?URL obrigatoria}"',
+    `YT_DLP=${shellCommandQuote(config.paths.ytDlpPath)}`,
+    `USER_AGENT=${shellCommandQuote(config.stream.userAgent)}`,
+    `FORMAT=${shellCommandQuote(config.stream.format)}`
+  ];
+
+  if (cookiesPath) {
+    lines.push(`COOKIES=${shellCommandQuote(cookiesPath)}`);
+  }
+
+  lines.push('', 'exec "$YT_DLP" \\');
+
+  if (cookiesPath) {
+    lines.push('  --cookies "$COOKIES" \\');
+  }
+
+  lines.push(
+    '  --no-playlist \\',
+    '  --no-progress \\',
+    '  --quiet \\'
+  );
+
+  if (config.stream.useHlsMpegTs !== false) {
+    lines.push('  --hls-use-mpegts \\');
+  }
+
+  lines.push(
+    '  --add-header "User-Agent: ${USER_AGENT}" \\',
+    '  -f "$FORMAT" \\',
+    '  -o - \\',
+    '  "$URL"',
+    ''
+  );
+
+  return lines.join('\n');
+}
+
+async function ensurePlaylistStreamScript(config, playlist) {
+  const scriptPath = getPlaylistScriptPath(config, playlist);
+  const content = buildStreamScriptContent(config, playlist);
+
+  await fs.writeFile(scriptPath, content, 'utf8');
+  await fs.chmod(scriptPath, 0o755);
+  await logger.info(`Script de stream atualizado: ${scriptPath}`);
+
+  return scriptPath;
+}
+
+function buildYmlContent(config, playlist, videoId, durationSeconds) {
+  const scriptPath = getPlaylistScriptPath(config, playlist);
+  const command = `${shellCommandQuote(scriptPath)} https://www.youtube.com/watch?v=${videoId}`;
+
   return [
-    `script: "${yamlDoubleQuoted(script)}"`,
+    `script: "${yamlDoubleQuoted(command)}"`,
     'is_live: false',
     `duration: "${secondsToDuration(durationSeconds)}"`,
     ''
   ].join('\n');
 }
 
-async function cleanupDisabledPlaylistFolders(config, activePlaylists, summary) {
-  if (!config.cleanup.removeDisabledPlaylistFolders) return;
+async function fetchPlaylistVideos(config, playlist) {
+  const cmdArgs = [
+    ...buildYtDlpCommonArgs(config, playlist),
+    '--dump-json',
+    '--flat-playlist',
+    playlist.url
+  ];
 
-  const baseDir = config.paths.baseDir;
-
-  if (isDangerousBaseDir(baseDir)) {
-    await logger.warn(`GC Pasta desativado: baseDir inseguro para remocao automatica (${baseDir}).`);
-    return;
-  }
-
-  if (activePlaylists.length === 0) {
-    await logger.warn('GC Pasta desativado: nenhuma playlist ativa. Nada sera removido para evitar limpeza acidental.');
-    return;
-  }
-
-  const activeNames = new Set(activePlaylists.map((playlist) => playlist.folderName));
-  const existingFolders = await listDirectories(baseDir);
-
-  for (const folder of existingFolders) {
-    if (!activeNames.has(folder)) {
-      const folderPath = path.join(baseDir, folder);
-      await logger.info(`GC Pasta: Removendo playlist desativada: ${folder}`);
-      await fs.rm(folderPath, { recursive: true, force: true });
-      summary.playlistFoldersRemoved += 1;
-    }
-  }
-}
-
-async function cleanupPlaylistFiles(playlistDir, currentIds, config, summary) {
-  if (!config.cleanup.removeMissingVideos) return;
-
-  if (!currentIds || currentIds.size === 0) {
-    await logger.warn(`GC Arquivo ignorado: nenhuma ID valida obtida para ${playlistDir}.`);
-    return;
-  }
-
-  const files = await walkFiles(playlistDir);
-
-  for (const filePath of files) {
-    if (!filePath.endsWith('.yml')) continue;
-
-    const content = await fs.readFile(filePath, 'utf8');
-    const match = content.match(/watch\?v=([a-zA-Z0-9_-]+)/);
-
-    if (!match || !currentIds.has(match[1])) {
-      await fs.rm(filePath, { force: true });
-      summary.filesRemoved += 1;
-      await logger.info(`GC Arquivo: Removido ${path.basename(filePath)}`);
-    }
-  }
-
-  if (config.cleanup.removeEmptyArtistFolders) {
-    await removeEmptyDirectories(playlistDir, playlistDir, logger);
-  }
-}
-
-async function processPlaylist(config, playlist, summary) {
-  const playlistDir = path.join(config.paths.baseDir, playlist.folderName);
-  await fs.mkdir(playlistDir, { recursive: true });
-
-  await logger.info(`--- Processando: ${playlist.folderName} ---`);
-  const cmdArgs = ['--dump-json', '--flat-playlist', playlist.url];
   const result = await runCommand(config.paths.ytDlpPath, cmdArgs);
 
   if (result.stderr && result.stderr.trim()) {
@@ -186,9 +225,10 @@ async function processPlaylist(config, playlist, summary) {
   }
 
   if (result.code !== 0) {
-    summary.playlistsFailed += 1;
-    await logger.error(`yt-dlp falhou para ${playlist.folderName} com codigo ${result.code}. GC interno ignorado para proteger arquivos existentes.`);
-    return;
+    const error = new Error(`yt-dlp falhou para ${playlist.folderName} com codigo ${result.code}.`);
+    error.code = 'YTDLP_FAILED';
+    error.stderr = result.stderr;
+    throw error;
   }
 
   const { videos, errors } = parseYtDlpJsonLines(result.stdout);
@@ -197,72 +237,120 @@ async function processPlaylist(config, playlist, summary) {
   }
 
   if (videos.length === 0) {
-    summary.playlistsFailed += 1;
-    await logger.error(`Nenhum video retornado para ${playlist.folderName}. GC interno ignorado para proteger arquivos existentes.`);
+    const error = new Error(`Nenhum video retornado para ${playlist.folderName}.`);
+    error.code = 'NO_VIDEOS';
+    throw error;
+  }
+
+  return videos;
+}
+
+async function readExistingYmlIndex(playlistDir) {
+  const files = await walkFiles(playlistDir);
+  const byVideoId = new Map();
+  const ymlFiles = [];
+
+  for (const filePath of files) {
+    if (!filePath.endsWith('.yml')) continue;
+
+    ymlFiles.push(filePath);
+
+    const content = await fs.readFile(filePath, 'utf8');
+    const match = content.match(/watch\?v=([a-zA-Z0-9_-]+)/);
+    if (match && !byVideoId.has(match[1])) {
+      byVideoId.set(match[1], filePath);
+    }
+  }
+
+  return { byVideoId, ymlFiles };
+}
+
+async function writeVideoYml(config, playlist, playlistDir, existingIndex, video, summary) {
+  const videoId = video.id;
+  const rawTitle = video.title || 'Sem_Titulo';
+  const duration = Number(video.duration);
+
+  if (!videoId || !Number.isFinite(duration) || duration <= 0) {
+    summary.videosSkipped += 1;
     return;
   }
 
-  const currentIds = new Set(videos.map((video) => video.id).filter(Boolean));
+  const { artist, title } = extractArtistAndTitle(rawTitle);
+  const artistDir = path.join(playlistDir, artist);
+  await fs.mkdir(artistDir, { recursive: true });
+
+  const fileName = artist !== 'Outros' ? `${artist} - ${title}.yml` : `${title}.yml`;
+  const filePath = path.join(artistDir, fileName);
+  const existingPath = existingIndex.byVideoId.get(videoId);
+  const ymlContent = buildYmlContent(config, playlist, videoId, duration);
+
+  if (existingPath && path.resolve(existingPath) !== path.resolve(filePath)) {
+    await fs.rm(existingPath, { force: true });
+    summary.filesMoved += 1;
+    await logger.info(`YML movido/renomeado: ${path.basename(existingPath)} -> ${path.basename(filePath)}`);
+  }
+
+  const alreadyExists = await pathExists(filePath);
+  const previousContent = alreadyExists ? await fs.readFile(filePath, 'utf8') : null;
+
+  if (previousContent === ymlContent) {
+    summary.filesUnchanged += 1;
+    return;
+  }
+
+  await fs.writeFile(filePath, ymlContent, 'utf8');
+  if (alreadyExists) {
+    summary.filesUpdated += 1;
+  } else {
+    summary.filesCreated += 1;
+  }
+}
+
+async function scanPlaylistLibrary(config, playlist) {
+  if (!playlist.libraryId) {
+    await logger.warn(`Scan ignorado para ${playlist.folderName}: Library ID nao configurado.`);
+    return { ok: false, status: 0, statusText: 'Library ID nao configurado' };
+  }
+
+  const baseUrl = String(config.ersatztv.url || '').replace(/\/+$/, '');
+  const url = `${baseUrl}/api/libraries/${playlist.libraryId}/scan`;
+
+  await logger.info(`Disparando scan da biblioteca ${playlist.libraryId} (${playlist.folderName})...`);
+  const result = await apiRequest(url, 'POST', config.ersatztv.apiTimeoutSeconds);
+
+  if (!result.ok) {
+    await logger.warn(`Scan falhou para ${playlist.folderName}: HTTP ${result.status} ${result.statusText}`);
+  }
+
+  return result;
+}
+
+async function processPlaylist(config, playlist, summary) {
+  const playlistDir = getPlaylistDir(config, playlist);
+  await fs.mkdir(playlistDir, { recursive: true });
+  await ensurePlaylistStreamScript(config, playlist);
+
+  await logger.info(`--- Processando: ${playlist.folderName} ---`);
+
+  let videos;
+  try {
+    videos = await fetchPlaylistVideos(config, playlist);
+  } catch (error) {
+    summary.playlistsFailed += 1;
+    await logger.error(`${error.message} Nenhum arquivo sera removido automaticamente.`);
+    return;
+  }
+
+  const existingIndex = await readExistingYmlIndex(playlistDir);
   summary.videosFound += videos.length;
 
   for (const video of videos) {
-    const videoId = video.id;
-    const rawTitle = video.title || 'Sem_Titulo';
-    const duration = video.duration;
-
-    if (!videoId || !duration) {
-      summary.videosSkipped += 1;
-      continue;
-    }
-
-    const { artist, title } = extractArtistAndTitle(rawTitle);
-    const artistDir = path.join(playlistDir, artist);
-    await fs.mkdir(artistDir, { recursive: true });
-
-    const fileName = artist !== 'Outros' ? `${artist} - ${title}.yml` : `${title}.yml`;
-    const filePath = path.join(artistDir, fileName);
-    const ymlContent = buildYmlContent(config, videoId, Number(duration));
-
-    await fs.writeFile(filePath, ymlContent, 'utf8');
-    summary.filesWritten += 1;
+    await writeVideoYml(config, playlist, playlistDir, existingIndex, video, summary);
   }
 
-  await cleanupPlaylistFiles(playlistDir, currentIds, config, summary);
+  const scan = await scanPlaylistLibrary(config, playlist);
+  summary.api.scans.push({ playlist: playlist.folderName, libraryId: playlist.libraryId || null, ...scan });
   summary.playlistsProcessed += 1;
-}
-
-async function triggerErsatzTv(config, summary) {
-  const baseUrl = String(config.ersatztv.url || '').replace(/\/+$/, '');
-  const timeoutSeconds = config.ersatztv.apiTimeoutSeconds;
-
-  await logger.info('Disparando Scan...');
-  const scan = await apiRequest(`${baseUrl}/api/libraries/${config.ersatztv.libraryId}/scan`, 'POST', timeoutSeconds);
-  summary.api.scan = scan;
-
-  if (!scan.ok) {
-    await logger.error(`Scan falhou: HTTP ${scan.status} ${scan.statusText}`);
-    return;
-  }
-
-  const waitSeconds = Number(config.ersatztv.scanWaitSeconds) || 0;
-  if (waitSeconds > 0) {
-    await logger.info(`Esperando processamento (${waitSeconds}s)...`);
-    await wait(waitSeconds * 1000);
-  }
-
-  await logger.info('Limpando Lixo...');
-  const trash = await apiRequest(`${baseUrl}/api/libraries/${config.ersatztv.libraryId}/empty-trash`, 'POST', timeoutSeconds);
-  summary.api.emptyTrash = trash;
-  if (!trash.ok) {
-    await logger.warn(`Empty trash falhou: HTTP ${trash.status} ${trash.statusText}`);
-  }
-
-  await logger.info('Reconstruindo Playout...');
-  const rebuild = await apiRequest(`${baseUrl}/api/playout/${config.ersatztv.playoutId}/rebuild`, 'POST', timeoutSeconds);
-  summary.api.rebuild = rebuild;
-  if (!rebuild.ok) {
-    await logger.warn(`Rebuild falhou: HTTP ${rebuild.status} ${rebuild.statusText}`);
-  }
 }
 
 async function runSync(config, options = {}) {
@@ -284,15 +372,14 @@ async function runSync(config, options = {}) {
     trigger: options.trigger || 'manual',
     playlistsProcessed: 0,
     playlistsFailed: 0,
-    playlistFoldersRemoved: 0,
     videosFound: 0,
     videosSkipped: 0,
-    filesWritten: 0,
-    filesRemoved: 0,
+    filesCreated: 0,
+    filesUpdated: 0,
+    filesMoved: 0,
+    filesUnchanged: 0,
     api: {
-      scan: null,
-      emptyTrash: null,
-      rebuild: null
+      scans: []
     }
   };
 
@@ -302,18 +389,12 @@ async function runSync(config, options = {}) {
     state.currentStep = 'prepare-base-dir';
     await fs.mkdir(config.paths.baseDir, { recursive: true });
 
-    const activePlaylists = getActivePlaylists(config);
-
-    state.currentStep = 'cleanup-disabled-playlists';
-    await cleanupDisabledPlaylistFolders(config, activePlaylists, summary);
+    const activePlaylists = getPlaylistsWithFolders(config);
 
     state.currentStep = 'process-playlists';
     for (const playlist of activePlaylists) {
       await processPlaylist(config, playlist, summary);
     }
-
-    state.currentStep = 'ersatztv-api';
-    await triggerErsatzTv(config, summary);
 
     summary.finishedAt = new Date().toISOString();
     state.finishedAt = summary.finishedAt;
@@ -338,11 +419,145 @@ async function runSync(config, options = {}) {
   }
 }
 
+async function manualCleanupPlaylist(config, identifier) {
+  if (state.running) {
+    const error = new Error('Existe uma operacao em execucao. Tente novamente quando terminar.');
+    error.code = 'SYNC_ALREADY_RUNNING';
+    throw error;
+  }
+
+  const playlist = findPlaylist(config, identifier);
+  if (!playlist) {
+    const error = new Error('Playlist nao encontrada na configuracao.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  state.running = true;
+  state.currentStep = `manual-cleanup:${playlist.folderName}`;
+  state.startedAt = new Date().toISOString();
+  state.finishedAt = null;
+  state.lastError = null;
+
+  const summary = {
+    startedAt: state.startedAt,
+    finishedAt: null,
+    trigger: 'manual-cleanup',
+    playlist: playlist.folderName,
+    videosFound: 0,
+    filesChecked: 0,
+    filesRemoved: 0,
+    foldersRemoved: 0
+  };
+
+  try {
+    await logger.info(`Limpeza manual iniciada para ${playlist.folderName}.`);
+
+    const playlistDir = getPlaylistDir(config, playlist);
+    const videos = await fetchPlaylistVideos(config, playlist);
+    const currentIds = new Set(videos.map((video) => video.id).filter(Boolean));
+    const files = await walkFiles(playlistDir);
+
+    summary.videosFound = currentIds.size;
+
+    for (const filePath of files) {
+      if (!filePath.endsWith('.yml')) continue;
+      summary.filesChecked += 1;
+
+      const content = await fs.readFile(filePath, 'utf8');
+      const match = content.match(/watch\?v=([a-zA-Z0-9_-]+)/);
+
+      if (!match || !currentIds.has(match[1])) {
+        await fs.rm(filePath, { force: true });
+        summary.filesRemoved += 1;
+        await logger.info(`YML removido na limpeza manual: ${filePath}`);
+      }
+    }
+
+    if (config.cleanup.removeEmptyArtistFolders) {
+      summary.foldersRemoved = await removeEmptyDirectories(playlistDir, playlistDir, logger);
+    }
+
+    summary.finishedAt = new Date().toISOString();
+    state.finishedAt = summary.finishedAt;
+    state.currentStep = 'idle';
+    state.lastResult = summary;
+
+    await logger.info('Limpeza manual finalizada.', summary);
+    return summary;
+  } catch (error) {
+    summary.finishedAt = new Date().toISOString();
+    state.finishedAt = summary.finishedAt;
+    state.currentStep = 'error';
+    state.lastError = {
+      message: error.message,
+      stack: error.stack
+    };
+    state.lastResult = summary;
+    await logger.error(`Limpeza manual interrompida: ${error.message}`);
+    throw error;
+  } finally {
+    state.running = false;
+  }
+}
+
+async function runPlaylistApiAction(config, identifier, action) {
+  const playlist = findPlaylist(config, identifier);
+  if (!playlist) {
+    const error = new Error('Playlist nao encontrada na configuracao.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const baseUrl = String(config.ersatztv.url || '').replace(/\/+$/, '');
+  const timeoutSeconds = config.ersatztv.apiTimeoutSeconds;
+  let url;
+  let label;
+
+  if (action === 'scan') {
+    if (!playlist.libraryId) throw new Error(`Library ID nao configurado para ${playlist.folderName}.`);
+    url = `${baseUrl}/api/libraries/${playlist.libraryId}/scan`;
+    label = `scan da biblioteca ${playlist.libraryId}`;
+  } else if (action === 'empty-trash') {
+    if (!playlist.libraryId) throw new Error(`Library ID nao configurado para ${playlist.folderName}.`);
+    url = `${baseUrl}/api/libraries/${playlist.libraryId}/empty-trash`;
+    label = `limpeza de lixo da biblioteca ${playlist.libraryId}`;
+  } else if (action === 'rebuild-playout') {
+    if (!playlist.playoutId) throw new Error(`Playout ID nao configurado para ${playlist.folderName}.`);
+    url = `${baseUrl}/api/playout/${playlist.playoutId}/rebuild`;
+    label = `rebuild do playout ${playlist.playoutId}`;
+  } else {
+    const error = new Error('Acao de playlist nao suportada.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  await logger.info(`Disparando ${label} (${playlist.folderName})...`);
+  const result = await apiRequest(url, 'POST', timeoutSeconds);
+
+  if (result.ok) {
+    await logger.info(`Acao concluida: ${label} (${playlist.folderName}).`, result);
+  } else {
+    await logger.warn(`Acao falhou: ${label} (${playlist.folderName}) HTTP ${result.status} ${result.statusText}.`);
+  }
+
+  return {
+    ok: result.ok,
+    playlist: playlist.folderName,
+    action,
+    libraryId: playlist.libraryId || null,
+    playoutId: playlist.playoutId || null,
+    result
+  };
+}
+
 function getState() {
   return { ...state };
 }
 
 module.exports = {
   runSync,
+  manualCleanupPlaylist,
+  runPlaylistApiAction,
   getState
 };

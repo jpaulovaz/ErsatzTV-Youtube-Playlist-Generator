@@ -5,21 +5,27 @@
   },
   "paths": {
     "baseDir": "/home/joaopaulovaz/comerciais/videclipes/youtube/youtube",
-    "streamScriptPath": "/home/joaopaulovaz/comerciais/videclipes/youtube/stream-yt.sh",
-    "ytDlpPath": "/usr/local/bin/yt-dlp"
+    "ytDlpPath": "/usr/local/bin/yt-dlp",
+    "cookiesPath": "/home/joaopaulovaz/comerciais/videclipes/youtube/cookies.txt",
+    "streamScriptName": "stream-yt.sh"
+  },
+  "stream": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "format": "best[height<=720][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]",
+    "useHlsMpegTs": true
   },
   "ersatztv": {
     "url": "http://localhost:8409",
-    "libraryId": 27,
-    "playoutId": 33,
-    "apiTimeoutSeconds": 10,
-    "scanWaitSeconds": 30
+    "apiTimeoutSeconds": 10
   },
   "playlists": [
     {
       "name": "Mix_Principal",
       "url": "https://www.youtube.com/watch?v=u2ah9tWTkmk&list=PLHg022HMFzFCRq-5ZVR3hiiCkGPJ3Ur1D",
-      "enabled": true
+      "enabled": true,
+      "libraryId": 27,
+      "playoutId": 33,
+      "cookiesPath": ""
     }
   ],
   "scheduler": {
@@ -28,8 +34,6 @@
     "runOnStartup": false
   },
   "cleanup": {
-    "removeDisabledPlaylistFolders": true,
-    "removeMissingVideos": true,
     "removeEmptyArtistFolders": true
   }
 }

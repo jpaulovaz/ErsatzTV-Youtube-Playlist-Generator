@@ -8,7 +8,7 @@ function showToast(message) {
   const toast = qs('#toast');
   toast.textContent = message;
   toast.classList.remove('hidden');
-  setTimeout(() => toast.classList.add('hidden'), 3500);
+  setTimeout(() => toast.classList.add('hidden'), 4500);
 }
 
 async function api(path, options = {}) {
@@ -48,6 +48,12 @@ function setByPath(object, dottedPath, value) {
   target[parts[0]] = value;
 }
 
+function optionalNumber(value) {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.floor(number) : null;
+}
+
 function formatDate(value) {
   if (!value) return '-';
   const date = new Date(value);
@@ -84,7 +90,10 @@ function readForm() {
   config.playlists = qsa('.playlist-row').map((row) => ({
     name: row.querySelector('[data-field="name"]').value.trim(),
     url: row.querySelector('[data-field="url"]').value.trim(),
-    enabled: row.querySelector('[data-field="enabled"]').checked
+    enabled: row.querySelector('[data-field="enabled"]').checked,
+    libraryId: optionalNumber(row.querySelector('[data-field="libraryId"]').value),
+    playoutId: optionalNumber(row.querySelector('[data-field="playoutId"]').value),
+    cookiesPath: row.querySelector('[data-field="cookiesPath"]').value.trim()
   })).filter((playlist) => playlist.name && playlist.url);
 
   return config;
@@ -99,31 +108,82 @@ function renderPlaylists(playlists) {
   }
 }
 
-function addPlaylistRow(playlist = { name: '', url: '', enabled: true }) {
+function addPlaylistRow(playlist = { name: '', url: '', enabled: true, libraryId: null, playoutId: null, cookiesPath: '' }) {
   const container = qs('#playlistList');
   const row = document.createElement('div');
   row.className = 'playlist-row';
 
   row.innerHTML = `
-    <label>Nome da pasta
-      <input data-field="name" type="text" value="">
-    </label>
-    <label>URL da playlist
-      <input data-field="url" type="text" value="">
-    </label>
-    <label class="check-row">
-      <input data-field="enabled" type="checkbox">
-      <span>Ativa</span>
-    </label>
-    <button type="button" class="danger" data-action="remove">Remover</button>
+    <div class="playlist-fields">
+      <label>Nome da pasta
+        <input data-field="name" type="text" value="">
+      </label>
+      <label>URL da playlist
+        <input data-field="url" type="text" value="">
+      </label>
+      <label>Library ID
+        <input data-field="libraryId" type="number" min="1" value="">
+      </label>
+      <label>Playout ID
+        <input data-field="playoutId" type="number" min="1" value="">
+      </label>
+      <label>Cookies desta playlist opcional
+        <input data-field="cookiesPath" type="text" placeholder="Vazio usa o cookies global">
+      </label>
+      <label class="check-row">
+        <input data-field="enabled" type="checkbox">
+        <span>Ativa</span>
+      </label>
+    </div>
+    <div class="playlist-actions">
+      <button type="button" data-action="cleanup">Limpar YML ausentes</button>
+      <button type="button" data-action="scan">Scan biblioteca</button>
+      <button type="button" data-action="empty-trash">Limpar lixo ErsatzTV</button>
+      <button type="button" data-action="rebuild-playout">Atualizar playout</button>
+      <button type="button" class="danger" data-action="remove">Remover da config</button>
+    </div>
   `;
 
   row.querySelector('[data-field="name"]').value = playlist.name || '';
   row.querySelector('[data-field="url"]').value = playlist.url || '';
+  row.querySelector('[data-field="libraryId"]').value = playlist.libraryId || '';
+  row.querySelector('[data-field="playoutId"]').value = playlist.playoutId || '';
+  row.querySelector('[data-field="cookiesPath"]').value = playlist.cookiesPath || '';
   row.querySelector('[data-field="enabled"]').checked = playlist.enabled !== false;
+
   row.querySelector('[data-action="remove"]').addEventListener('click', () => row.remove());
+  row.querySelector('[data-action="cleanup"]').addEventListener('click', () => runPlaylistAction(row, 'cleanup'));
+  row.querySelector('[data-action="scan"]').addEventListener('click', () => runPlaylistAction(row, 'scan'));
+  row.querySelector('[data-action="empty-trash"]').addEventListener('click', () => runPlaylistAction(row, 'empty-trash'));
+  row.querySelector('[data-action="rebuild-playout"]').addEventListener('click', () => runPlaylistAction(row, 'rebuild-playout'));
 
   container.appendChild(row);
+}
+
+function assertPlaylistSaved(name) {
+  return (currentConfig.playlists || []).some((playlist) => playlist.name === name);
+}
+
+async function runPlaylistAction(row, action) {
+  const name = row.querySelector('[data-field="name"]').value.trim();
+  if (!name) {
+    showToast('Informe o nome da playlist antes de executar a acao.');
+    return;
+  }
+
+  if (!assertPlaylistSaved(name)) {
+    showToast('Salve a configuracao antes de executar acoes nesta playlist.');
+    return;
+  }
+
+  if (action === 'cleanup') {
+    const confirmed = window.confirm(`Remover YML que nao aparecem mais na playlist "${name}"?`);
+    if (!confirmed) return;
+  }
+
+  const payload = await api(`/api/playlists/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
+  showToast(payload.result && payload.result.ok === false ? 'Acao enviada, mas a API retornou falha. Veja os logs.' : 'Acao executada. Veja os logs.');
+  await refreshAll();
 }
 
 async function loadConfig() {
