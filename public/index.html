@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ErsatzTV YML Syncer 0.0.6</title>
+  <title>ErsatzTV YML Syncer 0.0.7</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <div class="topbar-inner">
       <div>
         <h1>ErsatzTV YML Syncer</h1>
-        <p>Versao 0.0.6 - metadados title/plot, qualidade de stream, YML, interface e agendador.</p>
+        <p>Versao 0.0.7 - plot igual ao title e limpeza manual remove pastas vazias.</p>
       </div>
       <div class="status-pill" id="runningPill">Carregando...</div>
     </div>
@@ -148,13 +148,7 @@
         </div>
 
         <h3>Limpeza manual</h3>
-        <p class="warning">A execucao agendada nao remove YML. A remocao de videos ausentes acontece somente pelo botao de limpeza de cada playlist.</p>
-        <div class="form-grid two">
-          <label class="check-row">
-            <input name="cleanup.removeEmptyArtistFolders" type="checkbox">
-            <span>Remover pastas de artistas vazias apos limpeza manual</span>
-          </label>
-        </div>
+        <p class="warning">A execucao agendada nao remove YML. A remocao de videos ausentes acontece somente pelo botao de limpeza de cada playlist. Essa limpeza tambem remove automaticamente pastas vazias deixadas apos a exclusao dos YML.</p>
       </form>
     </section>
 

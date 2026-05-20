@@ -1,12 +1,18 @@
-# ErsatzTV YML Syncer 0.0.6
+# ErsatzTV YML Syncer 0.0.7
 
 Gerador de arquivos YML para Remote Streams do ErsatzTV usando playlists do YouTube, com interface web, logs, agendador interno e execucao individual por biblioteca/playlist.
+
+## O que mudou na 0.0.7
+
+- O campo `plot` do YML agora recebe exatamente o mesmo texto usado em `title`. Na pratica, a Description do ErsatzTV passa a ficar igual ao titulo do item.
+- A limpeza manual agora remove tambem as pastas vazias deixadas depois da exclusao dos YML ausentes.
+- Corrigida a rotina de remocao de pastas vazias: ela agora percorre as subpastas da playlist e preserva apenas a pasta raiz da biblioteca.
 
 ## O que mudou na 0.0.6
 
 - Os YML gerados agora incluem metadados basicos reconhecidos pelo ErsatzTV:
   - `title`: titulo limpo do video do YouTube.
-  - `plot`: descricao do video quando ela vier no retorno do yt-dlp; caso contrario, uma descricao curta gerada automaticamente com playlist, artista, titulo e origem.
+  - `plot`: o mesmo texto usado em `title`, para que a Description do ErsatzTV fique igual ao titulo do item.
 - Como os YML passam a ter novo conteudo, a proxima execucao atualizara os arquivos existentes e disparara scan da biblioteca quando houver mudanca.
 - O campo `subtitle` nao foi incluido porque ele nao e um campo confirmado para Remote Stream Definition no YAML do ErsatzTV Legacy.
 
@@ -165,7 +171,7 @@ script: "/caminho/base/Mix_Principal/stream-yt.sh https://www.youtube.com/watch?
 is_live: false
 duration: "00:03:40"
 title: "Artista A - Musica 1"
-plot: "Playlist: Mix_Principal. Artista: Artista A. Titulo: Musica 1. Origem: YouTube."
+plot: "Artista A - Musica 1"
 ```
 
 Os campos `title` e `plot` sao usados pelo ErsatzTV como metadados do Remote Stream. Eles podem aparecer no XMLTV/EPG e em Graphics Elements, por exemplo em variaveis como `{{ Epg[0].Title }}` e descricao/plot quando o template do ErsatzTV expuser esse dado.
@@ -180,7 +186,7 @@ O scan automatico da biblioteca do ErsatzTV e chamado quando a rodada cria, move
 
 A execucao agendada e os botoes de execucao nao apagam YML de videos ausentes da playlist. Eles apenas garantem que os videos atuais tenham YML criado/atualizado.
 
-Para remover YML de videos que sairam da playlist, use o botao `Limpar YML ausentes` na linha da playlist. Essa acao consulta a playlist atual no YouTube e remove apenas os YML cujo video nao aparece mais nela.
+Para remover YML de videos que sairam da playlist, use o botao `Limpar YML ausentes` na linha da playlist. Essa acao consulta a playlist atual no YouTube, remove apenas os YML cujo video nao aparece mais nela e, em seguida, remove as pastas vazias que sobrarem dentro da pasta da playlist.
 
 ## Acoes por playlist
 

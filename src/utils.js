@@ -88,8 +88,6 @@ async function removeEmptyDirectories(targetPath, stopAtPath, logger) {
   const normalizedStop = path.resolve(stopAtPath);
   const normalizedTarget = path.resolve(targetPath);
 
-  if (normalizedTarget === normalizedStop) return 0;
-
   let removed = 0;
   let entries = [];
   try {
@@ -110,7 +108,7 @@ async function removeEmptyDirectories(targetPath, stopAtPath, logger) {
     if (after.length === 0 && normalizedTarget !== normalizedStop) {
       await fs.rmdir(normalizedTarget);
       removed += 1;
-      if (logger) await logger.info(`GC Pasta Artista: Removido ${normalizedTarget}`);
+      if (logger) await logger.info(`Pasta vazia removida na limpeza manual: ${normalizedTarget}`);
     }
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;

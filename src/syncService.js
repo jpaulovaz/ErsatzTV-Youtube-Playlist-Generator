@@ -262,29 +262,15 @@ function buildVideoTitle(rawTitle) {
   return cleanMetadataText(rawTitle, 'Sem Titulo');
 }
 
-function buildVideoPlot(playlist, artist, title, description) {
-  const explicitDescription = limitMetadataText(description);
-  if (explicitDescription) return explicitDescription;
-
-  const parts = [`Playlist: ${playlist.name}`];
-
-  if (artist && artist !== 'Outros') {
-    parts.push(`Artista: ${artist}`);
-  }
-
-  if (title) {
-    parts.push(`Titulo: ${title}`);
-  }
-
-  parts.push('Origem: YouTube');
-  return parts.join('. ') + '.';
+function buildVideoPlot(title) {
+  return cleanMetadataText(title, 'Sem Titulo');
 }
 
 function buildYmlContent(config, playlist, videoId, durationSeconds, streamScriptHash, metadata = {}) {
   const scriptPath = getPlaylistScriptPath(config, playlist);
   const command = `${shellCommandQuote(scriptPath)} https://www.youtube.com/watch?v=${videoId}`;
   const title = buildVideoTitle(metadata.rawTitle);
-  const plot = buildVideoPlot(playlist, metadata.artist, metadata.title, metadata.description);
+  const plot = buildVideoPlot(title);
 
   return [
     '# generated_by: ErsatzTV Youtube Playlist Generator',
@@ -654,9 +640,7 @@ async function manualCleanupPlaylist(config, identifier) {
       }
     }
 
-    if (config.cleanup.removeEmptyArtistFolders) {
-      summary.foldersRemoved = await removeEmptyDirectories(playlistDir, playlistDir, logger);
-    }
+    summary.foldersRemoved = await removeEmptyDirectories(playlistDir, playlistDir, logger);
 
     summary.finishedAt = new Date().toISOString();
     state.finishedAt = summary.finishedAt;
