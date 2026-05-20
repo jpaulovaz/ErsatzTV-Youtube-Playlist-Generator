@@ -1,6 +1,14 @@
-# ErsatzTV YML Syncer 0.0.5
+# ErsatzTV YML Syncer 0.0.6
 
 Gerador de arquivos YML para Remote Streams do ErsatzTV usando playlists do YouTube, com interface web, logs, agendador interno e execucao individual por biblioteca/playlist.
+
+## O que mudou na 0.0.6
+
+- Os YML gerados agora incluem metadados basicos reconhecidos pelo ErsatzTV:
+  - `title`: titulo limpo do video do YouTube.
+  - `plot`: descricao do video quando ela vier no retorno do yt-dlp; caso contrario, uma descricao curta gerada automaticamente com playlist, artista, titulo e origem.
+- Como os YML passam a ter novo conteudo, a proxima execucao atualizara os arquivos existentes e disparara scan da biblioteca quando houver mudanca.
+- O campo `subtitle` nao foi incluido porque ele nao e um campo confirmado para Remote Stream Definition no YAML do ErsatzTV Legacy.
 
 ## O que mudou na 0.0.5
 
@@ -156,7 +164,11 @@ Cada YML aponta para o script dentro da propria pasta da playlist e inclui uma a
 script: "/caminho/base/Mix_Principal/stream-yt.sh https://www.youtube.com/watch?v=VIDEO_ID"
 is_live: false
 duration: "00:03:40"
+title: "Artista A - Musica 1"
+plot: "Playlist: Mix_Principal. Artista: Artista A. Titulo: Musica 1. Origem: YouTube."
 ```
+
+Os campos `title` e `plot` sao usados pelo ErsatzTV como metadados do Remote Stream. Eles podem aparecer no XMLTV/EPG e em Graphics Elements, por exemplo em variaveis como `{{ Epg[0].Title }}` e descricao/plot quando o template do ErsatzTV expuser esse dado.
 
 ## Fluxo automatico
 

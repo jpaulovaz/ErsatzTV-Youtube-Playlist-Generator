@@ -245,9 +245,46 @@ async function ensurePlaylistStreamScript(config, playlist) {
   };
 }
 
-function buildYmlContent(config, playlist, videoId, durationSeconds, streamScriptHash) {
+function cleanMetadataText(value, fallback = '') {
+  return String(value || '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() || fallback;
+}
+
+function limitMetadataText(value, maxLength = 1200) {
+  const text = cleanMetadataText(value);
+  if (!text || text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1).trim()}...`;
+}
+
+function buildVideoTitle(rawTitle) {
+  return cleanMetadataText(rawTitle, 'Sem Titulo');
+}
+
+function buildVideoPlot(playlist, artist, title, description) {
+  const explicitDescription = limitMetadataText(description);
+  if (explicitDescription) return explicitDescription;
+
+  const parts = [`Playlist: ${playlist.name}`];
+
+  if (artist && artist !== 'Outros') {
+    parts.push(`Artista: ${artist}`);
+  }
+
+  if (title) {
+    parts.push(`Titulo: ${title}`);
+  }
+
+  parts.push('Origem: YouTube');
+  return parts.join('. ') + '.';
+}
+
+function buildYmlContent(config, playlist, videoId, durationSeconds, streamScriptHash, metadata = {}) {
   const scriptPath = getPlaylistScriptPath(config, playlist);
   const command = `${shellCommandQuote(scriptPath)} https://www.youtube.com/watch?v=${videoId}`;
+  const title = buildVideoTitle(metadata.rawTitle);
+  const plot = buildVideoPlot(playlist, metadata.artist, metadata.title, metadata.description);
 
   return [
     '# generated_by: ErsatzTV Youtube Playlist Generator',
@@ -255,6 +292,8 @@ function buildYmlContent(config, playlist, videoId, durationSeconds, streamScrip
     `script: "${yamlDoubleQuoted(command)}"`,
     'is_live: false',
     `duration: "${secondsToDuration(durationSeconds)}"`,
+    `title: "${yamlDoubleQuoted(title)}"`,
+    `plot: "${yamlDoubleQuoted(plot)}"`,
     ''
   ].join('\n');
 }
@@ -331,7 +370,12 @@ async function writeVideoYml(config, playlist, playlistDir, existingIndex, video
   const fileName = artist !== 'Outros' ? `${artist} - ${title}.yml` : `${title}.yml`;
   const filePath = path.join(artistDir, fileName);
   const existingPath = existingIndex.byVideoId.get(videoId);
-  const ymlContent = buildYmlContent(config, playlist, videoId, duration, streamScriptHash);
+  const ymlContent = buildYmlContent(config, playlist, videoId, duration, streamScriptHash, {
+    rawTitle,
+    artist,
+    title,
+    description: video.description || ''
+  });
 
   if (existingPath && path.resolve(existingPath) !== path.resolve(filePath)) {
     await fs.rm(existingPath, { force: true });
