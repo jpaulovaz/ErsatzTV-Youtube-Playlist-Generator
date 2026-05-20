@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ErsatzTV YML Syncer 0.0.3</title>
+  <title>ErsatzTV YML Syncer 0.0.4</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <div class="topbar-inner">
       <div>
         <h1>ErsatzTV YML Syncer</h1>
-        <p>Versao 0.0.3 - geracao de YML, script de stream por playlist, interface e agendador.</p>
+        <p>Versao 0.0.4 - geracao de YML, script de stream por playlist, interface e agendador.</p>
       </div>
       <div class="status-pill" id="runningPill">Carregando...</div>
     </div>
@@ -82,6 +82,7 @@
           <label class="wide">Formato yt-dlp do stream
             <textarea name="stream.format" rows="2"></textarea>
           </label>
+          <p class="hint wide">Alteracoes em yt-dlp, cookies, User-Agent, formato ou --hls-use-mpegts mudam a assinatura do script. Na proxima execucao, os YML dessa playlist serao regravados e o scan da biblioteca sera chamado se houver mudanca.</p>
           <label class="check-row">
             <input name="stream.useHlsMpegTs" type="checkbox">
             <span>Usar --hls-use-mpegts no script de stream</span>
@@ -133,6 +134,9 @@
         <button id="addPlaylistBtn">Adicionar playlist</button>
       </div>
       <div id="playlistList" class="playlist-list"></div>
+      <div class="section-actions">
+        <button id="saveBtnBottom" class="primary">Salvar configuracao</button>
+      </div>
     </section>
 
     <section class="card logs-card">

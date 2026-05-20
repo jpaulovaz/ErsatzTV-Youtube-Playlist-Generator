@@ -1,5 +1,6 @@
 const fs = require('fs/promises');
 const path = require('path');
+const crypto = require('crypto');
 const { spawn } = require('child_process');
 const logger = require('./logger');
 const {
@@ -47,6 +48,10 @@ function runCommand(command, args, options = {}) {
       resolve({ code, stdout, stderr });
     });
   });
+}
+
+function hashString(value) {
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 16);
 }
 
 function parseYtDlpJsonLines(stdout) {
@@ -190,19 +195,43 @@ function buildStreamScriptContent(config, playlist) {
 async function ensurePlaylistStreamScript(config, playlist) {
   const scriptPath = getPlaylistScriptPath(config, playlist);
   const content = buildStreamScriptContent(config, playlist);
+  const hash = hashString(content);
 
-  await fs.writeFile(scriptPath, content, 'utf8');
+  let existed = false;
+  let changed = true;
+
+  try {
+    const previousContent = await fs.readFile(scriptPath, 'utf8');
+    existed = true;
+    changed = previousContent !== content;
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+
+  if (changed) {
+    await fs.writeFile(scriptPath, content, 'utf8');
+    await logger.info(`Script de stream ${existed ? 'atualizado' : 'criado'}: ${scriptPath}`);
+  } else {
+    await logger.info(`Script de stream sem alteracoes: ${scriptPath}`);
+  }
+
   await fs.chmod(scriptPath, 0o755);
-  await logger.info(`Script de stream atualizado: ${scriptPath}`);
 
-  return scriptPath;
+  return {
+    scriptPath,
+    hash,
+    changed,
+    existed
+  };
 }
 
-function buildYmlContent(config, playlist, videoId, durationSeconds) {
+function buildYmlContent(config, playlist, videoId, durationSeconds, streamScriptHash) {
   const scriptPath = getPlaylistScriptPath(config, playlist);
   const command = `${shellCommandQuote(scriptPath)} https://www.youtube.com/watch?v=${videoId}`;
 
   return [
+    '# generated_by: ErsatzTV Youtube Playlist Generator',
+    `# stream_script_hash: ${streamScriptHash || 'unknown'}`,
     `script: "${yamlDoubleQuoted(command)}"`,
     'is_live: false',
     `duration: "${secondsToDuration(durationSeconds)}"`,
@@ -265,7 +294,7 @@ async function readExistingYmlIndex(playlistDir) {
   return { byVideoId, ymlFiles };
 }
 
-async function writeVideoYml(config, playlist, playlistDir, existingIndex, video, summary) {
+async function writeVideoYml(config, playlist, playlistDir, existingIndex, video, summary, streamScriptHash) {
   const videoId = video.id;
   const rawTitle = video.title || 'Sem_Titulo';
   const duration = Number(video.duration);
@@ -282,7 +311,7 @@ async function writeVideoYml(config, playlist, playlistDir, existingIndex, video
   const fileName = artist !== 'Outros' ? `${artist} - ${title}.yml` : `${title}.yml`;
   const filePath = path.join(artistDir, fileName);
   const existingPath = existingIndex.byVideoId.get(videoId);
-  const ymlContent = buildYmlContent(config, playlist, videoId, duration);
+  const ymlContent = buildYmlContent(config, playlist, videoId, duration, streamScriptHash);
 
   if (existingPath && path.resolve(existingPath) !== path.resolve(filePath)) {
     await fs.rm(existingPath, { force: true });
@@ -359,6 +388,9 @@ async function processPlaylist(config, playlist, summary) {
     filesUpdated: 0,
     filesMoved: 0,
     filesUnchanged: 0,
+    streamScriptPath: null,
+    streamScriptHash: null,
+    streamScriptChanged: false,
     scanRequested: false,
     scanSkippedReason: null,
     scan: null,
@@ -367,7 +399,14 @@ async function processPlaylist(config, playlist, summary) {
   };
 
   await fs.mkdir(playlistDir, { recursive: true });
-  await ensurePlaylistStreamScript(config, playlist);
+  const streamScript = await ensurePlaylistStreamScript(config, playlist);
+  playlistSummary.streamScriptPath = streamScript.scriptPath;
+  playlistSummary.streamScriptHash = streamScript.hash;
+  playlistSummary.streamScriptChanged = streamScript.changed;
+
+  if (streamScript.changed) {
+    await logger.info(`Alteracao no script de stream detectada para ${playlist.folderName}; os YML serao reavaliados com a nova assinatura.`);
+  }
 
   await logger.info(`--- Processando: ${playlist.folderName} ---`);
 
@@ -390,19 +429,19 @@ async function processPlaylist(config, playlist, summary) {
   const before = getCountSnapshot(summary);
 
   for (const video of videos) {
-    await writeVideoYml(config, playlist, playlistDir, existingIndex, video, summary);
+    await writeVideoYml(config, playlist, playlistDir, existingIndex, video, summary, streamScript.hash);
   }
 
   Object.assign(playlistSummary, getCountDelta(summary, before));
 
-  const hasNewOrMovedYml = playlistSummary.filesCreated > 0 || playlistSummary.filesMoved > 0;
-  if (hasNewOrMovedYml) {
+  const hasYmlChanges = playlistSummary.filesCreated > 0 || playlistSummary.filesUpdated > 0 || playlistSummary.filesMoved > 0;
+  if (hasYmlChanges) {
     const scan = await scanPlaylistLibrary(config, playlist);
     playlistSummary.scanRequested = true;
     playlistSummary.scan = scan;
     summary.api.scans.push({ playlist: playlist.folderName, libraryId: playlist.libraryId || null, ...scan });
   } else {
-    const reason = 'Nenhum YML novo ou movido nesta rodada.';
+    const reason = 'Nenhum YML criado, atualizado ou movido nesta rodada.';
     playlistSummary.scanSkippedReason = reason;
     summary.api.scansSkipped.push({ playlist: playlist.folderName, libraryId: playlist.libraryId || null, reason });
     await logger.info(`Scan automatico ignorado para ${playlist.folderName}: ${reason}`);

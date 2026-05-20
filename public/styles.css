@@ -309,6 +309,12 @@ button.danger {
   gap: 10px;
 }
 
+.section-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 .hint,
 .warning {
   padding: 12px 14px;
@@ -378,7 +384,8 @@ button.danger {
     padding: 16px;
   }
 
-  .playlist-actions button {
+  .playlist-actions button,
+  .section-actions button {
     width: 100%;
   }
 }

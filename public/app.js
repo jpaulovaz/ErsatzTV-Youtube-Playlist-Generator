@@ -272,10 +272,17 @@ async function boot() {
   }
 }
 
-qs('#saveBtn').addEventListener('click', (event) => {
-  event.preventDefault();
-  saveConfig().catch((error) => showToast(error.message));
-});
+function bindSaveButton(selector) {
+  const button = qs(selector);
+  if (!button) return;
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    saveConfig().catch((error) => showToast(error.message));
+  });
+}
+
+bindSaveButton('#saveBtn');
+bindSaveButton('#saveBtnBottom');
 
 qs('#runNowBtn').addEventListener('click', () => {
   runNow().catch((error) => showToast(error.message));

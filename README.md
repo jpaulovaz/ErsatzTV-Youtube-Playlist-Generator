@@ -1,6 +1,14 @@
-# ErsatzTV YML Syncer 0.0.3
+# ErsatzTV YML Syncer 0.0.4
 
 Gerador de arquivos YML para Remote Streams do ErsatzTV usando playlists do YouTube, com interface web, logs, agendador interno e execucao individual por biblioteca/playlist.
+
+## O que mudou na 0.0.4
+
+- O script `stream-yt.sh` de cada playlist agora e comparado antes de ser regravado.
+- Cada YML passa a receber a assinatura do script em um comentario `stream_script_hash`.
+- Se voce alterar pela interface o caminho do `yt-dlp`, cookies, User-Agent, formato ou `--hls-use-mpegts`, a proxima execucao atualiza o script e regrava os YML daquela playlist.
+- O scan automatico da biblioteca agora e chamado quando houver YML criado, movido ou atualizado. Isso cobre mudancas de configuracao do script.
+- Foi adicionado um segundo botao `Salvar configuracao` ao final da area de playlists para evitar confusao quando a pagina estiver rolada para baixo.
 
 ## O que mudou na 0.0.3
 
@@ -97,9 +105,11 @@ baseDir/
       Artista B - Musica 2.yml
 ```
 
-Cada YML aponta para o script dentro da propria pasta da playlist:
+Cada YML aponta para o script dentro da propria pasta da playlist e inclui uma assinatura do script para detectar mudancas futuras:
 
 ```yml
+# generated_by: ErsatzTV Youtube Playlist Generator
+# stream_script_hash: 0123456789abcdef
 script: "/caminho/base/Mix_Principal/stream-yt.sh https://www.youtube.com/watch?v=VIDEO_ID"
 is_live: false
 duration: "00:03:40"
@@ -109,7 +119,7 @@ duration: "00:03:40"
 
 A execucao agendada, o botao global `Executar agora` e o botao `Executar esta biblioteca` fazem o mesmo tipo de sincronizacao: consultam a playlist no YouTube e garantem que todos os videos atuais tenham YML criado/atualizado.
 
-O scan automatico da biblioteca do ErsatzTV so e chamado quando a rodada cria ou move algum YML naquela playlist. Se todos os arquivos ja existirem, o app registra nos logs que o scan foi ignorado.
+O scan automatico da biblioteca do ErsatzTV e chamado quando a rodada cria, move ou atualiza algum YML naquela playlist. Se todos os arquivos ja existirem com o mesmo conteudo, o app registra nos logs que o scan foi ignorado.
 
 ## Limpeza
 
@@ -144,5 +154,5 @@ Na interface, cada playlist tem botoes para:
 ## Observacoes
 
 - O app impede operacoes locais simultaneas para evitar conflito entre sincronizacao e limpeza manual.
-- O script de stream e regravado em cada execucao para refletir mudancas de `yt-dlp`, cookies, user-agent ou formato.
+- O script de stream e verificado em cada execucao e so e regravado quando o conteudo muda. Quando muda, os YML recebem uma nova assinatura e sao atualizados na rodada seguinte.
 - Se uma playlist nao tiver `Library ID`, o scan automatico dessa playlist sera ignorado e registrado nos logs.
