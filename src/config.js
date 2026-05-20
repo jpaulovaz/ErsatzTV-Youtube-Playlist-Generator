@@ -8,6 +8,7 @@ const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const DEFAULT_STREAM_MAX_HEIGHT = 720;
 const STREAM_QUALITY_MODES = new Set(['compatible', 'high', 'custom']);
+const STREAM_CODEC_PROFILES = new Set(['auto', 'mp4_h264_aac']);
 const JS_RUNTIME_MODES = new Set(['disabled', 'deno', 'node', 'custom']);
 const EJS_COMPONENT_OPTIONS = new Set(['none', 'ejs:github', 'ejs:npm']);
 
@@ -17,13 +18,30 @@ function toPositiveInteger(value, fallback) {
   return Math.floor(number);
 }
 
-function buildCompatibleFormat(maxHeight = DEFAULT_STREAM_MAX_HEIGHT) {
+function normalizeCodecProfile(value) {
+  const profile = String(value || '').trim();
+  return STREAM_CODEC_PROFILES.has(profile) ? profile : 'auto';
+}
+
+function buildCompatibleFormat(maxHeight = DEFAULT_STREAM_MAX_HEIGHT, codecProfile = 'auto') {
   const height = toPositiveInteger(maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
+  const profile = normalizeCodecProfile(codecProfile);
+
+  if (profile === 'mp4_h264_aac') {
+    return `best[height<=${height}][ext=mp4][vcodec^=avc1][acodec^=mp4a]/best[height<=${height}][ext=mp4][vcodec!=none][acodec!=none]/best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
+  }
+
   return `best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
 }
 
-function buildHighQualityFormat(maxHeight = DEFAULT_STREAM_MAX_HEIGHT) {
+function buildHighQualityFormat(maxHeight = DEFAULT_STREAM_MAX_HEIGHT, codecProfile = 'auto') {
   const height = toPositiveInteger(maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
+  const profile = normalizeCodecProfile(codecProfile);
+
+  if (profile === 'mp4_h264_aac') {
+    return `bestvideo[height<=${height}][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a][acodec^=mp4a]/bestvideo[height<=${height}][vcodec^=avc1]+bestaudio[acodec^=mp4a]/best[height<=${height}][ext=mp4][vcodec^=avc1][acodec^=mp4a]/best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
+  }
+
   return `bestvideo[height<=${height}][vcodec!=none]+bestaudio[acodec!=none]/best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
 }
 
@@ -35,11 +53,12 @@ function buildDefaultFormatSort(maxHeight = DEFAULT_STREAM_MAX_HEIGHT) {
 function buildStreamFormat(stream) {
   const mode = STREAM_QUALITY_MODES.has(stream && stream.qualityMode) ? stream.qualityMode : 'compatible';
   const maxHeight = toPositiveInteger(stream && stream.maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
+  const codecProfile = normalizeCodecProfile(stream && stream.codecProfile);
 
-  if (mode === 'compatible') return buildCompatibleFormat(maxHeight);
-  if (mode === 'high') return buildHighQualityFormat(maxHeight);
+  if (mode === 'compatible') return buildCompatibleFormat(maxHeight, codecProfile);
+  if (mode === 'high') return buildHighQualityFormat(maxHeight, codecProfile);
 
-  return String((stream && stream.format) || buildCompatibleFormat(maxHeight)).trim();
+  return String((stream && stream.format) || buildCompatibleFormat(maxHeight, codecProfile)).trim();
 }
 
 const DEFAULT_STREAM_FORMAT = buildCompatibleFormat(DEFAULT_STREAM_MAX_HEIGHT);
@@ -59,6 +78,7 @@ const DEFAULT_CONFIG = {
   stream: {
     userAgent: DEFAULT_USER_AGENT,
     qualityMode: 'compatible',
+    codecProfile: 'auto',
     maxHeight: DEFAULT_STREAM_MAX_HEIGHT,
     format: DEFAULT_STREAM_FORMAT,
     useHlsMpegTs: true,
@@ -135,11 +155,22 @@ function inferQualityMode(rawStream) {
   const rawFormat = String((rawStream && rawStream.format) || '').trim();
   const rawMaxHeight = toPositiveInteger(rawStream && rawStream.maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
 
-  if (!rawFormat || rawFormat === buildCompatibleFormat(rawMaxHeight) || rawFormat === DEFAULT_STREAM_FORMAT) {
+  const compatibleFormats = [
+    buildCompatibleFormat(rawMaxHeight, 'auto'),
+    buildCompatibleFormat(rawMaxHeight, 'mp4_h264_aac'),
+    DEFAULT_STREAM_FORMAT
+  ];
+  const highQualityFormats = [
+    buildHighQualityFormat(rawMaxHeight, 'auto'),
+    buildHighQualityFormat(rawMaxHeight, 'mp4_h264_aac'),
+    DEFAULT_HIGH_QUALITY_FORMAT
+  ];
+
+  if (!rawFormat || compatibleFormats.includes(rawFormat)) {
     return 'compatible';
   }
 
-  if (rawFormat === buildHighQualityFormat(rawMaxHeight) || rawFormat === DEFAULT_HIGH_QUALITY_FORMAT) {
+  if (highQualityFormats.includes(rawFormat)) {
     return 'high';
   }
 
@@ -175,6 +206,7 @@ function normalizeStreamConfig(config, rawConfig) {
 
   stream.userAgent = String(stream.userAgent || DEFAULT_USER_AGENT).trim();
   stream.qualityMode = inferQualityMode(rawStream);
+  stream.codecProfile = normalizeCodecProfile(stream.codecProfile);
   stream.maxHeight = toPositiveInteger(stream.maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
   stream.useHlsMpegTs = stream.useHlsMpegTs !== false;
 
@@ -294,6 +326,7 @@ module.exports = {
   DEFAULT_STREAM_FORMAT,
   DEFAULT_HIGH_QUALITY_FORMAT,
   DEFAULT_STREAM_MAX_HEIGHT,
+  STREAM_CODEC_PROFILES,
   JS_RUNTIME_MODES,
   EJS_COMPONENT_OPTIONS,
   buildCompatibleFormat,

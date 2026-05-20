@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ErsatzTV YML Syncer 0.0.8</title>
+  <title>ErsatzTV YML Syncer 0.0.9</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <div class="topbar-inner">
       <div>
         <h1>ErsatzTV YML Syncer</h1>
-        <p>Versao 0.0.8 - runtime JS/EJS para yt-dlp e desafios atuais do YouTube.</p>
+        <p>Versao 0.0.9 - perfil MP4/H.264/AAC para melhorar compatibilidade do stream.</p>
       </div>
       <div class="status-pill" id="runningPill">Carregando...</div>
     </div>
@@ -97,6 +97,13 @@
               <option value="2160">2160p</option>
             </select>
           </label>
+          <label>Perfil de codec/container
+            <select name="stream.codecProfile">
+              <option value="auto">Automatico do yt-dlp</option>
+              <option value="mp4_h264_aac">Preferir MP4/H.264 + AAC/M4A</option>
+            </select>
+          </label>
+          <p class="hint wide">Para streaming no ErsatzTV, MP3 nao e recomendado: normalmente exigiria transcodificacao de audio e pioraria a performance. O perfil MP4/H.264 + AAC/M4A tenta evitar VP9/AV1/Opus/WebM e usa formatos mais compativeis sem recodificar quando o YouTube disponibiliza esses formatos.</p>
           <label class="wide">Formato yt-dlp do stream
             <textarea name="stream.format" rows="3"></textarea>
           </label>
@@ -143,7 +150,7 @@
           <label>Formato de merge
             <input name="stream.mergeOutputFormat" type="text" placeholder="mkv">
           </label>
-          <p class="hint wide">Alteracoes em yt-dlp, cookies, User-Agent, modo de qualidade, resolucao, formato, runtime JS, EJS, ordenacao, merge ou --hls-use-mpegts mudam a assinatura do script. Na proxima execucao, os YML dessa playlist serao regravados e o scan da biblioteca sera chamado se houver mudanca.</p>
+          <p class="hint wide">Alteracoes em yt-dlp, cookies, User-Agent, modo de qualidade, resolucao, perfil de codec, formato, runtime JS, EJS, ordenacao, merge ou --hls-use-mpegts mudam a assinatura do script. Na proxima execucao, os YML dessa playlist serao regravados e o scan da biblioteca sera chamado se houver mudanca.</p>
         </div>
 
         <h3>ErsatzTV</h3>

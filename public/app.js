@@ -58,13 +58,31 @@ function streamMaxHeight(value) {
   return optionalNumber(value) || 720;
 }
 
-function buildCompatibleFormat(maxHeight) {
+const CODEC_PROFILE_OPTIONS = ['auto', 'mp4_h264_aac'];
+
+function normalizeCodecProfile(value) {
+  return CODEC_PROFILE_OPTIONS.includes(value) ? value : 'auto';
+}
+
+function buildCompatibleFormat(maxHeight, codecProfile = 'auto') {
   const height = streamMaxHeight(maxHeight);
+  const profile = normalizeCodecProfile(codecProfile);
+
+  if (profile === 'mp4_h264_aac') {
+    return `best[height<=${height}][ext=mp4][vcodec^=avc1][acodec^=mp4a]/best[height<=${height}][ext=mp4][vcodec!=none][acodec!=none]/best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
+  }
+
   return `best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
 }
 
-function buildHighQualityFormat(maxHeight) {
+function buildHighQualityFormat(maxHeight, codecProfile = 'auto') {
   const height = streamMaxHeight(maxHeight);
+  const profile = normalizeCodecProfile(codecProfile);
+
+  if (profile === 'mp4_h264_aac') {
+    return `bestvideo[height<=${height}][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a][acodec^=mp4a]/bestvideo[height<=${height}][vcodec^=avc1]+bestaudio[acodec^=mp4a]/best[height<=${height}][ext=mp4][vcodec^=avc1][acodec^=mp4a]/best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
+  }
+
   return `bestvideo[height<=${height}][vcodec!=none]+bestaudio[acodec!=none]/best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
 }
 
@@ -131,15 +149,17 @@ function refreshYtDlpJsUi(applyDefaults = false) {
   }
 }
 
-function resolveFormatForMode(mode, maxHeight, currentFormat) {
-  if (mode === 'compatible') return buildCompatibleFormat(maxHeight);
-  if (mode === 'high') return buildHighQualityFormat(maxHeight);
-  return String(currentFormat || '').trim() || buildCompatibleFormat(maxHeight);
+function resolveFormatForMode(mode, maxHeight, currentFormat, codecProfile = 'auto') {
+  const profile = normalizeCodecProfile(codecProfile);
+  if (mode === 'compatible') return buildCompatibleFormat(maxHeight, profile);
+  if (mode === 'high') return buildHighQualityFormat(maxHeight, profile);
+  return String(currentFormat || '').trim() || buildCompatibleFormat(maxHeight, profile);
 }
 
 function refreshStreamQualityUi(applyDefaults = false) {
   const modeField = qs('[name="stream.qualityMode"]');
   const heightField = qs('[name="stream.maxHeight"]');
+  const codecProfileField = qs('[name="stream.codecProfile"]');
   const formatField = qs('[name="stream.format"]');
   const useSortField = qs('[name="stream.useFormatSort"]');
   const sortField = qs('[name="stream.formatSort"]');
@@ -150,7 +170,8 @@ function refreshStreamQualityUi(applyDefaults = false) {
 
   const mode = modeField.value || 'compatible';
   const height = streamMaxHeight(heightField.value);
-  const autoFormat = resolveFormatForMode(mode, height, formatField.value);
+  const codecProfile = codecProfileField ? codecProfileField.value : 'auto';
+  const autoFormat = resolveFormatForMode(mode, height, formatField.value, codecProfile);
 
   if (mode !== 'custom') {
     formatField.value = autoFormat;
@@ -185,8 +206,9 @@ function refreshStreamQualityUi(applyDefaults = false) {
 
 function normalizeStreamBeforeSave(stream) {
   stream.qualityMode = ['compatible', 'high', 'custom'].includes(stream.qualityMode) ? stream.qualityMode : 'compatible';
+  stream.codecProfile = normalizeCodecProfile(stream.codecProfile);
   stream.maxHeight = streamMaxHeight(stream.maxHeight);
-  stream.format = resolveFormatForMode(stream.qualityMode, stream.maxHeight, stream.format);
+  stream.format = resolveFormatForMode(stream.qualityMode, stream.maxHeight, stream.format, stream.codecProfile);
 
   if (!String(stream.formatSort || '').trim()) {
     stream.formatSort = buildFormatSort(stream.maxHeight);
@@ -445,6 +467,7 @@ function bindSaveButton(selector) {
 function bindStreamQualityControls() {
   const modeField = qs('[name="stream.qualityMode"]');
   const heightField = qs('[name="stream.maxHeight"]');
+  const codecProfileField = qs('[name="stream.codecProfile"]');
 
   if (modeField) {
     modeField.addEventListener('change', () => refreshStreamQualityUi(true));
@@ -453,6 +476,10 @@ function bindStreamQualityControls() {
   if (heightField) {
     heightField.addEventListener('change', () => refreshStreamQualityUi(true));
     heightField.addEventListener('input', () => refreshStreamQualityUi(false));
+  }
+
+  if (codecProfileField) {
+    codecProfileField.addEventListener('change', () => refreshStreamQualityUi(true));
   }
 }
 

@@ -22,7 +22,8 @@
     "jsRuntimeMode": "deno",
     "jsRuntimePath": "/usr/local/bin/deno",
     "jsRuntimeCustomName": "deno",
-    "ejsComponents": "ejs:github"
+    "ejsComponents": "ejs:github",
+    "codecProfile": "auto"
   },
   "ersatztv": {
     "url": "http://localhost:8409",

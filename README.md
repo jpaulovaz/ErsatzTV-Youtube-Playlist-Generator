@@ -1,6 +1,15 @@
-# ErsatzTV YML Syncer 0.0.8
+# ErsatzTV YML Syncer 0.0.9
 
 Gerador de arquivos YML para Remote Streams do ErsatzTV usando playlists do YouTube, com interface web, logs, agendador interno e execucao individual por biblioteca/playlist.
+
+## O que mudou na 0.0.9
+
+- Adicionado o campo `Perfil de codec/container`:
+  - `auto`: comportamento atual do yt-dlp.
+  - `mp4_h264_aac`: tenta preferir MP4/H.264 para video e AAC/M4A para audio.
+- Nao foi criada opcao para MP3 por padrao: para YouTube, MP3 normalmente exigiria transcodificacao de audio, o que aumentaria custo e latencia. Para o ErsatzTV, AAC/M4A e a alternativa mais compativel e eficiente.
+- O seletor `-f` gerado automaticamente agora considera modo de qualidade, resolucao maxima e perfil de codec.
+- Mudancas no perfil de codec alteram a assinatura do script e fazem os YML serem reavaliados na proxima execucao.
 
 ## O que mudou na 0.0.8
 
@@ -114,7 +123,8 @@ A interface edita esse arquivo. Alteracoes de host e porta da interface exigem r
 - `paths.streamScriptName`: nome do script criado dentro de cada pasta de playlist.
 - `stream.qualityMode`: `compatible`, `high` ou `custom`.
 - `stream.maxHeight`: resolucao maxima desejada, por exemplo `720` ou `1080`.
-- `stream.format`: seletor `-f` final usado pelo yt-dlp. Nos modos `compatible` e `high`, ele e recalculado automaticamente a partir da resolucao maxima.
+- `stream.codecProfile`: `auto` ou `mp4_h264_aac`. Use `mp4_h264_aac` para tentar evitar VP9/AV1/Opus/WebM e priorizar H.264 + AAC/M4A.
+- `stream.format`: seletor `-f` final usado pelo yt-dlp. Nos modos `compatible` e `high`, ele e recalculado automaticamente a partir da resolucao maxima e do perfil de codec.
 - `stream.useFormatSort` e `stream.formatSort`: habilitam e configuram a ordenacao `-S`, por exemplo `res:720,fps`.
 - `stream.useMergeOutputFormat` e `stream.mergeOutputFormat`: habilitam e configuram `--merge-output-format`, por exemplo `mkv`.
 - `stream.jsRuntimeMode`: runtime JavaScript usado pelo `yt-dlp`; valores: `disabled`, `deno`, `node` ou `custom`.
@@ -167,13 +177,17 @@ Esses parametros tambem sao usados quando o app chama `yt-dlp --dump-json --flat
 
 A resolucao real depende dos formatos que o YouTube oferece para cada video.
 
+O campo `Perfil de codec/container` controla se o app deve deixar o yt-dlp escolher automaticamente ou se deve tentar priorizar formatos MP4/H.264 + AAC/M4A. Essa segunda opcao tende a ser mais previsivel para o ErsatzTV e evita fontes VP9/AV1/Opus/WebM quando houver alternativa no YouTube.
+
+MP3 nao foi incluido como perfil padrao porque o YouTube normalmente nao entrega MP3 nativo. Converter para MP3 exigiria pos-processamento/transcodificacao pelo ffmpeg antes de entregar ao ErsatzTV, o que pioraria latencia e performance. Para streaming linear, AAC/M4A e a escolha mais eficiente.
+
 O modo `Compativel` usa um seletor como:
 
 ```text
 best[height<=720][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]
 ```
 
-Ele pede um formato ja muxado, com video e audio no mesmo arquivo. E o modo mais seguro para pipe/stdout, mas alguns videos podem ficar em 360p.
+Ele pede um formato ja muxado, com video e audio no mesmo arquivo. E o modo mais seguro para pipe/stdout, mas alguns videos podem ficar em 360p. Com perfil MP4/H.264 + AAC/M4A, o seletor tenta primeiro formatos MP4 com H.264/AAC e cai para outros formatos se necessario.
 
 O modo `Alta qualidade` usa um seletor como:
 
@@ -181,7 +195,7 @@ O modo `Alta qualidade` usa um seletor como:
 bestvideo[height<=720][vcodec!=none]+bestaudio[acodec!=none]/best[height<=720][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]
 ```
 
-Nesse modo, o script tambem pode usar `-S res:720,fps` e `--merge-output-format mkv`. A vantagem e tentar obter 720p/1080p quando o YouTube disponibiliza video e audio separados. A desvantagem e depender mais de ffmpeg e consumir mais CPU/rede.
+Nesse modo, o script tambem pode usar `-S res:720,fps` e `--merge-output-format mkv`. A vantagem e tentar obter 720p/1080p quando o YouTube disponibiliza video e audio separados. A desvantagem e depender mais de ffmpeg e consumir mais CPU/rede. Com perfil MP4/H.264 + AAC/M4A, o seletor tenta combinar video H.264/MP4 com audio AAC/M4A antes de cair para formatos mais genericos.
 
 Para testar um video fora do ErsatzTV, use o script criado dentro da pasta da playlist:
 
