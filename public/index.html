@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ErsatzTV YML Syncer 0.0.4</title>
+  <title>ErsatzTV YML Syncer 0.0.5</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <div class="topbar-inner">
       <div>
         <h1>ErsatzTV YML Syncer</h1>
-        <p>Versao 0.0.4 - geracao de YML, script de stream por playlist, interface e agendador.</p>
+        <p>Versao 0.0.5 - qualidade de stream configuravel, YML, interface e agendador.</p>
       </div>
       <div class="status-pill" id="runningPill">Carregando...</div>
     </div>
@@ -79,14 +79,47 @@
           <label class="wide">User-Agent usado pelo yt-dlp
             <textarea name="stream.userAgent" rows="2"></textarea>
           </label>
-          <label class="wide">Formato yt-dlp do stream
-            <textarea name="stream.format" rows="2"></textarea>
+
+          <label>Modo de qualidade
+            <select name="stream.qualityMode">
+              <option value="compatible">Compativel: video e audio no mesmo formato</option>
+              <option value="high">Alta qualidade: bestvideo + bestaudio</option>
+              <option value="custom">Personalizado: usar seletor manual</option>
+            </select>
           </label>
-          <p class="hint wide">Alteracoes em yt-dlp, cookies, User-Agent, formato ou --hls-use-mpegts mudam a assinatura do script. Na proxima execucao, os YML dessa playlist serao regravados e o scan da biblioteca sera chamado se houver mudanca.</p>
+          <label>Resolucao maxima
+            <select name="stream.maxHeight">
+              <option value="360">360p</option>
+              <option value="480">480p</option>
+              <option value="720">720p</option>
+              <option value="1080">1080p</option>
+              <option value="1440">1440p</option>
+              <option value="2160">2160p</option>
+            </select>
+          </label>
+          <label class="wide">Formato yt-dlp do stream
+            <textarea name="stream.format" rows="3"></textarea>
+          </label>
+          <p class="hint wide">O modo compativel prioriza estabilidade, mas pode cair em 360p quando o YouTube nao oferece formato unico em 720p+. O modo alta qualidade tenta combinar bestvideo + bestaudio e pode entregar 720p/1080p, mas depende mais de ffmpeg e deve ser testado no ErsatzTV.</p>
           <label class="check-row">
             <input name="stream.useHlsMpegTs" type="checkbox">
             <span>Usar --hls-use-mpegts no script de stream</span>
           </label>
+          <label class="check-row">
+            <input name="stream.useFormatSort" type="checkbox">
+            <span>Usar ordenacao -S do yt-dlp</span>
+          </label>
+          <label>Ordenacao -S
+            <input name="stream.formatSort" type="text" placeholder="res:720,fps">
+          </label>
+          <label class="check-row">
+            <input name="stream.useMergeOutputFormat" type="checkbox">
+            <span>Usar --merge-output-format</span>
+          </label>
+          <label>Formato de merge
+            <input name="stream.mergeOutputFormat" type="text" placeholder="mkv">
+          </label>
+          <p class="hint wide">Alteracoes em yt-dlp, cookies, User-Agent, modo de qualidade, resolucao, formato, ordenacao, merge ou --hls-use-mpegts mudam a assinatura do script. Na proxima execucao, os YML dessa playlist serao regravados e o scan da biblioteca sera chamado se houver mudanca.</p>
         </div>
 
         <h3>ErsatzTV</h3>

@@ -151,6 +151,9 @@ function buildYtDlpCommonArgs(config, playlist) {
 
 function buildStreamScriptContent(config, playlist) {
   const cookiesPath = getEffectiveCookiesPath(config, playlist);
+  const useFormatSort = Boolean(config.stream.useFormatSort && config.stream.formatSort);
+  const useMergeOutputFormat = Boolean(config.stream.useMergeOutputFormat && config.stream.mergeOutputFormat);
+
   const lines = [
     '#!/usr/bin/env bash',
     'set -euo pipefail',
@@ -160,6 +163,14 @@ function buildStreamScriptContent(config, playlist) {
     `USER_AGENT=${shellCommandQuote(config.stream.userAgent)}`,
     `FORMAT=${shellCommandQuote(config.stream.format)}`
   ];
+
+  if (useFormatSort) {
+    lines.push(`FORMAT_SORT=${shellCommandQuote(config.stream.formatSort)}`);
+  }
+
+  if (useMergeOutputFormat) {
+    lines.push(`MERGE_OUTPUT_FORMAT=${shellCommandQuote(config.stream.mergeOutputFormat)}`);
+  }
 
   if (cookiesPath) {
     lines.push(`COOKIES=${shellCommandQuote(cookiesPath)}`);
@@ -181,8 +192,17 @@ function buildStreamScriptContent(config, playlist) {
     lines.push('  --hls-use-mpegts \\');
   }
 
+  lines.push('  --add-header "User-Agent: ${USER_AGENT}" \\');
+
+  if (useFormatSort) {
+    lines.push('  -S "$FORMAT_SORT" \\');
+  }
+
+  if (useMergeOutputFormat) {
+    lines.push('  --merge-output-format "$MERGE_OUTPUT_FORMAT" \\');
+  }
+
   lines.push(
-    '  --add-header "User-Agent: ${USER_AGENT}" \\',
     '  -f "$FORMAT" \\',
     '  -o - \\',
     '  "$URL"',
@@ -391,6 +411,8 @@ async function processPlaylist(config, playlist, summary) {
     streamScriptPath: null,
     streamScriptHash: null,
     streamScriptChanged: false,
+    streamQualityMode: config.stream.qualityMode || 'compatible',
+    streamMaxHeight: config.stream.maxHeight || null,
     scanRequested: false,
     scanSkippedReason: null,
     scan: null,

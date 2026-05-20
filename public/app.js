@@ -54,6 +54,93 @@ function optionalNumber(value) {
   return Number.isFinite(number) && number > 0 ? Math.floor(number) : null;
 }
 
+function streamMaxHeight(value) {
+  return optionalNumber(value) || 720;
+}
+
+function buildCompatibleFormat(maxHeight) {
+  const height = streamMaxHeight(maxHeight);
+  return `best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
+}
+
+function buildHighQualityFormat(maxHeight) {
+  const height = streamMaxHeight(maxHeight);
+  return `bestvideo[height<=${height}][vcodec!=none]+bestaudio[acodec!=none]/best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
+}
+
+function buildFormatSort(maxHeight) {
+  return `res:${streamMaxHeight(maxHeight)},fps`;
+}
+
+function resolveFormatForMode(mode, maxHeight, currentFormat) {
+  if (mode === 'compatible') return buildCompatibleFormat(maxHeight);
+  if (mode === 'high') return buildHighQualityFormat(maxHeight);
+  return String(currentFormat || '').trim() || buildCompatibleFormat(maxHeight);
+}
+
+function refreshStreamQualityUi(applyDefaults = false) {
+  const modeField = qs('[name="stream.qualityMode"]');
+  const heightField = qs('[name="stream.maxHeight"]');
+  const formatField = qs('[name="stream.format"]');
+  const useSortField = qs('[name="stream.useFormatSort"]');
+  const sortField = qs('[name="stream.formatSort"]');
+  const useMergeField = qs('[name="stream.useMergeOutputFormat"]');
+  const mergeField = qs('[name="stream.mergeOutputFormat"]');
+
+  if (!modeField || !heightField || !formatField) return;
+
+  const mode = modeField.value || 'compatible';
+  const height = streamMaxHeight(heightField.value);
+  const autoFormat = resolveFormatForMode(mode, height, formatField.value);
+
+  if (mode !== 'custom') {
+    formatField.value = autoFormat;
+    formatField.readOnly = true;
+    formatField.classList.add('readonly');
+  } else {
+    formatField.readOnly = false;
+    formatField.classList.remove('readonly');
+  }
+
+  if (sortField) {
+    sortField.placeholder = buildFormatSort(height);
+    if (applyDefaults && (mode === 'high' || !sortField.value.trim())) {
+      sortField.value = buildFormatSort(height);
+    }
+  }
+
+  if (mergeField && applyDefaults && !mergeField.value.trim()) {
+    mergeField.value = 'mkv';
+  }
+
+  if (applyDefaults && useSortField && useMergeField) {
+    if (mode === 'high') {
+      useSortField.checked = true;
+      useMergeField.checked = true;
+    } else if (mode === 'compatible') {
+      useSortField.checked = false;
+      useMergeField.checked = false;
+    }
+  }
+}
+
+function normalizeStreamBeforeSave(stream) {
+  stream.qualityMode = ['compatible', 'high', 'custom'].includes(stream.qualityMode) ? stream.qualityMode : 'compatible';
+  stream.maxHeight = streamMaxHeight(stream.maxHeight);
+  stream.format = resolveFormatForMode(stream.qualityMode, stream.maxHeight, stream.format);
+
+  if (!String(stream.formatSort || '').trim()) {
+    stream.formatSort = buildFormatSort(stream.maxHeight);
+  }
+
+  if (!String(stream.mergeOutputFormat || '').trim()) {
+    stream.mergeOutputFormat = 'mkv';
+  }
+
+  stream.useFormatSort = Boolean(stream.useFormatSort);
+  stream.useMergeOutputFormat = Boolean(stream.useMergeOutputFormat);
+}
+
 function formatDate(value) {
   if (!value) return '-';
   const date = new Date(value);
@@ -70,6 +157,7 @@ function fillForm(config) {
       field.value = value ?? '';
     }
   });
+  refreshStreamQualityUi(false);
 }
 
 function readForm() {
@@ -86,6 +174,8 @@ function readForm() {
     }
     setByPath(config, field.name, value);
   });
+
+  normalizeStreamBeforeSave(config.stream);
 
   config.playlists = qsa('.playlist-row').map((row) => ({
     name: row.querySelector('[data-field="name"]').value.trim(),
@@ -281,6 +371,21 @@ function bindSaveButton(selector) {
   });
 }
 
+function bindStreamQualityControls() {
+  const modeField = qs('[name="stream.qualityMode"]');
+  const heightField = qs('[name="stream.maxHeight"]');
+
+  if (modeField) {
+    modeField.addEventListener('change', () => refreshStreamQualityUi(true));
+  }
+
+  if (heightField) {
+    heightField.addEventListener('change', () => refreshStreamQualityUi(true));
+    heightField.addEventListener('input', () => refreshStreamQualityUi(false));
+  }
+}
+
+bindStreamQualityControls();
 bindSaveButton('#saveBtn');
 bindSaveButton('#saveBtnBottom');
 

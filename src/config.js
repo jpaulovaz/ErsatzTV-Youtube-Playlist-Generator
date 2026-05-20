@@ -6,7 +6,42 @@ const CONFIG_DIR = path.join(ROOT_DIR, 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-const DEFAULT_STREAM_FORMAT = 'best[height<=720][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]';
+const DEFAULT_STREAM_MAX_HEIGHT = 720;
+const STREAM_QUALITY_MODES = new Set(['compatible', 'high', 'custom']);
+
+function toPositiveInteger(value, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return fallback;
+  return Math.floor(number);
+}
+
+function buildCompatibleFormat(maxHeight = DEFAULT_STREAM_MAX_HEIGHT) {
+  const height = toPositiveInteger(maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
+  return `best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
+}
+
+function buildHighQualityFormat(maxHeight = DEFAULT_STREAM_MAX_HEIGHT) {
+  const height = toPositiveInteger(maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
+  return `bestvideo[height<=${height}][vcodec!=none]+bestaudio[acodec!=none]/best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
+}
+
+function buildDefaultFormatSort(maxHeight = DEFAULT_STREAM_MAX_HEIGHT) {
+  const height = toPositiveInteger(maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
+  return `res:${height},fps`;
+}
+
+function buildStreamFormat(stream) {
+  const mode = STREAM_QUALITY_MODES.has(stream && stream.qualityMode) ? stream.qualityMode : 'compatible';
+  const maxHeight = toPositiveInteger(stream && stream.maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
+
+  if (mode === 'compatible') return buildCompatibleFormat(maxHeight);
+  if (mode === 'high') return buildHighQualityFormat(maxHeight);
+
+  return String((stream && stream.format) || buildCompatibleFormat(maxHeight)).trim();
+}
+
+const DEFAULT_STREAM_FORMAT = buildCompatibleFormat(DEFAULT_STREAM_MAX_HEIGHT);
+const DEFAULT_HIGH_QUALITY_FORMAT = buildHighQualityFormat(DEFAULT_STREAM_MAX_HEIGHT);
 
 const DEFAULT_CONFIG = {
   server: {
@@ -21,8 +56,14 @@ const DEFAULT_CONFIG = {
   },
   stream: {
     userAgent: DEFAULT_USER_AGENT,
+    qualityMode: 'compatible',
+    maxHeight: DEFAULT_STREAM_MAX_HEIGHT,
     format: DEFAULT_STREAM_FORMAT,
-    useHlsMpegTs: true
+    useHlsMpegTs: true,
+    useFormatSort: false,
+    formatSort: buildDefaultFormatSort(DEFAULT_STREAM_MAX_HEIGHT),
+    useMergeOutputFormat: false,
+    mergeOutputFormat: 'mkv'
   },
   ersatztv: {
     url: 'http://localhost:8409',
@@ -81,6 +122,56 @@ function toOptionalPositiveNumber(value) {
   return Math.floor(number);
 }
 
+function inferQualityMode(rawStream) {
+  const explicitMode = String((rawStream && rawStream.qualityMode) || '').trim();
+  if (STREAM_QUALITY_MODES.has(explicitMode)) return explicitMode;
+
+  const rawFormat = String((rawStream && rawStream.format) || '').trim();
+  const rawMaxHeight = toPositiveInteger(rawStream && rawStream.maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
+
+  if (!rawFormat || rawFormat === buildCompatibleFormat(rawMaxHeight) || rawFormat === DEFAULT_STREAM_FORMAT) {
+    return 'compatible';
+  }
+
+  if (rawFormat === buildHighQualityFormat(rawMaxHeight) || rawFormat === DEFAULT_HIGH_QUALITY_FORMAT) {
+    return 'high';
+  }
+
+  return 'custom';
+}
+
+function normalizeStreamConfig(config, rawConfig) {
+  const rawStream = rawConfig.stream && typeof rawConfig.stream === 'object' ? rawConfig.stream : {};
+  const stream = config.stream && typeof config.stream === 'object' ? config.stream : clone(DEFAULT_CONFIG.stream);
+
+  stream.userAgent = String(stream.userAgent || DEFAULT_USER_AGENT).trim();
+  stream.qualityMode = inferQualityMode(rawStream);
+  stream.maxHeight = toPositiveInteger(stream.maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
+  stream.useHlsMpegTs = stream.useHlsMpegTs !== false;
+
+  if (stream.qualityMode === 'high') {
+    stream.useFormatSort = rawStream.useFormatSort !== undefined ? Boolean(stream.useFormatSort) : true;
+    stream.useMergeOutputFormat = rawStream.useMergeOutputFormat !== undefined ? Boolean(stream.useMergeOutputFormat) : true;
+  } else if (stream.qualityMode === 'compatible') {
+    stream.useFormatSort = rawStream.useFormatSort !== undefined ? Boolean(stream.useFormatSort) : false;
+    stream.useMergeOutputFormat = rawStream.useMergeOutputFormat !== undefined ? Boolean(stream.useMergeOutputFormat) : false;
+  } else {
+    stream.useFormatSort = Boolean(stream.useFormatSort);
+    stream.useMergeOutputFormat = Boolean(stream.useMergeOutputFormat);
+  }
+
+  if (rawStream.formatSort !== undefined && String(rawStream.formatSort || '').trim()) {
+    stream.formatSort = String(rawStream.formatSort).trim();
+  } else {
+    stream.formatSort = buildDefaultFormatSort(stream.maxHeight);
+  }
+
+  stream.mergeOutputFormat = String(stream.mergeOutputFormat || 'mkv').trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'mkv';
+  stream.format = buildStreamFormat(stream);
+
+  config.stream = stream;
+}
+
 function normalizeConfig(raw) {
   const rawConfig = raw && typeof raw === 'object' ? raw : {};
   const config = deepMerge(DEFAULT_CONFIG, rawConfig);
@@ -101,10 +192,7 @@ function normalizeConfig(raw) {
     config.paths.cookiesPath = DEFAULT_CONFIG.paths.cookiesPath;
   }
 
-  config.stream = config.stream && typeof config.stream === 'object' ? config.stream : clone(DEFAULT_CONFIG.stream);
-  config.stream.userAgent = String(config.stream.userAgent || DEFAULT_USER_AGENT).trim();
-  config.stream.format = String(config.stream.format || DEFAULT_STREAM_FORMAT).trim();
-  config.stream.useHlsMpegTs = config.stream.useHlsMpegTs !== false;
+  normalizeStreamConfig(config, rawConfig);
 
   config.ersatztv = config.ersatztv && typeof config.ersatztv === 'object' ? config.ersatztv : clone(DEFAULT_CONFIG.ersatztv);
   config.ersatztv.url = String(config.ersatztv.url || DEFAULT_CONFIG.ersatztv.url).trim().replace(/\/+$/, '');
@@ -169,6 +257,12 @@ module.exports = {
   DEFAULT_CONFIG,
   DEFAULT_USER_AGENT,
   DEFAULT_STREAM_FORMAT,
+  DEFAULT_HIGH_QUALITY_FORMAT,
+  DEFAULT_STREAM_MAX_HEIGHT,
+  buildCompatibleFormat,
+  buildHighQualityFormat,
+  buildDefaultFormatSort,
+  buildStreamFormat,
   loadConfig,
   saveConfig,
   normalizeConfig

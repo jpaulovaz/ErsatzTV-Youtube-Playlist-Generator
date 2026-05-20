@@ -1,6 +1,16 @@
-# ErsatzTV YML Syncer 0.0.4
+# ErsatzTV YML Syncer 0.0.5
 
 Gerador de arquivos YML para Remote Streams do ErsatzTV usando playlists do YouTube, com interface web, logs, agendador interno e execucao individual por biblioteca/playlist.
+
+## O que mudou na 0.0.5
+
+- Adicionado `Modo de qualidade` para o script de stream:
+  - `Compativel`: usa apenas formatos com video e audio juntos. E mais estavel, mas pode cair em 360p quando o YouTube nao oferece formato unico em 720p+.
+  - `Alta qualidade`: tenta combinar `bestvideo + bestaudio`, respeitando a resolucao maxima configurada. Pode entregar 720p/1080p, mas depende mais de ffmpeg/yt-dlp e deve ser testado no ErsatzTV.
+  - `Personalizado`: permite informar manualmente o seletor `-f` do yt-dlp.
+- Adicionada configuracao de `Resolucao maxima`, com suporte a 360p, 480p, 720p, 1080p, 1440p e 2160p pela interface.
+- Adicionadas opcoes para `-S` do yt-dlp, `--merge-output-format` e formato de merge.
+- A assinatura do script agora tambem considera modo de qualidade, resolucao, ordenacao e merge. Mudancas nesses campos regravam os YML e disparam scan da biblioteca quando houver alteracao.
 
 ## O que mudou na 0.0.4
 
@@ -77,6 +87,11 @@ A interface edita esse arquivo. Alteracoes de host e porta da interface exigem r
 - `paths.ytDlpPath`: caminho do binario `yt-dlp`.
 - `paths.cookiesPath`: caminho global opcional do `cookies.txt` em formato Netscape.
 - `paths.streamScriptName`: nome do script criado dentro de cada pasta de playlist.
+- `stream.qualityMode`: `compatible`, `high` ou `custom`.
+- `stream.maxHeight`: resolucao maxima desejada, por exemplo `720` ou `1080`.
+- `stream.format`: seletor `-f` final usado pelo yt-dlp. Nos modos `compatible` e `high`, ele e recalculado automaticamente a partir da resolucao maxima.
+- `stream.useFormatSort` e `stream.formatSort`: habilitam e configuram a ordenacao `-S`, por exemplo `res:720,fps`.
+- `stream.useMergeOutputFormat` e `stream.mergeOutputFormat`: habilitam e configuram `--merge-output-format`, por exemplo `mkv`.
 - `playlists[].libraryId`: ID da biblioteca do ErsatzTV referente aquela playlist.
 - `playlists[].playoutId`: ID do playout do ErsatzTV referente aquela playlist.
 - `playlists[].cookiesPath`: caminho especifico de cookies para a playlist; vazio usa o global.
@@ -90,6 +105,34 @@ O campo de cookies nao recebe o texto bruto dos cookies. Ele recebe o caminho co
 ```
 
 Esse arquivo deve estar no formato Netscape aceito pelo `yt-dlp --cookies`. Se uma playlist tiver `cookiesPath` especifico, ele substitui o caminho global apenas naquela playlist.
+
+## Qualidade do stream
+
+A resolucao real depende dos formatos que o YouTube oferece para cada video.
+
+O modo `Compativel` usa um seletor como:
+
+```text
+best[height<=720][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]
+```
+
+Ele pede um formato ja muxado, com video e audio no mesmo arquivo. E o modo mais seguro para pipe/stdout, mas alguns videos podem ficar em 360p.
+
+O modo `Alta qualidade` usa um seletor como:
+
+```text
+bestvideo[height<=720][vcodec!=none]+bestaudio[acodec!=none]/best[height<=720][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]
+```
+
+Nesse modo, o script tambem pode usar `-S res:720,fps` e `--merge-output-format mkv`. A vantagem e tentar obter 720p/1080p quando o YouTube disponibiliza video e audio separados. A desvantagem e depender mais de ffmpeg e consumir mais CPU/rede.
+
+Para testar um video fora do ErsatzTV, use o script criado dentro da pasta da playlist:
+
+```bash
+URL="https://www.youtube.com/watch?v=ID_DO_VIDEO"
+timeout 60s /caminho/da/playlist/stream-yt.sh "$URL" > /tmp/etv-yt-test.mkv
+ffprobe -v error -show_entries stream=index,codec_type,codec_name,width,height,r_frame_rate -of json /tmp/etv-yt-test.mkv
+```
 
 ## Estrutura gerada
 
