@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ErsatzTV YML Syncer 0.0.7</title>
+  <title>ErsatzTV YML Syncer 0.0.8</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <div class="topbar-inner">
       <div>
         <h1>ErsatzTV YML Syncer</h1>
-        <p>Versao 0.0.7 - plot igual ao title e limpeza manual remove pastas vazias.</p>
+        <p>Versao 0.0.8 - runtime JS/EJS para yt-dlp e desafios atuais do YouTube.</p>
       </div>
       <div class="status-pill" id="runningPill">Carregando...</div>
     </div>
@@ -101,6 +101,30 @@
             <textarea name="stream.format" rows="3"></textarea>
           </label>
           <p class="hint wide">O modo compativel prioriza estabilidade, mas pode cair em 360p quando o YouTube nao oferece formato unico em 720p+. O modo alta qualidade tenta combinar bestvideo + bestaudio e pode entregar 720p/1080p, mas depende mais de ffmpeg e deve ser testado no ErsatzTV.</p>
+
+          <label>Runtime JS do yt-dlp
+            <select name="stream.jsRuntimeMode">
+              <option value="disabled">Desativado</option>
+              <option value="deno">Deno</option>
+              <option value="node">Node</option>
+              <option value="custom">Personalizado</option>
+            </select>
+          </label>
+          <label>Caminho do runtime JS
+            <input name="stream.jsRuntimePath" type="text" placeholder="/usr/local/bin/deno">
+          </label>
+          <label data-js-runtime-custom>Nome do runtime personalizado
+            <input name="stream.jsRuntimeCustomName" type="text" placeholder="Ex.: bun, qjs, quickjs">
+          </label>
+          <label>Componentes EJS remotos
+            <select name="stream.ejsComponents">
+              <option value="none">Nenhum</option>
+              <option value="ejs:github">ejs:github</option>
+              <option value="ejs:npm">ejs:npm</option>
+            </select>
+          </label>
+          <p class="hint wide">Use Deno em /usr/local/bin/deno com ejs:github quando o yt-dlp mostrar erros como Signature solving failed, n challenge solving failed ou Only images are available. Essas opcoes entram tanto na leitura da playlist quanto no stream-yt.sh gerado.</p>
+
           <label class="check-row">
             <input name="stream.useHlsMpegTs" type="checkbox">
             <span>Usar --hls-use-mpegts no script de stream</span>
@@ -119,7 +143,7 @@
           <label>Formato de merge
             <input name="stream.mergeOutputFormat" type="text" placeholder="mkv">
           </label>
-          <p class="hint wide">Alteracoes em yt-dlp, cookies, User-Agent, modo de qualidade, resolucao, formato, ordenacao, merge ou --hls-use-mpegts mudam a assinatura do script. Na proxima execucao, os YML dessa playlist serao regravados e o scan da biblioteca sera chamado se houver mudanca.</p>
+          <p class="hint wide">Alteracoes em yt-dlp, cookies, User-Agent, modo de qualidade, resolucao, formato, runtime JS, EJS, ordenacao, merge ou --hls-use-mpegts mudam a assinatura do script. Na proxima execucao, os YML dessa playlist serao regravados e o scan da biblioteca sera chamado se houver mudanca.</p>
         </div>
 
         <h3>ErsatzTV</h3>

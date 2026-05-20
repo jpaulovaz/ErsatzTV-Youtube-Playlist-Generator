@@ -18,7 +18,11 @@
     "useFormatSort": false,
     "formatSort": "res:720,fps",
     "useMergeOutputFormat": false,
-    "mergeOutputFormat": "mkv"
+    "mergeOutputFormat": "mkv",
+    "jsRuntimeMode": "deno",
+    "jsRuntimePath": "/usr/local/bin/deno",
+    "jsRuntimeCustomName": "deno",
+    "ejsComponents": "ejs:github"
   },
   "ersatztv": {
     "url": "http://localhost:8409",

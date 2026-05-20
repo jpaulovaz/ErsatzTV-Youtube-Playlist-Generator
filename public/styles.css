@@ -173,6 +173,8 @@ textarea {
   resize: vertical;
 }
 
+input.readonly,
+input[readonly],
 textarea.readonly,
 textarea[readonly] {
   color: var(--muted);

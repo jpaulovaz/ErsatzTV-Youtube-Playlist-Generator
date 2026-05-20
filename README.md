@@ -1,6 +1,16 @@
-# ErsatzTV YML Syncer 0.0.7
+# ErsatzTV YML Syncer 0.0.8
 
 Gerador de arquivos YML para Remote Streams do ErsatzTV usando playlists do YouTube, com interface web, logs, agendador interno e execucao individual por biblioteca/playlist.
+
+## O que mudou na 0.0.8
+
+- Adicionadas opcoes avancadas para resolver desafios JavaScript do YouTube no `yt-dlp`:
+  - `Runtime JS do yt-dlp`: `disabled`, `deno`, `node` ou `custom`.
+  - `Caminho do runtime JS`: por padrao `/usr/local/bin/deno`.
+  - `Componentes EJS remotos`: `none`, `ejs:github` ou `ejs:npm`.
+- A configuracao inicial agora usa `Deno` + `/usr/local/bin/deno` + `ejs:github`, combinacao que corrigiu erros como `Signature solving failed`, `n challenge solving failed` e `Only images are available` no ambiente de teste.
+- As opcoes de runtime JS/EJS entram tanto na leitura da playlist quanto no `stream-yt.sh` gerado dentro de cada biblioteca.
+- Mudancas nessas opcoes alteram a assinatura do script e fazem os YML serem reavaliados na proxima execucao.
 
 ## O que mudou na 0.0.7
 
@@ -30,7 +40,7 @@ Gerador de arquivos YML para Remote Streams do ErsatzTV usando playlists do YouT
 
 - O script `stream-yt.sh` de cada playlist agora e comparado antes de ser regravado.
 - Cada YML passa a receber a assinatura do script em um comentario `stream_script_hash`.
-- Se voce alterar pela interface o caminho do `yt-dlp`, cookies, User-Agent, formato ou `--hls-use-mpegts`, a proxima execucao atualiza o script e regrava os YML daquela playlist.
+- Se voce alterar pela interface o caminho do `yt-dlp`, cookies, User-Agent, formato, runtime JS/EJS ou `--hls-use-mpegts`, a proxima execucao atualiza o script e regrava os YML daquela playlist.
 - O scan automatico da biblioteca agora e chamado quando houver YML criado, movido ou atualizado. Isso cobre mudancas de configuracao do script.
 - Foi adicionado um segundo botao `Salvar configuracao` ao final da area de playlists para evitar confusao quando a pagina estiver rolada para baixo.
 
@@ -59,6 +69,7 @@ Gerador de arquivos YML para Remote Streams do ErsatzTV usando playlists do YouT
 - `yt-dlp` instalado no caminho configurado, por padrao `/usr/local/bin/yt-dlp`.
 - ErsatzTV acessivel pela URL configurada, por padrao `http://localhost:8409`.
 - Opcionalmente, um arquivo `cookies.txt` exportado do navegador em formato Netscape, se o YouTube exigir cookies no seu ambiente.
+- Opcionalmente, mas recomendado para YouTube atual: Deno instalado em `/usr/local/bin/deno` para o `yt-dlp` resolver desafios JavaScript/EJS.
 
 ## Como iniciar
 
@@ -106,6 +117,10 @@ A interface edita esse arquivo. Alteracoes de host e porta da interface exigem r
 - `stream.format`: seletor `-f` final usado pelo yt-dlp. Nos modos `compatible` e `high`, ele e recalculado automaticamente a partir da resolucao maxima.
 - `stream.useFormatSort` e `stream.formatSort`: habilitam e configuram a ordenacao `-S`, por exemplo `res:720,fps`.
 - `stream.useMergeOutputFormat` e `stream.mergeOutputFormat`: habilitam e configuram `--merge-output-format`, por exemplo `mkv`.
+- `stream.jsRuntimeMode`: runtime JavaScript usado pelo `yt-dlp`; valores: `disabled`, `deno`, `node` ou `custom`.
+- `stream.jsRuntimePath`: caminho do runtime JS, por exemplo `/usr/local/bin/deno`.
+- `stream.jsRuntimeCustomName`: nome usado quando `stream.jsRuntimeMode` for `custom`, por exemplo `bun`, `qjs` ou `quickjs`.
+- `stream.ejsComponents`: componentes EJS remotos para o `yt-dlp`; valores: `none`, `ejs:github` ou `ejs:npm`.
 - `playlists[].libraryId`: ID da biblioteca do ErsatzTV referente aquela playlist.
 - `playlists[].playoutId`: ID do playout do ErsatzTV referente aquela playlist.
 - `playlists[].cookiesPath`: caminho especifico de cookies para a playlist; vazio usa o global.
@@ -119,6 +134,34 @@ O campo de cookies nao recebe o texto bruto dos cookies. Ele recebe o caminho co
 ```
 
 Esse arquivo deve estar no formato Netscape aceito pelo `yt-dlp --cookies`. Se uma playlist tiver `cookiesPath` especifico, ele substitui o caminho global apenas naquela playlist.
+
+## Runtime JS/EJS do yt-dlp
+
+Quando o YouTube muda seus desafios internos, o `yt-dlp` pode registrar erros como:
+
+```text
+Signature solving failed
+n challenge solving failed
+Only images are available for download
+Requested format is not available
+```
+
+Para esse caso, use na interface:
+
+```text
+Runtime JS do yt-dlp: Deno
+Caminho do runtime JS: /usr/local/bin/deno
+Componentes EJS remotos: ejs:github
+```
+
+Com essa configuracao, o script gerado em cada playlist passa a incluir:
+
+```bash
+--js-runtimes "deno:/usr/local/bin/deno" \
+--remote-components "ejs:github" \
+```
+
+Esses parametros tambem sao usados quando o app chama `yt-dlp --dump-json --flat-playlist` para ler a playlist. Se quiser voltar ao comportamento antigo, selecione `Desativado` e `Nenhum`.
 
 ## Qualidade do stream
 

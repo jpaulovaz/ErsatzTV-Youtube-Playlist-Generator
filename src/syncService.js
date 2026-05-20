@@ -134,9 +134,46 @@ function findPlaylist(config, identifier) {
   ));
 }
 
+function sanitizeJsRuntimeName(value) {
+  return String(value || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
+function getYtDlpJsRuntimeArg(config) {
+  const stream = config.stream || {};
+  const mode = String(stream.jsRuntimeMode || 'disabled').trim();
+
+  if (!mode || mode === 'disabled') return '';
+
+  const runtimeName = mode === 'custom'
+    ? sanitizeJsRuntimeName(stream.jsRuntimeCustomName)
+    : sanitizeJsRuntimeName(mode);
+
+  if (!runtimeName) return '';
+
+  const runtimePath = String(stream.jsRuntimePath || '').trim();
+  return runtimePath ? `${runtimeName}:${runtimePath}` : runtimeName;
+}
+
+function getYtDlpEjsComponentsArg(config) {
+  if (!getYtDlpJsRuntimeArg(config)) return '';
+
+  const components = String((config.stream && config.stream.ejsComponents) || 'none').trim();
+  return components && components !== 'none' ? components : '';
+}
+
 function buildYtDlpCommonArgs(config, playlist) {
   const args = [];
   const cookiesPath = getEffectiveCookiesPath(config, playlist);
+  const jsRuntimeArg = getYtDlpJsRuntimeArg(config);
+  const ejsComponentsArg = getYtDlpEjsComponentsArg(config);
+
+  if (jsRuntimeArg) {
+    args.push('--js-runtimes', jsRuntimeArg);
+  }
+
+  if (ejsComponentsArg) {
+    args.push('--remote-components', ejsComponentsArg);
+  }
 
   if (cookiesPath) {
     args.push('--cookies', cookiesPath);
@@ -151,6 +188,8 @@ function buildYtDlpCommonArgs(config, playlist) {
 
 function buildStreamScriptContent(config, playlist) {
   const cookiesPath = getEffectiveCookiesPath(config, playlist);
+  const jsRuntimeArg = getYtDlpJsRuntimeArg(config);
+  const ejsComponentsArg = getYtDlpEjsComponentsArg(config);
   const useFormatSort = Boolean(config.stream.useFormatSort && config.stream.formatSort);
   const useMergeOutputFormat = Boolean(config.stream.useMergeOutputFormat && config.stream.mergeOutputFormat);
 
@@ -163,6 +202,14 @@ function buildStreamScriptContent(config, playlist) {
     `USER_AGENT=${shellCommandQuote(config.stream.userAgent)}`,
     `FORMAT=${shellCommandQuote(config.stream.format)}`
   ];
+
+  if (jsRuntimeArg) {
+    lines.push(`JS_RUNTIMES=${shellCommandQuote(jsRuntimeArg)}`);
+  }
+
+  if (ejsComponentsArg) {
+    lines.push(`EJS_COMPONENTS=${shellCommandQuote(ejsComponentsArg)}`);
+  }
 
   if (useFormatSort) {
     lines.push(`FORMAT_SORT=${shellCommandQuote(config.stream.formatSort)}`);
@@ -177,6 +224,14 @@ function buildStreamScriptContent(config, playlist) {
   }
 
   lines.push('', 'exec "$YT_DLP" \\');
+
+  if (jsRuntimeArg) {
+    lines.push('  --js-runtimes "$JS_RUNTIMES" \\');
+  }
+
+  if (ejsComponentsArg) {
+    lines.push('  --remote-components "$EJS_COMPONENTS" \\');
+  }
 
   if (cookiesPath) {
     lines.push('  --cookies "$COOKIES" \\');
@@ -443,6 +498,8 @@ async function processPlaylist(config, playlist, summary) {
     streamScriptChanged: false,
     streamQualityMode: config.stream.qualityMode || 'compatible',
     streamMaxHeight: config.stream.maxHeight || null,
+    streamJsRuntimeMode: config.stream.jsRuntimeMode || 'disabled',
+    streamEjsComponents: config.stream.ejsComponents || 'none',
     scanRequested: false,
     scanSkippedReason: null,
     scan: null,

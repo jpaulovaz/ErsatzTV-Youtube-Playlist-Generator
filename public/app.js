@@ -72,6 +72,65 @@ function buildFormatSort(maxHeight) {
   return `res:${streamMaxHeight(maxHeight)},fps`;
 }
 
+const JS_RUNTIME_DEFAULT_PATHS = {
+  deno: '/usr/local/bin/deno',
+  node: '/usr/bin/node',
+  custom: ''
+};
+const JS_RUNTIME_MODES = ['disabled', 'deno', 'node', 'custom'];
+const EJS_COMPONENT_OPTIONS = ['none', 'ejs:github', 'ejs:npm'];
+
+function defaultJsRuntimePath(mode) {
+  return JS_RUNTIME_DEFAULT_PATHS[mode] || '';
+}
+
+function sanitizeJsRuntimeName(value) {
+  return String(value || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
+function refreshYtDlpJsUi(applyDefaults = false) {
+  const modeField = qs('[name="stream.jsRuntimeMode"]');
+  const pathField = qs('[name="stream.jsRuntimePath"]');
+  const customNameField = qs('[name="stream.jsRuntimeCustomName"]');
+  const customNameWrapper = qs('[data-js-runtime-custom]');
+  const ejsField = qs('[name="stream.ejsComponents"]');
+
+  if (!modeField) return;
+
+  const mode = JS_RUNTIME_MODES.includes(modeField.value) ? modeField.value : 'deno';
+  const defaultPath = defaultJsRuntimePath(mode);
+
+  if (pathField) {
+    pathField.placeholder = defaultPath || 'Ex.: /usr/local/bin/deno';
+    if (applyDefaults && mode !== 'custom') {
+      pathField.value = defaultPath;
+    } else if (!pathField.value.trim() && defaultPath) {
+      pathField.value = defaultPath;
+    }
+
+    pathField.readOnly = mode === 'disabled';
+    pathField.classList.toggle('readonly', mode === 'disabled');
+  }
+
+  if (customNameWrapper) {
+    customNameWrapper.classList.toggle('hidden', mode !== 'custom');
+  }
+
+  if (customNameField) {
+    customNameField.readOnly = mode !== 'custom';
+    customNameField.classList.toggle('readonly', mode !== 'custom');
+    if (!customNameField.value.trim()) customNameField.value = 'deno';
+  }
+
+  if (ejsField && applyDefaults) {
+    if (mode === 'disabled') {
+      ejsField.value = 'none';
+    } else if (!EJS_COMPONENT_OPTIONS.includes(ejsField.value) || ejsField.value === 'none') {
+      ejsField.value = 'ejs:github';
+    }
+  }
+}
+
 function resolveFormatForMode(mode, maxHeight, currentFormat) {
   if (mode === 'compatible') return buildCompatibleFormat(maxHeight);
   if (mode === 'high') return buildHighQualityFormat(maxHeight);
@@ -137,6 +196,17 @@ function normalizeStreamBeforeSave(stream) {
     stream.mergeOutputFormat = 'mkv';
   }
 
+  stream.jsRuntimeMode = JS_RUNTIME_MODES.includes(stream.jsRuntimeMode) ? stream.jsRuntimeMode : 'deno';
+  stream.jsRuntimePath = String(stream.jsRuntimePath || '').trim();
+  if (!stream.jsRuntimePath && stream.jsRuntimeMode !== 'disabled') {
+    stream.jsRuntimePath = defaultJsRuntimePath(stream.jsRuntimeMode);
+  }
+  stream.jsRuntimeCustomName = sanitizeJsRuntimeName(stream.jsRuntimeCustomName) || 'deno';
+  stream.ejsComponents = EJS_COMPONENT_OPTIONS.includes(stream.ejsComponents) ? stream.ejsComponents : 'ejs:github';
+  if (stream.jsRuntimeMode === 'disabled') {
+    stream.ejsComponents = 'none';
+  }
+
   stream.useFormatSort = Boolean(stream.useFormatSort);
   stream.useMergeOutputFormat = Boolean(stream.useMergeOutputFormat);
 }
@@ -158,6 +228,7 @@ function fillForm(config) {
     }
   });
   refreshStreamQualityUi(false);
+  refreshYtDlpJsUi(false);
 }
 
 function readForm() {
@@ -385,7 +456,21 @@ function bindStreamQualityControls() {
   }
 }
 
+function bindYtDlpJsControls() {
+  const modeField = qs('[name="stream.jsRuntimeMode"]');
+  const pathField = qs('[name="stream.jsRuntimePath"]');
+
+  if (modeField) {
+    modeField.addEventListener('change', () => refreshYtDlpJsUi(true));
+  }
+
+  if (pathField) {
+    pathField.addEventListener('input', () => refreshYtDlpJsUi(false));
+  }
+}
+
 bindStreamQualityControls();
+bindYtDlpJsControls();
 bindSaveButton('#saveBtn');
 bindSaveButton('#saveBtnBottom');
 

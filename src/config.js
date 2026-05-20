@@ -8,6 +8,8 @@ const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const DEFAULT_STREAM_MAX_HEIGHT = 720;
 const STREAM_QUALITY_MODES = new Set(['compatible', 'high', 'custom']);
+const JS_RUNTIME_MODES = new Set(['disabled', 'deno', 'node', 'custom']);
+const EJS_COMPONENT_OPTIONS = new Set(['none', 'ejs:github', 'ejs:npm']);
 
 function toPositiveInteger(value, fallback) {
   const number = Number(value);
@@ -63,7 +65,11 @@ const DEFAULT_CONFIG = {
     useFormatSort: false,
     formatSort: buildDefaultFormatSort(DEFAULT_STREAM_MAX_HEIGHT),
     useMergeOutputFormat: false,
-    mergeOutputFormat: 'mkv'
+    mergeOutputFormat: 'mkv',
+    jsRuntimeMode: 'deno',
+    jsRuntimePath: '/usr/local/bin/deno',
+    jsRuntimeCustomName: 'deno',
+    ejsComponents: 'ejs:github'
   },
   ersatztv: {
     url: 'http://localhost:8409',
@@ -140,6 +146,29 @@ function inferQualityMode(rawStream) {
   return 'custom';
 }
 
+
+function normalizeJsRuntimeMode(value) {
+  const mode = String(value || '').trim();
+  return JS_RUNTIME_MODES.has(mode) ? mode : DEFAULT_CONFIG.stream.jsRuntimeMode;
+}
+
+function normalizeEjsComponents(value) {
+  const components = String(value || '').trim();
+  return EJS_COMPONENT_OPTIONS.has(components) ? components : DEFAULT_CONFIG.stream.ejsComponents;
+}
+
+function sanitizeJsRuntimeName(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '') || DEFAULT_CONFIG.stream.jsRuntimeCustomName;
+}
+
+function defaultJsRuntimePathForMode(mode) {
+  if (mode === 'deno') return '/usr/local/bin/deno';
+  if (mode === 'node') return '/usr/bin/node';
+  return '';
+}
+
 function normalizeStreamConfig(config, rawConfig) {
   const rawStream = rawConfig.stream && typeof rawConfig.stream === 'object' ? rawConfig.stream : {};
   const stream = config.stream && typeof config.stream === 'object' ? config.stream : clone(DEFAULT_CONFIG.stream);
@@ -167,6 +196,12 @@ function normalizeStreamConfig(config, rawConfig) {
   }
 
   stream.mergeOutputFormat = String(stream.mergeOutputFormat || 'mkv').trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'mkv';
+  stream.jsRuntimeMode = normalizeJsRuntimeMode(stream.jsRuntimeMode);
+  stream.jsRuntimePath = rawStream.jsRuntimePath !== undefined
+    ? String(rawStream.jsRuntimePath || '').trim()
+    : defaultJsRuntimePathForMode(stream.jsRuntimeMode);
+  stream.jsRuntimeCustomName = sanitizeJsRuntimeName(stream.jsRuntimeCustomName);
+  stream.ejsComponents = stream.jsRuntimeMode === 'disabled' ? 'none' : normalizeEjsComponents(stream.ejsComponents);
   stream.format = buildStreamFormat(stream);
 
   config.stream = stream;
@@ -259,6 +294,8 @@ module.exports = {
   DEFAULT_STREAM_FORMAT,
   DEFAULT_HIGH_QUALITY_FORMAT,
   DEFAULT_STREAM_MAX_HEIGHT,
+  JS_RUNTIME_MODES,
+  EJS_COMPONENT_OPTIONS,
   buildCompatibleFormat,
   buildHighQualityFormat,
   buildDefaultFormatSort,
