@@ -108,7 +108,7 @@ async function handlePlaylistAction(req, res, url) {
 
     const playlist = findPlaylist(config, playlistName);
     if (!playlist) {
-      sendJson(res, 404, { ok: false, error: 'Playlist nao encontrada na configuracao.' });
+      sendJson(res, 404, { ok: false, error: 'Biblioteca nao encontrada na configuracao.' });
       return true;
     }
 

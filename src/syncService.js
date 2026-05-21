@@ -387,13 +387,20 @@ function buildYmlContent(config, playlist, videoId, durationSeconds, streamScrip
 }
 
 async function fetchPlaylistVideosFromUrl(config, playlist, sourceUrl, sourceIndex) {
-  const label = `${playlist.folderName} fonte ${sourceIndex + 1}`;
+  const kind = getSourceKind(sourceUrl);
+  const label = `${playlist.folderName} fonte ${sourceIndex + 1} (${kind === 'video' ? 'video' : 'playlist'})`;
   const cmdArgs = [
     ...buildYtDlpCommonArgs(config, playlist),
-    '--dump-json',
-    '--flat-playlist',
-    sourceUrl
+    '--dump-json'
   ];
+
+  if (kind === 'video') {
+    cmdArgs.push('--no-playlist');
+  } else {
+    cmdArgs.push('--flat-playlist');
+  }
+
+  cmdArgs.push(sourceUrl);
 
   const result = await runCommand(config.paths.ytDlpPath, cmdArgs);
 
@@ -424,15 +431,16 @@ async function fetchPlaylistVideosFromUrl(config, playlist, sourceUrl, sourceInd
   return videos.map((video) => ({
     ...video,
     sourceUrl,
-    sourceIndex
+    sourceIndex,
+    sourceKind: kind
   }));
 }
 
 async function fetchPlaylistVideos(config, playlist) {
   const urls = getPlaylistUrls(playlist);
   if (urls.length === 0) {
-    const error = new Error(`Nenhuma URL de playlist configurada para ${playlist.folderName}.`);
-    error.code = 'NO_PLAYLIST_URLS';
+    const error = new Error(`Nenhuma fonte do YouTube configurada para ${playlist.folderName}.`);
+    error.code = 'NO_SOURCES';
     throw error;
   }
 
@@ -479,6 +487,7 @@ async function fetchPlaylistVideos(config, playlist) {
     sourceResults.push({
       index,
       url: sourceUrl,
+      kind: getSourceKind(sourceUrl),
       fetched: sourceVideos.length,
       unique: uniqueFromSource,
       duplicates: duplicateFromSource
@@ -557,7 +566,7 @@ async function inspectCookieFile(cookiesPath) {
   };
 
   if (!cookiesPath) {
-    result.error = 'Nenhum caminho de cookies.txt foi configurado para esta playlist nem no campo global.';
+    result.error = 'Nenhum caminho de cookies.txt foi configurado para esta biblioteca nem no campo global.';
     return result;
   }
 
@@ -589,11 +598,47 @@ function getVideoIdFromUrl(urlValue) {
     const parts = parsed.pathname.split('/').filter(Boolean);
     if (parsed.hostname.includes('youtu.be') && parts[0]) return parts[0];
     if (parts[0] === 'shorts' && parts[1]) return parts[1];
+    if (parts[0] === 'embed' && parts[1]) return parts[1];
   } catch {
     // Ignora URLs fora do formato padrao; o yt-dlp tentara lidar com elas abaixo.
   }
 
   return '';
+}
+
+function isSingleVideoSource(urlValue) {
+  try {
+    const parsed = new URL(String(urlValue || ''));
+    const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    const hasList = parsed.searchParams.has('list');
+
+    if (hasList) return false;
+
+    if ((host === 'youtube.com' || host === 'm.youtube.com' || host.endsWith('.youtube.com')) && parsed.pathname === '/watch') {
+      return Boolean(parsed.searchParams.get('v'));
+    }
+
+    if ((host === 'youtube.com' || host === 'm.youtube.com' || host.endsWith('.youtube.com')) && parts[0] === 'shorts' && parts[1]) {
+      return true;
+    }
+
+    if ((host === 'youtube.com' || host === 'm.youtube.com' || host.endsWith('.youtube.com')) && parts[0] === 'embed' && parts[1]) {
+      return true;
+    }
+
+    if (host === 'youtu.be' && parts[0]) {
+      return true;
+    }
+  } catch {
+    // URLs nao padronizadas serao tratadas como fonte generica pelo yt-dlp.
+  }
+
+  return false;
+}
+
+function getSourceKind(sourceUrl) {
+  return isSingleVideoSource(sourceUrl) ? 'video' : 'playlist';
 }
 
 async function resolveCookieTestTarget(config, playlist) {
@@ -603,7 +648,7 @@ async function resolveCookieTestTarget(config, playlist) {
     const directVideoId = getVideoIdFromUrl(urls[index]);
     if (directVideoId) {
       return {
-        source: 'playlist-url-video-id',
+        source: 'source-url-video-id',
         sourceIndex: index,
         sourceUrl: urls[index],
         videoId: directVideoId,
@@ -614,7 +659,7 @@ async function resolveCookieTestTarget(config, playlist) {
   }
 
   if (urls.length === 0) {
-    const error = new Error('Nenhuma URL de playlist configurada para escolher o video de teste.');
+    const error = new Error('Nenhuma fonte do YouTube configurada para escolher o video de teste.');
     error.status = 'target-error';
     throw error;
   }
@@ -632,7 +677,7 @@ async function resolveCookieTestTarget(config, playlist) {
   const result = await runCommand(config.paths.ytDlpPath, listArgs, { timeoutMs: 60000 });
   if (result.code !== 0 || result.timedOut) {
     const classification = classifyYtDlpCookieTest(result.stderr, result.stdout);
-    const error = new Error(result.timedOut ? 'Timeout ao consultar a playlist para escolher o video de teste.' : classification.message);
+    const error = new Error(result.timedOut ? 'Timeout ao consultar a fonte para escolher o video de teste.' : classification.message);
     error.status = result.timedOut ? 'timeout' : classification.status;
     error.ytDlp = {
       code: result.code,
@@ -670,7 +715,7 @@ async function resolveCookieTestTarget(config, playlist) {
 async function testPlaylistCookies(config, identifier) {
   const playlist = findPlaylist(config, identifier);
   if (!playlist) {
-    const error = new Error('Playlist nao encontrada na configuracao.');
+    const error = new Error('Biblioteca nao encontrada na configuracao.');
     error.statusCode = 404;
     throw error;
   }
@@ -1030,7 +1075,7 @@ function createRunSummary(options) {
 async function runSync(config, options = {}) {
   const targetPlaylist = options.playlistName ? findPlaylist(config, options.playlistName) : null;
   if (options.playlistName && !targetPlaylist) {
-    const error = new Error('Playlist nao encontrada na configuracao.');
+    const error = new Error('Biblioteca nao encontrada na configuracao.');
     error.statusCode = 404;
     throw error;
   }
@@ -1095,7 +1140,7 @@ async function manualCleanupPlaylist(config, identifier) {
 
   const playlist = findPlaylist(config, identifier);
   if (!playlist) {
-    const error = new Error('Playlist nao encontrada na configuracao.');
+    const error = new Error('Biblioteca nao encontrada na configuracao.');
     error.statusCode = 404;
     throw error;
   }
@@ -1171,7 +1216,7 @@ async function manualCleanupPlaylist(config, identifier) {
 async function runPlaylistApiAction(config, identifier, action) {
   const playlist = findPlaylist(config, identifier);
   if (!playlist) {
-    const error = new Error('Playlist nao encontrada na configuracao.');
+    const error = new Error('Biblioteca nao encontrada na configuracao.');
     error.statusCode = 404;
     throw error;
   }

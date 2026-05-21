@@ -261,6 +261,63 @@ function formatDate(value) {
   return date.toLocaleString();
 }
 
+function formatStep(step) {
+  const value = String(step || 'idle');
+  if (value === 'idle') return 'Aguardando';
+  if (value === 'starting') return 'Iniciando';
+  if (value === 'prepare-base-dir') return 'Preparando pastas';
+  if (value === 'error') return 'Erro';
+  if (value.startsWith('process-playlist:')) return `Atualizando ${value.split(':').slice(1).join(':')}`;
+  if (value.startsWith('manual-cleanup:')) return `Limpando ${value.split(':').slice(1).join(':')}`;
+  return value;
+}
+
+function formatRunSummary(summary) {
+  if (!summary) return 'Nenhuma execucao registrada ainda.';
+
+  if (summary.message && !summary.playlists) {
+    return `Erro: ${summary.message}`;
+  }
+
+  if (summary.trigger === 'manual-cleanup') {
+    return [
+      `Limpeza manual: ${summary.playlist || '-'}`,
+      `Videos validos na fonte: ${summary.videosFound || 0}`,
+      `YML verificados: ${summary.filesChecked || 0}`,
+      `YML removidos: ${summary.filesRemoved || 0}`,
+      `Pastas vazias removidas: ${summary.foldersRemoved || 0}`
+    ].join('\n');
+  }
+
+  const lines = [
+    `Bibliotecas atualizadas: ${summary.playlistsProcessed || 0}`,
+    `Bibliotecas com erro: ${summary.playlistsFailed || 0}`,
+    `Videos encontrados: ${summary.videosFound || 0}`,
+    `Videos repetidos ignorados: ${summary.videosDuplicate || 0}`,
+    `YML criados: ${summary.filesCreated || 0}`,
+    `YML atualizados: ${summary.filesUpdated || 0}`,
+    `YML sem mudanca: ${summary.filesUnchanged || 0}`
+  ];
+
+  if (Array.isArray(summary.playlists) && summary.playlists.length > 0) {
+    lines.push('', 'Detalhes:');
+    for (const playlist of summary.playlists) {
+      const sources = playlist.sourceCount || 0;
+      const found = playlist.videosFound || 0;
+      const created = playlist.filesCreated || 0;
+      const updated = playlist.filesUpdated || 0;
+      const duplicates = playlist.videosDuplicate || 0;
+      const scan = playlist.scanRequested ? 'scan solicitado' : 'scan ignorado';
+      lines.push(`- ${playlist.name}: ${sources} fonte(s), ${found} video(s), ${created} criado(s), ${updated} atualizado(s), ${duplicates} repetido(s), ${scan}`);
+      if (playlist.failed && playlist.error) {
+        lines.push(`  Erro: ${playlist.error}`);
+      }
+    }
+  }
+
+  return lines.join('\n');
+}
+
 
 function formatCookieTestDetails(result) {
   if (!result) return '';
@@ -367,8 +424,8 @@ function addPlaylistUrlField(row, value = '') {
   const item = document.createElement('div');
   item.className = 'playlist-url-row';
   item.innerHTML = `
-    <input data-field="url" type="url" value="" placeholder="https://www.youtube.com/watch?v=...&list=...">
-    <button type="button" class="compact danger" data-action="remove-url">Remover</button>
+    <input data-field="url" type="url" value="" placeholder="Cole uma playlist ou um video do YouTube">
+    <button type="button" class="compact danger ghost" data-action="remove-url">Remover</button>
   `;
 
   item.querySelector('[data-field="url"]').value = value || '';
@@ -389,13 +446,16 @@ function addPlaylistRow(playlist = { name: '', url: '', urls: [], enabled: true,
   row.innerHTML = `
     <div class="playlist-fields">
       <div class="playlist-top-row">
-        <label>Nome da pasta
-          <input data-field="name" type="text" value="">
+        <label>
+          <span class="label-line">Nome da pasta <span class="help" tabindex="0" data-help="Nome da pasta que sera criada dentro da pasta base. Exemplo: Mix_Principal.">?</span></span>
+          <input data-field="name" type="text" value="" placeholder="Mix_Principal">
         </label>
-        <label>Library ID
+        <label>
+          <span class="label-line">Library ID <span class="help" tabindex="0" data-help="ID da biblioteca no ErsatzTV. Usado para avisar o ErsatzTV quando novos YML forem criados ou atualizados.">?</span></span>
           <input data-field="libraryId" type="number" min="1" value="">
         </label>
-        <label>Playout ID
+        <label>
+          <span class="label-line">Playout ID <span class="help" tabindex="0" data-help="ID do playout no ErsatzTV. Usado pelo botao Atualizar playout.">?</span></span>
           <input data-field="playoutId" type="number" min="1" value="">
         </label>
       </div>
@@ -403,16 +463,17 @@ function addPlaylistRow(playlist = { name: '', url: '', urls: [], enabled: true,
       <div class="playlist-url-section">
         <div class="playlist-section-header">
           <div>
-            <strong>URLs das playlists da pasta</strong>
-            <p>Adicione uma URL por campo. Videos repetidos sao ignorados pelo ID do YouTube.</p>
+            <strong>Fontes do YouTube</strong>
+            <p>Use playlists, videos avulsos ou os dois. Repetidos sao ignorados automaticamente. Para video unico, use uma URL sem list=.</p>
           </div>
-          <button type="button" class="compact" data-action="add-url">Adicionar playlist</button>
+          <button type="button" class="compact" data-action="add-url">Adicionar fonte</button>
         </div>
         <div class="playlist-url-list" data-role="url-list"></div>
       </div>
 
       <div class="playlist-meta-row">
-        <label>Caminho do cookies.txt desta pasta
+        <label>
+          <span class="label-line">cookies.txt desta biblioteca <span class="help" tabindex="0" data-help="Opcional. Preencha apenas se esta biblioteca precisar de outro cookies.txt. Vazio usa o arquivo global.">?</span></span>
           <input data-field="cookiesPath" type="text" placeholder="Vazio usa o caminho global">
         </label>
         <label class="check-row">
@@ -422,13 +483,13 @@ function addPlaylistRow(playlist = { name: '', url: '', urls: [], enabled: true,
       </div>
     </div>
     <div class="playlist-actions">
-      <button type="button" class="primary" data-action="run">Executar esta biblioteca</button>
-      <button type="button" data-action="test-cookies">Testar cookies</button>
-      <button type="button" data-action="cleanup">Limpar YML ausentes</button>
-      <button type="button" data-action="scan">Scan biblioteca</button>
-      <button type="button" data-action="empty-trash">Limpar lixo ErsatzTV</button>
-      <button type="button" data-action="rebuild-playout">Atualizar playout</button>
-      <button type="button" class="danger" data-action="remove">Remover da config</button>
+      <button type="button" class="primary" data-action="run" title="Atualiza apenas esta biblioteca">Executar</button>
+      <button type="button" data-action="test-cookies" title="Testa o cookies.txt contra o YouTube">Testar cookies</button>
+      <button type="button" data-action="cleanup" title="Remove YML que nao estao mais nas fontes desta biblioteca">Limpar YML</button>
+      <button type="button" data-action="scan" title="Solicita scan da biblioteca no ErsatzTV">Scan</button>
+      <button type="button" data-action="empty-trash" title="Solicita limpeza de lixo da biblioteca no ErsatzTV">Limpar lixo</button>
+      <button type="button" data-action="rebuild-playout" title="Solicita atualizacao do playout no ErsatzTV">Atualizar playout</button>
+      <button type="button" class="danger" data-action="remove" title="Remove esta biblioteca da configuracao">Remover</button>
     </div>
     <pre class="playlist-result hidden" data-role="playlist-result"></pre>
   `;
@@ -463,26 +524,26 @@ function assertPlaylistSaved(name) {
 async function runPlaylistAction(row, action) {
   const name = row.querySelector('[data-field="name"]').value.trim();
   if (!name) {
-    showToast('Informe o nome da playlist antes de executar a acao.');
+    showToast('Informe o nome da biblioteca antes de executar a acao.');
     return;
   }
 
   if (!assertPlaylistSaved(name)) {
-    showToast('Salve a configuracao antes de executar acoes nesta playlist.');
+    showToast('Salve a configuracao antes de executar acoes nesta biblioteca.');
     return;
   }
 
   if (action === 'cleanup') {
-    const confirmed = window.confirm(`Remover YML que nao aparecem mais nas playlists da pasta "${name}"?`);
+    const confirmed = window.confirm(`Remover YML que nao aparecem mais nas fontes da biblioteca "${name}"?`);
     if (!confirmed) return;
   }
 
   const payload = await api(`/api/playlists/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
   if (action === 'run') {
-    showToast(payload.message || 'Sincronizacao da playlist iniciada. Acompanhe pelos logs.');
+    showToast(payload.message || 'Atualizacao da biblioteca iniciada. Acompanhe pelos logs.');
   } else if (action === 'test-cookies') {
     renderPlaylistInlineResult(row, payload.result);
-    showToast(payload.result && payload.result.ok ? 'Cookies validos no teste ativo.' : 'Teste de cookies falhou. Veja o resultado na playlist e os logs.');
+    showToast(payload.result && payload.result.ok ? 'Cookies validos no teste ativo.' : 'Teste de cookies falhou. Veja o resultado na biblioteca e os logs.');
   } else {
     showToast(payload.result && payload.result.ok === false ? 'Acao enviada, mas a API retornou falha. Veja os logs.' : 'Acao executada. Veja os logs.');
   }
@@ -510,7 +571,7 @@ async function saveConfig() {
 
 async function runNow() {
   await api('/api/run', { method: 'POST' });
-  showToast('Sincronizacao iniciada. Acompanhe pelos logs.');
+  showToast('Atualizacao iniciada. Acompanhe pelos logs.');
   await refreshAll();
 }
 
@@ -522,12 +583,12 @@ function renderStatus(status) {
   pill.classList.toggle('idle', !running);
 
   qs('#syncState').textContent = running ? 'Executando' : 'Ocioso';
-  qs('#syncStep').textContent = status.sync.currentStep || '-';
+  qs('#syncStep').textContent = formatStep(status.sync.currentStep);
   qs('#lastRun').textContent = formatDate(status.sync.finishedAt || status.sync.startedAt);
   qs('#nextRun').textContent = status.scheduler.nextRunAt ? formatDate(status.scheduler.nextRunAt) : '-';
 
   const summary = status.sync.lastResult || status.sync.lastError || null;
-  qs('#lastSummary').textContent = summary ? JSON.stringify(summary, null, 2) : 'Sem execucao registrada ainda.';
+  qs('#lastSummary').textContent = formatRunSummary(summary);
 }
 
 function renderLogs(payload) {

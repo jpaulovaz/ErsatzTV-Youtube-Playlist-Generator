@@ -1,113 +1,30 @@
-# ErsatzTV YML Syncer 0.0.12
+# ErsatzTV YouTube Playlist Generator
 
-Gerador de arquivos YML para Remote Streams do ErsatzTV usando uma ou mais playlists do YouTube por pasta/biblioteca, com interface web, logs, agendador interno, deduplicacao por video e execucao individual por biblioteca.
+Aplicativo para criar e manter arquivos `.yml` de Remote Streams do ErsatzTV usando playlists e videos do YouTube.
 
-## O que mudou na 0.0.12
+A ideia principal e simples: cada biblioteca do aplicativo cria uma pasta, gera os arquivos `.yml`, cria o `stream-yt.sh` dentro da propria pasta e avisa o ErsatzTV quando novos arquivos forem criados ou atualizados.
 
-- A interface de cada pasta/biblioteca foi reorganizada em linhas mais previsiveis:
-  - linha 1: nome da pasta, Library ID e Playout ID;
-  - linha 2: URLs das playlists em campos individuais, com botao `Adicionar playlist`;
-  - linha 3: cookies especificos da pasta e status ativo.
-- O campo multilinha de URLs foi substituido por uma lista de campos, evitando textarea grande e melhorando a leitura quando a pasta tem varias playlists.
-- Cada URL pode ser removida individualmente; a interface mantem pelo menos um campo vazio para facilitar a edicao.
-- Os botoes de acao da biblioteca foram padronizados em grade responsiva para ficarem mais uniformes e evitar desalinhamento.
-- O formato salvo continua igual: `playlists[].urls` permanece sendo a lista usada pelo sincronizador, mantendo compatibilidade com a versao anterior.
+## Recursos principais
 
-## O que mudou na 0.0.11
-
-- Cada pasta/biblioteca agora pode receber uma ou mais URLs de playlists do YouTube.
-- A configuracao antiga `playlists[].url` continua compativel, mas a interface passa a salvar `playlists[].urls` como lista.
-- Durante a leitura, o app junta os videos de todas as URLs da mesma pasta e remove duplicados pelo ID do YouTube, mantendo a primeira ocorrencia.
-- A limpeza manual tambem compara contra a uniao de todas as URLs daquela pasta, evitando remover YML de videos que continuam em outra playlist da mesma biblioteca.
-- O resultado da execucao mostra quantas fontes foram lidas, quantos videos vieram no total e quantos duplicados foram ignorados.
-- Adicionada protecao contra conflito de nome de arquivo quando dois videos diferentes geram o mesmo nome de YML: nesse caso o app adiciona o ID do video ao nome do arquivo.
-
-## O que mudou na 0.0.10
-
-- Adicionado o botao `Testar cookies` em cada playlist/biblioteca.
-- O teste e ativo: o app executa o `yt-dlp` usando o `cookies.txt` efetivo daquela playlist, o runtime JS/EJS configurado e um video da propria playlist.
-- Antes do teste ativo, o app valida se o arquivo de cookies esta configurado, existe, nao esta vazio e pode ser lido pelo usuario que roda o app.
-- O resultado aparece diretamente abaixo da playlist e tambem e registrado nos logs.
-- O teste usa `--simulate`/`--skip-download`, entao ele nao baixa o video; ele apenas verifica se o YouTube libera metadados/formato usando os cookies informados.
-- A resposta classifica erros comuns como cookie invalido/expirado, desafio JavaScript/EJS, formato indisponivel, rate limit ou timeout.
-
-## O que mudou na 0.0.9
-
-- Adicionado o campo `Perfil de codec/container`:
-  - `auto`: comportamento atual do yt-dlp.
-  - `mp4_h264_aac`: tenta preferir MP4/H.264 para video e AAC/M4A para audio.
-- Nao foi criada opcao para MP3 por padrao: para YouTube, MP3 normalmente exigiria transcodificacao de audio, o que aumentaria custo e latencia. Para o ErsatzTV, AAC/M4A e a alternativa mais compativel e eficiente.
-- O seletor `-f` gerado automaticamente agora considera modo de qualidade, resolucao maxima e perfil de codec.
-- Mudancas no perfil de codec alteram a assinatura do script e fazem os YML serem reavaliados na proxima execucao.
-
-## O que mudou na 0.0.8
-
-- Adicionadas opcoes avancadas para resolver desafios JavaScript do YouTube no `yt-dlp`:
-  - `Runtime JS do yt-dlp`: `disabled`, `deno`, `node` ou `custom`.
-  - `Caminho do runtime JS`: por padrao `/usr/local/bin/deno`.
-  - `Componentes EJS remotos`: `none`, `ejs:github` ou `ejs:npm`.
-- A configuracao inicial agora usa `Deno` + `/usr/local/bin/deno` + `ejs:github`, combinacao que corrigiu erros como `Signature solving failed`, `n challenge solving failed` e `Only images are available` no ambiente de teste.
-- As opcoes de runtime JS/EJS entram tanto na leitura da playlist quanto no `stream-yt.sh` gerado dentro de cada biblioteca.
-- Mudancas nessas opcoes alteram a assinatura do script e fazem os YML serem reavaliados na proxima execucao.
-
-## O que mudou na 0.0.7
-
-- O campo `plot` do YML agora recebe exatamente o mesmo texto usado em `title`. Na pratica, a Description do ErsatzTV passa a ficar igual ao titulo do item.
-- A limpeza manual agora remove tambem as pastas vazias deixadas depois da exclusao dos YML ausentes.
-- Corrigida a rotina de remocao de pastas vazias: ela agora percorre as subpastas da playlist e preserva apenas a pasta raiz da biblioteca.
-
-## O que mudou na 0.0.6
-
-- Os YML gerados agora incluem metadados basicos reconhecidos pelo ErsatzTV:
-  - `title`: titulo limpo do video do YouTube.
-  - `plot`: o mesmo texto usado em `title`, para que a Description do ErsatzTV fique igual ao titulo do item.
-- Como os YML passam a ter novo conteudo, a proxima execucao atualizara os arquivos existentes e disparara scan da biblioteca quando houver mudanca.
-- O campo `subtitle` nao foi incluido porque ele nao e um campo confirmado para Remote Stream Definition no YAML do ErsatzTV Legacy.
-
-## O que mudou na 0.0.5
-
-- Adicionado `Modo de qualidade` para o script de stream:
-  - `Compativel`: usa apenas formatos com video e audio juntos. E mais estavel, mas pode cair em 360p quando o YouTube nao oferece formato unico em 720p+.
-  - `Alta qualidade`: tenta combinar `bestvideo + bestaudio`, respeitando a resolucao maxima configurada. Pode entregar 720p/1080p, mas depende mais de ffmpeg/yt-dlp e deve ser testado no ErsatzTV.
-  - `Personalizado`: permite informar manualmente o seletor `-f` do yt-dlp.
-- Adicionada configuracao de `Resolucao maxima`, com suporte a 360p, 480p, 720p, 1080p, 1440p e 2160p pela interface.
-- Adicionadas opcoes para `-S` do yt-dlp, `--merge-output-format` e formato de merge.
-- A assinatura do script agora tambem considera modo de qualidade, resolucao, ordenacao e merge. Mudancas nesses campos regravam os YML e disparam scan da biblioteca quando houver alteracao.
-
-## O que mudou na 0.0.4
-
-- O script `stream-yt.sh` de cada playlist agora e comparado antes de ser regravado.
-- Cada YML passa a receber a assinatura do script em um comentario `stream_script_hash`.
-- Se voce alterar pela interface o caminho do `yt-dlp`, cookies, User-Agent, formato, runtime JS/EJS ou `--hls-use-mpegts`, a proxima execucao atualiza o script e regrava os YML daquela playlist.
-- O scan automatico da biblioteca agora e chamado quando houver YML criado, movido ou atualizado. Isso cobre mudancas de configuracao do script.
-- Foi adicionado um segundo botao `Salvar configuracao` ao final da area de playlists para evitar confusao quando a pagina estiver rolada para baixo.
-
-## O que mudou na 0.0.3
-
-- Mantido o botao global `Executar agora` no topo.
-- Adicionado o botao `Executar esta biblioteca` em cada playlist/biblioteca.
-- A execucao automatica ou manual agora dispara `scan` da biblioteca somente quando criar ou mover arquivos YML naquela playlist.
-- Se nada novo for criado, o scan automatico da Library ID e ignorado para evitar chamadas desnecessarias ao ErsatzTV.
-- A interface foi ajustada para ficar centralizada e evitar barra de rolagem horizontal.
-- O campo de cookies foi esclarecido: ele espera o caminho de um arquivo `cookies.txt` em formato Netscape, nao o conteudo bruto colado no campo.
-
-## O que mudou na 0.0.2
-
-- Cada playlist cria e atualiza seu proprio script `stream-yt.sh` dentro da pasta da playlist.
-- Cada YML passa a apontar para o script local da propria playlist.
-- O caminho global de `cookies.txt` pode ser configurado pela interface.
-- Cada playlist agora tem sua propria `Library ID` e seu proprio `Playout ID`.
-- A execucao automatica nao remove mais arquivos YML ausentes.
-- A limpeza de YML ausentes virou acao manual por playlist.
-- Foram adicionadas acoes manuais por playlist para scan da biblioteca, limpeza de lixo do ErsatzTV e rebuild do playout.
+- Interface web para configuracao e acompanhamento.
+- Uma ou mais fontes do YouTube por biblioteca.
+- Suporte a playlists e links diretos de videos.
+- Deduplicacao por ID do YouTube dentro da mesma biblioteca.
+- Script `stream-yt.sh` criado automaticamente dentro de cada pasta.
+- `Library ID` e `Playout ID` por biblioteca.
+- Agendador interno por intervalo em minutos.
+- Teste ativo de `cookies.txt` usando o proprio `yt-dlp`.
+- Configuracoes de qualidade, resolucao maxima, codec/container e runtime JS/EJS do `yt-dlp`.
+- Limpeza manual de YML ausentes, com remocao de pastas vazias.
+- Scan automatico da biblioteca somente quando houver YML criado, atualizado ou movido.
 
 ## Requisitos
 
 - Node.js 18 ou superior.
-- `yt-dlp` instalado no caminho configurado, por padrao `/usr/local/bin/yt-dlp`.
-- ErsatzTV acessivel pela URL configurada, por padrao `http://localhost:8409`.
-- Opcionalmente, um arquivo `cookies.txt` exportado do navegador em formato Netscape, se o YouTube exigir cookies no seu ambiente.
-- Opcionalmente, mas recomendado para YouTube atual: Deno instalado em `/usr/local/bin/deno` para o `yt-dlp` resolver desafios JavaScript/EJS.
+- `yt-dlp` instalado, normalmente em `/usr/local/bin/yt-dlp`.
+- ErsatzTV acessivel pela rede, normalmente em `http://localhost:8409`.
+- Opcional: `cookies.txt` em formato Netscape quando o YouTube exigir login/cookies.
+- Recomendado: Deno em `/usr/local/bin/deno` para ajudar o `yt-dlp` a resolver desafios recentes do YouTube.
 
 ## Como iniciar
 
@@ -122,19 +39,19 @@ Depois acesse:
 http://localhost:3099
 ```
 
-## Execucao manual sem interface
-
-```bash
-npm run sync
-```
-
-## Validacao basica de sintaxe
+## Validar arquivos do projeto
 
 ```bash
 npm run check
 ```
 
-## Configuracao principal
+## Executar sem abrir a interface
+
+```bash
+npm run sync
+```
+
+## Configuracao
 
 A configuracao fica em:
 
@@ -142,45 +59,51 @@ A configuracao fica em:
 config/config.json
 ```
 
-A interface edita esse arquivo. Alteracoes de host e porta da interface exigem reiniciar o processo Node.js.
+A interface edita esse arquivo. Mudancas de host ou porta exigem reiniciar o processo Node.js.
 
-### Campos importantes
+## Como usar
 
-- `paths.baseDir`: pasta onde cada playlist/biblioteca tera sua subpasta.
-- `paths.ytDlpPath`: caminho do binario `yt-dlp`.
-- `paths.cookiesPath`: caminho global opcional do `cookies.txt` em formato Netscape.
-- `paths.streamScriptName`: nome do script criado dentro de cada pasta de playlist.
-- `stream.qualityMode`: `compatible`, `high` ou `custom`.
-- `stream.maxHeight`: resolucao maxima desejada, por exemplo `720` ou `1080`.
-- `stream.codecProfile`: `auto` ou `mp4_h264_aac`. Use `mp4_h264_aac` para tentar evitar VP9/AV1/Opus/WebM e priorizar H.264 + AAC/M4A.
-- `stream.format`: seletor `-f` final usado pelo yt-dlp. Nos modos `compatible` e `high`, ele e recalculado automaticamente a partir da resolucao maxima e do perfil de codec.
-- `stream.useFormatSort` e `stream.formatSort`: habilitam e configuram a ordenacao `-S`, por exemplo `res:720,fps`.
-- `stream.useMergeOutputFormat` e `stream.mergeOutputFormat`: habilitam e configuram `--merge-output-format`, por exemplo `mkv`.
-- `stream.jsRuntimeMode`: runtime JavaScript usado pelo `yt-dlp`; valores: `disabled`, `deno`, `node` ou `custom`.
-- `stream.jsRuntimePath`: caminho do runtime JS, por exemplo `/usr/local/bin/deno`.
-- `stream.jsRuntimeCustomName`: nome usado quando `stream.jsRuntimeMode` for `custom`, por exemplo `bun`, `qjs` ou `quickjs`.
-- `stream.ejsComponents`: componentes EJS remotos para o `yt-dlp`; valores: `none`, `ejs:github` ou `ejs:npm`.
-- `playlists[].url`: primeira URL da pasta, mantida por compatibilidade com versoes anteriores.
-- `playlists[].urls`: lista de URLs de playlists do YouTube que devem alimentar a mesma pasta/biblioteca.
-- `playlists[].libraryId`: ID da biblioteca do ErsatzTV referente aquela pasta/biblioteca.
-- `playlists[].playoutId`: ID do playout do ErsatzTV referente aquela pasta/biblioteca.
-- `playlists[].cookiesPath`: caminho especifico de cookies para a pasta/biblioteca; vazio usa o global.
+1. Abra a interface web.
+2. Configure a pasta base dos YML.
+3. Configure o caminho do `yt-dlp`.
+4. Configure o `cookies.txt` global, se necessario.
+5. Crie uma biblioteca.
+6. Informe o nome da pasta, Library ID e Playout ID.
+7. Adicione uma ou mais fontes do YouTube: playlists, videos avulsos ou ambos.
+8. Salve.
+9. Use `Executar` na biblioteca ou `Executar agora` no topo.
+
+## Fontes do YouTube
+
+Cada biblioteca aceita mais de uma fonte. Exemplos:
+
+```text
+https://www.youtube.com/playlist?list=PL...
+https://www.youtube.com/watch?v=ID_DO_VIDEO&list=PL...
+https://www.youtube.com/watch?v=ID_DO_VIDEO
+https://youtu.be/ID_DO_VIDEO
+https://www.youtube.com/shorts/ID_DO_VIDEO
+```
+
+Links de playlist sao lidos como lista. Links diretos de video sao tratados como item unico. Se a URL de video tiver o parametro list=, ela sera tratada como playlist; para usar apenas aquele video, remova o trecho list= da URL. Se o mesmo video aparecer em mais de uma fonte da mesma biblioteca, apenas um YML sera criado.
 
 ## Cookies do YouTube
 
-O campo de cookies nao recebe o texto bruto dos cookies. Ele recebe o caminho completo para um arquivo `cookies.txt` ja salvo no disco, por exemplo:
+O campo de cookies recebe o caminho de um arquivo `cookies.txt` salvo no servidor. Nao cole o conteudo bruto dos cookies na interface.
+
+Exemplo:
 
 ```text
-/home/joaopaulovaz/comerciais/videclipes/youtube/cookies.txt
+/home/usuario/youtube/cookies.txt
 ```
 
-Esse arquivo deve estar no formato Netscape aceito pelo `yt-dlp --cookies`. Se uma playlist tiver `cookiesPath` especifico, ele substitui o caminho global apenas naquela playlist.
+Use o botao `Testar cookies` da biblioteca para validar se o YouTube ainda aceita aquele arquivo. O teste executa o `yt-dlp` em modo simulado e nao baixa o video.
 
-Use o botao `Testar cookies` da playlist para fazer uma validacao ativa. O app escolhe um video da propria playlist e executa o `yt-dlp` em modo simulado, com os cookies e as opcoes JS/EJS configuradas. Um resultado `valid` indica que, naquele momento, o YouTube aceitou os cookies para acessar o video de teste. O teste roda com o usuario do processo Node.js; se o ErsatzTV roda com outro usuario, esse outro usuario tambem precisa conseguir ler o mesmo arquivo.
+Importante: o teste roda com o usuario que executa o app Node.js. Se o ErsatzTV roda com outro usuario, esse outro usuario tambem precisa conseguir ler o mesmo `cookies.txt`.
 
 ## Runtime JS/EJS do yt-dlp
 
-Quando o YouTube muda seus desafios internos, o `yt-dlp` pode registrar erros como:
+Se aparecerem erros como estes nos logs:
 
 ```text
 Signature solving failed
@@ -189,123 +112,38 @@ Only images are available for download
 Requested format is not available
 ```
 
-Para esse caso, use na interface:
+Use esta configuracao:
 
 ```text
-Runtime JS do yt-dlp: Deno
-Caminho do runtime JS: /usr/local/bin/deno
-Componentes EJS remotos: ejs:github
+Runtime JS: Deno
+Caminho do runtime: /usr/local/bin/deno
+Componentes EJS: ejs:github
 ```
 
-Com essa configuracao, o script gerado em cada playlist passa a incluir:
-
-```bash
---js-runtimes "deno:/usr/local/bin/deno" \
---remote-components "ejs:github" \
-```
-
-Esses parametros tambem sao usados quando o app chama `yt-dlp --dump-json --flat-playlist` para ler a playlist. Se quiser voltar ao comportamento antigo, selecione `Desativado` e `Nenhum`.
+Essa configuracao sera usada tanto para ler as fontes quanto para gerar o script de stream de cada biblioteca.
 
 ## Qualidade do stream
 
-A resolucao real depende dos formatos que o YouTube oferece para cada video.
+- `Compativel`: prioriza estabilidade. Usa formatos com video e audio juntos quando possivel.
+- `Alta qualidade`: tenta combinar video e audio separados para conseguir resolucoes maiores.
+- `Personalizado`: libera o seletor manual `-f` do `yt-dlp`.
 
-O campo `Perfil de codec/container` controla se o app deve deixar o yt-dlp escolher automaticamente ou se deve tentar priorizar formatos MP4/H.264 + AAC/M4A. Essa segunda opcao tende a ser mais previsivel para o ErsatzTV e evita fontes VP9/AV1/Opus/WebM quando houver alternativa no YouTube.
+A resolucao maxima e apenas um limite. Se o YouTube nao oferecer aquela resolucao para o video, o `yt-dlp` usara a melhor opcao disponivel abaixo dela.
 
-MP3 nao foi incluido como perfil padrao porque o YouTube normalmente nao entrega MP3 nativo. Converter para MP3 exigiria pos-processamento/transcodificacao pelo ffmpeg antes de entregar ao ErsatzTV, o que pioraria latencia e performance. Para streaming linear, AAC/M4A e a escolha mais eficiente.
-
-O modo `Compativel` usa um seletor como:
-
-```text
-best[height<=720][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]
-```
-
-Ele pede um formato ja muxado, com video e audio no mesmo arquivo. E o modo mais seguro para pipe/stdout, mas alguns videos podem ficar em 360p. Com perfil MP4/H.264 + AAC/M4A, o seletor tenta primeiro formatos MP4 com H.264/AAC e cai para outros formatos se necessario.
-
-O modo `Alta qualidade` usa um seletor como:
-
-```text
-bestvideo[height<=720][vcodec!=none]+bestaudio[acodec!=none]/best[height<=720][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]
-```
-
-Nesse modo, o script tambem pode usar `-S res:720,fps` e `--merge-output-format mkv`. A vantagem e tentar obter 720p/1080p quando o YouTube disponibiliza video e audio separados. A desvantagem e depender mais de ffmpeg e consumir mais CPU/rede. Com perfil MP4/H.264 + AAC/M4A, o seletor tenta combinar video H.264/MP4 com audio AAC/M4A antes de cair para formatos mais genericos.
-
-Para testar um video fora do ErsatzTV, use o script criado dentro da pasta da playlist:
-
-```bash
-URL="https://www.youtube.com/watch?v=ID_DO_VIDEO"
-timeout 60s /caminho/da/playlist/stream-yt.sh "$URL" > /tmp/etv-yt-test.mkv
-ffprobe -v error -show_entries stream=index,codec_type,codec_name,width,height,r_frame_rate -of json /tmp/etv-yt-test.mkv
-```
-
-## Estrutura gerada
-
-Para uma pasta/biblioteca chamada `Mix_Principal`, mesmo com varias URLs de playlists, o app cria uma unica estrutura semelhante a:
-
-```text
-baseDir/
-  Mix_Principal/
-    stream-yt.sh
-    Artista A/
-      Artista A - Musica 1.yml
-    Artista B/
-      Artista B - Musica 2.yml
-```
-
-Cada YML aponta para o script dentro da propria pasta/biblioteca e inclui uma assinatura do script para detectar mudancas futuras:
-
-```yml
-# generated_by: ErsatzTV Youtube Playlist Generator
-# stream_script_hash: 0123456789abcdef
-script: "/caminho/base/Mix_Principal/stream-yt.sh https://www.youtube.com/watch?v=VIDEO_ID"
-is_live: false
-duration: "00:03:40"
-title: "Artista A - Musica 1"
-plot: "Artista A - Musica 1"
-```
-
-Os campos `title` e `plot` sao usados pelo ErsatzTV como metadados do Remote Stream. Eles podem aparecer no XMLTV/EPG e em Graphics Elements, por exemplo em variaveis como `{{ Epg[0].Title }}` e descricao/plot quando o template do ErsatzTV expuser esse dado.
-
-## Fluxo automatico
-
-A execucao agendada, o botao global `Executar agora` e o botao `Executar esta biblioteca` fazem o mesmo tipo de sincronizacao: consultam todas as URLs configuradas naquela pasta, removem duplicados pelo ID do YouTube e garantem que todos os videos atuais tenham YML criado/atualizado.
-
-O scan automatico da biblioteca do ErsatzTV e chamado quando a rodada cria, move ou atualiza algum YML naquela pasta/biblioteca. Se todos os arquivos ja existirem com o mesmo conteudo, o app registra nos logs que o scan foi ignorado.
+O perfil `Preferir MP4/H.264 + AAC` tenta evitar VP9, AV1, Opus e WebM quando houver alternativa mais compativel.
 
 ## Limpeza
 
-A execucao agendada e os botoes de execucao nao apagam YML de videos ausentes da playlist. Eles apenas garantem que os videos atuais tenham YML criado/atualizado.
+A execucao automatica nao remove YML antigos. Para remover arquivos que nao estao mais nas fontes da biblioteca, use o botao `Limpar YML` na propria biblioteca.
 
-Para remover YML de videos que sairam das playlists, use o botao `Limpar YML ausentes` na linha da pasta/biblioteca. Essa acao consulta todas as URLs atuais daquela pasta, monta a uniao de IDs do YouTube, remove apenas os YML cujo video nao aparece mais em nenhuma delas e, em seguida, remove as pastas vazias que sobrarem dentro da pasta.
+Essa acao tambem remove pastas vazias deixadas apos a exclusao dos YML.
 
-## Acoes por pasta/biblioteca
+## Acoes por biblioteca
 
-Na interface, cada pasta/biblioteca tem botoes para:
-
-- `Executar esta biblioteca`: sincroniza somente aquela pasta/biblioteca, considerando todas as URLs configuradas nela.
-- `Testar cookies`: executa um teste ativo com yt-dlp usando uma das URLs da pasta.
-- `Limpar YML ausentes`: remove arquivos locais que nao pertencem mais a nenhuma URL configurada naquela pasta.
-- `Scan biblioteca`: chama `POST /api/libraries/{libraryId}/scan` manualmente.
-- `Limpar lixo ErsatzTV`: chama `POST /api/libraries/{libraryId}/empty-trash` manualmente.
-- `Atualizar playout`: chama `POST /api/playout/{playoutId}/rebuild` manualmente.
-
-## Endpoints internos
-
-- `GET /api/config`
-- `PUT /api/config`
-- `POST /api/run`
-- `GET /api/status`
-- `GET /api/logs?limit=250`
-- `POST /api/logs/clear`
-- `POST /api/playlists/:name/run`
-- `POST /api/playlists/:name/cleanup`
-- `POST /api/playlists/:name/test-cookies`
-- `POST /api/playlists/:name/scan`
-- `POST /api/playlists/:name/empty-trash`
-- `POST /api/playlists/:name/rebuild-playout`
-
-## Observacoes
-
-- O app impede operacoes locais simultaneas para evitar conflito entre sincronizacao e limpeza manual.
-- O script de stream e verificado em cada execucao e so e regravado quando o conteudo muda. Quando muda, os YML recebem uma nova assinatura e sao atualizados na rodada seguinte.
-- Se uma pasta/biblioteca nao tiver `Library ID`, o scan automatico sera ignorado e registrado nos logs.
+- `Executar`: atualiza apenas aquela biblioteca.
+- `Testar cookies`: valida o cookies.txt com uma chamada real ao YouTube.
+- `Limpar YML`: remove arquivos que nao pertencem mais as fontes atuais.
+- `Scan`: solicita scan da biblioteca no ErsatzTV.
+- `Limpar lixo`: solicita limpeza de lixo da biblioteca no ErsatzTV.
+- `Atualizar playout`: solicita rebuild do playout no ErsatzTV.
+- `Remover`: remove a biblioteca da configuracao local.

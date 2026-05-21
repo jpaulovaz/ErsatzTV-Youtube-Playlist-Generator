@@ -3,25 +3,33 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ErsatzTV YML Syncer 0.0.12</title>
+  <title>ErsatzTV YouTube Playlist Generator</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <div>
-        <h1>ErsatzTV YML Syncer</h1>
-        <p>Versao 0.0.12 - URLs de playlists em campos individuais por pasta.</p>
+      <div class="brand">
+        <span class="brand-mark">YT</span>
+        <div>
+          <h1>ErsatzTV YouTube Playlist Generator</h1>
+          <p>Gere e mantenha arquivos YML para canais do ErsatzTV usando playlists e videos do YouTube.</p>
+        </div>
       </div>
-      <div class="status-pill" id="runningPill">Carregando...</div>
+      <div class="topbar-actions">
+        <div class="status-pill" id="runningPill">Carregando...</div>
+        <button id="runNowBtn" class="primary">Executar agora</button>
+      </div>
     </div>
   </header>
 
   <main class="layout">
     <section class="card status-card">
       <div class="card-header">
-        <h2>Status</h2>
-        <button id="runNowBtn" class="primary">Executar agora</button>
+        <div>
+          <h2>Status</h2>
+          <p>Acompanhe a ultima execucao e o proximo agendamento.</p>
+        </div>
       </div>
       <div class="grid metrics">
         <div>
@@ -46,160 +54,195 @@
 
     <section class="card">
       <div class="card-header">
-        <h2>Configuracao</h2>
-        <button id="saveBtn" class="primary">Salvar configuracao</button>
+        <div>
+          <h2>Configuracao geral</h2>
+          <p>Defina os caminhos, a qualidade do stream e a conexao com o ErsatzTV.</p>
+        </div>
+        <button id="saveBtn" class="primary">Salvar</button>
       </div>
 
       <form id="configForm">
-        <h3>Servidor da interface</h3>
-        <div class="form-grid two">
-          <label>Host
-            <input name="server.host" type="text" placeholder="0.0.0.0">
-          </label>
-          <label>Porta
-            <input name="server.port" type="number" min="1" max="65535">
-          </label>
+        <div class="settings-block">
+          <h3>Interface</h3>
+          <div class="form-grid two">
+            <label>
+              <span class="label-line">Host <span class="help" tabindex="0" data-help="Use 0.0.0.0 para acessar a interface por outro dispositivo da rede. Use 127.0.0.1 para acesso apenas local.">?</span></span>
+              <input name="server.host" type="text" placeholder="0.0.0.0">
+            </label>
+            <label>
+              <span class="label-line">Porta <span class="help" tabindex="0" data-help="Porta usada pela interface web. Exemplo: 3099 abre a interface em http://servidor:3099.">?</span></span>
+              <input name="server.port" type="number" min="1" max="65535">
+            </label>
+          </div>
         </div>
 
-        <h3>Caminhos e stream</h3>
-        <div class="form-grid two">
-          <label>Diretorio base dos YML
-            <input name="paths.baseDir" type="text">
-          </label>
-          <label>Caminho do yt-dlp
-            <input name="paths.ytDlpPath" type="text">
-          </label>
-          <label>Arquivo cookies.txt global opcional
-            <input name="paths.cookiesPath" type="text" placeholder="Ex.: /home/usuario/youtube/cookies.txt">
-          </label>
-          <label>Nome do script criado em cada playlist
-            <input name="paths.streamScriptName" type="text" placeholder="stream-yt.sh">
-          </label>
-          <p class="hint wide">Use aqui o caminho de um arquivo cookies.txt em formato Netscape. Nao cole o conteudo bruto dos cookies neste campo.</p>
-          <label class="wide">User-Agent usado pelo yt-dlp
-            <textarea name="stream.userAgent" rows="2"></textarea>
-          </label>
-
-          <label>Modo de qualidade
-            <select name="stream.qualityMode">
-              <option value="compatible">Compativel: video e audio no mesmo formato</option>
-              <option value="high">Alta qualidade: bestvideo + bestaudio</option>
-              <option value="custom">Personalizado: usar seletor manual</option>
-            </select>
-          </label>
-          <label>Resolucao maxima
-            <select name="stream.maxHeight">
-              <option value="360">360p</option>
-              <option value="480">480p</option>
-              <option value="720">720p</option>
-              <option value="1080">1080p</option>
-              <option value="1440">1440p</option>
-              <option value="2160">2160p</option>
-            </select>
-          </label>
-          <label>Perfil de codec/container
-            <select name="stream.codecProfile">
-              <option value="auto">Automatico do yt-dlp</option>
-              <option value="mp4_h264_aac">Preferir MP4/H.264 + AAC/M4A</option>
-            </select>
-          </label>
-          <p class="hint wide">Para streaming no ErsatzTV, MP3 nao e recomendado: normalmente exigiria transcodificacao de audio e pioraria a performance. O perfil MP4/H.264 + AAC/M4A tenta evitar VP9/AV1/Opus/WebM e usa formatos mais compativeis sem recodificar quando o YouTube disponibiliza esses formatos.</p>
-          <label class="wide">Formato yt-dlp do stream
-            <textarea name="stream.format" rows="3"></textarea>
-          </label>
-          <p class="hint wide">O modo compativel prioriza estabilidade, mas pode cair em 360p quando o YouTube nao oferece formato unico em 720p+. O modo alta qualidade tenta combinar bestvideo + bestaudio e pode entregar 720p/1080p, mas depende mais de ffmpeg e deve ser testado no ErsatzTV.</p>
-
-          <label>Runtime JS do yt-dlp
-            <select name="stream.jsRuntimeMode">
-              <option value="disabled">Desativado</option>
-              <option value="deno">Deno</option>
-              <option value="node">Node</option>
-              <option value="custom">Personalizado</option>
-            </select>
-          </label>
-          <label>Caminho do runtime JS
-            <input name="stream.jsRuntimePath" type="text" placeholder="/usr/local/bin/deno">
-          </label>
-          <label data-js-runtime-custom>Nome do runtime personalizado
-            <input name="stream.jsRuntimeCustomName" type="text" placeholder="Ex.: bun, qjs, quickjs">
-          </label>
-          <label>Componentes EJS remotos
-            <select name="stream.ejsComponents">
-              <option value="none">Nenhum</option>
-              <option value="ejs:github">ejs:github</option>
-              <option value="ejs:npm">ejs:npm</option>
-            </select>
-          </label>
-          <p class="hint wide">Use Deno em /usr/local/bin/deno com ejs:github quando o yt-dlp mostrar erros como Signature solving failed, n challenge solving failed ou Only images are available. Essas opcoes entram tanto na leitura da playlist quanto no stream-yt.sh gerado.</p>
-
-          <label class="check-row">
-            <input name="stream.useHlsMpegTs" type="checkbox">
-            <span>Usar --hls-use-mpegts no script de stream</span>
-          </label>
-          <label class="check-row">
-            <input name="stream.useFormatSort" type="checkbox">
-            <span>Usar ordenacao -S do yt-dlp</span>
-          </label>
-          <label>Ordenacao -S
-            <input name="stream.formatSort" type="text" placeholder="res:720,fps">
-          </label>
-          <label class="check-row">
-            <input name="stream.useMergeOutputFormat" type="checkbox">
-            <span>Usar --merge-output-format</span>
-          </label>
-          <label>Formato de merge
-            <input name="stream.mergeOutputFormat" type="text" placeholder="mkv">
-          </label>
-          <p class="hint wide">Alteracoes em yt-dlp, cookies, User-Agent, modo de qualidade, resolucao, perfil de codec, formato, runtime JS, EJS, ordenacao, merge ou --hls-use-mpegts mudam a assinatura do script. Na proxima execucao, os YML dessa playlist serao regravados e o scan da biblioteca sera chamado se houver mudanca.</p>
+        <div class="settings-block">
+          <h3>Arquivos</h3>
+          <div class="form-grid two">
+            <label>
+              <span class="label-line">Pasta base dos YML <span class="help" tabindex="0" data-help="Pasta onde serao criadas as bibliotecas. Cada biblioteca tera uma subpasta propria com os arquivos .yml e o stream-yt.sh.">?</span></span>
+              <input name="paths.baseDir" type="text" placeholder="/home/usuario/youtube/youtube">
+            </label>
+            <label>
+              <span class="label-line">Caminho do yt-dlp <span class="help" tabindex="0" data-help="Caminho completo do executavel yt-dlp. Exemplo: /usr/local/bin/yt-dlp.">?</span></span>
+              <input name="paths.ytDlpPath" type="text" placeholder="/usr/local/bin/yt-dlp">
+            </label>
+            <label>
+              <span class="label-line">cookies.txt global <span class="help" tabindex="0" data-help="Caminho de um arquivo cookies.txt em formato Netscape. Nao cole o conteudo dos cookies aqui. Cada biblioteca pode usar outro arquivo se necessario.">?</span></span>
+              <input name="paths.cookiesPath" type="text" placeholder="/home/usuario/youtube/cookies.txt">
+            </label>
+            <label>
+              <span class="label-line">Nome do script local <span class="help" tabindex="0" data-help="Nome do script criado dentro de cada biblioteca. O padrao stream-yt.sh e recomendado.">?</span></span>
+              <input name="paths.streamScriptName" type="text" placeholder="stream-yt.sh">
+            </label>
+          </div>
         </div>
 
-        <h3>ErsatzTV</h3>
-        <div class="form-grid two">
-          <label>URL
-            <input name="ersatztv.url" type="text">
-          </label>
-          <label>Timeout API (segundos)
-            <input name="ersatztv.apiTimeoutSeconds" type="number" min="1">
-          </label>
+        <div class="settings-block">
+          <h3>Qualidade do video</h3>
+          <div class="form-grid three">
+            <label>
+              <span class="label-line">Modo de qualidade <span class="help" tabindex="0" data-help="Compativel prioriza estabilidade. Alta qualidade tenta juntar video e audio separados para conseguir resolucoes maiores. Personalizado libera o seletor manual do yt-dlp.">?</span></span>
+              <select name="stream.qualityMode">
+                <option value="compatible">Compativel</option>
+                <option value="high">Alta qualidade</option>
+                <option value="custom">Personalizado</option>
+              </select>
+            </label>
+            <label>
+              <span class="label-line">Resolucao maxima <span class="help" tabindex="0" data-help="E o limite maximo. Se o YouTube nao oferecer essa resolucao, o yt-dlp usara a melhor opcao disponivel abaixo dela.">?</span></span>
+              <select name="stream.maxHeight">
+                <option value="360">360p</option>
+                <option value="480">480p</option>
+                <option value="720">720p</option>
+                <option value="1080">1080p</option>
+                <option value="1440">1440p</option>
+                <option value="2160">2160p</option>
+              </select>
+            </label>
+            <label>
+              <span class="label-line">Perfil de formato <span class="help" tabindex="0" data-help="Automatico deixa o yt-dlp escolher. MP4/H.264 + AAC tenta usar formatos mais compativeis com players e transcodificacao.">?</span></span>
+              <select name="stream.codecProfile">
+                <option value="auto">Automatico</option>
+                <option value="mp4_h264_aac">Preferir MP4/H.264 + AAC</option>
+              </select>
+            </label>
+          </div>
         </div>
 
-        <h3>Agendador</h3>
-        <div class="form-grid two">
-          <label class="check-row">
-            <input name="scheduler.enabled" type="checkbox">
-            <span>Ativar execucao periodica</span>
-          </label>
-          <label>Intervalo (minutos)
-            <input name="scheduler.intervalMinutes" type="number" min="1">
-          </label>
-          <label class="check-row">
-            <input name="scheduler.runOnStartup" type="checkbox">
-            <span>Executar ao iniciar a interface</span>
-          </label>
+        <details class="settings-block advanced">
+          <summary>Opcoes avancadas do yt-dlp</summary>
+          <div class="form-grid two advanced-grid">
+            <label class="wide">
+              <span class="label-line">User-Agent <span class="help" tabindex="0" data-help="Texto enviado ao YouTube para simular um navegador. Mantenha o padrao se nao houver motivo para alterar.">?</span></span>
+              <textarea name="stream.userAgent" rows="2"></textarea>
+            </label>
+            <label class="wide">
+              <span class="label-line">Seletor de formato <span class="help" tabindex="0" data-help="Com modo Compativel ou Alta qualidade este campo e preenchido automaticamente. No modo Personalizado, informe o seletor -f do yt-dlp.">?</span></span>
+              <textarea name="stream.format" rows="3"></textarea>
+            </label>
+            <label>
+              <span class="label-line">Runtime JS <span class="help" tabindex="0" data-help="Ajuda o yt-dlp a resolver protecoes recentes do YouTube. Deno com /usr/local/bin/deno costuma ser a melhor opcao.">?</span></span>
+              <select name="stream.jsRuntimeMode">
+                <option value="disabled">Desativado</option>
+                <option value="deno">Deno</option>
+                <option value="node">Node</option>
+                <option value="custom">Personalizado</option>
+              </select>
+            </label>
+            <label>
+              <span class="label-line">Caminho do runtime <span class="help" tabindex="0" data-help="Caminho do Deno, Node ou outro runtime JS. Exemplo recomendado: /usr/local/bin/deno.">?</span></span>
+              <input name="stream.jsRuntimePath" type="text" placeholder="/usr/local/bin/deno">
+            </label>
+            <label data-js-runtime-custom>
+              <span class="label-line">Nome personalizado <span class="help" tabindex="0" data-help="Use apenas quando o runtime JS nao for Deno nem Node. Exemplo: bun.">?</span></span>
+              <input name="stream.jsRuntimeCustomName" type="text" placeholder="bun">
+            </label>
+            <label>
+              <span class="label-line">Componentes EJS <span class="help" tabindex="0" data-help="Use ejs:github quando o yt-dlp mostrar erros de signature, n challenge ou only images are available.">?</span></span>
+              <select name="stream.ejsComponents">
+                <option value="none">Nenhum</option>
+                <option value="ejs:github">ejs:github</option>
+                <option value="ejs:npm">ejs:npm</option>
+              </select>
+            </label>
+            <label class="check-row">
+              <input name="stream.useHlsMpegTs" type="checkbox">
+              <span>Usar HLS em MPEG-TS <span class="help" tabindex="0" data-help="Mantem --hls-use-mpegts no script. Em geral ajuda na entrega do stream para o ErsatzTV.">?</span></span>
+            </label>
+            <label class="check-row">
+              <input name="stream.useFormatSort" type="checkbox">
+              <span>Usar ordenacao de formatos <span class="help" tabindex="0" data-help="Ativa -S no yt-dlp. Em geral e util no modo Alta qualidade para priorizar resolucao e FPS.">?</span></span>
+            </label>
+            <label>
+              <span class="label-line">Ordenacao <span class="help" tabindex="0" data-help="Criterio usado pelo -S. Exemplo: res:720,fps.">?</span></span>
+              <input name="stream.formatSort" type="text" placeholder="res:720,fps">
+            </label>
+            <label class="check-row">
+              <input name="stream.useMergeOutputFormat" type="checkbox">
+              <span>Definir formato de merge <span class="help" tabindex="0" data-help="Usado quando video e audio vem separados. MKV costuma ser flexivel para testes.">?</span></span>
+            </label>
+            <label>
+              <span class="label-line">Formato de merge <span class="help" tabindex="0" data-help="Exemplo: mkv. Use apenas se a opcao de merge estiver ativa.">?</span></span>
+              <input name="stream.mergeOutputFormat" type="text" placeholder="mkv">
+            </label>
+          </div>
+        </details>
+
+        <div class="settings-block">
+          <h3>ErsatzTV</h3>
+          <div class="form-grid two">
+            <label>
+              <span class="label-line">URL do ErsatzTV <span class="help" tabindex="0" data-help="Endereco da interface/API do ErsatzTV. Exemplo: http://localhost:8409.">?</span></span>
+              <input name="ersatztv.url" type="text" placeholder="http://localhost:8409">
+            </label>
+            <label>
+              <span class="label-line">Timeout da API <span class="help" tabindex="0" data-help="Tempo maximo, em segundos, para chamadas de scan, limpar lixo e atualizar playout.">?</span></span>
+              <input name="ersatztv.apiTimeoutSeconds" type="number" min="1">
+            </label>
+          </div>
         </div>
 
-        <h3>Limpeza manual</h3>
-        <p class="warning">A execucao agendada nao remove YML. A remocao de videos ausentes acontece somente pelo botao de limpeza de cada playlist. Essa limpeza tambem remove automaticamente pastas vazias deixadas apos a exclusao dos YML.</p>
+        <div class="settings-block">
+          <h3>Agendador</h3>
+          <div class="form-grid three">
+            <label class="check-row">
+              <input name="scheduler.enabled" type="checkbox">
+              <span>Ativar execucao periodica <span class="help" tabindex="0" data-help="Quando ativo, o app verifica as fontes no intervalo definido.">?</span></span>
+            </label>
+            <label>
+              <span class="label-line">Intervalo em minutos <span class="help" tabindex="0" data-help="Tempo entre uma verificacao e outra. Exemplo: 60 para rodar de hora em hora.">?</span></span>
+              <input name="scheduler.intervalMinutes" type="number" min="1">
+            </label>
+            <label class="check-row">
+              <input name="scheduler.runOnStartup" type="checkbox">
+              <span>Executar ao iniciar <span class="help" tabindex="0" data-help="Roda uma verificacao automaticamente quando o aplicativo e iniciado.">?</span></span>
+            </label>
+          </div>
+        </div>
       </form>
     </section>
 
     <section class="card">
       <div class="card-header">
         <div>
-          <h2>Pastas / Bibliotecas</h2>
-          <p>Cada pasta pode ter uma ou mais URLs de playlists do YouTube, com uma Library ID e um Playout ID no ErsatzTV. Videos repetidos entre as URLs da mesma pasta sao ignorados pelo ID do YouTube.</p>
+          <h2>Bibliotecas</h2>
+          <p>Cada biblioteca cria uma pasta e pode misturar playlists e videos avulsos do YouTube.</p>
         </div>
-        <button id="addPlaylistBtn">Adicionar pasta</button>
+        <button id="addPlaylistBtn">Adicionar biblioteca</button>
       </div>
       <div id="playlistList" class="playlist-list"></div>
       <div class="section-actions">
-        <button id="saveBtnBottom" class="primary">Salvar configuracao</button>
+        <button id="saveBtnBottom" class="primary">Salvar</button>
       </div>
     </section>
 
     <section class="card logs-card">
       <div class="card-header">
-        <h2>Logs</h2>
+        <div>
+          <h2>Logs</h2>
+          <p>Historico das operacoes executadas pelo aplicativo.</p>
+        </div>
         <button id="clearLogsBtn">Limpar logs</button>
       </div>
       <pre id="logs" class="logs"></pre>
