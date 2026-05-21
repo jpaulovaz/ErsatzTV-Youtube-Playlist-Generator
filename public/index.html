@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ErsatzTV YML Syncer 0.0.10</title>
+  <title>ErsatzTV YML Syncer 0.0.3</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <div class="topbar-inner">
       <div>
         <h1>ErsatzTV YML Syncer</h1>
-        <p>Versao 0.0.10 - teste ativo de cookies por playlist usando yt-dlp.</p>
+        <p>Versao 0.0.3 - geracao de YML, script de stream por playlist, interface e agendador.</p>
       </div>
       <div class="status-pill" id="runningPill">Carregando...</div>
     </div>
@@ -79,78 +79,13 @@
           <label class="wide">User-Agent usado pelo yt-dlp
             <textarea name="stream.userAgent" rows="2"></textarea>
           </label>
-
-          <label>Modo de qualidade
-            <select name="stream.qualityMode">
-              <option value="compatible">Compativel: video e audio no mesmo formato</option>
-              <option value="high">Alta qualidade: bestvideo + bestaudio</option>
-              <option value="custom">Personalizado: usar seletor manual</option>
-            </select>
-          </label>
-          <label>Resolucao maxima
-            <select name="stream.maxHeight">
-              <option value="360">360p</option>
-              <option value="480">480p</option>
-              <option value="720">720p</option>
-              <option value="1080">1080p</option>
-              <option value="1440">1440p</option>
-              <option value="2160">2160p</option>
-            </select>
-          </label>
-          <label>Perfil de codec/container
-            <select name="stream.codecProfile">
-              <option value="auto">Automatico do yt-dlp</option>
-              <option value="mp4_h264_aac">Preferir MP4/H.264 + AAC/M4A</option>
-            </select>
-          </label>
-          <p class="hint wide">Para streaming no ErsatzTV, MP3 nao e recomendado: normalmente exigiria transcodificacao de audio e pioraria a performance. O perfil MP4/H.264 + AAC/M4A tenta evitar VP9/AV1/Opus/WebM e usa formatos mais compativeis sem recodificar quando o YouTube disponibiliza esses formatos.</p>
           <label class="wide">Formato yt-dlp do stream
-            <textarea name="stream.format" rows="3"></textarea>
+            <textarea name="stream.format" rows="2"></textarea>
           </label>
-          <p class="hint wide">O modo compativel prioriza estabilidade, mas pode cair em 360p quando o YouTube nao oferece formato unico em 720p+. O modo alta qualidade tenta combinar bestvideo + bestaudio e pode entregar 720p/1080p, mas depende mais de ffmpeg e deve ser testado no ErsatzTV.</p>
-
-          <label>Runtime JS do yt-dlp
-            <select name="stream.jsRuntimeMode">
-              <option value="disabled">Desativado</option>
-              <option value="deno">Deno</option>
-              <option value="node">Node</option>
-              <option value="custom">Personalizado</option>
-            </select>
-          </label>
-          <label>Caminho do runtime JS
-            <input name="stream.jsRuntimePath" type="text" placeholder="/usr/local/bin/deno">
-          </label>
-          <label data-js-runtime-custom>Nome do runtime personalizado
-            <input name="stream.jsRuntimeCustomName" type="text" placeholder="Ex.: bun, qjs, quickjs">
-          </label>
-          <label>Componentes EJS remotos
-            <select name="stream.ejsComponents">
-              <option value="none">Nenhum</option>
-              <option value="ejs:github">ejs:github</option>
-              <option value="ejs:npm">ejs:npm</option>
-            </select>
-          </label>
-          <p class="hint wide">Use Deno em /usr/local/bin/deno com ejs:github quando o yt-dlp mostrar erros como Signature solving failed, n challenge solving failed ou Only images are available. Essas opcoes entram tanto na leitura da playlist quanto no stream-yt.sh gerado.</p>
-
           <label class="check-row">
             <input name="stream.useHlsMpegTs" type="checkbox">
             <span>Usar --hls-use-mpegts no script de stream</span>
           </label>
-          <label class="check-row">
-            <input name="stream.useFormatSort" type="checkbox">
-            <span>Usar ordenacao -S do yt-dlp</span>
-          </label>
-          <label>Ordenacao -S
-            <input name="stream.formatSort" type="text" placeholder="res:720,fps">
-          </label>
-          <label class="check-row">
-            <input name="stream.useMergeOutputFormat" type="checkbox">
-            <span>Usar --merge-output-format</span>
-          </label>
-          <label>Formato de merge
-            <input name="stream.mergeOutputFormat" type="text" placeholder="mkv">
-          </label>
-          <p class="hint wide">Alteracoes em yt-dlp, cookies, User-Agent, modo de qualidade, resolucao, perfil de codec, formato, runtime JS, EJS, ordenacao, merge ou --hls-use-mpegts mudam a assinatura do script. Na proxima execucao, os YML dessa playlist serao regravados e o scan da biblioteca sera chamado se houver mudanca.</p>
         </div>
 
         <h3>ErsatzTV</h3>
@@ -179,7 +114,13 @@
         </div>
 
         <h3>Limpeza manual</h3>
-        <p class="warning">A execucao agendada nao remove YML. A remocao de videos ausentes acontece somente pelo botao de limpeza de cada playlist. Essa limpeza tambem remove automaticamente pastas vazias deixadas apos a exclusao dos YML.</p>
+        <p class="warning">A execucao agendada nao remove YML. A remocao de videos ausentes acontece somente pelo botao de limpeza de cada playlist.</p>
+        <div class="form-grid two">
+          <label class="check-row">
+            <input name="cleanup.removeEmptyArtistFolders" type="checkbox">
+            <span>Remover pastas de artistas vazias apos limpeza manual</span>
+          </label>
+        </div>
       </form>
     </section>
 
@@ -192,9 +133,6 @@
         <button id="addPlaylistBtn">Adicionar playlist</button>
       </div>
       <div id="playlistList" class="playlist-list"></div>
-      <div class="section-actions">
-        <button id="saveBtnBottom" class="primary">Salvar configuracao</button>
-      </div>
     </section>
 
     <section class="card logs-card">
