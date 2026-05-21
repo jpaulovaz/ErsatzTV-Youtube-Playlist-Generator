@@ -1,6 +1,15 @@
-# ErsatzTV YML Syncer 0.0.9
+# ErsatzTV YML Syncer 0.0.10
 
 Gerador de arquivos YML para Remote Streams do ErsatzTV usando playlists do YouTube, com interface web, logs, agendador interno e execucao individual por biblioteca/playlist.
+
+## O que mudou na 0.0.10
+
+- Adicionado o botao `Testar cookies` em cada playlist/biblioteca.
+- O teste e ativo: o app executa o `yt-dlp` usando o `cookies.txt` efetivo daquela playlist, o runtime JS/EJS configurado e um video da propria playlist.
+- Antes do teste ativo, o app valida se o arquivo de cookies esta configurado, existe, nao esta vazio e pode ser lido pelo usuario que roda o app.
+- O resultado aparece diretamente abaixo da playlist e tambem e registrado nos logs.
+- O teste usa `--simulate`/`--skip-download`, entao ele nao baixa o video; ele apenas verifica se o YouTube libera metadados/formato usando os cookies informados.
+- A resposta classifica erros comuns como cookie invalido/expirado, desafio JavaScript/EJS, formato indisponivel, rate limit ou timeout.
 
 ## O que mudou na 0.0.9
 
@@ -144,6 +153,8 @@ O campo de cookies nao recebe o texto bruto dos cookies. Ele recebe o caminho co
 ```
 
 Esse arquivo deve estar no formato Netscape aceito pelo `yt-dlp --cookies`. Se uma playlist tiver `cookiesPath` especifico, ele substitui o caminho global apenas naquela playlist.
+
+Use o botao `Testar cookies` da playlist para fazer uma validacao ativa. O app escolhe um video da propria playlist e executa o `yt-dlp` em modo simulado, com os cookies e as opcoes JS/EJS configuradas. Um resultado `valid` indica que, naquele momento, o YouTube aceitou os cookies para acessar o video de teste. O teste roda com o usuario do processo Node.js; se o ErsatzTV roda com outro usuario, esse outro usuario tambem precisa conseguir ler o mesmo arquivo.
 
 ## Runtime JS/EJS do yt-dlp
 

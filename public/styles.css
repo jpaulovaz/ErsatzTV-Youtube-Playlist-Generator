@@ -320,6 +320,34 @@ button.danger {
   gap: 10px;
 }
 
+
+.playlist-result {
+  width: 100%;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  background: #020617;
+  border: 1px solid var(--line);
+  color: #cbd5e1;
+}
+
+.playlist-result.ok {
+  border-color: rgba(34, 197, 94, 0.65);
+  background: rgba(34, 197, 94, 0.08);
+  color: #bbf7d0;
+}
+
+.playlist-result.fail {
+  border-color: rgba(249, 115, 22, 0.65);
+  background: rgba(249, 115, 22, 0.1);
+  color: #fed7aa;
+}
+
+
 .section-actions {
   display: flex;
   justify-content: flex-end;

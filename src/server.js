@@ -3,7 +3,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const { URL } = require('url');
 const { ROOT_DIR, loadConfig, saveConfig } = require('./config');
-const { runSync, manualCleanupPlaylist, runPlaylistApiAction, findPlaylist, getState } = require('./syncService');
+const { runSync, manualCleanupPlaylist, runPlaylistApiAction, testPlaylistCookies, findPlaylist, getState } = require('./syncService');
 const scheduler = require('./scheduler');
 const logger = require('./logger');
 
@@ -127,6 +127,8 @@ async function handlePlaylistAction(req, res, url) {
 
   if (action === 'cleanup') {
     result = await manualCleanupPlaylist(config, playlistName);
+  } else if (action === 'test-cookies') {
+    result = await testPlaylistCookies(config, playlistName);
   } else {
     result = await runPlaylistApiAction(config, playlistName, action);
   }

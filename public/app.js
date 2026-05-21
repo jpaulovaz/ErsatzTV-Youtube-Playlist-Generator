@@ -240,6 +240,34 @@ function formatDate(value) {
   return date.toLocaleString();
 }
 
+
+function formatCookieTestDetails(result) {
+  if (!result) return '';
+
+  const lines = [
+    result.ok ? 'Cookies validos no teste ativo.' : 'Teste de cookies falhou.',
+    `Status: ${result.status || '-'}`,
+    result.message ? `Mensagem: ${result.message}` : '',
+    result.cookiesPath ? `Arquivo: ${result.cookiesPath}` : '',
+    result.cookieFile && result.cookieFile.modifiedAt ? `Atualizado em: ${formatDate(result.cookieFile.modifiedAt)}` : '',
+    result.target && result.target.url ? `Video testado: ${result.target.url}` : '',
+    result.ytDlp && result.ytDlp.code !== null && result.ytDlp.code !== undefined ? `yt-dlp exit code: ${result.ytDlp.code}` : '',
+    !result.ok && result.ytDlp && result.ytDlp.stderr ? `stderr:
+${result.ytDlp.stderr}` : ''
+  ].filter(Boolean);
+
+  return lines.join('\n');
+}
+
+function renderPlaylistInlineResult(row, result, fallbackMessage = '') {
+  const box = row.querySelector('[data-role="playlist-result"]');
+  if (!box) return;
+
+  box.textContent = result ? formatCookieTestDetails(result) : fallbackMessage;
+  box.classList.remove('hidden', 'ok', 'fail');
+  box.classList.add(result && result.ok ? 'ok' : 'fail');
+}
+
 function fillForm(config) {
   qsa('#configForm [name]').forEach((field) => {
     const value = getByPath(config, field.name);
@@ -320,12 +348,14 @@ function addPlaylistRow(playlist = { name: '', url: '', enabled: true, libraryId
     </div>
     <div class="playlist-actions">
       <button type="button" class="primary" data-action="run">Executar esta biblioteca</button>
+      <button type="button" data-action="test-cookies">Testar cookies</button>
       <button type="button" data-action="cleanup">Limpar YML ausentes</button>
       <button type="button" data-action="scan">Scan biblioteca</button>
       <button type="button" data-action="empty-trash">Limpar lixo ErsatzTV</button>
       <button type="button" data-action="rebuild-playout">Atualizar playout</button>
       <button type="button" class="danger" data-action="remove">Remover da config</button>
     </div>
+    <pre class="playlist-result hidden" data-role="playlist-result"></pre>
   `;
 
   row.querySelector('[data-field="name"]').value = playlist.name || '';
@@ -337,6 +367,7 @@ function addPlaylistRow(playlist = { name: '', url: '', enabled: true, libraryId
 
   row.querySelector('[data-action="remove"]').addEventListener('click', () => row.remove());
   row.querySelector('[data-action="run"]').addEventListener('click', () => runPlaylistAction(row, 'run'));
+  row.querySelector('[data-action="test-cookies"]').addEventListener('click', () => runPlaylistAction(row, 'test-cookies'));
   row.querySelector('[data-action="cleanup"]').addEventListener('click', () => runPlaylistAction(row, 'cleanup'));
   row.querySelector('[data-action="scan"]').addEventListener('click', () => runPlaylistAction(row, 'scan'));
   row.querySelector('[data-action="empty-trash"]').addEventListener('click', () => runPlaylistAction(row, 'empty-trash'));
@@ -369,6 +400,9 @@ async function runPlaylistAction(row, action) {
   const payload = await api(`/api/playlists/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
   if (action === 'run') {
     showToast(payload.message || 'Sincronizacao da playlist iniciada. Acompanhe pelos logs.');
+  } else if (action === 'test-cookies') {
+    renderPlaylistInlineResult(row, payload.result);
+    showToast(payload.result && payload.result.ok ? 'Cookies validos no teste ativo.' : 'Teste de cookies falhou. Veja o resultado na playlist e os logs.');
   } else {
     showToast(payload.result && payload.result.ok === false ? 'Acao enviada, mas a API retornou falha. Veja os logs.' : 'Acao executada. Veja os logs.');
   }

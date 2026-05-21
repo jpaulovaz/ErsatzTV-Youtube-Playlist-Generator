@@ -1,4 +1,5 @@
 const fs = require('fs/promises');
+const { constants: fsConstants } = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -33,6 +34,17 @@ function runCommand(command, args, options = {}) {
 
     let stdout = '';
     let stderr = '';
+    let timedOut = false;
+    let killTimer = null;
+
+    const timeoutMs = Number(options.timeoutMs) || 0;
+    const timeout = timeoutMs > 0
+      ? setTimeout(() => {
+        timedOut = true;
+        child.kill('SIGTERM');
+        killTimer = setTimeout(() => child.kill('SIGKILL'), 3000);
+      }, timeoutMs)
+      : null;
 
     child.stdout.on('data', (chunk) => {
       stdout += chunk.toString();
@@ -42,10 +54,16 @@ function runCommand(command, args, options = {}) {
       stderr += chunk.toString();
     });
 
-    child.on('error', reject);
+    child.on('error', (error) => {
+      if (timeout) clearTimeout(timeout);
+      if (killTimer) clearTimeout(killTimer);
+      reject(error);
+    });
 
-    child.on('close', (code) => {
-      resolve({ code, stdout, stderr });
+    child.on('close', (code, signal) => {
+      if (timeout) clearTimeout(timeout);
+      if (killTimer) clearTimeout(killTimer);
+      resolve({ code, signal, stdout, stderr, timedOut });
     });
   });
 }
@@ -372,6 +390,268 @@ async function fetchPlaylistVideos(config, playlist) {
   }
 
   return videos;
+}
+
+
+function truncateText(value, maxLength = 2200) {
+  const text = String(value || '').trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.floor(maxLength / 2)).trim()}\n...\n${text.slice(-Math.floor(maxLength / 2)).trim()}`;
+}
+
+function classifyYtDlpCookieTest(stderr, stdout) {
+  const output = `${stderr || ''}\n${stdout || ''}`;
+
+  if (/sign in to confirm.*not a bot|confirm you.?re not a bot|use --cookies|use --cookies-from-browser|authentication|login required|not logged in/i.test(output)) {
+    return {
+      status: 'invalid-cookie',
+      message: 'O YouTube recusou o acesso com estes cookies. Reexporte o cookies.txt, confira se ele esta atualizado e se o usuario do ErsatzTV consegue ler o arquivo.'
+    };
+  }
+
+  if (/cookie.*expired|expired.*cookie|invalid cookie/i.test(output)) {
+    return {
+      status: 'invalid-cookie',
+      message: 'O yt-dlp indicou cookie expirado ou invalido. Reexporte o cookies.txt em formato Netscape.'
+    };
+  }
+
+  if (/signature solving failed|n challenge solving failed|only images are available/i.test(output)) {
+    return {
+      status: 'youtube-js-challenge',
+      message: 'O YouTube respondeu com desafio JavaScript/signature. Verifique se Deno/Node, --js-runtimes e --remote-components estao configurados corretamente.'
+    };
+  }
+
+  if (/requested format is not available|no video formats found|no formats found/i.test(output)) {
+    return {
+      status: 'format-unavailable',
+      message: 'O YouTube foi acessado, mas nenhum formato de video compativel foi liberado para o teste. Isso pode ser seletor -f, bloqueio do video ou cookie/runtime JS.'
+    };
+  }
+
+  if (/http error 429|too many requests|rate-limit|ratelimit/i.test(output)) {
+    return {
+      status: 'rate-limited',
+      message: 'O YouTube limitou temporariamente as requisicoes desse IP/sessao. Aguarde, renove cookies ou reduza a frequencia de testes/streams.'
+    };
+  }
+
+  return {
+    status: 'yt-dlp-failed',
+    message: 'O yt-dlp falhou no teste ativo. Veja stderr/stdout retornados para identificar se e cookie, runtime JS, formato ou bloqueio do video.'
+  };
+}
+
+async function inspectCookieFile(cookiesPath) {
+  const result = {
+    path: cookiesPath,
+    configured: Boolean(cookiesPath),
+    exists: false,
+    readable: false,
+    sizeBytes: 0,
+    modifiedAt: null,
+    error: null
+  };
+
+  if (!cookiesPath) {
+    result.error = 'Nenhum caminho de cookies.txt foi configurado para esta playlist nem no campo global.';
+    return result;
+  }
+
+  try {
+    const stats = await fs.stat(cookiesPath);
+    result.exists = true;
+    result.sizeBytes = stats.size;
+    result.modifiedAt = stats.mtime.toISOString();
+    await fs.access(cookiesPath, fsConstants.R_OK);
+    result.readable = true;
+    if (stats.size <= 0) {
+      result.error = 'O arquivo cookies.txt existe, mas esta vazio.';
+    }
+  } catch (error) {
+    result.error = error.code === 'ENOENT'
+      ? 'O arquivo cookies.txt nao existe nesse caminho.'
+      : `Nao foi possivel ler o cookies.txt: ${error.message}`;
+  }
+
+  return result;
+}
+
+function getVideoIdFromUrl(urlValue) {
+  try {
+    const parsed = new URL(String(urlValue || ''));
+    const videoId = parsed.searchParams.get('v');
+    if (videoId) return videoId;
+
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    if (parsed.hostname.includes('youtu.be') && parts[0]) return parts[0];
+    if (parts[0] === 'shorts' && parts[1]) return parts[1];
+  } catch {
+    // Ignora URLs fora do formato padrao; o yt-dlp tentara lidar com elas abaixo.
+  }
+
+  return '';
+}
+
+async function resolveCookieTestTarget(config, playlist) {
+  const directVideoId = getVideoIdFromUrl(playlist.url);
+  if (directVideoId) {
+    return {
+      source: 'playlist-url-video-id',
+      videoId: directVideoId,
+      url: `https://www.youtube.com/watch?v=${directVideoId}`,
+      title: null
+    };
+  }
+
+  const listArgs = [
+    ...buildYtDlpCommonArgs(config, playlist),
+    '--dump-json',
+    '--flat-playlist',
+    '--playlist-items',
+    '1',
+    playlist.url
+  ];
+
+  const result = await runCommand(config.paths.ytDlpPath, listArgs, { timeoutMs: 60000 });
+  if (result.code !== 0 || result.timedOut) {
+    const classification = classifyYtDlpCookieTest(result.stderr, result.stdout);
+    const error = new Error(result.timedOut ? 'Timeout ao consultar a playlist para escolher o video de teste.' : classification.message);
+    error.status = result.timedOut ? 'timeout' : classification.status;
+    error.ytDlp = {
+      code: result.code,
+      signal: result.signal || null,
+      timedOut: Boolean(result.timedOut),
+      stdout: truncateText(result.stdout),
+      stderr: truncateText(result.stderr)
+    };
+    throw error;
+  }
+
+  const { videos } = parseYtDlpJsonLines(result.stdout);
+  const first = videos.find((video) => video && video.id);
+  if (first) {
+    return {
+      source: 'playlist-first-item',
+      videoId: first.id,
+      url: `https://www.youtube.com/watch?v=${first.id}`,
+      title: first.title || null
+    };
+  }
+
+  return {
+    source: 'playlist-url-fallback',
+    videoId: null,
+    url: playlist.url,
+    title: null
+  };
+}
+
+async function testPlaylistCookies(config, identifier) {
+  const playlist = findPlaylist(config, identifier);
+  if (!playlist) {
+    const error = new Error('Playlist nao encontrada na configuracao.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const cookiesPath = getEffectiveCookiesPath(config, playlist);
+  const cookieFile = await inspectCookieFile(cookiesPath);
+  const summary = {
+    playlist: playlist.folderName,
+    sourceName: playlist.name,
+    ok: false,
+    status: 'not-tested',
+    message: '',
+    cookiesPath,
+    cookieFile,
+    target: null,
+    ytDlp: null,
+    testedAt: new Date().toISOString()
+  };
+
+  if (!cookieFile.configured || !cookieFile.exists || !cookieFile.readable || cookieFile.sizeBytes <= 0) {
+    summary.status = 'cookie-file-error';
+    summary.message = cookieFile.error || 'Arquivo cookies.txt nao configurado, ilegivel ou vazio.';
+    await logger.warn(`Teste de cookies nao executado para ${playlist.folderName}: ${summary.message}`);
+    return summary;
+  }
+
+  await logger.info(`Teste ativo de cookies iniciado para ${playlist.folderName}: ${cookiesPath}`);
+
+  let target;
+  try {
+    target = await resolveCookieTestTarget(config, playlist);
+    summary.target = target;
+  } catch (error) {
+    summary.status = error.status || 'target-error';
+    summary.message = error.message;
+    summary.ytDlp = error.ytDlp || null;
+    await logger.warn(`Teste de cookies falhou ao resolver video de teste para ${playlist.folderName}: ${error.message}`);
+    return summary;
+  }
+
+  const testFormat = 'best[height<=360][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]/best';
+  const args = [
+    ...buildYtDlpCommonArgs(config, playlist),
+    '--no-playlist',
+    '--no-progress',
+    '--no-color',
+    '--simulate',
+    '--skip-download',
+    '-f',
+    testFormat,
+    '--print',
+    'id=%(id)s\ntitle=%(title)s\nduration=%(duration_string)s\nresolution=%(resolution)s\nformat_id=%(format_id)s',
+    target.url
+  ];
+
+  let result;
+  try {
+    result = await runCommand(config.paths.ytDlpPath, args, { timeoutMs: 75000 });
+  } catch (error) {
+    summary.status = 'spawn-error';
+    summary.message = `Nao foi possivel executar o yt-dlp: ${error.message}`;
+    await logger.warn(`Teste de cookies falhou para ${playlist.folderName}: ${summary.message}`);
+    return summary;
+  }
+
+  summary.ytDlp = {
+    code: result.code,
+    signal: result.signal || null,
+    timedOut: Boolean(result.timedOut),
+    stdout: truncateText(result.stdout),
+    stderr: truncateText(result.stderr)
+  };
+
+  if (result.timedOut) {
+    summary.status = 'timeout';
+    summary.message = 'O teste ativo demorou demais e foi interrompido. Pode ser rede, YouTube lento ou yt-dlp travado.';
+  } else if (result.code === 0) {
+    summary.ok = true;
+    summary.status = 'valid';
+    summary.message = 'Cookie aceito pelo YouTube no teste ativo. O yt-dlp conseguiu ler o video de teste usando esse cookies.txt.';
+  } else {
+    const classification = classifyYtDlpCookieTest(result.stderr, result.stdout);
+    summary.status = classification.status;
+    summary.message = classification.message;
+  }
+
+  const logPayload = {
+    playlist: summary.playlist,
+    cookiesPath: summary.cookiesPath,
+    target: summary.target && summary.target.url,
+    code: summary.ytDlp && summary.ytDlp.code
+  };
+
+  if (summary.ok) {
+    await logger.info(`Teste de cookies finalizado para ${playlist.folderName}: ${summary.status}. ${summary.message}`, logPayload);
+  } else {
+    await logger.warn(`Teste de cookies finalizado para ${playlist.folderName}: ${summary.status}. ${summary.message}`, logPayload);
+  }
+
+  return summary;
 }
 
 async function readExistingYmlIndex(playlistDir) {
@@ -780,6 +1060,7 @@ module.exports = {
   runSync,
   manualCleanupPlaylist,
   runPlaylistApiAction,
+  testPlaylistCookies,
   findPlaylist,
   getState
 };
