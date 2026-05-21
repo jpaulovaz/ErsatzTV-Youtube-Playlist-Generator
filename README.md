@@ -1,6 +1,17 @@
-# ErsatzTV YML Syncer 0.0.11
+# ErsatzTV YML Syncer 0.0.12
 
 Gerador de arquivos YML para Remote Streams do ErsatzTV usando uma ou mais playlists do YouTube por pasta/biblioteca, com interface web, logs, agendador interno, deduplicacao por video e execucao individual por biblioteca.
+
+## O que mudou na 0.0.12
+
+- A interface de cada pasta/biblioteca foi reorganizada em linhas mais previsiveis:
+  - linha 1: nome da pasta, Library ID e Playout ID;
+  - linha 2: URLs das playlists em campos individuais, com botao `Adicionar playlist`;
+  - linha 3: cookies especificos da pasta e status ativo.
+- O campo multilinha de URLs foi substituido por uma lista de campos, evitando textarea grande e melhorando a leitura quando a pasta tem varias playlists.
+- Cada URL pode ser removida individualmente; a interface mantem pelo menos um campo vazio para facilitar a edicao.
+- Os botoes de acao da biblioteca foram padronizados em grade responsiva para ficarem mais uniformes e evitar desalinhamento.
+- O formato salvo continua igual: `playlists[].urls` permanece sendo a lista usada pelo sincronizador, mantendo compatibilidade com a versao anterior.
 
 ## O que mudou na 0.0.11
 

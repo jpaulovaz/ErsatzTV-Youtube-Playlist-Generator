@@ -210,6 +210,25 @@ button {
   background: #0f172a;
   color: var(--text);
   padding: 10px 14px;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+button.compact {
+  min-height: 38px;
+  padding: 9px 12px;
+  font-size: 13px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 button:hover {
@@ -279,51 +298,90 @@ button.danger {
 .playlist-row {
   min-width: 0;
   display: grid;
-  gap: 14px;
+  gap: 16px;
   background: #020617;
   border: 1px solid var(--line);
   border-radius: 16px;
-  padding: 14px;
+  padding: 16px;
 }
 
 .playlist-fields {
+  min-width: 0;
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.playlist-top-row,
+.playlist-meta-row {
+  min-width: 0;
+  display: grid;
   gap: 12px;
   align-items: end;
 }
 
-.playlist-fields label:nth-child(1) {
-  grid-column: span 3;
+.playlist-top-row {
+  grid-template-columns: minmax(220px, 1fr) minmax(120px, 180px) minmax(120px, 180px);
 }
 
-.playlist-fields label:nth-child(2) {
-  grid-column: span 5;
+.playlist-meta-row {
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 260px);
 }
 
-.playlist-fields textarea {
-  min-height: 106px;
+.playlist-url-section {
+  min-width: 0;
+  border: 1px solid rgba(55, 65, 81, 0.82);
+  background: rgba(15, 23, 42, 0.42);
+  border-radius: 14px;
+  padding: 14px;
 }
 
-.playlist-fields label:nth-child(3),
-.playlist-fields label:nth-child(4) {
-  grid-column: span 2;
-}
-
-.playlist-fields label:nth-child(5) {
-  grid-column: span 9;
-}
-
-.playlist-fields label:nth-child(6) {
-  grid-column: span 3;
-}
-
-.playlist-actions {
+.playlist-section-header {
   display: flex;
-  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.playlist-section-header strong {
+  display: block;
+  color: #e2e8f0;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.playlist-section-header p {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.playlist-url-list {
+  display: grid;
   gap: 10px;
 }
 
+.playlist-url-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 118px;
+  gap: 10px;
+  align-items: center;
+}
+
+.playlist-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 10px;
+}
+
+.playlist-actions button {
+  width: 100%;
+  min-height: 44px;
+}
+
+.playlist-actions button.primary {
+  grid-column: span 2;
+}
 
 .playlist-result {
   width: 100%;
@@ -404,12 +462,20 @@ button.danger {
 
   .form-grid.two,
   .metrics,
-  .playlist-fields {
+  .playlist-top-row,
+  .playlist-meta-row,
+  .playlist-url-row {
     grid-template-columns: 1fr;
   }
 
-  .playlist-fields label:nth-child(n) {
-    grid-column: auto;
+  .playlist-section-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .playlist-url-row button,
+  .playlist-section-header button {
+    width: 100%;
   }
 
   .wide {
@@ -425,6 +491,14 @@ button.danger {
 
   .card {
     padding: 16px;
+  }
+
+  .playlist-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .playlist-actions button.primary {
+    grid-column: auto;
   }
 
   .playlist-actions button,

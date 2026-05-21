@@ -2,7 +2,7 @@ let currentConfig = null;
 let refreshTimer = null;
 
 const qs = (selector) => document.querySelector(selector);
-const qsa = (selector) => Array.from(document.querySelectorAll(selector));
+const qsa = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 function showToast(message) {
   const toast = qs('#toast');
@@ -321,7 +321,7 @@ function readForm() {
   normalizeStreamBeforeSave(config.stream);
 
   config.playlists = qsa('.playlist-row').map((row) => {
-    const urls = splitPlaylistUrls(row.querySelector('[data-field="urls"]').value);
+    const urls = getPlaylistUrlsFromRow(row);
     return {
       name: row.querySelector('[data-field="name"]').value.trim(),
       url: urls[0] || '',
@@ -345,6 +345,42 @@ function renderPlaylists(playlists) {
   }
 }
 
+function getPlaylistUrlsFromRow(row) {
+  const values = qsa('[data-field="url"]', row).map((input) => input.value);
+  return splitPlaylistUrls(values.join('\n'));
+}
+
+function updatePlaylistUrlRemoveButtons(row) {
+  const urlRows = qsa('.playlist-url-row', row);
+  for (const urlRow of urlRows) {
+    const button = urlRow.querySelector('[data-action="remove-url"]');
+    if (!button) continue;
+    button.disabled = urlRows.length <= 1;
+    button.title = urlRows.length <= 1 ? 'Mantenha pelo menos um campo de URL.' : 'Remover esta URL';
+  }
+}
+
+function addPlaylistUrlField(row, value = '') {
+  const list = row.querySelector('[data-role="url-list"]');
+  if (!list) return;
+
+  const item = document.createElement('div');
+  item.className = 'playlist-url-row';
+  item.innerHTML = `
+    <input data-field="url" type="url" value="" placeholder="https://www.youtube.com/watch?v=...&list=...">
+    <button type="button" class="compact danger" data-action="remove-url">Remover</button>
+  `;
+
+  item.querySelector('[data-field="url"]').value = value || '';
+  item.querySelector('[data-action="remove-url"]').addEventListener('click', () => {
+    item.remove();
+    updatePlaylistUrlRemoveButtons(row);
+  });
+
+  list.appendChild(item);
+  updatePlaylistUrlRemoveButtons(row);
+}
+
 function addPlaylistRow(playlist = { name: '', url: '', urls: [], enabled: true, libraryId: null, playoutId: null, cookiesPath: '' }) {
   const container = qs('#playlistList');
   const row = document.createElement('div');
@@ -352,25 +388,38 @@ function addPlaylistRow(playlist = { name: '', url: '', urls: [], enabled: true,
 
   row.innerHTML = `
     <div class="playlist-fields">
-      <label>Nome da pasta
-        <input data-field="name" type="text" value="">
-      </label>
-      <label>URLs das playlists da pasta
-        <textarea data-field="urls" rows="4" placeholder="Uma URL por linha"></textarea>
-      </label>
-      <label>Library ID
-        <input data-field="libraryId" type="number" min="1" value="">
-      </label>
-      <label>Playout ID
-        <input data-field="playoutId" type="number" min="1" value="">
-      </label>
-      <label>Caminho do cookies.txt desta pasta
-        <input data-field="cookiesPath" type="text" placeholder="Vazio usa o caminho global">
-      </label>
-      <label class="check-row">
-        <input data-field="enabled" type="checkbox">
-        <span>Ativa</span>
-      </label>
+      <div class="playlist-top-row">
+        <label>Nome da pasta
+          <input data-field="name" type="text" value="">
+        </label>
+        <label>Library ID
+          <input data-field="libraryId" type="number" min="1" value="">
+        </label>
+        <label>Playout ID
+          <input data-field="playoutId" type="number" min="1" value="">
+        </label>
+      </div>
+
+      <div class="playlist-url-section">
+        <div class="playlist-section-header">
+          <div>
+            <strong>URLs das playlists da pasta</strong>
+            <p>Adicione uma URL por campo. Videos repetidos sao ignorados pelo ID do YouTube.</p>
+          </div>
+          <button type="button" class="compact" data-action="add-url">Adicionar playlist</button>
+        </div>
+        <div class="playlist-url-list" data-role="url-list"></div>
+      </div>
+
+      <div class="playlist-meta-row">
+        <label>Caminho do cookies.txt desta pasta
+          <input data-field="cookiesPath" type="text" placeholder="Vazio usa o caminho global">
+        </label>
+        <label class="check-row">
+          <input data-field="enabled" type="checkbox">
+          <span>Ativa</span>
+        </label>
+      </div>
     </div>
     <div class="playlist-actions">
       <button type="button" class="primary" data-action="run">Executar esta biblioteca</button>
@@ -386,11 +435,15 @@ function addPlaylistRow(playlist = { name: '', url: '', urls: [], enabled: true,
 
   const playlistUrls = getPlaylistUrls(playlist);
   row.querySelector('[data-field="name"]').value = playlist.name || '';
-  row.querySelector('[data-field="urls"]').value = playlistUrls.join('\n');
   row.querySelector('[data-field="libraryId"]').value = playlist.libraryId || '';
   row.querySelector('[data-field="playoutId"]').value = playlist.playoutId || '';
   row.querySelector('[data-field="cookiesPath"]').value = playlist.cookiesPath || '';
   row.querySelector('[data-field="enabled"]').checked = playlist.enabled !== false;
+
+  row.querySelector('[data-action="add-url"]').addEventListener('click', () => addPlaylistUrlField(row));
+  for (const url of playlistUrls.length ? playlistUrls : ['']) {
+    addPlaylistUrlField(row, url);
+  }
 
   row.querySelector('[data-action="remove"]').addEventListener('click', () => row.remove());
   row.querySelector('[data-action="run"]').addEventListener('click', () => runPlaylistAction(row, 'run'));
