@@ -301,6 +301,10 @@ button.danger {
   grid-column: span 5;
 }
 
+.playlist-fields textarea {
+  min-height: 106px;
+}
+
 .playlist-fields label:nth-child(3),
 .playlist-fields label:nth-child(4) {
   grid-column: span 2;

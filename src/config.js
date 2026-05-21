@@ -99,6 +99,9 @@ const DEFAULT_CONFIG = {
     {
       name: 'Mix_Principal',
       url: 'https://www.youtube.com/watch?v=u2ah9tWTkmk&list=PLHg022HMFzFCRq-5ZVR3hiiCkGPJ3Ur1D',
+      urls: [
+        'https://www.youtube.com/watch?v=u2ah9tWTkmk&list=PLHg022HMFzFCRq-5ZVR3hiiCkGPJ3Ur1D'
+      ],
       enabled: true,
       libraryId: 27,
       playoutId: 33,
@@ -200,6 +203,31 @@ function defaultJsRuntimePathForMode(mode) {
   return '';
 }
 
+
+function normalizePlaylistUrls(playlist) {
+  const values = [];
+
+  if (playlist && typeof playlist.url === 'string') {
+    values.push(playlist.url);
+  }
+
+  if (playlist && Array.isArray(playlist.urls)) {
+    values.push(...playlist.urls);
+  }
+
+  const seen = new Set();
+  const urls = [];
+
+  for (const value of values) {
+    const url = String(value || '').trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    urls.push(url);
+  }
+
+  return urls;
+}
+
 function normalizeStreamConfig(config, rawConfig) {
   const rawStream = rawConfig.stream && typeof rawConfig.stream === 'object' ? rawConfig.stream : {};
   const stream = config.stream && typeof config.stream === 'object' ? config.stream : clone(DEFAULT_CONFIG.stream);
@@ -277,15 +305,19 @@ function normalizeConfig(raw) {
   }
 
   config.playlists = config.playlists
-    .map((playlist) => ({
-      name: String(playlist.name || '').trim(),
-      url: String(playlist.url || '').trim(),
-      enabled: playlist.enabled !== false,
-      libraryId: toOptionalPositiveNumber(playlist.libraryId) || legacyLibraryId,
-      playoutId: toOptionalPositiveNumber(playlist.playoutId) || legacyPlayoutId,
-      cookiesPath: String(playlist.cookiesPath || '').trim()
-    }))
-    .filter((playlist) => playlist.name && playlist.url);
+    .map((playlist) => {
+      const urls = normalizePlaylistUrls(playlist);
+      return {
+        name: String(playlist.name || '').trim(),
+        url: urls[0] || '',
+        urls,
+        enabled: playlist.enabled !== false,
+        libraryId: toOptionalPositiveNumber(playlist.libraryId) || legacyLibraryId,
+        playoutId: toOptionalPositiveNumber(playlist.playoutId) || legacyPlayoutId,
+        cookiesPath: String(playlist.cookiesPath || '').trim()
+      };
+    })
+    .filter((playlist) => playlist.name && playlist.urls.length > 0);
 
   config.cleanup = config.cleanup && typeof config.cleanup === 'object' ? config.cleanup : {};
   config.cleanup.removeEmptyArtistFolders = config.cleanup.removeEmptyArtistFolders !== false;

@@ -116,16 +116,45 @@ async function apiRequest(url, method = 'POST', timeoutSeconds = 10) {
   }
 }
 
+function getPlaylistUrls(playlist) {
+  const values = [];
+
+  if (playlist && typeof playlist.url === 'string') {
+    values.push(playlist.url);
+  }
+
+  if (playlist && Array.isArray(playlist.urls)) {
+    values.push(...playlist.urls);
+  }
+
+  const seen = new Set();
+  const urls = [];
+
+  for (const value of values) {
+    const url = String(value || '').trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    urls.push(url);
+  }
+
+  return urls;
+}
+
 function getPlaylistsWithFolders(config, options = {}) {
   const includeDisabled = Boolean(options.includeDisabled);
 
   return (config.playlists || [])
     .filter((playlist) => includeDisabled || playlist.enabled !== false)
-    .map((playlist) => ({
-      ...playlist,
-      folderName: sanitizeName(playlist.name)
-    }))
-    .filter((playlist) => playlist.folderName && playlist.url);
+    .map((playlist) => {
+      const urls = getPlaylistUrls(playlist);
+      return {
+        ...playlist,
+        url: urls[0] || '',
+        urls,
+        folderName: sanitizeName(playlist.name)
+      };
+    })
+    .filter((playlist) => playlist.folderName && playlist.urls.length > 0);
 }
 
 function getEffectiveCookiesPath(config, playlist) {
@@ -357,39 +386,112 @@ function buildYmlContent(config, playlist, videoId, durationSeconds, streamScrip
   ].join('\n');
 }
 
-async function fetchPlaylistVideos(config, playlist) {
+async function fetchPlaylistVideosFromUrl(config, playlist, sourceUrl, sourceIndex) {
+  const label = `${playlist.folderName} fonte ${sourceIndex + 1}`;
   const cmdArgs = [
     ...buildYtDlpCommonArgs(config, playlist),
     '--dump-json',
     '--flat-playlist',
-    playlist.url
+    sourceUrl
   ];
 
   const result = await runCommand(config.paths.ytDlpPath, cmdArgs);
 
   if (result.stderr && result.stderr.trim()) {
-    await logger.warn(`yt-dlp stderr (${playlist.folderName}): ${result.stderr.trim().slice(0, 1200)}`);
+    await logger.warn(`yt-dlp stderr (${label}): ${result.stderr.trim().slice(0, 1200)}`);
   }
 
   if (result.code !== 0) {
-    const error = new Error(`yt-dlp falhou para ${playlist.folderName} com codigo ${result.code}.`);
+    const error = new Error(`yt-dlp falhou para ${label} com codigo ${result.code}.`);
     error.code = 'YTDLP_FAILED';
     error.stderr = result.stderr;
+    error.sourceUrl = sourceUrl;
     throw error;
   }
 
   const { videos, errors } = parseYtDlpJsonLines(result.stdout);
   for (const error of errors) {
-    await logger.warn(`Linha JSON ignorada em ${playlist.folderName}: ${error.error}`);
+    await logger.warn(`Linha JSON ignorada em ${label}: ${error.error}`);
   }
 
   if (videos.length === 0) {
-    const error = new Error(`Nenhum video retornado para ${playlist.folderName}.`);
+    const error = new Error(`Nenhum video retornado para ${label}.`);
     error.code = 'NO_VIDEOS';
+    error.sourceUrl = sourceUrl;
     throw error;
   }
 
-  return videos;
+  return videos.map((video) => ({
+    ...video,
+    sourceUrl,
+    sourceIndex
+  }));
+}
+
+async function fetchPlaylistVideos(config, playlist) {
+  const urls = getPlaylistUrls(playlist);
+  if (urls.length === 0) {
+    const error = new Error(`Nenhuma URL de playlist configurada para ${playlist.folderName}.`);
+    error.code = 'NO_PLAYLIST_URLS';
+    throw error;
+  }
+
+  const byVideoId = new Map();
+  const videosWithoutId = [];
+  const duplicates = [];
+  const sourceResults = [];
+
+  for (let index = 0; index < urls.length; index += 1) {
+    const sourceUrl = urls[index];
+    await logger.info(`Lendo fonte ${index + 1}/${urls.length} para ${playlist.folderName}: ${sourceUrl}`);
+    const sourceVideos = await fetchPlaylistVideosFromUrl(config, playlist, sourceUrl, index);
+    let uniqueFromSource = 0;
+    let duplicateFromSource = 0;
+
+    for (const video of sourceVideos) {
+      const videoId = video && video.id;
+      if (!videoId) {
+        videosWithoutId.push(video);
+        uniqueFromSource += 1;
+        continue;
+      }
+
+      if (byVideoId.has(videoId)) {
+        const first = byVideoId.get(videoId);
+        const duplicate = {
+          id: videoId,
+          title: video.title || first.title || '',
+          firstSourceIndex: first.sourceIndex,
+          firstSourceUrl: first.sourceUrl,
+          duplicateSourceIndex: index,
+          duplicateSourceUrl: sourceUrl
+        };
+        duplicates.push(duplicate);
+        duplicateFromSource += 1;
+        await logger.info(`Video duplicado ignorado em ${playlist.folderName}: ${videoId} ja veio da fonte ${first.sourceIndex + 1}; repetido na fonte ${index + 1}.`);
+        continue;
+      }
+
+      byVideoId.set(videoId, video);
+      uniqueFromSource += 1;
+    }
+
+    sourceResults.push({
+      index,
+      url: sourceUrl,
+      fetched: sourceVideos.length,
+      unique: uniqueFromSource,
+      duplicates: duplicateFromSource
+    });
+  }
+
+  return {
+    videos: [...byVideoId.values(), ...videosWithoutId],
+    duplicates,
+    sourceResults,
+    sourceCount: urls.length,
+    fetchedCount: sourceResults.reduce((total, source) => total + source.fetched, 0)
+  };
 }
 
 
@@ -495,23 +597,36 @@ function getVideoIdFromUrl(urlValue) {
 }
 
 async function resolveCookieTestTarget(config, playlist) {
-  const directVideoId = getVideoIdFromUrl(playlist.url);
-  if (directVideoId) {
-    return {
-      source: 'playlist-url-video-id',
-      videoId: directVideoId,
-      url: `https://www.youtube.com/watch?v=${directVideoId}`,
-      title: null
-    };
+  const urls = getPlaylistUrls(playlist);
+
+  for (let index = 0; index < urls.length; index += 1) {
+    const directVideoId = getVideoIdFromUrl(urls[index]);
+    if (directVideoId) {
+      return {
+        source: 'playlist-url-video-id',
+        sourceIndex: index,
+        sourceUrl: urls[index],
+        videoId: directVideoId,
+        url: `https://www.youtube.com/watch?v=${directVideoId}`,
+        title: null
+      };
+    }
   }
 
+  if (urls.length === 0) {
+    const error = new Error('Nenhuma URL de playlist configurada para escolher o video de teste.');
+    error.status = 'target-error';
+    throw error;
+  }
+
+  const sourceUrl = urls[0];
   const listArgs = [
     ...buildYtDlpCommonArgs(config, playlist),
     '--dump-json',
     '--flat-playlist',
     '--playlist-items',
     '1',
-    playlist.url
+    sourceUrl
   ];
 
   const result = await runCommand(config.paths.ytDlpPath, listArgs, { timeoutMs: 60000 });
@@ -534,6 +649,8 @@ async function resolveCookieTestTarget(config, playlist) {
   if (first) {
     return {
       source: 'playlist-first-item',
+      sourceIndex: 0,
+      sourceUrl,
       videoId: first.id,
       url: `https://www.youtube.com/watch?v=${first.id}`,
       title: first.title || null
@@ -542,8 +659,10 @@ async function resolveCookieTestTarget(config, playlist) {
 
   return {
     source: 'playlist-url-fallback',
+    sourceIndex: 0,
+    sourceUrl,
     videoId: null,
-    url: playlist.url,
+    url: sourceUrl,
     title: null
   };
 }
@@ -657,6 +776,7 @@ async function testPlaylistCookies(config, identifier) {
 async function readExistingYmlIndex(playlistDir) {
   const files = await walkFiles(playlistDir);
   const byVideoId = new Map();
+  const byPath = new Map();
   const ymlFiles = [];
 
   for (const filePath of files) {
@@ -666,12 +786,33 @@ async function readExistingYmlIndex(playlistDir) {
 
     const content = await fs.readFile(filePath, 'utf8');
     const match = content.match(/watch\?v=([a-zA-Z0-9_-]+)/);
-    if (match && !byVideoId.has(match[1])) {
-      byVideoId.set(match[1], filePath);
+    const videoId = match ? match[1] : null;
+    byPath.set(path.resolve(filePath), videoId);
+
+    if (videoId && !byVideoId.has(videoId)) {
+      byVideoId.set(videoId, filePath);
     }
   }
 
-  return { byVideoId, ymlFiles };
+  return { byVideoId, byPath, ymlFiles };
+}
+
+function getCollisionSafeYmlPath(baseFilePath, existingIndex, videoId) {
+  const parsed = path.parse(baseFilePath);
+  let candidate = baseFilePath;
+  let counter = 1;
+
+  while (true) {
+    const key = path.resolve(candidate);
+    if (!existingIndex.byPath.has(key)) return candidate;
+
+    const ownerId = existingIndex.byPath.get(key);
+    if (ownerId === videoId) return candidate;
+
+    const suffix = counter === 1 ? videoId : `${videoId}-${counter}`;
+    candidate = path.join(parsed.dir, `${parsed.name} [${suffix}]${parsed.ext}`);
+    counter += 1;
+  }
 }
 
 async function writeVideoYml(config, playlist, playlistDir, existingIndex, video, summary, streamScriptHash) {
@@ -688,8 +829,9 @@ async function writeVideoYml(config, playlist, playlistDir, existingIndex, video
   const artistDir = path.join(playlistDir, artist);
   await fs.mkdir(artistDir, { recursive: true });
 
-  const fileName = artist !== 'Outros' ? `${artist} - ${title}.yml` : `${title}.yml`;
-  const filePath = path.join(artistDir, fileName);
+  const baseFileName = artist !== 'Outros' ? `${artist} - ${title}.yml` : `${title}.yml`;
+  const baseFilePath = path.join(artistDir, baseFileName);
+  const filePath = getCollisionSafeYmlPath(baseFilePath, existingIndex, videoId);
   const existingPath = existingIndex.byVideoId.get(videoId);
   const ymlContent = buildYmlContent(config, playlist, videoId, duration, streamScriptHash, {
     rawTitle,
@@ -698,8 +840,13 @@ async function writeVideoYml(config, playlist, playlistDir, existingIndex, video
     description: video.description || ''
   });
 
+  if (path.resolve(filePath) !== path.resolve(baseFilePath)) {
+    await logger.warn(`Nome de YML duplicado detectado em ${playlist.folderName}; usando arquivo unico para ${videoId}: ${path.basename(filePath)}`);
+  }
+
   if (existingPath && path.resolve(existingPath) !== path.resolve(filePath)) {
     await fs.rm(existingPath, { force: true });
+    existingIndex.byPath.delete(path.resolve(existingPath));
     summary.filesMoved += 1;
     await logger.info(`YML movido/renomeado: ${path.basename(existingPath)} -> ${path.basename(filePath)}`);
   }
@@ -709,10 +856,15 @@ async function writeVideoYml(config, playlist, playlistDir, existingIndex, video
 
   if (previousContent === ymlContent) {
     summary.filesUnchanged += 1;
+    existingIndex.byVideoId.set(videoId, filePath);
+    existingIndex.byPath.set(path.resolve(filePath), videoId);
     return;
   }
 
   await fs.writeFile(filePath, ymlContent, 'utf8');
+  existingIndex.byVideoId.set(videoId, filePath);
+  existingIndex.byPath.set(path.resolve(filePath), videoId);
+
   if (alreadyExists) {
     summary.filesUpdated += 1;
   } else {
@@ -767,7 +919,12 @@ async function processPlaylist(config, playlist, summary) {
     enabled: playlist.enabled !== false,
     libraryId: playlist.libraryId || null,
     playoutId: playlist.playoutId || null,
+    sourceCount: getPlaylistUrls(playlist).length,
+    sourceResults: [],
+    videosFetched: 0,
     videosFound: 0,
+    videosDuplicate: 0,
+    duplicates: [],
     videosSkipped: 0,
     filesCreated: 0,
     filesUpdated: 0,
@@ -799,9 +956,9 @@ async function processPlaylist(config, playlist, summary) {
 
   await logger.info(`--- Processando: ${playlist.folderName} ---`);
 
-  let videos;
+  let fetchResult;
   try {
-    videos = await fetchPlaylistVideos(config, playlist);
+    fetchResult = await fetchPlaylistVideos(config, playlist);
   } catch (error) {
     summary.playlistsFailed += 1;
     playlistSummary.failed = true;
@@ -811,9 +968,15 @@ async function processPlaylist(config, playlist, summary) {
     return playlistSummary;
   }
 
+  const videos = fetchResult.videos;
   const existingIndex = await readExistingYmlIndex(playlistDir);
   summary.videosFound += videos.length;
+  summary.videosDuplicate += fetchResult.duplicates.length;
+  playlistSummary.sourceResults = fetchResult.sourceResults;
+  playlistSummary.videosFetched = fetchResult.fetchedCount;
   playlistSummary.videosFound = videos.length;
+  playlistSummary.videosDuplicate = fetchResult.duplicates.length;
+  playlistSummary.duplicates = fetchResult.duplicates.slice(0, 50);
 
   const before = getCountSnapshot(summary);
 
@@ -850,6 +1013,7 @@ function createRunSummary(options) {
     playlistsProcessed: 0,
     playlistsFailed: 0,
     videosFound: 0,
+    videosDuplicate: 0,
     videosSkipped: 0,
     filesCreated: 0,
     filesUpdated: 0,
@@ -948,6 +1112,7 @@ async function manualCleanupPlaylist(config, identifier) {
     trigger: 'manual-cleanup',
     playlist: playlist.folderName,
     videosFound: 0,
+    videosDuplicate: 0,
     filesChecked: 0,
     filesRemoved: 0,
     foldersRemoved: 0
@@ -957,11 +1122,12 @@ async function manualCleanupPlaylist(config, identifier) {
     await logger.info(`Limpeza manual iniciada para ${playlist.folderName}.`);
 
     const playlistDir = getPlaylistDir(config, playlist);
-    const videos = await fetchPlaylistVideos(config, playlist);
-    const currentIds = new Set(videos.map((video) => video.id).filter(Boolean));
+    const fetchResult = await fetchPlaylistVideos(config, playlist);
+    const currentIds = new Set(fetchResult.videos.map((video) => video.id).filter(Boolean));
     const files = await walkFiles(playlistDir);
 
     summary.videosFound = currentIds.size;
+    summary.videosDuplicate = fetchResult.duplicates.length;
 
     for (const filePath of files) {
       if (!filePath.endsWith('.yml')) continue;

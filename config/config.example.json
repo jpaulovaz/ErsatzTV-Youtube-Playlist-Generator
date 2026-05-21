@@ -36,7 +36,10 @@
       "enabled": true,
       "libraryId": 27,
       "playoutId": 33,
-      "cookiesPath": ""
+      "cookiesPath": "",
+      "urls": [
+        "https://www.youtube.com/watch?v=u2ah9tWTkmk&list=PLHg022HMFzFCRq-5ZVR3hiiCkGPJ3Ur1D"
+      ]
     }
   ],
   "scheduler": {

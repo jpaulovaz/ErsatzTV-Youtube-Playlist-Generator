@@ -1,6 +1,15 @@
-# ErsatzTV YML Syncer 0.0.10
+# ErsatzTV YML Syncer 0.0.11
 
-Gerador de arquivos YML para Remote Streams do ErsatzTV usando playlists do YouTube, com interface web, logs, agendador interno e execucao individual por biblioteca/playlist.
+Gerador de arquivos YML para Remote Streams do ErsatzTV usando uma ou mais playlists do YouTube por pasta/biblioteca, com interface web, logs, agendador interno, deduplicacao por video e execucao individual por biblioteca.
+
+## O que mudou na 0.0.11
+
+- Cada pasta/biblioteca agora pode receber uma ou mais URLs de playlists do YouTube.
+- A configuracao antiga `playlists[].url` continua compativel, mas a interface passa a salvar `playlists[].urls` como lista.
+- Durante a leitura, o app junta os videos de todas as URLs da mesma pasta e remove duplicados pelo ID do YouTube, mantendo a primeira ocorrencia.
+- A limpeza manual tambem compara contra a uniao de todas as URLs daquela pasta, evitando remover YML de videos que continuam em outra playlist da mesma biblioteca.
+- O resultado da execucao mostra quantas fontes foram lidas, quantos videos vieram no total e quantos duplicados foram ignorados.
+- Adicionada protecao contra conflito de nome de arquivo quando dois videos diferentes geram o mesmo nome de YML: nesse caso o app adiciona o ID do video ao nome do arquivo.
 
 ## O que mudou na 0.0.10
 
@@ -140,9 +149,11 @@ A interface edita esse arquivo. Alteracoes de host e porta da interface exigem r
 - `stream.jsRuntimePath`: caminho do runtime JS, por exemplo `/usr/local/bin/deno`.
 - `stream.jsRuntimeCustomName`: nome usado quando `stream.jsRuntimeMode` for `custom`, por exemplo `bun`, `qjs` ou `quickjs`.
 - `stream.ejsComponents`: componentes EJS remotos para o `yt-dlp`; valores: `none`, `ejs:github` ou `ejs:npm`.
-- `playlists[].libraryId`: ID da biblioteca do ErsatzTV referente aquela playlist.
-- `playlists[].playoutId`: ID do playout do ErsatzTV referente aquela playlist.
-- `playlists[].cookiesPath`: caminho especifico de cookies para a playlist; vazio usa o global.
+- `playlists[].url`: primeira URL da pasta, mantida por compatibilidade com versoes anteriores.
+- `playlists[].urls`: lista de URLs de playlists do YouTube que devem alimentar a mesma pasta/biblioteca.
+- `playlists[].libraryId`: ID da biblioteca do ErsatzTV referente aquela pasta/biblioteca.
+- `playlists[].playoutId`: ID do playout do ErsatzTV referente aquela pasta/biblioteca.
+- `playlists[].cookiesPath`: caminho especifico de cookies para a pasta/biblioteca; vazio usa o global.
 
 ## Cookies do YouTube
 
@@ -218,7 +229,7 @@ ffprobe -v error -show_entries stream=index,codec_type,codec_name,width,height,r
 
 ## Estrutura gerada
 
-Para uma playlist chamada `Mix_Principal`, o app cria uma estrutura semelhante a:
+Para uma pasta/biblioteca chamada `Mix_Principal`, mesmo com varias URLs de playlists, o app cria uma unica estrutura semelhante a:
 
 ```text
 baseDir/
@@ -230,7 +241,7 @@ baseDir/
       Artista B - Musica 2.yml
 ```
 
-Cada YML aponta para o script dentro da propria pasta da playlist e inclui uma assinatura do script para detectar mudancas futuras:
+Cada YML aponta para o script dentro da propria pasta/biblioteca e inclui uma assinatura do script para detectar mudancas futuras:
 
 ```yml
 # generated_by: ErsatzTV Youtube Playlist Generator
@@ -246,22 +257,23 @@ Os campos `title` e `plot` sao usados pelo ErsatzTV como metadados do Remote Str
 
 ## Fluxo automatico
 
-A execucao agendada, o botao global `Executar agora` e o botao `Executar esta biblioteca` fazem o mesmo tipo de sincronizacao: consultam a playlist no YouTube e garantem que todos os videos atuais tenham YML criado/atualizado.
+A execucao agendada, o botao global `Executar agora` e o botao `Executar esta biblioteca` fazem o mesmo tipo de sincronizacao: consultam todas as URLs configuradas naquela pasta, removem duplicados pelo ID do YouTube e garantem que todos os videos atuais tenham YML criado/atualizado.
 
-O scan automatico da biblioteca do ErsatzTV e chamado quando a rodada cria, move ou atualiza algum YML naquela playlist. Se todos os arquivos ja existirem com o mesmo conteudo, o app registra nos logs que o scan foi ignorado.
+O scan automatico da biblioteca do ErsatzTV e chamado quando a rodada cria, move ou atualiza algum YML naquela pasta/biblioteca. Se todos os arquivos ja existirem com o mesmo conteudo, o app registra nos logs que o scan foi ignorado.
 
 ## Limpeza
 
 A execucao agendada e os botoes de execucao nao apagam YML de videos ausentes da playlist. Eles apenas garantem que os videos atuais tenham YML criado/atualizado.
 
-Para remover YML de videos que sairam da playlist, use o botao `Limpar YML ausentes` na linha da playlist. Essa acao consulta a playlist atual no YouTube, remove apenas os YML cujo video nao aparece mais nela e, em seguida, remove as pastas vazias que sobrarem dentro da pasta da playlist.
+Para remover YML de videos que sairam das playlists, use o botao `Limpar YML ausentes` na linha da pasta/biblioteca. Essa acao consulta todas as URLs atuais daquela pasta, monta a uniao de IDs do YouTube, remove apenas os YML cujo video nao aparece mais em nenhuma delas e, em seguida, remove as pastas vazias que sobrarem dentro da pasta.
 
-## Acoes por playlist
+## Acoes por pasta/biblioteca
 
-Na interface, cada playlist tem botoes para:
+Na interface, cada pasta/biblioteca tem botoes para:
 
-- `Executar esta biblioteca`: sincroniza somente aquela playlist/biblioteca.
-- `Limpar YML ausentes`: remove arquivos locais que nao pertencem mais a playlist.
+- `Executar esta biblioteca`: sincroniza somente aquela pasta/biblioteca, considerando todas as URLs configuradas nela.
+- `Testar cookies`: executa um teste ativo com yt-dlp usando uma das URLs da pasta.
+- `Limpar YML ausentes`: remove arquivos locais que nao pertencem mais a nenhuma URL configurada naquela pasta.
 - `Scan biblioteca`: chama `POST /api/libraries/{libraryId}/scan` manualmente.
 - `Limpar lixo ErsatzTV`: chama `POST /api/libraries/{libraryId}/empty-trash` manualmente.
 - `Atualizar playout`: chama `POST /api/playout/{playoutId}/rebuild` manualmente.
@@ -276,6 +288,7 @@ Na interface, cada playlist tem botoes para:
 - `POST /api/logs/clear`
 - `POST /api/playlists/:name/run`
 - `POST /api/playlists/:name/cleanup`
+- `POST /api/playlists/:name/test-cookies`
 - `POST /api/playlists/:name/scan`
 - `POST /api/playlists/:name/empty-trash`
 - `POST /api/playlists/:name/rebuild-playout`
@@ -284,4 +297,4 @@ Na interface, cada playlist tem botoes para:
 
 - O app impede operacoes locais simultaneas para evitar conflito entre sincronizacao e limpeza manual.
 - O script de stream e verificado em cada execucao e so e regravado quando o conteudo muda. Quando muda, os YML recebem uma nova assinatura e sao atualizados na rodada seguinte.
-- Se uma playlist nao tiver `Library ID`, o scan automatico dessa playlist sera ignorado e registrado nos logs.
+- Se uma pasta/biblioteca nao tiver `Library ID`, o scan automatico sera ignorado e registrado nos logs.

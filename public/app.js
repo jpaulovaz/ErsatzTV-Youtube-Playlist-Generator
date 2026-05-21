@@ -58,6 +58,27 @@ function streamMaxHeight(value) {
   return optionalNumber(value) || 720;
 }
 
+function splitPlaylistUrls(value) {
+  const seen = new Set();
+  const urls = [];
+
+  for (const line of String(value || '').split(/\r?\n/)) {
+    const url = line.trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    urls.push(url);
+  }
+
+  return urls;
+}
+
+function getPlaylistUrls(playlist) {
+  const values = [];
+  if (playlist && typeof playlist.url === 'string') values.push(playlist.url);
+  if (playlist && Array.isArray(playlist.urls)) values.push(...playlist.urls);
+  return splitPlaylistUrls(values.join('\n'));
+}
+
 const CODEC_PROFILE_OPTIONS = ['auto', 'mp4_h264_aac'];
 
 function normalizeCodecProfile(value) {
@@ -251,6 +272,7 @@ function formatCookieTestDetails(result) {
     result.cookiesPath ? `Arquivo: ${result.cookiesPath}` : '',
     result.cookieFile && result.cookieFile.modifiedAt ? `Atualizado em: ${formatDate(result.cookieFile.modifiedAt)}` : '',
     result.target && result.target.url ? `Video testado: ${result.target.url}` : '',
+    result.target && result.target.sourceUrl ? `Fonte usada: ${result.target.sourceUrl}` : '',
     result.ytDlp && result.ytDlp.code !== null && result.ytDlp.code !== undefined ? `yt-dlp exit code: ${result.ytDlp.code}` : '',
     !result.ok && result.ytDlp && result.ytDlp.stderr ? `stderr:
 ${result.ytDlp.stderr}` : ''
@@ -298,14 +320,18 @@ function readForm() {
 
   normalizeStreamBeforeSave(config.stream);
 
-  config.playlists = qsa('.playlist-row').map((row) => ({
-    name: row.querySelector('[data-field="name"]').value.trim(),
-    url: row.querySelector('[data-field="url"]').value.trim(),
-    enabled: row.querySelector('[data-field="enabled"]').checked,
-    libraryId: optionalNumber(row.querySelector('[data-field="libraryId"]').value),
-    playoutId: optionalNumber(row.querySelector('[data-field="playoutId"]').value),
-    cookiesPath: row.querySelector('[data-field="cookiesPath"]').value.trim()
-  })).filter((playlist) => playlist.name && playlist.url);
+  config.playlists = qsa('.playlist-row').map((row) => {
+    const urls = splitPlaylistUrls(row.querySelector('[data-field="urls"]').value);
+    return {
+      name: row.querySelector('[data-field="name"]').value.trim(),
+      url: urls[0] || '',
+      urls,
+      enabled: row.querySelector('[data-field="enabled"]').checked,
+      libraryId: optionalNumber(row.querySelector('[data-field="libraryId"]').value),
+      playoutId: optionalNumber(row.querySelector('[data-field="playoutId"]').value),
+      cookiesPath: row.querySelector('[data-field="cookiesPath"]').value.trim()
+    };
+  }).filter((playlist) => playlist.name && playlist.urls.length > 0);
 
   return config;
 }
@@ -319,7 +345,7 @@ function renderPlaylists(playlists) {
   }
 }
 
-function addPlaylistRow(playlist = { name: '', url: '', enabled: true, libraryId: null, playoutId: null, cookiesPath: '' }) {
+function addPlaylistRow(playlist = { name: '', url: '', urls: [], enabled: true, libraryId: null, playoutId: null, cookiesPath: '' }) {
   const container = qs('#playlistList');
   const row = document.createElement('div');
   row.className = 'playlist-row';
@@ -329,8 +355,8 @@ function addPlaylistRow(playlist = { name: '', url: '', enabled: true, libraryId
       <label>Nome da pasta
         <input data-field="name" type="text" value="">
       </label>
-      <label>URL da playlist
-        <input data-field="url" type="text" value="">
+      <label>URLs das playlists da pasta
+        <textarea data-field="urls" rows="4" placeholder="Uma URL por linha"></textarea>
       </label>
       <label>Library ID
         <input data-field="libraryId" type="number" min="1" value="">
@@ -338,7 +364,7 @@ function addPlaylistRow(playlist = { name: '', url: '', enabled: true, libraryId
       <label>Playout ID
         <input data-field="playoutId" type="number" min="1" value="">
       </label>
-      <label>Caminho do cookies.txt desta playlist
+      <label>Caminho do cookies.txt desta pasta
         <input data-field="cookiesPath" type="text" placeholder="Vazio usa o caminho global">
       </label>
       <label class="check-row">
@@ -358,8 +384,9 @@ function addPlaylistRow(playlist = { name: '', url: '', enabled: true, libraryId
     <pre class="playlist-result hidden" data-role="playlist-result"></pre>
   `;
 
+  const playlistUrls = getPlaylistUrls(playlist);
   row.querySelector('[data-field="name"]').value = playlist.name || '';
-  row.querySelector('[data-field="url"]').value = playlist.url || '';
+  row.querySelector('[data-field="urls"]').value = playlistUrls.join('\n');
   row.querySelector('[data-field="libraryId"]').value = playlist.libraryId || '';
   row.querySelector('[data-field="playoutId"]').value = playlist.playoutId || '';
   row.querySelector('[data-field="cookiesPath"]').value = playlist.cookiesPath || '';
@@ -393,7 +420,7 @@ async function runPlaylistAction(row, action) {
   }
 
   if (action === 'cleanup') {
-    const confirmed = window.confirm(`Remover YML que nao aparecem mais na playlist "${name}"?`);
+    const confirmed = window.confirm(`Remover YML que nao aparecem mais nas playlists da pasta "${name}"?`);
     if (!confirmed) return;
   }
 

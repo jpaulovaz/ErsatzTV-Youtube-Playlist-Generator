@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ErsatzTV YML Syncer 0.0.10</title>
+  <title>ErsatzTV YML Syncer 0.0.11</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <div class="topbar-inner">
       <div>
         <h1>ErsatzTV YML Syncer</h1>
-        <p>Versao 0.0.10 - teste ativo de cookies por playlist usando yt-dlp.</p>
+        <p>Versao 0.0.11 - multiplas playlists por pasta com deduplicacao por video.</p>
       </div>
       <div class="status-pill" id="runningPill">Carregando...</div>
     </div>
@@ -186,10 +186,10 @@
     <section class="card">
       <div class="card-header">
         <div>
-          <h2>Playlists / Bibliotecas</h2>
-          <p>Cada playlist pode apontar para uma Library ID e um Playout ID diferentes no ErsatzTV e pode ser executada separadamente.</p>
+          <h2>Pastas / Bibliotecas</h2>
+          <p>Cada pasta pode ter uma ou mais URLs de playlists do YouTube, com uma Library ID e um Playout ID no ErsatzTV. Videos repetidos entre as URLs da mesma pasta sao ignorados pelo ID do YouTube.</p>
         </div>
-        <button id="addPlaylistBtn">Adicionar playlist</button>
+        <button id="addPlaylistBtn">Adicionar pasta</button>
       </div>
       <div id="playlistList" class="playlist-list"></div>
       <div class="section-actions">

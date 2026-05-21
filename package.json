@@ -1,7 +1,7 @@
 {
   "name": "ersatztv-yml-syncer",
-  "version": "0.0.10",
-  "description": "Gerador e sincronizador de arquivos YML para ErsatzTV usando playlists do YouTube, com metadados title/plot, script de stream por playlist, qualidade configuravel, perfil MP4/H.264/AAC, runtime JS/EJS do yt-dlp, teste ativo de cookies por playlist, execucao individual, limpeza manual e agendador.",
+  "version": "0.0.11",
+  "description": "Gerador e sincronizador de arquivos YML para ErsatzTV usando uma ou mais playlists do YouTube por pasta, com deduplicacao por video, metadados title/plot, script de stream por pasta, qualidade configuravel, runtime JS/EJS, teste ativo de cookies, limpeza manual e agendador.",
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {
