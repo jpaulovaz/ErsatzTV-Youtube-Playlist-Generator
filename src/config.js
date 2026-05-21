@@ -11,6 +11,9 @@ const STREAM_QUALITY_MODES = new Set(['compatible', 'high', 'custom']);
 const STREAM_CODEC_PROFILES = new Set(['auto', 'mp4_h264_aac']);
 const JS_RUNTIME_MODES = new Set(['disabled', 'deno', 'node', 'custom']);
 const EJS_COMPONENT_OPTIONS = new Set(['none', 'ejs:github', 'ejs:npm']);
+const YOUTUBE_API_READ_MODES = new Set(['api', 'ytdlp']);
+const YOUTUBE_API_AVAILABILITY_MODES = new Set(['disabled', 'light', 'rigorous_manual']);
+const YOUTUBE_API_PLOT_STRATEGIES = new Set(['title', 'first_description_line', 'full_description']);
 
 function toPositiveInteger(value, fallback) {
   const number = Number(value);
@@ -90,6 +93,17 @@ const DEFAULT_CONFIG = {
     jsRuntimePath: '/usr/local/bin/deno',
     jsRuntimeCustomName: 'deno',
     ejsComponents: 'ejs:github'
+  },
+  youtubeApi: {
+    enabled: false,
+    apiKey: '',
+    readMode: 'api',
+    availabilityMode: 'light',
+    updateExistingThumbnails: false,
+    thumbnailFormat: 'jpg',
+    plotStrategy: 'title',
+    cacheTtlHours: 168,
+    timeoutSeconds: 20
   },
   ersatztv: {
     url: 'http://localhost:8409',
@@ -267,6 +281,23 @@ function normalizeStreamConfig(config, rawConfig) {
   config.stream = stream;
 }
 
+function normalizeYouTubeApiConfig(config) {
+  const api = config.youtubeApi && typeof config.youtubeApi === 'object' ? config.youtubeApi : clone(DEFAULT_CONFIG.youtubeApi);
+
+  api.enabled = Boolean(api.enabled);
+  api.apiKey = String(api.apiKey || '').trim();
+  api.readMode = YOUTUBE_API_READ_MODES.has(String(api.readMode || '').trim()) ? String(api.readMode).trim() : DEFAULT_CONFIG.youtubeApi.readMode;
+  api.availabilityMode = YOUTUBE_API_AVAILABILITY_MODES.has(String(api.availabilityMode || '').trim()) ? String(api.availabilityMode).trim() : DEFAULT_CONFIG.youtubeApi.availabilityMode;
+  api.updateExistingThumbnails = Boolean(api.updateExistingThumbnails);
+  api.thumbnailFormat = String(api.thumbnailFormat || 'jpg').trim().replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() || 'jpg';
+  if (api.thumbnailFormat !== 'jpg') api.thumbnailFormat = 'jpg';
+  api.plotStrategy = YOUTUBE_API_PLOT_STRATEGIES.has(String(api.plotStrategy || '').trim()) ? String(api.plotStrategy).trim() : DEFAULT_CONFIG.youtubeApi.plotStrategy;
+  api.cacheTtlHours = Math.max(1, Number(api.cacheTtlHours) || DEFAULT_CONFIG.youtubeApi.cacheTtlHours);
+  api.timeoutSeconds = Math.max(5, Number(api.timeoutSeconds) || DEFAULT_CONFIG.youtubeApi.timeoutSeconds);
+
+  config.youtubeApi = api;
+}
+
 function normalizeConfig(raw) {
   const rawConfig = raw && typeof raw === 'object' ? raw : {};
   const config = deepMerge(DEFAULT_CONFIG, rawConfig);
@@ -288,6 +319,7 @@ function normalizeConfig(raw) {
   }
 
   normalizeStreamConfig(config, rawConfig);
+  normalizeYouTubeApiConfig(config);
 
   config.ersatztv = config.ersatztv && typeof config.ersatztv === 'object' ? config.ersatztv : clone(DEFAULT_CONFIG.ersatztv);
   config.ersatztv.url = String(config.ersatztv.url || DEFAULT_CONFIG.ersatztv.url).trim().replace(/\/+$/, '');
@@ -361,6 +393,9 @@ module.exports = {
   STREAM_CODEC_PROFILES,
   JS_RUNTIME_MODES,
   EJS_COMPONENT_OPTIONS,
+  YOUTUBE_API_READ_MODES,
+  YOUTUBE_API_AVAILABILITY_MODES,
+  YOUTUBE_API_PLOT_STRATEGIES,
   buildCompatibleFormat,
   buildHighQualityFormat,
   buildDefaultFormatSort,

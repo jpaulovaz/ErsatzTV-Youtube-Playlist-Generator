@@ -49,5 +49,16 @@
   },
   "cleanup": {
     "removeEmptyArtistFolders": true
+  },
+  "youtubeApi": {
+    "enabled": false,
+    "apiKey": "",
+    "readMode": "api",
+    "availabilityMode": "light",
+    "updateExistingThumbnails": false,
+    "thumbnailFormat": "jpg",
+    "plotStrategy": "title",
+    "cacheTtlHours": 168,
+    "timeoutSeconds": 20
   }
 }

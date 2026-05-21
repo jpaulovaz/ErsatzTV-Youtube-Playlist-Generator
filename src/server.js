@@ -3,7 +3,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const { URL } = require('url');
 const { ROOT_DIR, loadConfig, saveConfig } = require('./config');
-const { runSync, manualCleanupPlaylist, runPlaylistApiAction, testPlaylistCookies, findPlaylist, getState } = require('./syncService');
+const { runSync, manualCleanupPlaylist, previewCleanupPlaylist, runPlaylistApiAction, testPlaylistCookies, checkPlaylistAvailability, refreshPlaylistThumbnails, testYouTubeApi, getAllPlaylistHealth, findPlaylist, getState } = require('./syncService');
 const scheduler = require('./scheduler');
 const logger = require('./logger');
 
@@ -125,10 +125,16 @@ async function handlePlaylistAction(req, res, url) {
 
   let result;
 
-  if (action === 'cleanup') {
+  if (action === 'cleanup-preview') {
+    result = await previewCleanupPlaylist(config, playlistName);
+  } else if (action === 'cleanup') {
     result = await manualCleanupPlaylist(config, playlistName);
   } else if (action === 'test-cookies') {
     result = await testPlaylistCookies(config, playlistName);
+  } else if (action === 'availability') {
+    result = await checkPlaylistAvailability(config, playlistName);
+  } else if (action === 'refresh-thumbnails') {
+    result = await refreshPlaylistThumbnails(config, playlistName);
   } else {
     result = await runPlaylistApiAction(config, playlistName, action);
   }
@@ -158,6 +164,13 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/youtube-api/test') {
+    const config = await loadConfig();
+    const result = await testYouTubeApi(config);
+    sendJson(res, 200, { ok: result.ok, result });
+    return;
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/run') {
     const state = getState();
     if (state.running) {
@@ -174,9 +187,12 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/status') {
+    const config = await loadConfig();
+    const health = await getAllPlaylistHealth(config);
     sendJson(res, 200, {
       sync: getState(),
       scheduler: scheduler.getStatus(),
+      health,
       now: new Date().toISOString()
     });
     return;

@@ -99,6 +99,58 @@
         </div>
 
         <div class="settings-block">
+          <h3>YouTube API</h3>
+          <div class="form-grid three">
+            <label class="check-row">
+              <input name="youtubeApi.enabled" type="checkbox">
+              <span>Usar YouTube API <span class="help" tabindex="0" data-help="Ative para atualizar bibliotecas sem usar yt-dlp nem cookies. O yt-dlp continua sendo usado pelo ErsatzTV apenas na hora de tocar o video.">?</span></span>
+            </label>
+            <label>
+              <span class="label-line">Modo de leitura <span class="help" tabindex="0" data-help="Use API para a rotina normal. Use yt-dlp apenas como compatibilidade quando nao houver API Key ou em testes especificos.">?</span></span>
+              <select name="youtubeApi.readMode">
+                <option value="api">YouTube API</option>
+                <option value="ytdlp">yt-dlp</option>
+              </select>
+            </label>
+            <label>
+              <span class="label-line">Verificacao <span class="help" tabindex="0" data-help="Leve: usa a YouTube API para marcar videos suspeitos sem apagar nada. Desativada: nao verifica disponibilidade. Rigorosa manual fica reservada para testes com yt-dlp.">?</span></span>
+              <select name="youtubeApi.availabilityMode">
+                <option value="light">Leve</option>
+                <option value="disabled">Desativada</option>
+                <option value="rigorous_manual">Rigorosa manual</option>
+              </select>
+            </label>
+            <label class="wide">
+              <span class="label-line">API Key <span class="help" tabindex="0" data-help="Cole aqui a chave da YouTube Data API. Ela sera usada para listar playlists, buscar duracao, titulos e thumbnails. A chave nao aparece nos logs.">?</span></span>
+              <input name="youtubeApi.apiKey" type="password" autocomplete="off" placeholder="AIza...">
+            </label>
+            <label>
+              <span class="label-line">Descricao no EPG <span class="help" tabindex="0" data-help="Escolha o texto gravado no campo plot do YML. Para manter seus Graphics Elements atuais, use Igual ao titulo.">?</span></span>
+              <select name="youtubeApi.plotStrategy">
+                <option value="title">Igual ao titulo</option>
+                <option value="first_description_line">Primeira linha da descricao</option>
+                <option value="full_description">Descricao completa</option>
+              </select>
+            </label>
+            <label>
+              <span class="label-line">Cache em horas <span class="help" tabindex="0" data-help="Tempo para reaproveitar metadados ja lidos da API. Ajuda a economizar cota. Exemplo: 168 equivale a 7 dias.">?</span></span>
+              <input name="youtubeApi.cacheTtlHours" type="number" min="1">
+            </label>
+            <label>
+              <span class="label-line">Timeout da API <span class="help" tabindex="0" data-help="Tempo maximo, em segundos, para esperar a resposta da YouTube API.">?</span></span>
+              <input name="youtubeApi.timeoutSeconds" type="number" min="5">
+            </label>
+            <label class="check-row">
+              <input name="youtubeApi.updateExistingThumbnails" type="checkbox">
+              <span>Atualizar thumbnails existentes <span class="help" tabindex="0" data-help="Desligado: baixa a imagem apenas quando ela ainda nao existe. Ligado: substitui imagens ja salvas nas proximas execucoes.">?</span></span>
+            </label>
+            <div class="form-actions-inline">
+              <button id="testYoutubeApiBtn" type="button">Testar API</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-block">
           <h3>Qualidade do video</h3>
           <div class="form-grid three">
             <label>

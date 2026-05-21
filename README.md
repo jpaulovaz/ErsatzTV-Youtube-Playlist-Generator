@@ -1,28 +1,33 @@
 # ErsatzTV YouTube Playlist Generator
 
-Aplicativo para criar e manter arquivos `.yml` de Remote Streams do ErsatzTV usando playlists e videos do YouTube.
+Aplicativo para criar e manter arquivos `.yml` de Remote Streams do ErsatzTV a partir de playlists e videos avulsos do YouTube.
 
-A ideia principal e simples: cada biblioteca do aplicativo cria uma pasta, gera os arquivos `.yml`, cria o `stream-yt.sh` dentro da propria pasta e avisa o ErsatzTV quando novos arquivos forem criados ou atualizados.
+A partir desta versao, a rotina normal pode usar a **YouTube Data API** para listar fontes, buscar metadados, validar duracao, gerar thumbnails e montar os YML sem usar cookies e sem chamar `yt-dlp`. O `yt-dlp` continua sendo usado pelo `stream-yt.sh` quando o ErsatzTV realmente toca o video.
 
 ## Recursos principais
 
 - Interface web para configuracao e acompanhamento.
-- Uma ou mais fontes do YouTube por biblioteca.
-- Suporte a playlists e links diretos de videos.
+- Uma ou mais fontes por biblioteca: playlists, videos avulsos ou ambos.
 - Deduplicacao por ID do YouTube dentro da mesma biblioteca.
+- Leitura via YouTube Data API, recomendada para rotina agendada.
+- Fallback por `yt-dlp` para compatibilidade.
+- Geração de `.yml` com `script`, `is_live`, `duration`, `title`, `plot` e `year` quando disponivel.
+- Download de thumbnail local ao lado do `.yml`, com o mesmo nome base.
+- Painel de saude por biblioteca: ativos, fora das fontes, suspeitos, sem duracao e thumbnails pendentes.
 - Script `stream-yt.sh` criado automaticamente dentro de cada pasta.
 - `Library ID` e `Playout ID` por biblioteca.
 - Agendador interno por intervalo em minutos.
-- Teste ativo de `cookies.txt` usando o proprio `yt-dlp`.
+- Teste ativo de `cookies.txt` usando `yt-dlp`.
 - Configuracoes de qualidade, resolucao maxima, codec/container e runtime JS/EJS do `yt-dlp`.
-- Limpeza manual de YML ausentes, com remocao de pastas vazias.
-- Scan automatico da biblioteca somente quando houver YML criado, atualizado ou movido.
+- Limpeza manual de YML ausentes, com remocao de thumbnails sidecar e pastas vazias.
+- Scan automatico da biblioteca somente quando houver YML ou thumbnail criado, atualizado ou movido.
 
 ## Requisitos
 
 - Node.js 18 ou superior.
-- `yt-dlp` instalado, normalmente em `/usr/local/bin/yt-dlp`.
 - ErsatzTV acessivel pela rede, normalmente em `http://localhost:8409`.
+- YouTube Data API Key para o modo recomendado de leitura.
+- `yt-dlp` instalado, normalmente em `/usr/local/bin/yt-dlp`, para streaming e teste de cookies.
 - Opcional: `cookies.txt` em formato Netscape quando o YouTube exigir login/cookies.
 - Recomendado: Deno em `/usr/local/bin/deno` para ajudar o `yt-dlp` a resolver desafios recentes do YouTube.
 
@@ -61,17 +66,16 @@ config/config.json
 
 A interface edita esse arquivo. Mudancas de host ou porta exigem reiniciar o processo Node.js.
 
-## Como usar
+## YouTube API
 
-1. Abra a interface web.
-2. Configure a pasta base dos YML.
-3. Configure o caminho do `yt-dlp`.
-4. Configure o `cookies.txt` global, se necessario.
-5. Crie uma biblioteca.
-6. Informe o nome da pasta, Library ID e Playout ID.
-7. Adicione uma ou mais fontes do YouTube: playlists, videos avulsos ou ambos.
-8. Salve.
-9. Use `Executar` na biblioteca ou `Executar agora` no topo.
+1. Crie ou use um projeto no Google Cloud.
+2. Ative a YouTube Data API v3.
+3. Gere uma API Key.
+4. Informe a chave na secao `YouTube API` da interface.
+5. Clique em `Testar API`.
+6. Mantenha o modo de leitura em `YouTube API` para que a rotina agendada nao use cookies.
+
+A API e usada para catalogo e metadados. Ela nao entrega video/audio para streaming. O stream continua sendo feito pelo ErsatzTV chamando o `stream-yt.sh`, que usa `yt-dlp`.
 
 ## Fontes do YouTube
 
@@ -85,7 +89,18 @@ https://youtu.be/ID_DO_VIDEO
 https://www.youtube.com/shorts/ID_DO_VIDEO
 ```
 
-Links de playlist sao lidos como lista. Links diretos de video sao tratados como item unico. Se a URL de video tiver o parametro list=, ela sera tratada como playlist; para usar apenas aquele video, remova o trecho list= da URL. Se o mesmo video aparecer em mais de uma fonte da mesma biblioteca, apenas um YML sera criado.
+Links com `list=` sao tratados como playlist. Para usar apenas um video de uma URL com `list=`, remova o parametro `list=`.
+
+## Thumbnails
+
+Quando a YouTube API esta ativa, o app baixa uma imagem `.jpg` ao lado do `.yml` com o mesmo nome base:
+
+```text
+Artista - Musica.yml
+Artista - Musica.jpg
+```
+
+Por padrao, imagens existentes nao sao substituidas. Use `Atualizar thumbnails existentes` ou o botao `Thumbnails` da biblioteca quando quiser forcar a atualizacao.
 
 ## Cookies do YouTube
 
@@ -99,29 +114,6 @@ Exemplo:
 
 Use o botao `Testar cookies` da biblioteca para validar se o YouTube ainda aceita aquele arquivo. O teste executa o `yt-dlp` em modo simulado e nao baixa o video.
 
-Importante: o teste roda com o usuario que executa o app Node.js. Se o ErsatzTV roda com outro usuario, esse outro usuario tambem precisa conseguir ler o mesmo `cookies.txt`.
-
-## Runtime JS/EJS do yt-dlp
-
-Se aparecerem erros como estes nos logs:
-
-```text
-Signature solving failed
-n challenge solving failed
-Only images are available for download
-Requested format is not available
-```
-
-Use esta configuracao:
-
-```text
-Runtime JS: Deno
-Caminho do runtime: /usr/local/bin/deno
-Componentes EJS: ejs:github
-```
-
-Essa configuracao sera usada tanto para ler as fontes quanto para gerar o script de stream de cada biblioteca.
-
 ## Qualidade do stream
 
 - `Compativel`: prioriza estabilidade. Usa formatos com video e audio juntos quando possivel.
@@ -130,18 +122,18 @@ Essa configuracao sera usada tanto para ler as fontes quanto para gerar o script
 
 A resolucao maxima e apenas um limite. Se o YouTube nao oferecer aquela resolucao para o video, o `yt-dlp` usara a melhor opcao disponivel abaixo dela.
 
-O perfil `Preferir MP4/H.264 + AAC` tenta evitar VP9, AV1, Opus e WebM quando houver alternativa mais compativel.
-
 ## Limpeza
 
 A execucao automatica nao remove YML antigos. Para remover arquivos que nao estao mais nas fontes da biblioteca, use o botao `Limpar YML` na propria biblioteca.
 
-Essa acao tambem remove pastas vazias deixadas apos a exclusao dos YML.
+Essa acao tambem remove thumbnails sidecar correspondentes e pastas vazias deixadas apos a exclusao dos YML.
 
 ## Acoes por biblioteca
 
 - `Executar`: atualiza apenas aquela biblioteca.
-- `Testar cookies`: valida o cookies.txt com uma chamada real ao YouTube.
+- `Testar cookies`: valida o cookies.txt com uma chamada real ao YouTube via `yt-dlp`.
+- `Verificar`: atualiza o painel de saude sem apagar arquivos.
+- `Thumbnails`: atualiza thumbnails usando a YouTube API.
 - `Limpar YML`: remove arquivos que nao pertencem mais as fontes atuais.
 - `Scan`: solicita scan da biblioteca no ErsatzTV.
 - `Limpar lixo`: solicita limpeza de lixo da biblioteca no ErsatzTV.

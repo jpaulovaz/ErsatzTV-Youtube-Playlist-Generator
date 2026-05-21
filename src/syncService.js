@@ -14,6 +14,15 @@ const {
   walkFiles,
   removeEmptyDirectories
 } = require('./utils');
+const {
+  shouldUseYouTubeApi,
+  hasApiKey,
+  fetchSourcesViaApi,
+  fetchVideoDetails,
+  testYouTubeApi,
+  parseYouTubeSource,
+  canonicalWatchUrl
+} = require('./youtubeApi');
 
 const state = {
   running: false,
@@ -364,7 +373,18 @@ function buildVideoTitle(rawTitle) {
   return cleanMetadataText(rawTitle, 'Sem Titulo');
 }
 
-function buildVideoPlot(title) {
+function buildVideoPlot(config, title, description = '') {
+  const strategy = String((config.youtubeApi && config.youtubeApi.plotStrategy) || 'title');
+
+  if (strategy === 'full_description') {
+    return limitMetadataText(description, 1200) || cleanMetadataText(title, 'Sem Titulo');
+  }
+
+  if (strategy === 'first_description_line') {
+    const firstLine = String(description || '').split(/\r?\n/).map((line) => cleanMetadataText(line)).find(Boolean);
+    return limitMetadataText(firstLine || title, 600);
+  }
+
   return cleanMetadataText(title, 'Sem Titulo');
 }
 
@@ -372,18 +392,25 @@ function buildYmlContent(config, playlist, videoId, durationSeconds, streamScrip
   const scriptPath = getPlaylistScriptPath(config, playlist);
   const command = `${shellCommandQuote(scriptPath)} https://www.youtube.com/watch?v=${videoId}`;
   const title = buildVideoTitle(metadata.rawTitle);
-  const plot = buildVideoPlot(title);
+  const plot = buildVideoPlot(config, title, metadata.description || '');
+  const year = Number(metadata.year);
 
-  return [
+  const lines = [
     '# generated_by: ErsatzTV Youtube Playlist Generator',
     `# stream_script_hash: ${streamScriptHash || 'unknown'}`,
     `script: "${yamlDoubleQuoted(command)}"`,
     'is_live: false',
     `duration: "${secondsToDuration(durationSeconds)}"`,
     `title: "${yamlDoubleQuoted(title)}"`,
-    `plot: "${yamlDoubleQuoted(plot)}"`,
-    ''
-  ].join('\n');
+    `plot: "${yamlDoubleQuoted(plot)}"`
+  ];
+
+  if (Number.isFinite(year) && year > 0) {
+    lines.push(`year: ${Math.floor(year)}`);
+  }
+
+  lines.push('');
+  return lines.join('\n');
 }
 
 async function fetchPlaylistVideosFromUrl(config, playlist, sourceUrl, sourceIndex) {
@@ -436,7 +463,7 @@ async function fetchPlaylistVideosFromUrl(config, playlist, sourceUrl, sourceInd
   }));
 }
 
-async function fetchPlaylistVideos(config, playlist) {
+async function fetchPlaylistVideosViaYtDlp(config, playlist) {
   const urls = getPlaylistUrls(playlist);
   if (urls.length === 0) {
     const error = new Error(`Nenhuma fonte do YouTube configurada para ${playlist.folderName}.`);
@@ -501,6 +528,37 @@ async function fetchPlaylistVideos(config, playlist) {
     sourceCount: urls.length,
     fetchedCount: sourceResults.reduce((total, source) => total + source.fetched, 0)
   };
+}
+
+
+async function fetchPlaylistVideosViaApi(config, playlist) {
+  if (!hasApiKey(config)) {
+    const error = new Error('YouTube API ativada, mas a API Key nao foi configurada.');
+    error.code = 'YOUTUBE_API_KEY_MISSING';
+    throw error;
+  }
+
+  await logger.info(`Lendo fontes via YouTube Data API para ${playlist.folderName}.`);
+  const result = await fetchSourcesViaApi(config, playlist);
+  for (const source of result.sourceResults || []) {
+    if (source.error) {
+      await logger.warn(`Fonte ignorada pela YouTube API em ${playlist.folderName}: ${source.url} - ${source.error}`);
+    }
+  }
+  if (result.missingSourceIds && result.missingSourceIds.length > 0) {
+    await logger.warn(`${result.missingSourceIds.length} video(s) das fontes nao foram retornados pela YouTube API em ${playlist.folderName}. Eles serao preservados se ja existirem localmente.`);
+  }
+  return result;
+}
+
+async function fetchPlaylistVideos(config, playlist) {
+  if (shouldUseYouTubeApi(config)) {
+    return fetchPlaylistVideosViaApi(config, playlist);
+  }
+
+  await logger.info(`Lendo fontes via yt-dlp para ${playlist.folderName}.`);
+  const result = await fetchPlaylistVideosViaYtDlp(config, playlist);
+  return { ...result, readMode: 'ytdlp', quotaUnitsUsed: 0, missingSourceIds: [] };
 }
 
 
@@ -823,6 +881,7 @@ async function readExistingYmlIndex(playlistDir) {
   const byVideoId = new Map();
   const byPath = new Map();
   const ymlFiles = [];
+  const entries = [];
 
   for (const filePath of files) {
     if (!filePath.endsWith('.yml')) continue;
@@ -834,12 +893,14 @@ async function readExistingYmlIndex(playlistDir) {
     const videoId = match ? match[1] : null;
     byPath.set(path.resolve(filePath), videoId);
 
+    entries.push({ filePath, videoId });
+
     if (videoId && !byVideoId.has(videoId)) {
       byVideoId.set(videoId, filePath);
     }
   }
 
-  return { byVideoId, byPath, ymlFiles };
+  return { byVideoId, byPath, ymlFiles, entries };
 }
 
 function getCollisionSafeYmlPath(baseFilePath, existingIndex, videoId) {
@@ -857,6 +918,71 @@ function getCollisionSafeYmlPath(baseFilePath, existingIndex, videoId) {
     const suffix = counter === 1 ? videoId : `${videoId}-${counter}`;
     candidate = path.join(parsed.dir, `${parsed.name} [${suffix}]${parsed.ext}`);
     counter += 1;
+  }
+}
+
+
+function getThumbnailPathForYml(filePath, config) {
+  const parsed = path.parse(filePath);
+  const ext = (config.youtubeApi && config.youtubeApi.thumbnailFormat) || 'jpg';
+  return path.join(parsed.dir, `${parsed.name}.${ext}`);
+}
+
+async function moveThumbnailIfNeeded(oldYmlPath, newYmlPath, config, summary) {
+  const oldThumb = getThumbnailPathForYml(oldYmlPath, config);
+  const newThumb = getThumbnailPathForYml(newYmlPath, config);
+  if (oldThumb === newThumb) return;
+  if (!(await pathExists(oldThumb))) return;
+  if (await pathExists(newThumb)) return;
+  await fs.rename(oldThumb, newThumb);
+  summary.thumbnailsMoved += 1;
+  await logger.info(`Thumbnail movida/renomeada: ${path.basename(oldThumb)} -> ${path.basename(newThumb)}`);
+}
+
+async function downloadFile(url, filePath, timeoutMs = 20000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${response.statusText}`);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    await fs.writeFile(filePath, buffer);
+    return buffer.length;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function ensureVideoThumbnail(config, filePath, video, summary) {
+  const thumbnailUrl = String(video.thumbnailUrl || '').trim();
+  const thumbnailPath = getThumbnailPathForYml(filePath, config);
+  const alreadyExists = await pathExists(thumbnailPath);
+  const forceUpdate = Boolean(config.youtubeApi && config.youtubeApi.updateExistingThumbnails);
+
+  if (!thumbnailUrl) {
+    summary.thumbnailsMissing += 1;
+    return { changed: false, path: thumbnailPath, status: 'missing-url' };
+  }
+
+  if (alreadyExists && !forceUpdate) {
+    summary.thumbnailsUnchanged += 1;
+    return { changed: false, path: thumbnailPath, status: 'unchanged' };
+  }
+
+  try {
+    await downloadFile(thumbnailUrl, thumbnailPath, ((config.youtubeApi && config.youtubeApi.timeoutSeconds) || 20) * 1000);
+    if (alreadyExists) {
+      summary.thumbnailsUpdated += 1;
+      return { changed: true, path: thumbnailPath, status: 'updated' };
+    }
+    summary.thumbnailsCreated += 1;
+    return { changed: true, path: thumbnailPath, status: 'created' };
+  } catch (error) {
+    summary.thumbnailsFailed += 1;
+    await logger.warn(`Falha ao baixar thumbnail de ${video.id}: ${error.message}`);
+    return { changed: false, path: thumbnailPath, status: 'failed', error: error.message };
   }
 }
 
@@ -882,7 +1008,8 @@ async function writeVideoYml(config, playlist, playlistDir, existingIndex, video
     rawTitle,
     artist,
     title,
-    description: video.description || ''
+    description: video.description || '',
+    year: video.year || null
   });
 
   if (path.resolve(filePath) !== path.resolve(baseFilePath)) {
@@ -890,6 +1017,7 @@ async function writeVideoYml(config, playlist, playlistDir, existingIndex, video
   }
 
   if (existingPath && path.resolve(existingPath) !== path.resolve(filePath)) {
+    await moveThumbnailIfNeeded(existingPath, filePath, config, summary);
     await fs.rm(existingPath, { force: true });
     existingIndex.byPath.delete(path.resolve(existingPath));
     summary.filesMoved += 1;
@@ -899,22 +1027,189 @@ async function writeVideoYml(config, playlist, playlistDir, existingIndex, video
   const alreadyExists = await pathExists(filePath);
   const previousContent = alreadyExists ? await fs.readFile(filePath, 'utf8') : null;
 
+  let ymlChanged = false;
   if (previousContent === ymlContent) {
     summary.filesUnchanged += 1;
-    existingIndex.byVideoId.set(videoId, filePath);
-    existingIndex.byPath.set(path.resolve(filePath), videoId);
-    return;
+  } else {
+    await fs.writeFile(filePath, ymlContent, 'utf8');
+    ymlChanged = true;
+    if (alreadyExists) {
+      summary.filesUpdated += 1;
+    } else {
+      summary.filesCreated += 1;
+    }
   }
 
-  await fs.writeFile(filePath, ymlContent, 'utf8');
+  const thumbnailResult = shouldUseYouTubeApi(config)
+    ? await ensureVideoThumbnail(config, filePath, video, summary)
+    : { changed: false, status: 'disabled' };
+
   existingIndex.byVideoId.set(videoId, filePath);
   existingIndex.byPath.set(path.resolve(filePath), videoId);
 
-  if (alreadyExists) {
-    summary.filesUpdated += 1;
-  } else {
-    summary.filesCreated += 1;
+  return {
+    ymlChanged,
+    thumbnailChanged: Boolean(thumbnailResult.changed),
+    ymlPath: filePath,
+    thumbnailPath: thumbnailResult.path || null
+  };
+}
+
+
+function getAvailabilityPath(playlistDir) {
+  return path.join(playlistDir, '.availability.json');
+}
+
+async function readJsonFileIfExists(filePath, fallback) {
+  try {
+    const content = await fs.readFile(filePath, 'utf8');
+    return JSON.parse(content);
+  } catch (error) {
+    if (error.code === 'ENOENT') return fallback;
+    return fallback;
   }
+}
+
+function emptyHealthSummary(playlist) {
+  return {
+    playlist: playlist ? playlist.folderName : '',
+    ok: true,
+    lastCheckedAt: null,
+    readMode: null,
+    videosActive: 0,
+    localFiles: 0,
+    sourceMissing: 0,
+    suspicious: 0,
+    apiErrors: 0,
+    notChecked: 0,
+    noDuration: 0,
+    thumbnailsPending: 0,
+    quotaUnitsUsed: 0
+  };
+}
+
+async function writeAvailabilityStatus(config, playlist, playlistDir, existingIndex, videos, fetchResult, options = {}) {
+  const health = emptyHealthSummary(playlist);
+  const records = {};
+  const now = new Date().toISOString();
+  const videosById = new Map((videos || []).filter((video) => video && video.id).map((video) => [video.id, video]));
+  const currentIds = new Set(videosById.keys());
+  const localEntries = existingIndex.entries || [];
+  const localIds = [...new Set(localEntries.map((entry) => entry.videoId).filter(Boolean))];
+  const idsOutsideSources = localIds.filter((id) => !currentIds.has(id));
+  let outsideDetails = { videosById: new Map(), missingIds: [], quotaUnitsUsed: 0 };
+
+  health.lastCheckedAt = now;
+  health.readMode = (fetchResult && fetchResult.readMode) || (shouldUseYouTubeApi(config) ? 'api' : 'ytdlp');
+  health.videosActive = currentIds.size;
+  health.localFiles = localEntries.length;
+  health.quotaUnitsUsed += Number(fetchResult && fetchResult.quotaUnitsUsed) || 0;
+
+  const availabilityMode = String((config.youtubeApi && config.youtubeApi.availabilityMode) || 'disabled');
+  if (shouldUseYouTubeApi(config) && availabilityMode === 'light' && idsOutsideSources.length > 0) {
+    try {
+      outsideDetails = await fetchVideoDetails(config, idsOutsideSources, { forceFresh: Boolean(options.forceFreshAvailability), useCache: false });
+      health.quotaUnitsUsed += outsideDetails.quotaUnitsUsed;
+    } catch (error) {
+      health.apiErrors += 1;
+      await logger.warn(`Verificacao leve falhou para ${playlist.folderName}: ${error.message}`);
+    }
+  }
+
+  for (const entry of localEntries) {
+    if (!entry.videoId) {
+      health.notChecked += 1;
+      records[`file:${path.basename(entry.filePath)}`] = {
+        status: 'not_checked',
+        sourceState: 'unknown_id',
+        filePath: entry.filePath,
+        lastCheckedAt: now
+      };
+      continue;
+    }
+
+    const inSources = currentIds.has(entry.videoId);
+    const sourceVideo = videosById.get(entry.videoId);
+    const outsideVideo = outsideDetails.videosById.get(entry.videoId);
+    const wasMissing = outsideDetails.missingIds.includes(entry.videoId);
+    const thumbnailPath = getThumbnailPathForYml(entry.filePath, config);
+    const hasThumbnail = await pathExists(thumbnailPath);
+
+    if (!hasThumbnail) health.thumbnailsPending += 1;
+
+    let status = 'not_checked';
+    if (inSources) {
+      status = sourceVideo ? 'available' : 'not_checked';
+      if (sourceVideo && (!Number(sourceVideo.duration) || Number(sourceVideo.duration) <= 0)) {
+        health.noDuration += 1;
+      }
+    } else if (outsideVideo) {
+      status = 'available';
+      health.sourceMissing += 1;
+    } else if (wasMissing) {
+      status = 'not_found_or_private';
+      health.sourceMissing += 1;
+      health.suspicious += 1;
+    } else if (availabilityMode === 'disabled' || !shouldUseYouTubeApi(config)) {
+      status = 'not_checked';
+      health.sourceMissing += 1;
+      health.notChecked += 1;
+    } else {
+      status = 'api_error';
+      health.sourceMissing += 1;
+      health.apiErrors += 1;
+    }
+
+    records[entry.videoId] = {
+      status,
+      sourceState: inSources ? 'in_sources' : 'source_missing',
+      filePath: entry.filePath,
+      thumbnailPath,
+      hasThumbnail,
+      title: (sourceVideo && sourceVideo.title) || (outsideVideo && outsideVideo.title) || '',
+      lastCheckedAt: now
+    };
+  }
+
+  for (const id of currentIds) {
+    if (records[id]) continue;
+    const sourceVideo = videosById.get(id);
+    records[id] = {
+      status: 'available',
+      sourceState: 'in_sources',
+      filePath: null,
+      title: sourceVideo ? sourceVideo.title : '',
+      lastCheckedAt: now
+    };
+  }
+
+  const payload = {
+    playlist: playlist.folderName,
+    updatedAt: now,
+    readMode: health.readMode,
+    summary: health,
+    records
+  };
+
+  await fs.writeFile(getAvailabilityPath(playlistDir), JSON.stringify(payload, null, 2) + '\n', 'utf8');
+  return health;
+}
+
+async function getPlaylistHealth(config, playlist) {
+  const playlistDir = getPlaylistDir(config, playlist);
+  const payload = await readJsonFileIfExists(getAvailabilityPath(playlistDir), null);
+  if (payload && payload.summary) return payload.summary;
+  return emptyHealthSummary(playlist);
+}
+
+async function getAllPlaylistHealth(config) {
+  const result = {};
+  for (const playlist of getPlaylistsWithFolders(config, { includeDisabled: true })) {
+    const health = await getPlaylistHealth(config, playlist);
+    result[playlist.folderName] = health;
+    result[playlist.name] = health;
+  }
+  return result;
 }
 
 async function scanPlaylistLibrary(config, playlist) {
@@ -942,7 +1237,13 @@ function getCountSnapshot(summary) {
     filesCreated: summary.filesCreated,
     filesUpdated: summary.filesUpdated,
     filesMoved: summary.filesMoved,
-    filesUnchanged: summary.filesUnchanged
+    filesUnchanged: summary.filesUnchanged,
+    thumbnailsCreated: summary.thumbnailsCreated,
+    thumbnailsUpdated: summary.thumbnailsUpdated,
+    thumbnailsMoved: summary.thumbnailsMoved,
+    thumbnailsUnchanged: summary.thumbnailsUnchanged,
+    thumbnailsMissing: summary.thumbnailsMissing,
+    thumbnailsFailed: summary.thumbnailsFailed
   };
 }
 
@@ -952,7 +1253,13 @@ function getCountDelta(summary, before) {
     filesCreated: summary.filesCreated - before.filesCreated,
     filesUpdated: summary.filesUpdated - before.filesUpdated,
     filesMoved: summary.filesMoved - before.filesMoved,
-    filesUnchanged: summary.filesUnchanged - before.filesUnchanged
+    filesUnchanged: summary.filesUnchanged - before.filesUnchanged,
+    thumbnailsCreated: summary.thumbnailsCreated - before.thumbnailsCreated,
+    thumbnailsUpdated: summary.thumbnailsUpdated - before.thumbnailsUpdated,
+    thumbnailsMoved: summary.thumbnailsMoved - before.thumbnailsMoved,
+    thumbnailsUnchanged: summary.thumbnailsUnchanged - before.thumbnailsUnchanged,
+    thumbnailsMissing: summary.thumbnailsMissing - before.thumbnailsMissing,
+    thumbnailsFailed: summary.thumbnailsFailed - before.thumbnailsFailed
   };
 }
 
@@ -975,6 +1282,15 @@ async function processPlaylist(config, playlist, summary) {
     filesUpdated: 0,
     filesMoved: 0,
     filesUnchanged: 0,
+    thumbnailsCreated: 0,
+    thumbnailsUpdated: 0,
+    thumbnailsMoved: 0,
+    thumbnailsUnchanged: 0,
+    thumbnailsMissing: 0,
+    thumbnailsFailed: 0,
+    health: null,
+    readMode: null,
+    quotaUnitsUsed: 0,
     streamScriptPath: null,
     streamScriptHash: null,
     streamScriptChanged: false,
@@ -1022,6 +1338,12 @@ async function processPlaylist(config, playlist, summary) {
   playlistSummary.videosFound = videos.length;
   playlistSummary.videosDuplicate = fetchResult.duplicates.length;
   playlistSummary.duplicates = fetchResult.duplicates.slice(0, 50);
+  playlistSummary.readMode = fetchResult.readMode || (shouldUseYouTubeApi(config) ? 'api' : 'ytdlp');
+  playlistSummary.quotaUnitsUsed = Number(fetchResult.quotaUnitsUsed) || 0;
+  summary.quotaUnitsUsed += playlistSummary.quotaUnitsUsed;
+  if (fetchResult.missingSourceIds && fetchResult.missingSourceIds.length > 0) {
+    playlistSummary.missingSourceIds = fetchResult.missingSourceIds.slice(0, 50);
+  }
 
   const before = getCountSnapshot(summary);
 
@@ -1031,14 +1353,22 @@ async function processPlaylist(config, playlist, summary) {
 
   Object.assign(playlistSummary, getCountDelta(summary, before));
 
-  const hasYmlChanges = playlistSummary.filesCreated > 0 || playlistSummary.filesUpdated > 0 || playlistSummary.filesMoved > 0;
+  try {
+    playlistSummary.health = await writeAvailabilityStatus(config, playlist, playlistDir, existingIndex, videos, fetchResult);
+    summary.quotaUnitsUsed += Math.max(0, Number(playlistSummary.health.quotaUnitsUsed || 0) - Number(playlistSummary.quotaUnitsUsed || 0));
+  } catch (error) {
+    playlistSummary.health = { ok: false, error: error.message };
+    await logger.warn(`Nao foi possivel atualizar o painel de saude de ${playlist.folderName}: ${error.message}`);
+  }
+
+  const hasYmlChanges = playlistSummary.filesCreated > 0 || playlistSummary.filesUpdated > 0 || playlistSummary.filesMoved > 0 || playlistSummary.thumbnailsCreated > 0 || playlistSummary.thumbnailsUpdated > 0 || playlistSummary.thumbnailsMoved > 0;
   if (hasYmlChanges) {
     const scan = await scanPlaylistLibrary(config, playlist);
     playlistSummary.scanRequested = true;
     playlistSummary.scan = scan;
     summary.api.scans.push({ playlist: playlist.folderName, libraryId: playlist.libraryId || null, ...scan });
   } else {
-    const reason = 'Nenhum YML criado, atualizado ou movido nesta rodada.';
+    const reason = 'Nenhum YML ou thumbnail criado, atualizado ou movido nesta rodada.';
     playlistSummary.scanSkippedReason = reason;
     summary.api.scansSkipped.push({ playlist: playlist.folderName, libraryId: playlist.libraryId || null, reason });
     await logger.info(`Scan automatico ignorado para ${playlist.folderName}: ${reason}`);
@@ -1064,6 +1394,13 @@ function createRunSummary(options) {
     filesUpdated: 0,
     filesMoved: 0,
     filesUnchanged: 0,
+    thumbnailsCreated: 0,
+    thumbnailsUpdated: 0,
+    thumbnailsMoved: 0,
+    thumbnailsUnchanged: 0,
+    thumbnailsMissing: 0,
+    thumbnailsFailed: 0,
+    quotaUnitsUsed: 0,
     playlists: [],
     api: {
       scans: [],
@@ -1131,6 +1468,57 @@ async function runSync(config, options = {}) {
   }
 }
 
+
+async function previewCleanupPlaylist(config, identifier) {
+  const playlist = findPlaylist(config, identifier);
+  if (!playlist) {
+    const error = new Error('Biblioteca nao encontrada na configuracao.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const playlistDir = getPlaylistDir(config, playlist);
+  const fetchResult = await fetchPlaylistVideos(config, playlist);
+  const currentIds = new Set(fetchResult.videos.map((video) => video.id).filter(Boolean));
+  const files = await walkFiles(playlistDir);
+  const summary = {
+    ok: true,
+    trigger: 'cleanup-preview',
+    playlist: playlist.folderName,
+    videosFound: currentIds.size,
+    videosDuplicate: fetchResult.duplicates.length,
+    filesChecked: 0,
+    filesToRemove: 0,
+    thumbnailsToRemove: 0,
+    examples: []
+  };
+
+  for (const filePath of files) {
+    if (!filePath.endsWith('.yml')) continue;
+    summary.filesChecked += 1;
+    const content = await fs.readFile(filePath, 'utf8');
+    const match = content.match(/watch\?v=([a-zA-Z0-9_-]+)/);
+    const videoId = match ? match[1] : '';
+
+    if (!match || !currentIds.has(videoId)) {
+      const thumbnailPath = getThumbnailPathForYml(filePath, config);
+      const hasThumbnail = await pathExists(thumbnailPath);
+      summary.filesToRemove += 1;
+      if (hasThumbnail) summary.thumbnailsToRemove += 1;
+      if (summary.examples.length < 20) {
+        summary.examples.push({
+          filePath,
+          videoId,
+          reason: videoId ? 'fora_das_fontes' : 'sem_id_youtube',
+          thumbnailPath: hasThumbnail ? thumbnailPath : ''
+        });
+      }
+    }
+  }
+
+  return summary;
+}
+
 async function manualCleanupPlaylist(config, identifier) {
   if (state.running) {
     const error = new Error('Existe uma operacao em execucao. Tente novamente quando terminar.');
@@ -1160,6 +1548,7 @@ async function manualCleanupPlaylist(config, identifier) {
     videosDuplicate: 0,
     filesChecked: 0,
     filesRemoved: 0,
+    thumbnailsRemoved: 0,
     foldersRemoved: 0
   };
 
@@ -1182,8 +1571,14 @@ async function manualCleanupPlaylist(config, identifier) {
       const match = content.match(/watch\?v=([a-zA-Z0-9_-]+)/);
 
       if (!match || !currentIds.has(match[1])) {
+        const thumbnailPath = getThumbnailPathForYml(filePath, config);
         await fs.rm(filePath, { force: true });
         summary.filesRemoved += 1;
+        if (await pathExists(thumbnailPath)) {
+          await fs.rm(thumbnailPath, { force: true });
+          summary.thumbnailsRemoved += 1;
+          await logger.info(`Thumbnail removida na limpeza manual: ${thumbnailPath}`);
+        }
         await logger.info(`YML removido na limpeza manual: ${filePath}`);
       }
     }
@@ -1211,6 +1606,84 @@ async function manualCleanupPlaylist(config, identifier) {
   } finally {
     state.running = false;
   }
+}
+
+
+async function checkPlaylistAvailability(config, identifier) {
+  if (state.running) {
+    const error = new Error('Existe uma operacao em execucao. Tente novamente quando terminar.');
+    error.code = 'SYNC_ALREADY_RUNNING';
+    throw error;
+  }
+
+  const playlist = findPlaylist(config, identifier);
+  if (!playlist) {
+    const error = new Error('Biblioteca nao encontrada na configuracao.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  state.running = true;
+  state.currentStep = `availability:${playlist.folderName}`;
+  state.startedAt = new Date().toISOString();
+  state.finishedAt = null;
+  state.lastError = null;
+
+  const summary = {
+    startedAt: state.startedAt,
+    finishedAt: null,
+    trigger: 'availability',
+    playlist: playlist.folderName,
+    ok: false,
+    readMode: null,
+    videosFound: 0,
+    videosDuplicate: 0,
+    health: null,
+    error: null
+  };
+
+  try {
+    await logger.info(`Verificacao de disponibilidade iniciada para ${playlist.folderName}.`);
+    const playlistDir = getPlaylistDir(config, playlist);
+    await fs.mkdir(playlistDir, { recursive: true });
+    const fetchResult = await fetchPlaylistVideos(config, playlist);
+    const existingIndex = await readExistingYmlIndex(playlistDir);
+    summary.readMode = fetchResult.readMode || (shouldUseYouTubeApi(config) ? 'api' : 'ytdlp');
+    summary.videosFound = fetchResult.videos.length;
+    summary.videosDuplicate = fetchResult.duplicates.length;
+    summary.health = await writeAvailabilityStatus(config, playlist, playlistDir, existingIndex, fetchResult.videos, fetchResult, { forceFreshAvailability: true });
+    summary.ok = true;
+    summary.finishedAt = new Date().toISOString();
+    state.finishedAt = summary.finishedAt;
+    state.currentStep = 'idle';
+    state.lastResult = summary;
+    await logger.info('Verificacao de disponibilidade finalizada.', summary);
+    return summary;
+  } catch (error) {
+    summary.finishedAt = new Date().toISOString();
+    summary.error = error.message;
+    state.finishedAt = summary.finishedAt;
+    state.currentStep = 'error';
+    state.lastError = { message: error.message, stack: error.stack };
+    state.lastResult = summary;
+    await logger.error(`Verificacao de disponibilidade interrompida: ${error.message}`);
+    throw error;
+  } finally {
+    state.running = false;
+  }
+}
+
+async function refreshPlaylistThumbnails(config, identifier) {
+  const copy = JSON.parse(JSON.stringify(config));
+  copy.youtubeApi = copy.youtubeApi || {};
+  copy.youtubeApi.updateExistingThumbnails = true;
+  copy.youtubeApi.enabled = Boolean(copy.youtubeApi.enabled);
+  if (!shouldUseYouTubeApi(copy)) {
+    const error = new Error('Para atualizar thumbnails, ative a YouTube API e informe uma API Key valida.');
+    error.statusCode = 400;
+    throw error;
+  }
+  return runSync(copy, { trigger: 'manual-thumbnails', playlistName: identifier });
 }
 
 async function runPlaylistApiAction(config, identifier, action) {
@@ -1270,8 +1743,13 @@ function getState() {
 module.exports = {
   runSync,
   manualCleanupPlaylist,
+  previewCleanupPlaylist,
   runPlaylistApiAction,
   testPlaylistCookies,
+  checkPlaylistAvailability,
+  refreshPlaylistThumbnails,
+  testYouTubeApi,
+  getAllPlaylistHealth,
   findPlaylist,
   getState
 };

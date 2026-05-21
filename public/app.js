@@ -1,5 +1,6 @@
 let currentConfig = null;
 let refreshTimer = null;
+let latestHealth = {};
 
 const qs = (selector) => document.querySelector(selector);
 const qsa = (selector, root = document) => Array.from(root.querySelectorAll(selector));
@@ -225,6 +226,23 @@ function refreshStreamQualityUi(applyDefaults = false) {
   }
 }
 
+const YOUTUBE_API_READ_MODES = ['api', 'ytdlp'];
+const YOUTUBE_API_AVAILABILITY_MODES = ['disabled', 'light', 'rigorous_manual'];
+const YOUTUBE_API_PLOT_STRATEGIES = ['title', 'first_description_line', 'full_description'];
+
+function normalizeYouTubeApiBeforeSave(apiConfig) {
+  const api = apiConfig || {};
+  api.enabled = Boolean(api.enabled);
+  api.apiKey = String(api.apiKey || '').trim();
+  api.readMode = YOUTUBE_API_READ_MODES.includes(api.readMode) ? api.readMode : 'api';
+  api.availabilityMode = YOUTUBE_API_AVAILABILITY_MODES.includes(api.availabilityMode) ? api.availabilityMode : 'light';
+  api.plotStrategy = YOUTUBE_API_PLOT_STRATEGIES.includes(api.plotStrategy) ? api.plotStrategy : 'title';
+  api.updateExistingThumbnails = Boolean(api.updateExistingThumbnails);
+  api.thumbnailFormat = 'jpg';
+  api.cacheTtlHours = optionalNumber(api.cacheTtlHours) || 168;
+  api.timeoutSeconds = Math.max(5, optionalNumber(api.timeoutSeconds) || 20);
+}
+
 function normalizeStreamBeforeSave(stream) {
   stream.qualityMode = ['compatible', 'high', 'custom'].includes(stream.qualityMode) ? stream.qualityMode : 'compatible';
   stream.codecProfile = normalizeCodecProfile(stream.codecProfile);
@@ -285,6 +303,7 @@ function formatRunSummary(summary) {
       `Videos validos na fonte: ${summary.videosFound || 0}`,
       `YML verificados: ${summary.filesChecked || 0}`,
       `YML removidos: ${summary.filesRemoved || 0}`,
+      `Thumbnails removidas: ${summary.thumbnailsRemoved || 0}`,
       `Pastas vazias removidas: ${summary.foldersRemoved || 0}`
     ].join('\n');
   }
@@ -296,7 +315,10 @@ function formatRunSummary(summary) {
     `Videos repetidos ignorados: ${summary.videosDuplicate || 0}`,
     `YML criados: ${summary.filesCreated || 0}`,
     `YML atualizados: ${summary.filesUpdated || 0}`,
-    `YML sem mudanca: ${summary.filesUnchanged || 0}`
+    `YML sem mudanca: ${summary.filesUnchanged || 0}`,
+    `Thumbnails novas: ${summary.thumbnailsCreated || 0}`,
+    `Thumbnails atualizadas: ${summary.thumbnailsUpdated || 0}`,
+    `Cota API estimada: ${summary.quotaUnitsUsed || 0}`
   ];
 
   if (Array.isArray(summary.playlists) && summary.playlists.length > 0) {
@@ -308,7 +330,9 @@ function formatRunSummary(summary) {
       const updated = playlist.filesUpdated || 0;
       const duplicates = playlist.videosDuplicate || 0;
       const scan = playlist.scanRequested ? 'scan solicitado' : 'scan ignorado';
-      lines.push(`- ${playlist.name}: ${sources} fonte(s), ${found} video(s), ${created} criado(s), ${updated} atualizado(s), ${duplicates} repetido(s), ${scan}`);
+      const readMode = playlist.readMode ? `, leitura ${playlist.readMode}` : '';
+      const thumbs = (playlist.thumbnailsCreated || playlist.thumbnailsUpdated) ? `, ${(playlist.thumbnailsCreated || 0) + (playlist.thumbnailsUpdated || 0)} thumbnail(s)` : '';
+      lines.push(`- ${playlist.name}: ${sources} fonte(s), ${found} video(s), ${created} criado(s), ${updated} atualizado(s), ${duplicates} repetido(s)${thumbs}${readMode}, ${scan}`);
       if (playlist.failed && playlist.error) {
         lines.push(`  Erro: ${playlist.error}`);
       }
@@ -338,11 +362,68 @@ ${result.ytDlp.stderr}` : ''
   return lines.join('\n');
 }
 
+
+function formatHealthSummary(health) {
+  if (!health) return 'Sem dados de saude ainda.';
+  return [
+    `Videos ativos: ${health.videosActive || 0}`,
+    `Arquivos locais: ${health.localFiles || 0}`,
+    `Fora das fontes: ${health.sourceMissing || 0}`,
+    `Suspeitos: ${health.suspicious || 0}`,
+    `Sem duracao valida: ${health.noDuration || 0}`,
+    `Thumbnails pendentes: ${health.thumbnailsPending || 0}`,
+    `Ultima verificacao: ${formatDate(health.lastCheckedAt)}`
+  ].join(' | ');
+}
+
+function formatPlaylistActionDetails(result) {
+  if (!result) return '';
+  if (result.status && result.cookieFile) return formatCookieTestDetails(result);
+  if (result.trigger === 'cleanup-preview') {
+    const lines = [
+      'Pre-visualizacao da limpeza:',
+      `YML verificados: ${result.filesChecked || 0}`,
+      `YML que seriam removidos: ${result.filesToRemove || 0}`,
+      `Thumbnails junto desses YML: ${result.thumbnailsToRemove || 0}`
+    ];
+    if (Array.isArray(result.examples) && result.examples.length > 0) {
+      lines.push('', 'Exemplos:');
+      for (const item of result.examples.slice(0, 10)) {
+        lines.push(`- ${item.filePath}`);
+      }
+    }
+    return lines.join('\n');
+  }
+  if (result.trigger === 'availability') {
+    return [
+      result.ok ? 'Verificacao concluida.' : 'Verificacao falhou.',
+      `Modo: ${result.readMode || '-'}`,
+      `Videos nas fontes: ${result.videosFound || 0}`,
+      result.health ? formatHealthSummary(result.health) : '',
+      result.error ? `Erro: ${result.error}` : ''
+    ].filter(Boolean).join('\n');
+  }
+  if (result.trigger === 'manual-thumbnails' || result.trigger === 'manual-playlist' || result.trigger === 'manual') {
+    return formatRunSummary(result);
+  }
+  if (result.trigger === 'manual-cleanup') {
+    return formatRunSummary(result);
+  }
+  if (result.action) {
+    const ok = result.ok === false ? 'falhou' : 'enviada';
+    return `Acao ${result.action} ${ok}.`;
+  }
+  if (result.message || result.status) {
+    return [result.message || '', result.status ? `Status: ${result.status}` : ''].filter(Boolean).join('\n');
+  }
+  return JSON.stringify(result, null, 2);
+}
+
 function renderPlaylistInlineResult(row, result, fallbackMessage = '') {
   const box = row.querySelector('[data-role="playlist-result"]');
   if (!box) return;
 
-  box.textContent = result ? formatCookieTestDetails(result) : fallbackMessage;
+  box.textContent = result ? formatPlaylistActionDetails(result) : fallbackMessage;
   box.classList.remove('hidden', 'ok', 'fail');
   box.classList.add(result && result.ok ? 'ok' : 'fail');
 }
@@ -376,6 +457,8 @@ function readForm() {
   });
 
   normalizeStreamBeforeSave(config.stream);
+  config.youtubeApi = config.youtubeApi || {};
+  normalizeYouTubeApiBeforeSave(config.youtubeApi);
 
   config.playlists = qsa('.playlist-row').map((row) => {
     const urls = getPlaylistUrlsFromRow(row);
@@ -442,6 +525,7 @@ function addPlaylistRow(playlist = { name: '', url: '', urls: [], enabled: true,
   const container = qs('#playlistList');
   const row = document.createElement('div');
   row.className = 'playlist-row';
+  row.dataset.folder = playlist.name || '';
 
   row.innerHTML = `
     <div class="playlist-fields">
@@ -482,9 +566,12 @@ function addPlaylistRow(playlist = { name: '', url: '', urls: [], enabled: true,
         </label>
       </div>
     </div>
+    <div class="playlist-health" data-role="playlist-health">Saude da biblioteca: ainda nao verificada.</div>
     <div class="playlist-actions">
       <button type="button" class="primary" data-action="run" title="Atualiza apenas esta biblioteca">Executar</button>
       <button type="button" data-action="test-cookies" title="Testa o cookies.txt contra o YouTube">Testar cookies</button>
+      <button type="button" data-action="availability" title="Verifica os videos locais sem apagar arquivos">Verificar</button>
+      <button type="button" data-action="refresh-thumbnails" title="Baixa ou atualiza as thumbnails da biblioteca">Thumbnails</button>
       <button type="button" data-action="cleanup" title="Remove YML que nao estao mais nas fontes desta biblioteca">Limpar YML</button>
       <button type="button" data-action="scan" title="Solicita scan da biblioteca no ErsatzTV">Scan</button>
       <button type="button" data-action="empty-trash" title="Solicita limpeza de lixo da biblioteca no ErsatzTV">Limpar lixo</button>
@@ -509,6 +596,8 @@ function addPlaylistRow(playlist = { name: '', url: '', urls: [], enabled: true,
   row.querySelector('[data-action="remove"]').addEventListener('click', () => row.remove());
   row.querySelector('[data-action="run"]').addEventListener('click', () => runPlaylistAction(row, 'run'));
   row.querySelector('[data-action="test-cookies"]').addEventListener('click', () => runPlaylistAction(row, 'test-cookies'));
+  row.querySelector('[data-action="availability"]').addEventListener('click', () => runPlaylistAction(row, 'availability'));
+  row.querySelector('[data-action="refresh-thumbnails"]').addEventListener('click', () => runPlaylistAction(row, 'refresh-thumbnails'));
   row.querySelector('[data-action="cleanup"]').addEventListener('click', () => runPlaylistAction(row, 'cleanup'));
   row.querySelector('[data-action="scan"]').addEventListener('click', () => runPlaylistAction(row, 'scan'));
   row.querySelector('[data-action="empty-trash"]').addEventListener('click', () => runPlaylistAction(row, 'empty-trash'));
@@ -534,7 +623,16 @@ async function runPlaylistAction(row, action) {
   }
 
   if (action === 'cleanup') {
-    const confirmed = window.confirm(`Remover YML que nao aparecem mais nas fontes da biblioteca "${name}"?`);
+    const preview = await api(`/api/playlists/${encodeURIComponent(name)}/cleanup-preview`, { method: 'POST' });
+    renderPlaylistInlineResult(row, preview.result);
+    const toRemove = Number(preview.result && preview.result.filesToRemove) || 0;
+    if (toRemove <= 0) {
+      showToast('Nada para remover nesta biblioteca.');
+      await refreshAll();
+      return;
+    }
+    const thumbs = Number(preview.result && preview.result.thumbnailsToRemove) || 0;
+    const confirmed = window.confirm(`Remover ${toRemove} YML e ${thumbs} thumbnail(s) fora das fontes da biblioteca "${name}"?`);
     if (!confirmed) return;
   }
 
@@ -544,16 +642,34 @@ async function runPlaylistAction(row, action) {
   } else if (action === 'test-cookies') {
     renderPlaylistInlineResult(row, payload.result);
     showToast(payload.result && payload.result.ok ? 'Cookies validos no teste ativo.' : 'Teste de cookies falhou. Veja o resultado na biblioteca e os logs.');
+  } else if (action === 'availability' || action === 'refresh-thumbnails') {
+    renderPlaylistInlineResult(row, payload.result);
+    showToast(action === 'availability' ? 'Verificacao concluida. Veja o resumo na biblioteca.' : 'Atualizacao de thumbnails iniciada/concluida. Veja o resumo.');
   } else {
+    renderPlaylistInlineResult(row, payload.result);
     showToast(payload.result && payload.result.ok === false ? 'Acao enviada, mas a API retornou falha. Veja os logs.' : 'Acao executada. Veja os logs.');
   }
   await refreshAll();
+}
+
+
+function renderHealthForRows(healthMap) {
+  latestHealth = healthMap || {};
+  qsa('.playlist-row').forEach((row) => {
+    const name = row.querySelector('[data-field="name"]') ? row.querySelector('[data-field="name"]').value.trim() : row.dataset.folder;
+    const health = latestHealth[name] || null;
+    const box = row.querySelector('[data-role="playlist-health"]');
+    if (!box) return;
+    box.textContent = health ? formatHealthSummary(health) : 'Saude da biblioteca: ainda nao verificada.';
+    box.classList.toggle('has-warning', Boolean(health && ((health.suspicious || 0) > 0 || (health.apiErrors || 0) > 0)));
+  });
 }
 
 async function loadConfig() {
   currentConfig = await api('/api/config');
   fillForm(currentConfig);
   renderPlaylists(currentConfig.playlists || []);
+  renderHealthForRows(latestHealth);
 }
 
 async function saveConfig() {
@@ -565,6 +681,7 @@ async function saveConfig() {
   currentConfig = result.config;
   fillForm(currentConfig);
   renderPlaylists(currentConfig.playlists || []);
+  renderHealthForRows(latestHealth);
   showToast('Configuracao salva. Mudancas de host/porta exigem reinicio do app.');
   await refreshAll();
 }
@@ -589,6 +706,7 @@ function renderStatus(status) {
 
   const summary = status.sync.lastResult || status.sync.lastError || null;
   qs('#lastSummary').textContent = formatRunSummary(summary);
+  renderHealthForRows(status.health || {});
 }
 
 function renderLogs(payload) {
@@ -617,6 +735,20 @@ async function refreshAll() {
 
 async function clearLogs() {
   await api('/api/logs/clear', { method: 'POST' });
+  await refreshAll();
+}
+
+async function testYoutubeApiFromForm() {
+  const config = readForm();
+  const saved = await api('/api/config', {
+    method: 'PUT',
+    body: JSON.stringify(config)
+  });
+  currentConfig = saved.config;
+  const payload = await api('/api/youtube-api/test', { method: 'POST' });
+  const result = payload.result || {};
+  showToast(result.ok ? 'YouTube API funcionando.' : `Falha na YouTube API: ${result.message || result.status || 'erro'}`);
+  await loadConfig();
   await refreshAll();
 }
 
@@ -679,6 +811,13 @@ bindSaveButton('#saveBtnBottom');
 qs('#runNowBtn').addEventListener('click', () => {
   runNow().catch((error) => showToast(error.message));
 });
+
+const testYoutubeApiBtn = qs('#testYoutubeApiBtn');
+if (testYoutubeApiBtn) {
+  testYoutubeApiBtn.addEventListener('click', () => {
+    testYoutubeApiFromForm().catch((error) => showToast(error.message));
+  });
+}
 
 qs('#addPlaylistBtn').addEventListener('click', () => addPlaylistRow());
 

@@ -635,3 +635,39 @@ button.ghost {
     width: 100%;
   }
 }
+
+.form-actions-inline {
+  display: flex;
+  align-items: end;
+  min-width: 0;
+}
+
+.form-actions-inline button {
+  width: 100%;
+}
+
+.playlist-health {
+  border: 1px solid var(--line-soft);
+  border-radius: 13px;
+  background: rgba(2, 6, 23, 0.44);
+  color: #cbd5e1;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.playlist-health.has-warning {
+  border-color: rgba(249, 115, 22, 0.58);
+  background: rgba(249, 115, 22, 0.08);
+  color: #fed7aa;
+}
+
+.playlist-actions {
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+}
+
+.playlist-actions button {
+  min-height: 40px;
+  padding: 9px 10px;
+  font-size: 13px;
+}

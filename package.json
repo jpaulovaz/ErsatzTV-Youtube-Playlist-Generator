@@ -1,13 +1,13 @@
 {
   "name": "ersatztv-youtube-playlist-generator",
-  "version": "1.0.0",
-  "description": "Gerador de arquivos YML para ErsatzTV usando playlists e videos do YouTube, com interface web, agendador, teste ativo de cookies, fontes multiplas por biblioteca e configuracoes de yt-dlp.",
+  "version": "1.1.0",
+  "description": "Gerador de arquivos YML para ErsatzTV com YouTube Data API, thumbnails, painel de saude, interface web, agendador e yt-dlp para streaming.",
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {
     "start": "node src/main.js",
     "sync": "node src/cli-sync.js",
-    "check": "node --check src/main.js && node --check src/server.js && node --check src/syncService.js && node --check src/config.js && node --check src/logger.js && node --check src/scheduler.js && node --check src/utils.js && node --check src/cli-sync.js"
+    "check": "node --check src/main.js && node --check src/server.js && node --check src/syncService.js && node --check src/youtubeApi.js && node --check src/config.js && node --check src/logger.js && node --check src/scheduler.js && node --check src/utils.js && node --check src/cli-sync.js"
   },
   "engines": {
     "node": ">=18.0.0"
