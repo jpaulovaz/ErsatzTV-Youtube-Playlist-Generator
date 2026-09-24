@@ -20,3 +20,7 @@ npm-debug.log*
 *.zip
 *.tar.gz
 *.sha256
+
+# Credenciais de acesso web
+/config/auth.json
+/config/auth*.backup-*.json

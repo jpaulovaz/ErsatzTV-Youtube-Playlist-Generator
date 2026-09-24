@@ -1,47 +1,61 @@
-# Atualização da versão 1 para a versão 2.0
+# Atualização para a versão 2.1
 
-Este procedimento preserva `config/config.json`, `data/` e os arquivos de mídia existentes.
+Este procedimento foi preparado para atualização direta da versão 2.0 e também funciona sobre uma instalação migrada da versão 1. O pacote `update` não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`.
 
-## 1. Pare o aplicativo atual
+## 1. Pare a aplicação
 
-Use o nome real do seu serviço. Exemplo:
+Com PM2:
 
 ```bash
-sudo systemctl stop ersatztv-youtube-downloader
+pm2 stop ersatztv-youtube-downloader
 ```
 
-Quando o serviço antigo tiver outro nome, pare esse serviço em vez do exemplo acima.
+Quando o processo tiver outro nome, confira com `pm2 list` e use esse nome.
 
-## 2. Faça backup da instalação
+## 2. Faça backup
 
-Dentro da pasta que contém a aplicação:
+Dentro da pasta da aplicação:
 
 ```bash
 cd /caminho/da/aplicacao
-cd ..
-tar -czf "ersatztv-youtube-backup-$(date +%Y%m%d-%H%M%S).tar.gz" "$(basename /caminho/da/aplicacao)"
-```
-
-Alternativa direta, executada dentro da aplicação:
-
-```bash
 cp config/config.json "config/config.json.bak-$(date +%Y%m%d-%H%M%S)"
 cp -a data "data.bak-$(date +%Y%m%d-%H%M%S)"
 ```
 
-## 3. Extraia o pacote de atualização por cima da aplicação
+Quando já existir `config/auth.json`, preserve-o também:
 
-O arquivo `ErsatzTV-YouTube-Downloader-v2.0.0-update.zip` contém somente arquivos substituíveis. Ele não contém `config/config.json` nem dados operacionais.
+```bash
+[ ! -f config/auth.json ] || cp config/auth.json "config/auth.backup-$(date +%Y%m%d-%H%M%S).json"
+```
+
+## 3. Extraia o pacote de atualização
 
 ```bash
 cd /caminho/da/aplicacao
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v2.0.0-update.zip -d .
-rm -f deploy/ersatztv-yml-syncer.service.example
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v2.1.0-update.zip -d .
 ```
 
-O `rm` acima elimina somente o exemplo de serviço antigo; ele não toca no unit file já instalado em `/etc/systemd/system`.
+A atualização preserva a configuração de bibliotecas, a fila, o histórico e os arquivos de mídia.
 
-## 4. Valide
+## 4. Configure o login local
+
+Na primeira atualização para 2.1, crie o usuário administrativo:
+
+```bash
+npm run auth:set -- --username SEU_USUARIO
+```
+
+A senha é solicitada no terminal, precisa ter pelo menos 12 caracteres e não é exibida. Para uma aplicação que ficará exclusivamente atrás de um proxy reverso controlado, use:
+
+```bash
+npm run auth:set -- --username SEU_USUARIO --trust-proxy
+```
+
+Não habilite `--trust-proxy` quando clientes puderem acessar diretamente a porta do Node, pois nessa modalidade a aplicação confia nos cabeçalhos encaminhados pelo proxy.
+
+Para trocar a senha futuramente, execute o mesmo comando e reinicie a aplicação.
+
+## 5. Valide
 
 ```bash
 node --version
@@ -51,69 +65,65 @@ node --version
 npm run verify
 ```
 
-## 5. Inicie a versão 2
+## 6. Inicie no PM2
+
+Quando o processo ainda existe no PM2:
 
 ```bash
-sudo systemctl start ersatztv-youtube-downloader
-sudo journalctl -u ersatztv-youtube-downloader -n 100 --no-pager
+pm2 restart ersatztv-youtube-downloader --update-env
 ```
 
-Na primeira inicialização, a aplicação:
+Quando ele foi removido:
 
-- detecta o JSON da versão 1;
-- cria `config/config.v1.backup-*.json`;
-- grava o formato v2;
-- mantém bibliotecas, fontes, IDs, caminhos e preferências úteis;
-- não ativa automaticamente o `cookies.txt` legado.
-
-Confirme a interface em:
-
-```text
-http://SERVIDOR:3099
+```bash
+APP_DIR="$(pwd)"
+NODE_ENV=production pm2 start "$APP_DIR/src/main.js" \
+  --name ersatztv-youtube-downloader \
+  --cwd "$APP_DIR" \
+  --time
 ```
 
-## 6. Crie a biblioteca local no ErsatzTV
+Depois:
 
-Não exclua a biblioteca Remote Streams antiga ainda.
-
-1. Em `Media Sources > Local`, use/crie uma biblioteca do tipo `Music Videos`.
-2. Adicione como path a pasta da biblioteca gerada pelo app, por exemplo:
-
-```text
-/home/joaopaulovaz/comerciais/videclipes/youtube/youtube/Mix_Principal
+```bash
+pm2 logs ersatztv-youtube-downloader --lines 100
+pm2 save
 ```
 
-3. Salve e anote o `Library ID` correto.
-4. Atualize esse ID na biblioteca correspondente do aplicativo.
-5. Informe o `Playout ID` quando quiser rebuild automático.
+## 7. Valide a interface
 
-## 7. Faça a primeira descoberta
+Acesse pelo endereço HTTPS do proxy reverso. A rota `/login` deve aparecer antes do painel.
 
-Use `Buscar novidades`. A primeira execução da v2 pode enfileirar toda a playlist, pois os antigos YML não contam como vídeos concluídos.
+A versão 2.1 traz:
 
-Acompanhe:
+- login local obrigatório e sessão protegida;
+- botão `Limpar fila`, com escopo geral ou por biblioteca;
+- preservação de vídeos concluídos ao limpar a fila;
+- supressão dos itens removidos para evitar redescoberta automática;
+- resumo amplo da fila sempre visível;
+- listagem detalhada em sanfona, fechada por padrão e paginada;
+- remoção definitiva da função de limpeza de YML.
 
-- fila;
-- espaço em disco;
-- conversão/validação;
-- scan do ErsatzTV;
-- reprodução dos MP4 concluídos.
+Ao limpar uma playlist adicionada por engano, corrija ou remova também sua URL na biblioteca antes de executar uma nova descoberta.
 
-## 8. Só depois limpe os arquivos legados
+## Proxy reverso
 
-Quando a biblioteca local estiver validada:
+Quando o proxy e a aplicação estiverem no mesmo servidor, é mais seguro configurar:
 
-1. Use `Limpar YML antigos` na interface.
-2. Confirme que os MP4 continuam reconhecidos.
-3. Remova a biblioteca Remote Streams antiga no ErsatzTV.
+```json
+"server": {
+  "host": "127.0.0.1",
+  "port": 3099
+}
+```
 
-A limpeza manual remove `.yml`, `.yaml`, `.availability.json` e `stream-yt.sh`; não remove MP4/JPG concluídos.
+O proxy deve encaminhar, no mínimo, `Host`, `X-Forwarded-For` e `X-Forwarded-Proto`, além de publicar apenas HTTPS. Não execute simultaneamente uma segunda instância systemd e outra no PM2.
 
 ## Retorno para a versão anterior
 
-1. Pare a versão 2.
-2. Restaure o backup completo ou o `config.json` anterior.
-3. Restaure `data/` quando necessário.
-4. Reinicie o serviço antigo.
+1. Pare a versão 2.1.
+2. Restaure o backup da instalação ou os arquivos modificados.
+3. Restaure `config/` e `data/` quando necessário.
+4. Reinicie o processo anterior.
 
-Os MP4 que já tiverem sido baixados podem permanecer no disco; a versão anterior simplesmente não os utiliza como Remote Streams.
+Os vídeos MP4 já baixados permanecem no disco.

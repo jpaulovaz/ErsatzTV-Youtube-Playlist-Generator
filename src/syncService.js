@@ -3,7 +3,7 @@ const { constants: fsConstants } = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const logger = require('./logger');
-const { sanitizeName, pathExists, walkFiles, removeEmptyDirectories } = require('./utils');
+const { sanitizeName, pathExists } = require('./utils');
 const downloadManager = require('./downloadManager');
 const { runLibraryAction } = require('./ersatztvService');
 const {
@@ -575,48 +575,6 @@ async function testPlaylistCookies(config, identifier) {
   return summary;
 }
 
-function getLegacyFilesForLibrary(config, playlist) {
-  const libraryDir = path.join(config.paths.baseDir, playlist.folderName);
-  return walkFiles(libraryDir).then((files) => files.filter((filePath) => {
-    const lower = filePath.toLowerCase();
-    return lower.endsWith('.yml') || lower.endsWith('.yaml') || path.basename(filePath) === '.availability.json' || path.basename(filePath) === 'stream-yt.sh';
-  }));
-}
-
-async function previewLegacyCleanup(config, identifier) {
-  const playlist = findPlaylist(config, identifier);
-  if (!playlist) {
-    const error = new Error('Biblioteca nao encontrada na configuracao.');
-    error.statusCode = 404;
-    throw error;
-  }
-  const files = await getLegacyFilesForLibrary(config, playlist);
-  return {
-    playlist: playlist.folderName,
-    filesToRemove: files.length,
-    examples: files.slice(0, 30)
-  };
-}
-
-async function cleanupLegacyFiles(config, identifier) {
-  const playlist = findPlaylist(config, identifier);
-  if (!playlist) {
-    const error = new Error('Biblioteca nao encontrada na configuracao.');
-    error.statusCode = 404;
-    throw error;
-  }
-  const files = await getLegacyFilesForLibrary(config, playlist);
-  for (const filePath of files) {
-    await fs.rm(filePath, { force: true });
-    await logger.info(`Arquivo legado removido: ${filePath}`);
-  }
-  const libraryDir = path.join(config.paths.baseDir, playlist.folderName);
-  const foldersRemoved = config.cleanup.removeEmptyArtistFolders
-    ? await removeEmptyDirectories(libraryDir, libraryDir, logger)
-    : 0;
-  return { playlist: playlist.folderName, filesRemoved: files.length, foldersRemoved };
-}
-
 async function runPlaylistApiAction(config, identifier, action) {
   const playlist = findPlaylist(config, identifier);
   if (!playlist) {
@@ -648,8 +606,6 @@ module.exports = {
   runPlaylistApiAction,
   testPlaylistCookies,
   testYouTubeApi,
-  previewLegacyCleanup,
-  cleanupLegacyFiles,
   getAllPlaylistHealth,
   findPlaylist,
   getPlaylistsWithFolders,

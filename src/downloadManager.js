@@ -1328,6 +1328,80 @@ class DownloadManager {
     return this.getQueueStatus();
   }
 
+  async clearQueue(options = {}) {
+    const requestedLibrary = String(options.library || '').trim();
+    const libraryFolder = requestedLibrary ? sanitizeName(requestedLibrary) : '';
+    const cancelCurrent = options.cancelCurrent !== false;
+    const summary = {
+      library: libraryFolder || null,
+      cancelledCurrent: false,
+      removed: 0,
+      workDirectoriesRemoved: 0,
+      completedPreserved: 0,
+      skippedCurrent: 0
+    };
+
+    const currentItem = this.current ? this.state.items[this.current.itemId] : null;
+    const currentMatches = Boolean(currentItem && (!libraryFolder || currentItem.libraryFolder === libraryFolder));
+    if (currentMatches) {
+      if (!cancelCurrent) {
+        summary.skippedCurrent = 1;
+      } else {
+        this.current.cancelRequested = true;
+        killProcessTree(this.current.child);
+        summary.cancelledCurrent = true;
+        if (this.currentPromise) {
+          await Promise.race([
+            this.currentPromise.catch(() => {}),
+            new Promise((resolve) => setTimeout(resolve, 10000))
+          ]);
+        }
+        if (this.current && this.current.itemId === currentItem.id) {
+          throw new Error('O download atual ainda esta sendo encerrado. Aguarde alguns segundos e tente novamente.');
+        }
+      }
+    }
+
+    const updatedAt = nowIso();
+    for (const item of Object.values(this.state.items)) {
+      if (libraryFolder && item.libraryFolder !== libraryFolder) continue;
+      if (item.status === 'completed') {
+        summary.completedPreserved += 1;
+        continue;
+      }
+      if (item.status === 'downloading') {
+        summary.skippedCurrent += 1;
+        continue;
+      }
+
+      await fs.rm(this.getWorkDir(item), { recursive: true, force: true });
+      summary.workDirectoriesRemoved += 1;
+      item.status = 'removed';
+      item.phase = null;
+      item.suppressed = true;
+      item.priority = 0;
+      item.nextAttemptAt = null;
+      item.lastError = 'Item removido pela limpeza da fila. Use Tentar novamente para reativar.';
+      item.updatedAt = updatedAt;
+      item.progress = {
+        ...(item.progress || {}),
+        speedBytesPerSecond: null,
+        etaSeconds: null,
+        updatedAt
+      };
+      summary.removed += 1;
+    }
+
+    await this.saveNow();
+    await logger.warn(`Fila de downloads limpa: ${summary.removed} item(ns) removido(s).`, {
+      library: summary.library,
+      cancelledCurrent: summary.cancelledCurrent,
+      completedPreserved: summary.completedPreserved
+    });
+    this.kick();
+    return summary;
+  }
+
   async retryItem(id) {
     const item = this.state.items[id];
     if (!item) throw this.notFoundError();
@@ -1432,14 +1506,48 @@ class DownloadManager {
       removed: 0
     };
     let totalBytes = 0;
+    let oldestPendingAt = null;
+    let nextRetryAt = null;
+    let lastCompletedAt = null;
+    let lastFailedAt = null;
+    const activeLibraries = new Set();
 
     for (const item of items) {
       if (counts[item.status] !== undefined) counts[item.status] += 1;
       if (item.orphaned && item.status === 'completed') counts.orphaned += 1;
       totalBytes += Number(item.fileSizeBytes) || 0;
+
+      if (item.status === 'pending' || item.status === 'downloading') {
+        activeLibraries.add(item.libraryFolder);
+        const pendingDate = item.createdAt || item.discoveredAt || item.updatedAt;
+        if (pendingDate && (!oldestPendingAt || new Date(pendingDate).getTime() < new Date(oldestPendingAt).getTime())) {
+          oldestPendingAt = pendingDate;
+        }
+      }
+      if (item.status === 'pending' && item.nextAttemptAt) {
+        if (!nextRetryAt || new Date(item.nextAttemptAt).getTime() < new Date(nextRetryAt).getTime()) {
+          nextRetryAt = item.nextAttemptAt;
+        }
+      }
+      if (item.completedAt && (!lastCompletedAt || new Date(item.completedAt).getTime() > new Date(lastCompletedAt).getTime())) {
+        lastCompletedAt = item.completedAt;
+      }
+      if (item.failedAt && (!lastFailedAt || new Date(item.failedAt).getTime() > new Date(lastFailedAt).getTime())) {
+        lastFailedAt = item.failedAt;
+      }
     }
 
     const currentItem = this.current ? this.state.items[this.current.itemId] : null;
+    const activeItems = counts.pending + counts.downloading;
+    const actionRequired = counts.failed;
+    const historyItems = Math.max(0, items.length - activeItems - actionRequired);
+    const storage = this.storage ? clone(this.storage) : null;
+    if (storage && storage.totalBytes > 0) {
+      storage.usedPercent = Math.min(100, Math.max(0, (storage.usedBytes / storage.totalBytes) * 100));
+    } else if (storage) {
+      storage.usedPercent = null;
+    }
+
     return {
       running: Boolean(this.current),
       workerStarted: this.running,
@@ -1448,19 +1556,25 @@ class DownloadManager {
       lowDiskBlocked: this.isLowDisk(),
       counts,
       totalItems: items.length,
+      activeItems,
+      actionRequired,
+      historyItems,
+      activeLibraries: activeLibraries.size,
       totalBytes,
+      oldestPendingAt,
+      nextRetryAt,
+      lastCompletedAt,
+      lastFailedAt,
       current: currentItem ? clone(currentItem) : null,
       idleActionRunning: this.idleActionRunning,
-      storage: this.storage ? clone(this.storage) : null,
+      storage,
       updatedAt: this.state.updatedAt
     };
   }
 
-  listItems(options = {}) {
-    const limit = Math.max(1, Math.min(Number(options.limit) || 300, 2000));
+  filterAndSortItems(options = {}) {
     const statusFilter = String(options.status || '').trim();
     const libraryFilter = sanitizeName(options.library || '');
-
     const statusRank = {
       downloading: 0,
       pending: 1,
@@ -1472,7 +1586,13 @@ class DownloadManager {
     };
 
     return Object.values(this.state.items)
-      .filter((item) => !statusFilter || item.status === statusFilter)
+      .filter((item) => {
+        if (!statusFilter || statusFilter === 'all') return true;
+        if (statusFilter === 'active') return ['downloading', 'pending', 'failed'].includes(item.status);
+        if (statusFilter === 'history') return !['downloading', 'pending', 'failed'].includes(item.status);
+        if (statusFilter === 'orphaned') return item.orphaned || item.status === 'orphaned';
+        return item.status === statusFilter;
+      })
       .filter((item) => !libraryFilter || item.libraryFolder === libraryFilter)
       .sort((a, b) => {
         const rankDelta = (statusRank[a.status] ?? 99) - (statusRank[b.status] ?? 99);
@@ -1483,9 +1603,25 @@ class DownloadManager {
           return (Number(a.queueOrder) || 0) - (Number(b.queueOrder) || 0);
         }
         return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
-      })
-      .slice(0, limit)
-      .map(clone);
+      });
+  }
+
+  getItemsPage(options = {}) {
+    const limit = Math.max(1, Math.min(Number(options.limit) || 100, 500));
+    const offset = Math.max(0, Math.floor(Number(options.offset) || 0));
+    const filtered = this.filterAndSortItems(options);
+    const items = filtered.slice(offset, offset + limit).map(clone);
+    return {
+      items,
+      total: filtered.length,
+      offset,
+      limit,
+      hasMore: offset + items.length < filtered.length
+    };
+  }
+
+  listItems(options = {}) {
+    return this.getItemsPage(options).items;
   }
 
   getLibraryStats(config = this.config) {

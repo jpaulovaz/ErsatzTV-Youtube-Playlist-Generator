@@ -1,8 +1,13 @@
 let config = null;
 let statusData = null;
 let downloadItems = [];
+let authSession = null;
+let csrfToken = '';
 let toastTimer = null;
 let refreshInFlight = false;
+let downloadRequestInFlight = false;
+let downloadPagination = { total: 0, offset: 0, limit: 100, hasMore: false };
+const DOWNLOAD_PAGE_SIZE = 100;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -20,10 +25,23 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+function isMutatingMethod(method) {
+  return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(method || 'GET').toUpperCase());
+}
+
 async function api(url, options = {}) {
+  const { skipAuthRedirect = false, ...fetchOptions } = options;
+  const method = String(fetchOptions.method || 'GET').toUpperCase();
+  const headers = { ...(fetchOptions.headers || {}) };
+  if (fetchOptions.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  if (isMutatingMethod(method) && csrfToken) headers['X-CSRF-Token'] = csrfToken;
+
   const response = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options
+    credentials: 'same-origin',
+    cache: 'no-store',
+    ...fetchOptions,
+    method,
+    headers
   });
   let payload = null;
   try {
@@ -31,8 +49,17 @@ async function api(url, options = {}) {
   } catch {
     payload = null;
   }
+
+  if (response.status === 401 && !skipAuthRedirect) {
+    window.location.replace('/login');
+    throw new Error('Sessão expirada.');
+  }
   if (!response.ok) {
-    throw new Error(payload && payload.error ? payload.error : `HTTP ${response.status}`);
+    const error = new Error(payload && payload.error ? payload.error : `HTTP ${response.status}`);
+    error.status = response.status;
+    error.code = payload && payload.code;
+    error.retryAfterSeconds = payload && payload.retryAfterSeconds;
+    throw error;
   }
   return payload;
 }
@@ -136,15 +163,14 @@ function libraryStatsFor(playlist) {
   return statusData.health[playlist.name] || statusData.health[playlist.folderName] || null;
 }
 
-
 function libraryBadgesHtml(stats) {
-  if (!stats) return '<span class="badge">Sem estatisticas</span>';
+  if (!stats) return '<span class="badge">Sem estatísticas</span>';
   return [
     `<span class="badge info">${stats.total || 0} itens</span>`,
     `<span class="badge warn">${stats.pending || 0} pendentes</span>`,
-    `<span class="badge ok">${stats.completed || 0} concluidos</span>`,
+    `<span class="badge ok">${stats.completed || 0} concluídos</span>`,
     `<span class="badge danger">${stats.failed || 0} falhas</span>`,
-    `<span class="badge">${stats.orphaned || 0} orfaos</span>`,
+    `<span class="badge">${stats.orphaned || 0} órfãos</span>`,
     `<span class="badge">${formatBytes(stats.totalBytes || 0)}</span>`
   ].join('');
 }
@@ -158,6 +184,22 @@ function updateLibraryStats() {
   });
 }
 
+function updateLibraryFilters() {
+  const selects = [$('#downloadLibraryFilter'), $('#clearQueueLibrary')].filter(Boolean);
+  for (const select of selects) {
+    const selected = select.value;
+    const firstLabel = select.id === 'clearQueueLibrary' ? 'Todas as bibliotecas' : 'Todas';
+    select.innerHTML = `<option value="">${firstLabel}</option>`;
+    for (const playlist of config && Array.isArray(config.playlists) ? config.playlists : []) {
+      const option = document.createElement('option');
+      option.value = playlist.name;
+      option.textContent = playlist.name;
+      select.appendChild(option);
+    }
+    if ([...select.options].some((option) => option.value === selected)) select.value = selected;
+  }
+}
+
 function renderLibraries() {
   const container = $('#playlistList');
   container.innerHTML = '';
@@ -165,6 +207,7 @@ function renderLibraries() {
 
   if (playlists.length === 0) {
     container.innerHTML = '<div class="empty-state">Nenhuma biblioteca configurada.</div>';
+    updateLibraryFilters();
     return;
   }
 
@@ -190,9 +233,9 @@ function renderLibraries() {
         <label>Library ID<input data-field="libraryId" type="number" min="1" value="${playlist.libraryId || ''}"></label>
         <label>Playout ID<input data-field="playoutId" type="number" min="1" value="${playlist.playoutId || ''}"></label>
         <label class="wide">Fontes, uma URL por linha<textarea data-field="urls" rows="4">${escapeHtml((playlist.urls || []).join('\n'))}</textarea></label>
-        <label>Resolucao desta biblioteca
+        <label>Resolução desta biblioteca
           <select data-field="maxHeight">
-            <option value="" ${maxHeight === '' ? 'selected' : ''}>Herdar configuracao geral</option>
+            <option value="" ${maxHeight === '' ? 'selected' : ''}>Herdar configuração geral</option>
             ${[360, 480, 720, 1080, 1440, 2160].map((height) => `<option value="${height}" ${maxHeight === String(height) ? 'selected' : ''}>${height}p</option>`).join('')}
           </select>
         </label>
@@ -205,15 +248,15 @@ function renderLibraries() {
         <button class="small" data-library-action="scan">Scan</button>
         <button class="small" data-library-action="empty-trash">Limpar lixo</button>
         <button class="small" data-library-action="rebuild-playout">Atualizar playout</button>
-        <button class="small" data-library-action="legacy-cleanup">Limpar YML antigos</button>
-        <button class="small" data-library-action="orphans-cleanup">Limpar orfaos</button>
+        <button class="small" data-library-action="orphans-cleanup">Limpar órfãos</button>
         <span class="spacer"></span>
-        <button class="small danger" data-library-action="remove-config">Remover configuracao</button>
+        <button class="small danger" data-library-action="remove-config">Remover configuração</button>
         <button class="small danger" data-library-action="delete-with-files">Excluir biblioteca e arquivos</button>
       </div>
     `;
     container.appendChild(row);
   });
+  updateLibraryFilters();
 }
 
 async function saveConfiguration(showMessage = true) {
@@ -222,7 +265,7 @@ async function saveConfiguration(showMessage = true) {
   config = result.config;
   fillConfigForm();
   renderLibraries();
-  if (showMessage) showToast('Configuracao salva.');
+  if (showMessage) showToast('Configuração salva.');
   return config;
 }
 
@@ -230,11 +273,11 @@ function statusLabel(status) {
   const labels = {
     pending: 'Pendente',
     downloading: 'Baixando',
-    completed: 'Concluido',
+    completed: 'Concluído',
     failed: 'Falhou',
     cancelled: 'Cancelado',
-    orphaned: 'Orfao',
-    removed: 'Removido'
+    orphaned: 'Órfão',
+    removed: 'Removido da fila'
   };
   return labels[status] || status || '-';
 }
@@ -259,20 +302,28 @@ function statusBadgeClass(item) {
 }
 
 function formatDiscoverySummary(summary) {
-  if (!summary) return 'Nenhuma descoberta registrada nesta execucao.';
+  if (!summary) return 'Nenhuma descoberta registrada nesta execução.';
   if (summary.message && !summary.playlists) return `Erro: ${summary.message}`;
   return [
-    `Inicio: ${formatDate(summary.startedAt)}`,
+    `Início: ${formatDate(summary.startedAt)}`,
     `Fim: ${formatDate(summary.finishedAt)}`,
     `Bibliotecas processadas: ${summary.playlistsProcessed || 0}`,
     `Bibliotecas com erro: ${summary.playlistsFailed || 0}`,
-    `Videos encontrados: ${summary.videosFound || 0}`,
+    `Vídeos encontrados: ${summary.videosFound || 0}`,
     `Novos downloads enfileirados: ${summary.downloadsQueued || 0}`,
-    `Ja concluidos: ${summary.alreadyCompleted || 0}`,
-    `Ja conhecidos: ${summary.alreadyKnown || 0}`,
+    `Já concluídos: ${summary.alreadyCompleted || 0}`,
+    `Já conhecidos: ${summary.alreadyKnown || 0}`,
     `Reativados: ${summary.reactivated || 0}`,
-    `Marcados como orfaos: ${summary.orphaned || 0}`
+    `Marcados como órfãos: ${summary.orphaned || 0}`
   ].join('\n');
+}
+
+function queueStateText(queue) {
+  if (queue.lowDiskBlocked) return 'Bloqueada por disco';
+  if (queue.paused) return 'Pausada';
+  if (queue.running) return 'Baixando';
+  if (queue.idleActionRunning) return 'Atualizando ErsatzTV';
+  return 'Aguardando';
 }
 
 function renderStatus() {
@@ -282,17 +333,39 @@ function renderStatus() {
   const counts = queue.counts || {};
   const scheduler = statusData.scheduler || {};
   const storage = queue.storage || {};
+  const current = queue.current;
+  const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '2.0.0'}`;
-  $('#discoveryState').textContent = discovery.running ? 'Em execucao' : 'Aguardando';
+  $('#versionBadge').textContent = `v${statusData.version || '2.1.0'}`;
+  $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
-  $('#queueState').textContent = queue.paused ? 'Pausada' : (queue.running ? 'Baixando' : (queue.lowDiskBlocked ? 'Bloqueada por disco' : 'Aguardando'));
+  $('#queueState').textContent = queueStateText(queue);
   $('#pendingCount').textContent = counts.pending || 0;
   $('#completedCount').textContent = counts.completed || 0;
   $('#failedCount').textContent = counts.failed || 0;
   $('#freeSpace').textContent = storage.error ? 'Erro ao medir' : formatBytes(storage.availableBytes || 0);
   $('#nextRun').textContent = scheduler.enabled ? formatDate(scheduler.nextRunAt) : 'Desativado';
   $('#lastSummary').textContent = formatDiscoverySummary(discovery.lastResult);
+
+  $('#queueOverviewState').textContent = queueStateText(queue);
+  $('#queueOverviewActive').textContent = queue.activeItems || 0;
+  $('#queueOverviewPending').textContent = counts.pending || 0;
+  $('#queueOverviewCompleted').textContent = counts.completed || 0;
+  $('#queueOverviewFailed').textContent = counts.failed || 0;
+  $('#queueOverviewRemoved').textContent = counts.removed || 0;
+  $('#queueOverviewOrphans').textContent = counts.orphaned || 0;
+  $('#queueOverviewSize').textContent = formatBytes(queue.totalBytes || 0);
+  $('#queueOverviewDisk').textContent = storage.error
+    ? 'Erro ao medir'
+    : `${formatBytes(storage.availableBytes || 0)} livres${storage.totalBytes ? ` · ${Number(storage.usedPercent || 0).toFixed(1)}% usado` : ''}`;
+  $('#queueOverviewSpeed').textContent = progress.speedBytesPerSecond ? `${formatBytes(progress.speedBytesPerSecond)}/s` : '-';
+  $('#queueOverviewNextRetry').textContent = queue.nextRetryAt ? formatDate(queue.nextRetryAt) : '-';
+  $('#queueOverviewLastCompleted').textContent = queue.lastCompletedAt ? formatDate(queue.lastCompletedAt) : '-';
+
+  const activeCount = Number(queue.activeItems) || 0;
+  $('#queueAccordionBadge').textContent = `${activeCount} ativo${activeCount === 1 ? '' : 's'}`;
+  $('#queueAccordionHint').textContent = `${counts.pending || 0} pendente(s), ${counts.failed || 0} falha(s), ${queue.historyItems || 0} item(ns) no histórico.`;
+  $('#clearQueueBtn').disabled = (queue.totalItems || 0) - (counts.completed || 0) <= 0;
 
   const pill = $('#runningPill');
   pill.className = 'status-pill';
@@ -306,18 +379,17 @@ function renderStatus() {
   queueToggle.dataset.action = queue.paused ? 'resume' : 'pause';
 
   const currentBox = $('#currentDownload');
-  const current = queue.current;
   if (!current) {
     currentBox.classList.add('hidden');
   } else {
     currentBox.classList.remove('hidden');
-    const progress = current.progress || {};
     const percent = Number(progress.percent);
     const safePercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
     $('#currentTitle').textContent = current.title || current.videoId;
     const phase = phaseLabel(current.phase);
     $('#currentMeta').textContent = `${current.libraryFolder} | ${current.videoId} | ${current.maxHeight || 1080}p${phase ? ` | ${phase}` : ''}`;
-    $('#currentProgress').style.width = `${safePercent}%`;
+    $('#currentProgress').value = safePercent;
+    $('#currentProgress').textContent = `${safePercent.toFixed(1)}%`;
     $('#currentPercent').textContent = Number.isFinite(percent) ? `${percent.toFixed(1)}%` : 'Progresso indeterminado';
     $('#currentBytes').textContent = progress.totalBytes
       ? `${formatBytes(progress.downloadedBytes)} / ${formatBytes(progress.totalBytes)}`
@@ -331,18 +403,12 @@ function renderStatus() {
 }
 
 function renderDownloads() {
-  const filter = $('#downloadFilter').value;
-  const items = downloadItems.filter((item) => {
-    if (!filter) return true;
-    if (filter === 'orphaned') return item.orphaned || item.status === 'orphaned';
-    return item.status === filter;
-  });
   const body = $('#downloadsBody');
   const empty = $('#downloadsEmpty');
   body.innerHTML = '';
-  empty.classList.toggle('hidden', items.length > 0);
+  empty.classList.toggle('hidden', downloadItems.length > 0);
 
-  for (const item of items) {
+  for (const item of downloadItems) {
     const progress = item.progress || {};
     const percent = Number(progress.percent);
     const safePercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : (item.status === 'completed' ? 100 : 0);
@@ -372,7 +438,7 @@ function renderDownloads() {
       <td>${escapeHtml(item.libraryFolder || '-')}</td>
       <td><span class="badge ${statusBadgeClass(item)}">${escapeHtml(statusLabel(item.status))}</span></td>
       <td>
-        <div class="mini-progress"><span style="width:${safePercent}%"></span></div>
+        <progress class="mini-progress" max="100" value="${safePercent}">${safePercent}%</progress>
         <small>${Number.isFinite(percent) ? `${percent.toFixed(1)}%` : '-'}</small>
       </td>
       <td>${formatBytes(item.fileSizeBytes || progress.totalBytes || 0)}</td>
@@ -381,6 +447,11 @@ function renderDownloads() {
     `;
     body.appendChild(row);
   }
+
+  const shown = downloadItems.length;
+  const total = downloadPagination.total || 0;
+  $('#downloadsPaginationInfo').textContent = total ? `${shown} de ${total} item(ns)` : 'Nenhum item';
+  $('#loadMoreDownloadsBtn').classList.toggle('hidden', !downloadPagination.hasMore);
 }
 
 async function refreshStatus() {
@@ -388,12 +459,40 @@ async function refreshStatus() {
   renderStatus();
 }
 
-async function refreshDownloads() {
-  const result = await api('/api/downloads?limit=600');
-  downloadItems = result.items || [];
-  if (statusData) statusData.queue = result.queue;
-  renderDownloads();
-  if (statusData) renderStatus();
+function downloadQuery(offset = 0, limit = DOWNLOAD_PAGE_SIZE) {
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  params.set('offset', String(offset));
+  const status = $('#downloadFilter').value;
+  const library = $('#downloadLibraryFilter').value;
+  if (status) params.set('status', status);
+  if (library) params.set('library', library);
+  return params.toString();
+}
+
+async function refreshDownloads(options = {}) {
+  const { append = false, force = false, preserveLoaded = false } = options;
+  if (!force && !$('#downloadsAccordion').open) return;
+  if (downloadRequestInFlight) return;
+  downloadRequestInFlight = true;
+  try {
+    const offset = append ? downloadItems.length : 0;
+    const limit = append ? DOWNLOAD_PAGE_SIZE : (preserveLoaded ? Math.max(DOWNLOAD_PAGE_SIZE, Math.min(downloadItems.length || DOWNLOAD_PAGE_SIZE, 500)) : DOWNLOAD_PAGE_SIZE);
+    const result = await api(`/api/downloads?${downloadQuery(offset, limit)}`);
+    if (append) {
+      const byId = new Map(downloadItems.map((item) => [item.id, item]));
+      for (const item of result.items || []) byId.set(item.id, item);
+      downloadItems = [...byId.values()];
+    } else {
+      downloadItems = result.items || [];
+    }
+    downloadPagination = result.pagination || { total: downloadItems.length, offset: 0, limit, hasMore: false };
+    if (statusData) statusData.queue = result.queue;
+    renderDownloads();
+    if (statusData) renderStatus();
+  } finally {
+    downloadRequestInFlight = false;
+  }
 }
 
 async function refreshLogs() {
@@ -404,11 +503,15 @@ async function refreshLogs() {
   }).join('\n');
 }
 
-async function refreshAll(showErrors = false) {
+async function refreshAll(showErrors = false, options = {}) {
   if (refreshInFlight) return;
   refreshInFlight = true;
   try {
-    await Promise.all([refreshStatus(), refreshDownloads(), refreshLogs()]);
+    const tasks = [refreshStatus(), refreshLogs()];
+    if ($('#downloadsAccordion').open || options.forceDownloads) {
+      tasks.push(refreshDownloads({ force: true, preserveLoaded: true }));
+    }
+    await Promise.all(tasks);
   } catch (error) {
     if (showErrors) showToast(error.message, true);
   } finally {
@@ -436,23 +539,23 @@ async function handleLibraryAction(button) {
   const index = Number(row.dataset.index);
   await saveConfiguration(false);
   const playlist = config.playlists[index];
-  if (!playlist) throw new Error('Biblioteca nao encontrada apos salvar.');
+  if (!playlist) throw new Error('Biblioteca não encontrada após salvar.');
   const name = playlist.name;
   const action = button.dataset.libraryAction;
 
   if (action === 'remove-config') {
-    if (!confirm(`Remover apenas a configuracao de "${name}"? Os videos no disco nao serao apagados.`)) return;
+    if (!confirm(`Remover apenas a configuração de "${name}"? Os vídeos no disco não serão apagados.`)) return;
     config.playlists.splice(index, 1);
     await api('/api/config', { method: 'PUT', body: JSON.stringify(config) });
     config = await api('/api/config');
     fillConfigForm();
     renderLibraries();
-    showToast('Biblioteca removida da configuracao. Arquivos locais preservados.');
+    showToast('Biblioteca removida da configuração. Arquivos locais preservados.');
     return;
   }
 
   if (action === 'delete-with-files') {
-    const typed = prompt(`Acao irreversivel. Para excluir a biblioteca, videos, thumbnails e indice, digite exatamente:\n${name}`);
+    const typed = prompt(`Ação irreversível. Para excluir a biblioteca, vídeos, thumbnails e índice, digite exatamente:\n${name}`);
     if (typed === null) return;
     const result = await api(`/api/playlists/${encodeURIComponent(name)}/delete-with-files`, {
       method: 'POST',
@@ -461,7 +564,7 @@ async function handleLibraryAction(button) {
     config = result.result.config;
     fillConfigForm();
     renderLibraries();
-    showToast('Biblioteca e arquivos excluidos.');
+    showToast('Biblioteca e arquivos excluídos.');
     await refreshAll();
     return;
   }
@@ -471,29 +574,16 @@ async function handleLibraryAction(button) {
     return;
   }
 
-  if (action === 'legacy-cleanup') {
-    const preview = await api(`/api/playlists/${encodeURIComponent(name)}/legacy-preview`, { method: 'POST', body: '{}' });
-    const count = preview.result.filesToRemove || 0;
-    if (!count) {
-      showToast('Nenhum YML ou script legado encontrado.');
-      return;
-    }
-    if (!confirm(`Remover ${count} arquivo(s) YML/script legado(s) de ${name}? Videos e thumbnails nao serao apagados.`)) return;
-    const result = await api(`/api/playlists/${encodeURIComponent(name)}/legacy-cleanup`, { method: 'POST', body: '{}' });
-    showToast(`${result.result.filesRemoved || 0} arquivo(s) legado(s) removido(s).`);
-    return;
-  }
-
   if (action === 'orphans-cleanup') {
     const preview = await api(`/api/playlists/${encodeURIComponent(name)}/orphans-preview`, { method: 'POST', body: '{}' });
     const info = preview.result;
     if (!info.count) {
-      showToast('Nenhum item orfao encontrado.');
+      showToast('Nenhum item órfão encontrado.');
       return;
     }
-    if (!confirm(`Excluir ${info.count} item(ns) orfao(s), incluindo ${info.filesCount} arquivo(s) de video e ${formatBytes(info.totalBytes)}?`)) return;
+    if (!confirm(`Excluir ${info.count} item(ns) órfão(s), incluindo ${info.filesCount} arquivo(s) de vídeo e ${formatBytes(info.totalBytes)}?`)) return;
     const result = await api(`/api/playlists/${encodeURIComponent(name)}/orphans-cleanup`, { method: 'POST', body: '{}' });
-    showToast(`${result.result.videosRemoved || 0} video(s) orfao(s) removido(s).`);
+    showToast(`${result.result.videosRemoved || 0} vídeo(s) órfão(s) removido(s).`);
     await refreshAll();
     return;
   }
@@ -505,7 +595,7 @@ async function handleLibraryAction(button) {
   } else if (action === 'refresh-thumbnails') {
     showToast(`Thumbnails: ${result.result.created || 0} criadas, ${result.result.updated || 0} atualizadas, ${result.result.failed || 0} falhas.`);
   } else {
-    showToast(result.result && result.result.ok === false ? 'A acao foi enviada, mas o ErsatzTV retornou falha.' : 'Acao concluida.');
+    showToast(result.result && result.result.ok === false ? 'A ação foi enviada, mas o ErsatzTV retornou falha.' : 'Ação concluída.');
   }
   await refreshAll();
 }
@@ -518,16 +608,56 @@ async function handleDownloadAction(button) {
   if ((action === 'cancel' || action === 'remove') && !confirm(`${action === 'cancel' ? 'Cancelar' : 'Remover'} este item?`)) return;
   await api(`/api/downloads/${encodeURIComponent(id)}/${action}`, { method: 'POST', body: '{}' });
   showToast('Fila atualizada.');
-  await refreshAll();
+  await refreshAll(false, { forceDownloads: $('#downloadsAccordion').open });
+}
+
+function openClearQueueDialog() {
+  updateLibraryFilters();
+  $('#clearQueueCancelCurrent').checked = true;
+  const dialog = $('#clearQueueDialog');
+  if (typeof dialog.showModal === 'function') dialog.showModal();
+  else if (confirm('Limpar todos os itens não concluídos da fila?')) clearQueue().catch((error) => showToast(error.message, true));
+}
+
+async function clearQueue() {
+  const library = $('#clearQueueLibrary').value;
+  const cancelCurrent = $('#clearQueueCancelCurrent').checked;
+  const result = await api('/api/downloads/clear', {
+    method: 'POST',
+    body: JSON.stringify({ library, cancelCurrent })
+  });
+  $('#clearQueueDialog').close();
+  showToast(`${result.result.removed || 0} item(ns) retirado(s) da fila. ${result.result.completedPreserved || 0} concluído(s) preservado(s).`);
+  downloadItems = [];
+  await refreshAll(true, { forceDownloads: $('#downloadsAccordion').open });
+}
+
+async function logout() {
+  try {
+    await api('/api/auth/logout', { method: 'POST', body: '{}' });
+  } finally {
+    window.location.replace('/login');
+  }
 }
 
 function bindEvents() {
   $('#saveBtn').addEventListener('click', () => saveConfiguration().catch((error) => showToast(error.message, true)));
   $('#saveBtnBottom').addEventListener('click', () => saveConfiguration().catch((error) => showToast(error.message, true)));
   $('#runNowBtn').addEventListener('click', () => runDiscovery().catch((error) => showToast(error.message, true)));
-  $('#refreshBtn').addEventListener('click', () => refreshAll(true));
-  $('#refreshDownloadsBtn').addEventListener('click', () => refreshDownloads().catch((error) => showToast(error.message, true)));
-  $('#downloadFilter').addEventListener('change', renderDownloads);
+  $('#refreshBtn').addEventListener('click', () => refreshAll(true, { forceDownloads: $('#downloadsAccordion').open }));
+  $('#refreshDownloadsBtn').addEventListener('click', () => refreshDownloads({ force: true }).catch((error) => showToast(error.message, true)));
+  $('#loadMoreDownloadsBtn').addEventListener('click', () => refreshDownloads({ append: true, force: true }).catch((error) => showToast(error.message, true)));
+  $('#downloadFilter').addEventListener('change', () => {
+    downloadItems = [];
+    refreshDownloads({ force: true }).catch((error) => showToast(error.message, true));
+  });
+  $('#downloadLibraryFilter').addEventListener('change', () => {
+    downloadItems = [];
+    refreshDownloads({ force: true }).catch((error) => showToast(error.message, true));
+  });
+  $('#downloadsAccordion').addEventListener('toggle', (event) => {
+    if (event.currentTarget.open) refreshDownloads({ force: true }).catch((error) => showToast(error.message, true));
+  });
 
   $('#queueToggleBtn').addEventListener('click', async (event) => {
     try {
@@ -582,6 +712,10 @@ function bindEvents() {
     handleDownloadAction(button).catch((error) => showToast(error.message, true));
   });
 
+  $('#clearQueueBtn').addEventListener('click', openClearQueueDialog);
+  $('#confirmClearQueueBtn').addEventListener('click', () => clearQueue().catch((error) => showToast(error.message, true)));
+  $('#logoutBtn').addEventListener('click', () => logout().catch(() => window.location.replace('/login')));
+
   $('#clearLogsBtn').addEventListener('click', async () => {
     try {
       await api('/api/logs/clear', { method: 'POST', body: '{}' });
@@ -593,6 +727,22 @@ function bindEvents() {
   });
 }
 
-bindEvents();
-loadInitial().catch((error) => showToast(error.message, true));
-setInterval(() => refreshAll(false), 3500);
+async function bootstrap() {
+  authSession = await api('/api/auth/session', { skipAuthRedirect: true });
+  if (!authSession.authenticated) {
+    window.location.replace('/login');
+    return;
+  }
+  csrfToken = authSession.csrfToken || '';
+  $('#signedInUser').textContent = authSession.username || 'Usuário';
+  $('#userInitial').textContent = String(authSession.username || 'U').slice(0, 1).toUpperCase();
+  $('#downloadsAccordion').open = false;
+  bindEvents();
+  await loadInitial();
+  setInterval(() => refreshAll(false), 4000);
+}
+
+bootstrap().catch((error) => {
+  showToast(error.message, true);
+  if (error.status === 401) window.location.replace('/login');
+});

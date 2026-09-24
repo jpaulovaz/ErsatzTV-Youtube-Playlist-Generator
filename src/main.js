@@ -3,6 +3,7 @@ const { startServer } = require('./server');
 const downloadManager = require('./downloadManager');
 const scheduler = require('./scheduler');
 const logger = require('./logger');
+const auth = require('./auth');
 
 let server = null;
 let shuttingDown = false;
@@ -13,6 +14,7 @@ async function shutdown(signal) {
   await logger.info(`Encerramento solicitado por ${signal}.`);
   scheduler.stopTimer();
   await downloadManager.stop({ terminateCurrent: true });
+  auth.stop();
   if (server) {
     await new Promise((resolve) => server.close(resolve));
   }

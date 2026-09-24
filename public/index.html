@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
   <title>ErsatzTV YouTube Downloader</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
@@ -10,19 +11,24 @@
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark">YT</span>
+        <span class="brand-mark" aria-hidden="true">YT</span>
         <div>
           <div class="title-line">
             <h1>ErsatzTV YouTube Downloader</h1>
-            <span id="versionBadge" class="version-badge">v2</span>
+            <span id="versionBadge" class="version-badge">v2.1</span>
           </div>
-          <p>Descubra videos do YouTube, baixe em fila e entregue arquivos MP4 locais ao ErsatzTV.</p>
+          <p>Descubra vídeos do YouTube, baixe em fila e entregue arquivos MP4 locais ao ErsatzTV.</p>
         </div>
       </div>
       <div class="topbar-actions">
         <span class="status-pill" id="runningPill">Carregando...</span>
         <button id="queueToggleBtn">Pausar fila</button>
         <button id="runNowBtn" class="primary">Buscar novidades</button>
+        <div class="user-chip" title="Sessão autenticada">
+          <span id="userInitial" class="user-avatar">U</span>
+          <span id="signedInUser" class="user-name">-</span>
+        </div>
+        <button id="logoutBtn" class="icon-button" title="Sair da aplicação" aria-label="Sair da aplicação">Sair</button>
       </div>
     </div>
   </header>
@@ -31,7 +37,7 @@
     <section class="card">
       <div class="card-header">
         <div>
-          <h2>Operacao</h2>
+          <h2>Operação</h2>
           <p>Estado da descoberta, fila persistente, armazenamento e agendamento.</p>
         </div>
         <button id="refreshBtn">Atualizar</button>
@@ -42,10 +48,10 @@
         <div><span>Etapa</span><strong id="discoveryStep">-</strong></div>
         <div><span>Fila</span><strong id="queueState">-</strong></div>
         <div><span>Pendentes</span><strong id="pendingCount">-</strong></div>
-        <div><span>Concluidos</span><strong id="completedCount">-</strong></div>
+        <div><span>Concluídos</span><strong id="completedCount">-</strong></div>
         <div><span>Falhas</span><strong id="failedCount">-</strong></div>
-        <div><span>Espaco livre</span><strong id="freeSpace">-</strong></div>
-        <div><span>Proxima busca</span><strong id="nextRun">-</strong></div>
+        <div><span>Espaço livre</span><strong id="freeSpace">-</strong></div>
+        <div><span>Próxima busca</span><strong id="nextRun">-</strong></div>
       </div>
 
       <div id="currentDownload" class="current-download hidden">
@@ -57,7 +63,7 @@
           </div>
           <button id="cancelCurrentBtn" class="danger">Cancelar</button>
         </div>
-        <div class="progress-track"><div id="currentProgress" class="progress-bar"></div></div>
+        <progress id="currentProgress" class="progress-track progress-native" max="100" value="0">0%</progress>
         <div class="progress-details">
           <span id="currentPercent">-</span>
           <span id="currentBytes">-</span>
@@ -69,49 +75,97 @@
       <pre id="lastSummary" class="summary"></pre>
     </section>
 
-    <section class="card">
-      <div class="card-header">
+    <section class="card queue-card">
+      <div class="card-header queue-card-header">
         <div>
-          <h2>Fila e historico</h2>
-          <p>Um download por vez, com persistencia, retomada e novas tentativas automaticas.</p>
+          <h2>Fila de downloads</h2>
+          <p>Resumo permanente e listagem recolhível para filas pequenas ou com milhares de itens.</p>
         </div>
-        <div class="inline-actions">
-          <select id="downloadFilter" aria-label="Filtrar downloads">
-            <option value="">Todos</option>
-            <option value="pending">Pendentes</option>
-            <option value="downloading">Baixando</option>
-            <option value="completed">Concluidos</option>
-            <option value="failed">Falhas</option>
-            <option value="cancelled">Cancelados</option>
-            <option value="orphaned">Orfaos</option>
-            <option value="removed">Removidos</option>
-          </select>
-          <button id="refreshDownloadsBtn">Atualizar fila</button>
+        <button id="clearQueueBtn" class="danger">Limpar fila</button>
+      </div>
+
+      <div class="metrics queue-summary-grid">
+        <div><span>Estado</span><strong id="queueOverviewState">-</strong></div>
+        <div><span>Ativos</span><strong id="queueOverviewActive">-</strong></div>
+        <div><span>Pendentes</span><strong id="queueOverviewPending">-</strong></div>
+        <div><span>Concluídos</span><strong id="queueOverviewCompleted">-</strong></div>
+        <div><span>Falhas</span><strong id="queueOverviewFailed">-</strong></div>
+        <div><span>Removidos</span><strong id="queueOverviewRemoved">-</strong></div>
+        <div><span>Órfãos</span><strong id="queueOverviewOrphans">-</strong></div>
+        <div><span>Biblioteca local</span><strong id="queueOverviewSize">-</strong></div>
+        <div><span>Disco</span><strong id="queueOverviewDisk">-</strong></div>
+        <div><span>Velocidade atual</span><strong id="queueOverviewSpeed">-</strong></div>
+        <div><span>Próxima tentativa</span><strong id="queueOverviewNextRetry">-</strong></div>
+        <div><span>Último concluído</span><strong id="queueOverviewLastCompleted">-</strong></div>
+      </div>
+
+      <details id="downloadsAccordion" class="queue-accordion">
+        <summary>
+          <div class="accordion-copy">
+            <span class="accordion-title">Abrir itens da fila e histórico</span>
+            <small id="queueAccordionHint">A lista inicia fechada para manter a página leve.</small>
+          </div>
+          <div class="accordion-state">
+            <span id="queueAccordionBadge" class="badge info">0 ativos</span>
+            <span class="accordion-chevron" aria-hidden="true"></span>
+          </div>
+        </summary>
+
+        <div class="queue-accordion-content">
+          <div class="queue-toolbar">
+            <div class="inline-actions queue-filters">
+              <label class="compact-label">Exibir
+                <select id="downloadFilter" aria-label="Filtrar downloads">
+                  <option value="active">Fila ativa</option>
+                  <option value="pending">Pendentes</option>
+                  <option value="downloading">Baixando</option>
+                  <option value="failed">Falhas</option>
+                  <option value="completed">Concluídos</option>
+                  <option value="cancelled">Cancelados</option>
+                  <option value="orphaned">Órfãos</option>
+                  <option value="removed">Removidos</option>
+                  <option value="history">Histórico</option>
+                  <option value="all">Todos</option>
+                </select>
+              </label>
+              <label class="compact-label">Biblioteca
+                <select id="downloadLibraryFilter" aria-label="Filtrar por biblioteca">
+                  <option value="">Todas</option>
+                </select>
+              </label>
+              <button id="refreshDownloadsBtn">Atualizar lista</button>
+            </div>
+            <span id="downloadsPaginationInfo" class="muted">-</span>
+          </div>
+
+          <div class="table-wrap">
+            <table class="download-table">
+              <thead>
+                <tr>
+                  <th>Vídeo</th>
+                  <th>Biblioteca</th>
+                  <th>Status</th>
+                  <th>Progresso</th>
+                  <th>Tamanho</th>
+                  <th>Tentativas</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="downloadsBody"></tbody>
+            </table>
+          </div>
+          <div id="downloadsEmpty" class="empty-state hidden">Nenhum item para o filtro selecionado.</div>
+          <div class="pagination-actions">
+            <button id="loadMoreDownloadsBtn" class="hidden">Carregar mais</button>
+          </div>
         </div>
-      </div>
-      <div class="table-wrap">
-        <table class="download-table">
-          <thead>
-            <tr>
-              <th>Video</th>
-              <th>Biblioteca</th>
-              <th>Status</th>
-              <th>Progresso</th>
-              <th>Tamanho</th>
-              <th>Tentativas</th>
-              <th>Acoes</th>
-            </tr>
-          </thead>
-          <tbody id="downloadsBody"></tbody>
-        </table>
-      </div>
-      <div id="downloadsEmpty" class="empty-state hidden">Nenhum item para o filtro selecionado.</div>
+      </details>
     </section>
 
     <section class="card">
       <div class="card-header">
         <div>
-          <h2>Configuracao geral</h2>
+          <h2>Configuração geral</h2>
           <p>A v2 usa yt-dlp apenas durante o download e grava MP4 com H.264 e AAC.</p>
         </div>
         <button id="saveBtn" class="primary">Salvar</button>
@@ -127,14 +181,14 @@
             <label>Caminho do yt-dlp<input name="paths.ytDlpPath" type="text" placeholder="/usr/local/bin/yt-dlp"></label>
             <label>Caminho do ffmpeg<input name="paths.ffmpegPath" type="text" placeholder="/usr/bin/ffmpeg"></label>
             <label>Caminho do ffprobe<input name="paths.ffprobePath" type="text" placeholder="/usr/bin/ffprobe"></label>
-            <label class="wide">cookies.txt global, opcional<input name="paths.cookiesPath" type="text" placeholder="Deixe vazio quando nao precisar de login"></label>
+            <label class="wide">cookies.txt global, opcional<input name="paths.cookiesPath" type="text" placeholder="Deixe vazio quando não precisar de login no YouTube"></label>
           </div>
         </div>
 
         <div class="settings-block">
           <h3>Downloads</h3>
           <div class="form-grid three">
-            <label>Resolucao maxima
+            <label>Resolução máxima
               <select name="downloads.maxHeight">
                 <option value="360">360p</option>
                 <option value="480">480p</option>
@@ -144,9 +198,9 @@
                 <option value="2160">2160p</option>
               </select>
             </label>
-            <label>Reserva minima em disco (GB)<input name="downloads.minFreeSpaceGb" type="number" min="1"></label>
+            <label>Reserva mínima em disco (GB)<input name="downloads.minFreeSpaceGb" type="number" min="1"></label>
             <label>Espera antes do scan (segundos)<input name="downloads.idleActionDelaySeconds" type="number" min="3"></label>
-            <label class="check-row"><input name="downloads.pauseOnLowDisk" type="checkbox"><span>Pausar se faltar espaco</span></label>
+            <label class="check-row"><input name="downloads.pauseOnLowDisk" type="checkbox"><span>Pausar se faltar espaço</span></label>
             <label class="check-row"><input name="downloads.writeThumbnails" type="checkbox"><span>Salvar thumbnails JPG</span></label>
             <label class="check-row"><input name="downloads.updateExistingThumbnails" type="checkbox"><span>Atualizar thumbnails existentes</span></label>
             <label class="check-row"><input name="downloads.scanOnQueueIdle" type="checkbox"><span>Scan do ErsatzTV ao esvaziar</span></label>
@@ -155,7 +209,7 @@
         </div>
 
         <details class="settings-block advanced">
-          <summary>Opcoes avancadas do yt-dlp</summary>
+          <summary>Opções avançadas do yt-dlp</summary>
           <div class="form-grid two advanced-grid">
             <label class="wide">User-Agent<textarea name="downloads.userAgent" rows="2"></textarea></label>
             <label>Runtime JavaScript
@@ -181,7 +235,7 @@
         <div class="settings-block">
           <h3>YouTube Data API</h3>
           <div class="form-grid three">
-            <label class="check-row"><input name="youtubeApi.enabled" type="checkbox"><span>Usar API para descobrir videos</span></label>
+            <label class="check-row"><input name="youtubeApi.enabled" type="checkbox"><span>Usar API para descobrir vídeos</span></label>
             <label>Modo preferido
               <select name="youtubeApi.readMode">
                 <option value="api">YouTube API com fallback</option>
@@ -206,11 +260,11 @@
         <div class="settings-block">
           <h3>Agendador de descoberta</h3>
           <div class="form-grid three">
-            <label class="check-row"><input name="scheduler.enabled" type="checkbox"><span>Ativar busca periodica</span></label>
+            <label class="check-row"><input name="scheduler.enabled" type="checkbox"><span>Ativar busca periódica</span></label>
             <label>Intervalo em minutos<input name="scheduler.intervalMinutes" type="number" min="1"></label>
             <label class="check-row"><input name="scheduler.runOnStartup" type="checkbox"><span>Buscar ao iniciar</span></label>
           </div>
-          <p class="hint">O padrao recomendado e 360 minutos. A fila continua baixando independentemente do agendador.</p>
+          <p class="hint">O padrão recomendado é 360 minutos. A fila continua baixando independentemente do agendador.</p>
         </div>
       </form>
     </section>
@@ -219,25 +273,49 @@
       <div class="card-header">
         <div>
           <h2>Bibliotecas</h2>
-          <p>Cada biblioteca mantem suas fontes, pasta de artistas, qualidade e IDs do ErsatzTV.</p>
+          <p>Cada biblioteca mantém suas fontes, pasta de artistas, qualidade e IDs do ErsatzTV.</p>
         </div>
         <button id="addPlaylistBtn">Adicionar biblioteca</button>
       </div>
       <div id="playlistList" class="playlist-list"></div>
-      <div class="section-actions"><button id="saveBtnBottom" class="primary">Salvar configuracao</button></div>
+      <div class="section-actions"><button id="saveBtnBottom" class="primary">Salvar configuração</button></div>
     </section>
 
     <section class="card logs-card">
       <div class="card-header">
         <div>
           <h2>Logs</h2>
-          <p>Descoberta, downloads, validacao, retries e acoes do ErsatzTV.</p>
+          <p>Descoberta, downloads, validação, retries e ações do ErsatzTV.</p>
         </div>
         <button id="clearLogsBtn">Limpar logs</button>
       </div>
       <pre id="logs" class="logs"></pre>
     </section>
   </main>
+
+  <dialog id="clearQueueDialog" class="modal-dialog">
+    <form method="dialog" class="modal-card">
+      <div class="modal-icon" aria-hidden="true">↯</div>
+      <div class="modal-copy">
+        <span class="eyebrow">Controle da fila</span>
+        <h2>Limpar downloads pendentes</h2>
+        <p>Os vídeos concluídos e os arquivos locais serão preservados. Os itens retirados ficam suprimidos para não voltarem automaticamente na próxima descoberta.</p>
+      </div>
+      <label>Escopo
+        <select id="clearQueueLibrary">
+          <option value="">Todas as bibliotecas</option>
+        </select>
+      </label>
+      <label class="check-row modal-check"><input id="clearQueueCancelCurrent" type="checkbox" checked><span>Cancelar também o download em andamento</span></label>
+      <div class="modal-warning">
+        Remova ou corrija a fonte errada na configuração para evitar que novos vídeos da mesma playlist sejam descobertos futuramente.
+      </div>
+      <div class="modal-actions">
+        <button value="cancel">Voltar</button>
+        <button id="confirmClearQueueBtn" type="button" class="danger">Limpar fila</button>
+      </div>
+    </form>
+  </dialog>
 
   <div id="toast" class="toast hidden"></div>
   <script src="/app.js"></script>

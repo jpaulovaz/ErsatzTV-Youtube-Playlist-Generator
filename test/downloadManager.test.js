@@ -263,3 +263,52 @@ console.log('__YTDLP_FILE__' + target);
   assert.equal(inspection.audio.codec_name, 'aac');
   await manager.stop({ terminateCurrent: true });
 });
+
+test('clear queue preserves completed media and suppresses every unfinished item', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-v2-clear-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const statePath = path.join(root, 'state.json');
+  const config = makeConfig(path.join(root, 'media'));
+  const playlist = { ...config.playlists[0], folderName: 'Teste' };
+  const manager = new DownloadManager({ statePath });
+
+  await manager.init(config);
+  await manager.reconcileLibrary(config, playlist, [
+    { id: 'ffffffffffa', title: 'Artist - Completed' },
+    { id: 'ffffffffffb', title: 'Artist - Pending One' },
+    { id: 'ffffffffffc', title: 'Artist - Pending Two' }
+  ]);
+
+  const completedId = makeItemId('Teste', 'ffffffffffa');
+  const completed = manager.state.items[completedId];
+  await fs.mkdir(path.dirname(completed.targetPath), { recursive: true });
+  await fs.writeFile(completed.targetPath, 'valid-placeholder');
+  completed.status = 'completed';
+  completed.fileSizeBytes = 17;
+  completed.completedAt = new Date().toISOString();
+  await manager.saveNow();
+
+  const result = await manager.clearQueue({ library: 'Teste' });
+  assert.equal(result.removed, 2);
+  assert.equal(result.completedPreserved, 1);
+  assert.equal(manager.state.items[completedId].status, 'completed');
+
+  for (const videoId of ['ffffffffffb', 'ffffffffffc']) {
+    const item = manager.state.items[makeItemId('Teste', videoId)];
+    assert.equal(item.status, 'removed');
+    assert.equal(item.suppressed, true);
+  }
+
+  assert.equal(manager.getItemsPage({ status: 'active' }).total, 0);
+  assert.equal(manager.getItemsPage({ status: 'history', limit: 2 }).total, 3);
+  assert.equal(manager.getItemsPage({ status: 'history', limit: 2 }).items.length, 2);
+  assert.equal(manager.getItemsPage({ status: 'history', limit: 2 }).hasMore, true);
+
+  await manager.reconcileLibrary(config, playlist, [
+    { id: 'ffffffffffa', title: 'Artist - Completed' },
+    { id: 'ffffffffffb', title: 'Artist - Pending One' },
+    { id: 'ffffffffffc', title: 'Artist - Pending Two' }
+  ]);
+  assert.equal(manager.state.items[makeItemId('Teste', 'ffffffffffb')].status, 'removed');
+  assert.equal(manager.state.items[makeItemId('Teste', 'ffffffffffc')].status, 'removed');
+});

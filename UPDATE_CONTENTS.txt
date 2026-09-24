@@ -1,0 +1,25 @@
+ErsatzTV YouTube Downloader 2.1.0 - pacote de atualizacao
+
+Este ZIP deve ser extraido sobre uma instalacao 2.0 existente.
+
+Preservado deliberadamente (nao incluido):
+- config/config.json
+- config/auth.json
+- data/
+- arquivos MP4/JPG das bibliotecas
+
+Principais mudancas:
+- login local seguro, sessao e protecao CSRF;
+- tela de login dedicada;
+- limpeza total ou por biblioteca da fila;
+- resumo permanente e lista em sanfona fechada por padrao;
+- filtros e paginacao da fila;
+- remocao da funcao de limpeza de YML.
+
+Antes de iniciar a 2.1, crie o login:
+  npm run auth:set -- --username SEU_USUARIO
+
+Para proxy reverso exclusivamente confiavel:
+  npm run auth:set -- --username SEU_USUARIO --trust-proxy
+
+Consulte UPGRADE.md.

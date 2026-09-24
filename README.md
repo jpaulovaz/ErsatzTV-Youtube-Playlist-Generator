@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 2.0
+# ErsatzTV YouTube Downloader 2.1
 
 Aplicativo Node.js para descobrir vídeos de playlists e URLs individuais do YouTube, enfileirar downloads persistentes e entregar arquivos locais ao ErsatzTV.
 
-A versão 2.0 substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido.
+A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.1 acrescenta autenticação local, limpeza segura da fila e uma listagem recolhível/paginada para bibliotecas grandes.
 
 ## Arquitetura
 
@@ -37,9 +37,11 @@ Biblioteca local do ErsatzTV
 - Retentativas automáticas após 1, 5 e 15 minutos.
 - Pausa automática quando o espaço livre fica abaixo da reserva configurada.
 - Itens removidos de uma fonte são marcados como órfãos e nunca apagados automaticamente.
-- Controles de pausar, retomar, cancelar, priorizar, remover e tentar novamente.
+- Controles de pausar, retomar, cancelar, priorizar, remover, limpar a fila e tentar novamente.
+- Resumo permanente da fila e listagem recolhível/paginada, fechada por padrão.
+- Login administrativo local com senha derivada por scrypt, sessão HttpOnly, CSRF e bloqueio de tentativas.
 - Scan da biblioteca e rebuild do playout quando a fila entra em repouso.
-- Limpeza manual de órfãos e de arquivos legados `.yml`.
+- Limpeza manual de órfãos.
 - Migração automática da configuração da versão 1.
 
 ## Requisitos
@@ -68,19 +70,27 @@ node --version
 
 1. Extraia o pacote completo em uma pasta permanente.
 2. Ajuste `config/config.json` pela interface ou use `config/config.example.json` como referência.
-3. Valide o projeto:
+3. Crie o único usuário administrativo local:
+
+```bash
+npm run auth:set -- --username SEU_USUARIO
+```
+
+Quando a aplicação ficar exclusivamente atrás de um proxy reverso confiável, use `--trust-proxy` ou responda `sim` à pergunta do assistente. A senha não é gravada em texto puro.
+
+4. Valide o projeto:
 
 ```bash
 npm run verify
 ```
 
-4. Inicie:
+5. Inicie:
 
 ```bash
 npm start
 ```
 
-5. Acesse:
+6. Acesse:
 
 ```text
 http://ENDERECO_DO_SERVIDOR:3099
@@ -146,7 +156,7 @@ Use uma biblioteca local do tipo **Music Videos** para o conteúdo musical. Para
 
 Aponte o `Library ID` do aplicativo para a biblioteca local que deve receber o scan. O `Playout ID` é opcional e serve para rebuild automático depois que a fila entra em repouso.
 
-Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, use `Limpar YML antigos` no aplicativo e remova a configuração antiga no ErsatzTV.
+Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, remova manualmente a configuração antiga no ErsatzTV. A versão 2.1 não contém mais ações relacionadas a YML.
 
 ## Descoberta e fila
 
@@ -163,6 +173,17 @@ Estados principais:
 - `removed`: retirado manualmente da fila e suprimido até uma ação de retry.
 
 Ao reiniciar o aplicativo, um item que estava em `downloading` volta para `pending`. Arquivos temporários ficam em `.youtube-downloader-work` e não são apresentados ao ErsatzTV como itens concluídos.
+
+### Limpar uma fila criada por engano
+
+A ação `Limpar fila` pode atuar sobre todas as bibliotecas ou apenas uma. Ela:
+
+- preserva todos os vídeos concluídos e seus arquivos locais;
+- opcionalmente encerra o download atual;
+- remove da fila ativa itens pendentes, falhos, cancelados e órfãos sem arquivo concluído;
+- mantém esses itens como `removed` e `suppressed`, evitando que a mesma descoberta os recoloque automaticamente.
+
+Antes da próxima busca, remova ou corrija a URL da playlist errada. Um item suprimido ainda pode ser reativado individualmente com `Tentar novamente`. A listagem detalhada da fila inicia fechada e carrega os itens em páginas de 100 registros.
 
 ## Compatibilidade de mídia
 
@@ -194,6 +215,32 @@ Quando um vídeo deixa de pertencer às fontes configuradas:
 - a interface permite visualizar e remover órfãos de forma explícita.
 
 A limpeza de órfãos remove o MP4, a thumbnail, o estado daquele item e pastas de artista que ficarem vazias.
+
+## Autenticação e proxy reverso
+
+A interface e todas as APIs operacionais são bloqueadas até que `config/auth.json` seja criado. Há somente um usuário local, adequado a uma instalação administrativa privada.
+
+Crie ou troque as credenciais com:
+
+```bash
+npm run auth:set -- --username SEU_USUARIO
+```
+
+O arquivo contém apenas hash scrypt, salt e segredo aleatório de sessão; a senha não é persistida. As permissões são ajustadas para `600`. Não copie `auth.example.json` como configuração ativa: ele contém apenas marcadores ilustrativos.
+
+Proteções incluídas:
+
+- cookie de sessão `HttpOnly`, `SameSite=Strict` e `Secure` automaticamente sob HTTPS;
+- expiração absoluta e por inatividade;
+- token CSRF para ações de escrita;
+- validação de origem;
+- limitação e bloqueio temporário após falhas de login;
+- cabeçalhos CSP, anti-frame, anti-MIME-sniffing e HSTS sob HTTPS;
+- sessões somente em memória, invalidadas quando o processo reinicia.
+
+Para um proxy no mesmo servidor, prefira `server.host = 127.0.0.1` e publique apenas o proxy em HTTPS. Ative `trustProxy` somente quando a aplicação receber tráfego exclusivamente de um proxy controlado, pois nessa modalidade ela confia em `X-Forwarded-For`, `X-Forwarded-Host` e `X-Forwarded-Proto`.
+
+Depois de mudar `config/auth.json`, reinicie o processo.
 
 ## Cookies
 
@@ -244,6 +291,7 @@ A segunda ação é destrutiva e não possui restauração automática.
 
 ```text
 config/config.json                  configuração ativa
+config/auth.json                    credencial derivada e parâmetros de sessão
 data/download-state.json            fila, histórico e índice por videoId
 data/app.log                        log operacional
 .youtube-downloader-work/           arquivos temporários dentro da pasta base
@@ -255,6 +303,7 @@ Faça backup de `config/` e `data/`. A mídia pode ser copiada separadamente con
 
 ```bash
 npm start          # interface + worker + agendador
+npm run auth:set   # criar ou trocar usuário/senha local
 npm run sync       # uma descoberta pelo terminal
 npm run check      # valida sintaxe JavaScript
 npm test           # testes automatizados
@@ -279,7 +328,7 @@ sudo journalctl -u ersatztv-youtube-downloader -f
 
 ## Segurança operacional
 
-- Não exponha a interface diretamente à internet sem autenticação/reverse proxy.
-- Proteja API Keys, cookies e backups da configuração.
+- Publique a interface externa somente por HTTPS e mantenha a porta do Node restrita ao proxy/rede confiável.
+- Proteja `config/auth.json`, API Keys, cookies e backups da configuração.
 - O processo precisa escrever apenas na pasta da aplicação, na pasta base e nos arquivos de log/estado.
 - Antes de usar exclusões, mantenha um backup ou snapshot do armazenamento.

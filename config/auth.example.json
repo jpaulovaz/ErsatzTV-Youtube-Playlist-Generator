@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "username": "admin",
+  "password": {
+    "algorithm": "scrypt",
+    "salt": "GERADO_AUTOMATICAMENTE_POR_NPM_RUN_AUTH_SET",
+    "hash": "GERADO_AUTOMATICAMENTE_POR_NPM_RUN_AUTH_SET",
+    "keyLength": 64,
+    "N": 32768,
+    "r": 8,
+    "p": 1
+  },
+  "sessionSecret": "GERADO_AUTOMATICAMENTE_POR_NPM_RUN_AUTH_SET",
+  "session": {
+    "maxAgeHours": 24,
+    "idleTimeoutMinutes": 120,
+    "cookieSecure": "auto"
+  },
+  "security": {
+    "maxFailedAttempts": 5,
+    "attemptWindowMinutes": 15,
+    "lockoutMinutes": 15,
+    "trustProxy": false
+  }
+}
