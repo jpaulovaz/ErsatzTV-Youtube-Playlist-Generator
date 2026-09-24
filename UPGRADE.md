@@ -1,6 +1,6 @@
-# Atualização para a versão 2.2
+# Atualização para a versão 2.3
 
-Este procedimento atualiza diretamente a versão 2.1. O pacote `update` não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva API Key, bibliotecas, credenciais, fila, histórico e arquivos de mídia.
+Este procedimento atualiza diretamente a versão 2.2. O pacote `update` não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva API Key, bibliotecas, credenciais, fila, histórico e arquivos de mídia.
 
 ## 1. Pare a aplicação
 
@@ -25,7 +25,7 @@ cp -a data "data.bak-$(date +%Y%m%d-%H%M%S)"
 
 ```bash
 cd /caminho/da/aplicacao
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v2.2.0-update.zip -d .
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v2.3.0-update.zip -d .
 ```
 
 ## 4. Valide
@@ -58,27 +58,27 @@ pm2 save
 Acesse a aplicação e confirme:
 
 - login e logout normais;
-- navegação lateral entre Visão geral, Downloads, Bibliotecas, Configurações e Logs;
+- navegação lateral entre Visão geral, Downloads, Bibliotecas, Configurações e Logs no desktop;
+- navegação inferior e painel de ações rápidas no celular;
 - fila detalhada fechada por padrão;
 - bibliotecas fechadas por padrão e abertas individualmente;
 - todas as áreas de configuração em sanfona;
 - API Key e demais valores previamente salvos ainda preenchidos;
 - ações de salvar, buscar novidades, pausar e retomar sem erros.
 
-## Alterações visuais da 2.2
+## Alterações visuais da 2.3
 
-- nova estrutura administrativa com barra lateral;
-- cabeçalho mais compacto e hierarquia visual mais sóbria;
-- novo símbolo da aplicação, substituindo o bloco `YT`;
-- separação da interface em áreas funcionais;
-- bibliotecas convertidas em sanfonas com resumo e indicadores;
-- configurações convertidas em sanfonas fechadas por padrão;
-- espaçamentos, botões, tabelas, métricas e responsividade revisados;
-- tela de login preservada, com apenas a substituição do símbolo visual.
+- desktop preservado com navegação lateral e a mesma identidade visual;
+- navegação inferior dedicada no celular;
+- cabeçalho móvel compacto e painel deslizante de ações rápidas;
+- downloads exibidos como cartões no celular, eliminando rolagem horizontal da tabela;
+- filtros, formulários, bibliotecas, configurações e diálogos adaptados para toque;
+- suporte a safe areas e posicionamento correto de toast acima da navegação móvel;
+- tela de login preservada.
 
 ## Retorno para a versão anterior
 
-1. Pare a versão 2.2.
+1. Pare a versão 2.3.
 2. Restaure os arquivos do backup da instalação.
 3. Restaure `config/` e `data/` somente quando necessário.
 4. Reinicie o processo anterior.

@@ -5,18 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>ErsatzTV YouTube Downloader</title>
-  <link rel="icon" href="/brand-mark.svg?v=2.2.0" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=2.2.0">
+  <link rel="icon" href="/brand-mark.svg?v=2.3.0" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=2.3.0">
 </head>
 <body class="app-page">
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=2.2.0" alt=""></span>
+        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=2.3.0" alt=""></span>
         <div class="brand-copy">
           <div class="title-line">
             <h1>ErsatzTV YouTube Downloader</h1>
-            <span id="versionBadge" class="version-badge">v2.2</span>
+            <span id="versionBadge" class="version-badge">v2.3</span>
           </div>
           <p>Bibliotecas locais para o ErsatzTV</p>
         </div>
@@ -38,8 +38,60 @@
           <span>Sair</span>
         </button>
       </div>
+
+      <div class="mobile-header-actions" aria-label="Controles móveis">
+        <span id="mobileRunningPill" class="mobile-status-pill" aria-live="polite">
+          <span class="mobile-status-dot" aria-hidden="true"></span>
+          <span class="mobile-status-text">Carregando</span>
+        </span>
+        <button id="mobileActionsBtn" type="button" class="mobile-actions-trigger" aria-controls="mobileActionSheet" aria-expanded="false" aria-label="Abrir controles da aplicação">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4"/></svg>
+        </button>
+      </div>
     </div>
   </header>
+
+  <div id="mobileActionBackdrop" class="mobile-action-backdrop" aria-hidden="true"></div>
+  <aside id="mobileActionSheet" class="mobile-action-sheet" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Controles da aplicação" tabindex="-1">
+    <div class="mobile-sheet-handle" aria-hidden="true"></div>
+    <div class="mobile-sheet-header">
+      <div>
+        <span class="page-kicker">Ações rápidas</span>
+        <h2>Controle da operação</h2>
+      </div>
+      <button id="mobileActionCloseBtn" type="button" class="icon-button mobile-sheet-close" aria-label="Fechar controles">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+
+    <div class="mobile-session-card">
+      <span id="mobileUserInitial" class="user-avatar">U</span>
+      <div>
+        <small>Sessão autenticada</small>
+        <strong id="mobileSignedInUser">-</strong>
+      </div>
+      <span id="mobileSheetStatus" class="status-pill">Carregando...</span>
+    </div>
+
+    <div class="mobile-action-grid">
+      <button id="mobileRunNowBtn" type="button" class="primary mobile-action-card">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg>
+        <span><strong>Buscar novidades</strong><small>Ler fontes agora</small></span>
+      </button>
+      <button id="mobileQueueToggleBtn" type="button" class="mobile-action-card">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+        <span><strong>Pausar fila</strong><small>Controle do worker</small></span>
+      </button>
+      <button id="mobileRefreshBtn" type="button" class="mobile-action-card">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5M6.2 9a7 7 0 0 1 11.6-2.1L20 11M4 13l2.2 4.1A7 7 0 0 0 17.8 15"/></svg>
+        <span><strong>Atualizar dados</strong><small>Recarregar painel</small></span>
+      </button>
+      <button id="mobileLogoutBtn" type="button" class="mobile-action-card danger">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6.8A1.8 1.8 0 0 0 5 6.8v10.4A1.8 1.8 0 0 0 6.8 19H10M14.5 8.5 18 12l-3.5 3.5M18 12H9"/></svg>
+        <span><strong>Encerrar sessão</strong><small>Sair com segurança</small></span>
+      </button>
+    </div>
+  </aside>
 
   <div class="workspace">
     <aside class="sidebar" aria-label="Navegação principal">
@@ -461,6 +513,6 @@
   </dialog>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="/app.js?v=2.2.0"></script>
+  <script src="/app.js?v=2.3.0"></script>
 </body>
 </html>

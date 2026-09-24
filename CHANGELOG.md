@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.3.0
+
+- Interface móvel dedicada sem alterar a experiência consolidada do desktop.
+- Navegação inferior fixa com cinco áreas e suporte a safe areas de iOS/Android.
+- Cabeçalho mobile compacto com estado operacional e painel deslizante de ações rápidas.
+- Controles móveis para buscar novidades, pausar/retomar fila, atualizar dados e encerrar sessão.
+- Tabela de downloads transformada em cartões responsivos no celular.
+- Filtros, formulários, bibliotecas, sanfonas, logs, diálogos e notificações revisados para toque.
+- Campos com tamanho adequado para evitar zoom automático em navegadores móveis.
+- Melhorias de acessibilidade, foco, fechamento por Escape e bloqueio de rolagem no painel móvel.
+- Nenhuma alteração no formato da configuração, autenticação, fila ou arquivos de mídia.
+
 ## 2.2.0
 
 - Interface administrativa redesenhada com linguagem visual mais sóbria e profissional.

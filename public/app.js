@@ -15,6 +15,29 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 const APP_VIEWS = new Set(['overview', 'downloads', 'libraries', 'settings', 'logs']);
 
+
+function setMobileActionSheet(open) {
+  const sheet = $('#mobileActionSheet');
+  const backdrop = $('#mobileActionBackdrop');
+  const trigger = $('#mobileActionsBtn');
+  if (!sheet || !backdrop || !trigger) return;
+
+  const shouldOpen = Boolean(open);
+  document.body.classList.toggle('mobile-sheet-open', shouldOpen);
+  sheet.setAttribute('aria-hidden', shouldOpen ? 'false' : 'true');
+  backdrop.setAttribute('aria-hidden', shouldOpen ? 'false' : 'true');
+  trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+  for (const region of [$('.topbar'), $('.workspace')].filter(Boolean)) {
+    if ('inert' in region) region.inert = shouldOpen;
+  }
+
+  if (shouldOpen) {
+    window.setTimeout(() => $('#mobileActionCloseBtn')?.focus(), 220);
+  } else if (document.activeElement && sheet.contains(document.activeElement)) {
+    trigger.focus();
+  }
+}
+
 function setActiveView(view, { persist = true, scroll = false } = {}) {
   const nextView = APP_VIEWS.has(view) ? view : 'overview';
   activeView = nextView;
@@ -28,6 +51,7 @@ function setActiveView(view, { persist = true, scroll = false } = {}) {
     else button.removeAttribute('aria-current');
   });
   if (persist) sessionStorage.setItem('ersatztv_active_view', nextView);
+  setMobileActionSheet(false);
   if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -389,7 +413,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '2.2.0'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '2.3.0'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -421,13 +445,32 @@ function renderStatus() {
   $('#queueAccordionHint').textContent = `${counts.pending || 0} pendente(s), ${counts.failed || 0} falha(s), ${queue.historyItems || 0} item(ns) no histórico.`;
   $('#clearQueueBtn').disabled = (queue.totalItems || 0) - (counts.completed || 0) <= 0;
 
+  const pillText = queue.lowDiskBlocked
+    ? 'Disco abaixo da reserva'
+    : (queue.paused ? 'Fila pausada' : (queue.running ? 'Download ativo' : 'Operacional'));
+  const pillClass = queue.lowDiskBlocked || counts.failed > 0
+    ? 'danger'
+    : (queue.paused || discovery.running || queue.running ? 'warn' : 'ok');
+
   const pill = $('#runningPill');
-  pill.className = 'status-pill';
-  if (queue.lowDiskBlocked || counts.failed > 0) pill.classList.add('danger');
-  else if (queue.paused || discovery.running || queue.running) pill.classList.add('warn');
-  else pill.classList.add('ok');
-  pill.textContent = queue.lowDiskBlocked ? 'Disco abaixo da reserva' : (queue.paused ? 'Fila pausada' : (queue.running ? 'Download ativo' : 'Operacional'));
-  $('#sidebarStatusText').textContent = pill.textContent;
+  pill.className = `status-pill ${pillClass}`;
+  pill.textContent = pillText;
+
+  const mobilePill = $('#mobileRunningPill');
+  if (mobilePill) {
+    mobilePill.className = `mobile-status-pill ${pillClass}`;
+    const text = mobilePill.querySelector('.mobile-status-text');
+    if (text) text.textContent = pillText;
+    mobilePill.title = pillText;
+  }
+
+  const sheetStatus = $('#mobileSheetStatus');
+  if (sheetStatus) {
+    sheetStatus.className = `status-pill ${pillClass}`;
+    sheetStatus.textContent = pillText;
+  }
+
+  $('#sidebarStatusText').textContent = pillText;
   $('#sidebarNextRun').textContent = scheduler.enabled
     ? `Próxima busca: ${formatDate(scheduler.nextRunAt)}`
     : 'Agendador desativado';
@@ -435,9 +478,22 @@ function renderStatus() {
   sidebarDot.classList.toggle('warn', queue.paused || discovery.running || queue.running);
   sidebarDot.classList.toggle('danger', queue.lowDiskBlocked || counts.failed > 0);
 
-  const queueToggle = $('#queueToggleBtn');
-  queueToggle.textContent = queue.paused ? 'Retomar fila' : 'Pausar fila';
-  queueToggle.dataset.action = queue.paused ? 'resume' : 'pause';
+  for (const queueToggle of [$('#queueToggleBtn'), $('#mobileQueueToggleBtn')].filter(Boolean)) {
+    const label = queue.paused ? 'Retomar fila' : 'Pausar fila';
+    queueToggle.dataset.action = queue.paused ? 'resume' : 'pause';
+    if (queueToggle.id === 'mobileQueueToggleBtn') {
+      const strong = queueToggle.querySelector('strong');
+      if (strong) strong.textContent = label;
+      const icon = queueToggle.querySelector('svg');
+      if (icon) {
+        icon.innerHTML = queue.paused
+          ? '<path d="m8 5 10 7-10 7Z"/>'
+          : '<path d="M8 5v14M16 5v14"/>';
+      }
+    } else {
+      queueToggle.textContent = label;
+    }
+  }
 
   const currentBox = $('#currentDownload');
   if (!current) {
@@ -489,22 +545,23 @@ function renderDownloads() {
     }
 
     const row = document.createElement('tr');
+    row.className = 'download-row';
     row.dataset.id = item.id;
     row.innerHTML = `
-      <td class="download-title">
+      <td class="download-title" data-label="Vídeo">
         <strong>${escapeHtml(item.title || item.videoId)}</strong>
         <small>${escapeHtml(item.videoId)}${item.orphaned ? ' | fora das fontes atuais' : ''}${item.phase ? ` | ${escapeHtml(phaseLabel(item.phase))}` : ''}</small>
         ${item.lastError ? `<div class="error-text">${escapeHtml(String(item.lastError).slice(-700))}</div>` : ''}
       </td>
-      <td>${escapeHtml(item.libraryFolder || '-')}</td>
-      <td><span class="badge ${statusBadgeClass(item)}">${escapeHtml(statusLabel(item.status))}</span></td>
-      <td>
+      <td data-label="Biblioteca">${escapeHtml(item.libraryFolder || '-')}</td>
+      <td data-label="Status"><span class="badge ${statusBadgeClass(item)}">${escapeHtml(statusLabel(item.status))}</span></td>
+      <td data-label="Progresso">
         <progress class="mini-progress" max="100" value="${safePercent}">${safePercent}%</progress>
         <small>${Number.isFinite(percent) ? `${percent.toFixed(1)}%` : '-'}</small>
       </td>
-      <td>${formatBytes(item.fileSizeBytes || progress.totalBytes || 0)}</td>
-      <td>${item.attempts || 0}</td>
-      <td><div class="row-actions">${actions.join('') || '<span class="muted">-</span>'}</div></td>
+      <td data-label="Tamanho">${formatBytes(item.fileSizeBytes || progress.totalBytes || 0)}</td>
+      <td data-label="Tentativas">${item.attempts || 0}</td>
+      <td data-label="Ações"><div class="row-actions">${actions.join('') || '<span class="muted">-</span>'}</div></td>
     `;
     body.appendChild(row);
   }
@@ -701,6 +758,13 @@ async function logout() {
   }
 }
 
+async function toggleQueueFrom(button) {
+  const action = button.dataset.action || 'pause';
+  await api(`/api/downloads/${action}`, { method: 'POST', body: '{}' });
+  showToast(action === 'pause' ? 'Fila pausada.' : 'Fila retomada.');
+  await refreshAll();
+}
+
 function bindEvents() {
   $$('.nav-button[data-view]').forEach((button) => {
     button.addEventListener('click', () => setActiveView(button.dataset.view, { scroll: true }));
@@ -732,15 +796,41 @@ function bindEvents() {
     if (event.currentTarget.open) refreshDownloads({ force: true }).catch((error) => showToast(error.message, true));
   });
 
-  $('#queueToggleBtn').addEventListener('click', async (event) => {
-    try {
-      const action = event.currentTarget.dataset.action || 'pause';
-      await api(`/api/downloads/${action}`, { method: 'POST', body: '{}' });
-      showToast(action === 'pause' ? 'Fila pausada.' : 'Fila retomada.');
-      await refreshAll();
-    } catch (error) {
-      showToast(error.message, true);
+  for (const button of [$('#queueToggleBtn'), $('#mobileQueueToggleBtn')].filter(Boolean)) {
+    button.addEventListener('click', async (event) => {
+      try {
+        await toggleQueueFrom(event.currentTarget);
+        setMobileActionSheet(false);
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    });
+  }
+
+  $('#mobileActionsBtn')?.addEventListener('click', () => setMobileActionSheet(true));
+  $('#mobileActionCloseBtn')?.addEventListener('click', () => setMobileActionSheet(false));
+  $('#mobileActionBackdrop')?.addEventListener('click', () => setMobileActionSheet(false));
+  $('#mobileRunNowBtn')?.addEventListener('click', () => {
+    runDiscovery()
+      .then(() => setMobileActionSheet(false))
+      .catch((error) => showToast(error.message, true));
+  });
+  $('#mobileRefreshBtn')?.addEventListener('click', () => {
+    refreshAll(true, { forceDownloads: $('#downloadsAccordion').open })
+      .then(() => {
+        showToast('Dados atualizados.');
+        setMobileActionSheet(false);
+      })
+      .catch((error) => showToast(error.message, true));
+  });
+  $('#mobileLogoutBtn')?.addEventListener('click', () => logout().catch(() => window.location.replace('/login')));
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && document.body.classList.contains('mobile-sheet-open')) {
+      setMobileActionSheet(false);
     }
+  });
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 760) setMobileActionSheet(false);
   });
 
   $('#cancelCurrentBtn').addEventListener('click', (event) => {
@@ -824,8 +914,12 @@ async function bootstrap() {
     return;
   }
   csrfToken = authSession.csrfToken || '';
-  $('#signedInUser').textContent = authSession.username || 'Usuário';
-  $('#userInitial').textContent = String(authSession.username || 'U').slice(0, 1).toUpperCase();
+  const username = authSession.username || 'Usuário';
+  const initial = String(username || 'U').slice(0, 1).toUpperCase();
+  $('#signedInUser').textContent = username;
+  $('#userInitial').textContent = initial;
+  if ($('#mobileSignedInUser')) $('#mobileSignedInUser').textContent = username;
+  if ($('#mobileUserInitial')) $('#mobileUserInitial').textContent = initial;
   $('#downloadsAccordion').open = false;
   $$('.settings-accordion').forEach((item) => { item.open = false; });
   setActiveView(sessionStorage.getItem('ersatztv_active_view') || 'overview', { persist: false });
