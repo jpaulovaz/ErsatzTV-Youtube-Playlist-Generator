@@ -1,73 +1,21 @@
 const fs = require('fs/promises');
 const path = require('path');
+const { sanitizeName, isDangerousBaseDir } = require('./utils');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const CONFIG_DIR = path.join(ROOT_DIR, 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
+const CONFIG_VERSION = 2;
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-const DEFAULT_STREAM_MAX_HEIGHT = 720;
-const STREAM_QUALITY_MODES = new Set(['compatible', 'high', 'custom']);
-const STREAM_CODEC_PROFILES = new Set(['auto', 'mp4_h264_aac']);
+const DEFAULT_MAX_HEIGHT = 1080;
+const ALLOWED_MAX_HEIGHTS = new Set([360, 480, 720, 1080, 1440, 2160]);
 const JS_RUNTIME_MODES = new Set(['disabled', 'deno', 'node', 'custom']);
 const EJS_COMPONENT_OPTIONS = new Set(['none', 'ejs:github', 'ejs:npm']);
 const YOUTUBE_API_READ_MODES = new Set(['api', 'ytdlp']);
-const YOUTUBE_API_AVAILABILITY_MODES = new Set(['disabled', 'light', 'rigorous_manual']);
-const YOUTUBE_API_PLOT_STRATEGIES = new Set(['title', 'first_description_line', 'full_description']);
-
-function toPositiveInteger(value, fallback) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0) return fallback;
-  return Math.floor(number);
-}
-
-function normalizeCodecProfile(value) {
-  const profile = String(value || '').trim();
-  return STREAM_CODEC_PROFILES.has(profile) ? profile : 'auto';
-}
-
-function buildCompatibleFormat(maxHeight = DEFAULT_STREAM_MAX_HEIGHT, codecProfile = 'auto') {
-  const height = toPositiveInteger(maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
-  const profile = normalizeCodecProfile(codecProfile);
-
-  if (profile === 'mp4_h264_aac') {
-    return `best[height<=${height}][ext=mp4][vcodec^=avc1][acodec^=mp4a]/best[height<=${height}][ext=mp4][vcodec!=none][acodec!=none]/best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
-  }
-
-  return `best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
-}
-
-function buildHighQualityFormat(maxHeight = DEFAULT_STREAM_MAX_HEIGHT, codecProfile = 'auto') {
-  const height = toPositiveInteger(maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
-  const profile = normalizeCodecProfile(codecProfile);
-
-  if (profile === 'mp4_h264_aac') {
-    return `bestvideo[height<=${height}][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a][acodec^=mp4a]/bestvideo[height<=${height}][vcodec^=avc1]+bestaudio[acodec^=mp4a]/best[height<=${height}][ext=mp4][vcodec^=avc1][acodec^=mp4a]/best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
-  }
-
-  return `bestvideo[height<=${height}][vcodec!=none]+bestaudio[acodec!=none]/best[height<=${height}][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]`;
-}
-
-function buildDefaultFormatSort(maxHeight = DEFAULT_STREAM_MAX_HEIGHT) {
-  const height = toPositiveInteger(maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
-  return `res:${height},fps`;
-}
-
-function buildStreamFormat(stream) {
-  const mode = STREAM_QUALITY_MODES.has(stream && stream.qualityMode) ? stream.qualityMode : 'compatible';
-  const maxHeight = toPositiveInteger(stream && stream.maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
-  const codecProfile = normalizeCodecProfile(stream && stream.codecProfile);
-
-  if (mode === 'compatible') return buildCompatibleFormat(maxHeight, codecProfile);
-  if (mode === 'high') return buildHighQualityFormat(maxHeight, codecProfile);
-
-  return String((stream && stream.format) || buildCompatibleFormat(maxHeight, codecProfile)).trim();
-}
-
-const DEFAULT_STREAM_FORMAT = buildCompatibleFormat(DEFAULT_STREAM_MAX_HEIGHT);
-const DEFAULT_HIGH_QUALITY_FORMAT = buildHighQualityFormat(DEFAULT_STREAM_MAX_HEIGHT);
 
 const DEFAULT_CONFIG = {
+  configVersion: CONFIG_VERSION,
   server: {
     host: '0.0.0.0',
     port: 3099
@@ -75,33 +23,33 @@ const DEFAULT_CONFIG = {
   paths: {
     baseDir: '/home/joaopaulovaz/comerciais/videclipes/youtube/youtube',
     ytDlpPath: '/usr/local/bin/yt-dlp',
-    cookiesPath: '/home/joaopaulovaz/comerciais/videclipes/youtube/cookies.txt',
-    streamScriptName: 'stream-yt.sh'
+    ffmpegPath: '/usr/bin/ffmpeg',
+    ffprobePath: '/usr/bin/ffprobe',
+    cookiesPath: ''
   },
-  stream: {
+  downloads: {
+    maxHeight: DEFAULT_MAX_HEIGHT,
+    container: 'mp4',
+    codecProfile: 'mp4_h264_aac',
+    concurrentDownloads: 1,
     userAgent: DEFAULT_USER_AGENT,
-    qualityMode: 'compatible',
-    codecProfile: 'auto',
-    maxHeight: DEFAULT_STREAM_MAX_HEIGHT,
-    format: DEFAULT_STREAM_FORMAT,
-    useHlsMpegTs: true,
-    useFormatSort: false,
-    formatSort: buildDefaultFormatSort(DEFAULT_STREAM_MAX_HEIGHT),
-    useMergeOutputFormat: false,
-    mergeOutputFormat: 'mkv',
     jsRuntimeMode: 'deno',
     jsRuntimePath: '/usr/local/bin/deno',
     jsRuntimeCustomName: 'deno',
-    ejsComponents: 'ejs:github'
+    ejsComponents: 'ejs:github',
+    writeThumbnails: true,
+    updateExistingThumbnails: false,
+    pauseOnLowDisk: true,
+    minFreeSpaceGb: 20,
+    scanOnQueueIdle: true,
+    rebuildPlayoutOnQueueIdle: true,
+    idleActionDelaySeconds: 15,
+    retryDelaysMinutes: [1, 5, 15]
   },
   youtubeApi: {
     enabled: false,
     apiKey: '',
     readMode: 'api',
-    availabilityMode: 'light',
-    updateExistingThumbnails: false,
-    thumbnailFormat: 'jpg',
-    plotStrategy: 'title',
     cacheTtlHours: 168,
     timeoutSeconds: 20
   },
@@ -119,12 +67,13 @@ const DEFAULT_CONFIG = {
       enabled: true,
       libraryId: 27,
       playoutId: 33,
-      cookiesPath: ''
+      cookiesPath: '',
+      maxHeight: null
     }
   ],
   scheduler: {
     enabled: false,
-    intervalMinutes: 60,
+    intervalMinutes: 360,
     runOnStartup: false
   },
   cleanup: {
@@ -136,227 +85,255 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function deepMerge(base, override) {
-  const result = clone(base);
-  if (!override || typeof override !== 'object') return result;
-
-  for (const [key, value] of Object.entries(override)) {
-    if (
-      value &&
-      typeof value === 'object' &&
-      !Array.isArray(value) &&
-      result[key] &&
-      typeof result[key] === 'object' &&
-      !Array.isArray(result[key])
-    ) {
-      result[key] = deepMerge(result[key], value);
-    } else {
-      result[key] = value;
-    }
-  }
-
-  return result;
+function hasOwn(object, key) {
+  return Boolean(object && Object.prototype.hasOwnProperty.call(object, key));
 }
 
-function toOptionalPositiveNumber(value) {
+function toPositiveInteger(value, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return fallback;
+  return Math.floor(number);
+}
+
+function toOptionalPositiveInteger(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) return null;
   return Math.floor(number);
 }
 
-function inferQualityMode(rawStream) {
-  const explicitMode = String((rawStream && rawStream.qualityMode) || '').trim();
-  if (STREAM_QUALITY_MODES.has(explicitMode)) return explicitMode;
-
-  const rawFormat = String((rawStream && rawStream.format) || '').trim();
-  const rawMaxHeight = toPositiveInteger(rawStream && rawStream.maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
-
-  const compatibleFormats = [
-    buildCompatibleFormat(rawMaxHeight, 'auto'),
-    buildCompatibleFormat(rawMaxHeight, 'mp4_h264_aac'),
-    DEFAULT_STREAM_FORMAT
-  ];
-  const highQualityFormats = [
-    buildHighQualityFormat(rawMaxHeight, 'auto'),
-    buildHighQualityFormat(rawMaxHeight, 'mp4_h264_aac'),
-    DEFAULT_HIGH_QUALITY_FORMAT
-  ];
-
-  if (!rawFormat || compatibleFormats.includes(rawFormat)) {
-    return 'compatible';
-  }
-
-  if (highQualityFormats.includes(rawFormat)) {
-    return 'high';
-  }
-
-  return 'custom';
+function normalizeMaxHeight(value, fallback = DEFAULT_MAX_HEIGHT) {
+  const height = toPositiveInteger(value, fallback);
+  return ALLOWED_MAX_HEIGHTS.has(height) ? height : fallback;
 }
 
-
-function normalizeJsRuntimeMode(value) {
-  const mode = String(value || '').trim();
-  return JS_RUNTIME_MODES.has(mode) ? mode : DEFAULT_CONFIG.stream.jsRuntimeMode;
-}
-
-function normalizeEjsComponents(value) {
-  const components = String(value || '').trim();
-  return EJS_COMPONENT_OPTIONS.has(components) ? components : DEFAULT_CONFIG.stream.ejsComponents;
+function normalizeOptionalMaxHeight(value) {
+  const height = toOptionalPositiveInteger(value);
+  if (height === null) return null;
+  return ALLOWED_MAX_HEIGHTS.has(height) ? height : null;
 }
 
 function sanitizeJsRuntimeName(value) {
   return String(value || '')
     .trim()
-    .replace(/[^a-zA-Z0-9_-]/g, '') || DEFAULT_CONFIG.stream.jsRuntimeCustomName;
+    .replace(/[^a-zA-Z0-9_-]/g, '') || 'deno';
 }
 
-function defaultJsRuntimePathForMode(mode) {
+function normalizeJsRuntimeMode(value) {
+  const mode = String(value || '').trim();
+  return JS_RUNTIME_MODES.has(mode) ? mode : DEFAULT_CONFIG.downloads.jsRuntimeMode;
+}
+
+function normalizeEjsComponents(value, runtimeMode) {
+  if (runtimeMode === 'disabled') return 'none';
+  const components = String(value || '').trim();
+  return EJS_COMPONENT_OPTIONS.has(components) ? components : DEFAULT_CONFIG.downloads.ejsComponents;
+}
+
+function defaultJsRuntimePath(mode) {
   if (mode === 'deno') return '/usr/local/bin/deno';
   if (mode === 'node') return '/usr/bin/node';
   return '';
 }
 
-
 function normalizePlaylistUrls(playlist) {
   const values = [];
-
-  if (playlist && typeof playlist.url === 'string') {
-    values.push(playlist.url);
-  }
-
-  if (playlist && Array.isArray(playlist.urls)) {
-    values.push(...playlist.urls);
-  }
+  if (playlist && typeof playlist.url === 'string') values.push(playlist.url);
+  if (playlist && Array.isArray(playlist.urls)) values.push(...playlist.urls);
 
   const seen = new Set();
   const urls = [];
-
   for (const value of values) {
     const url = String(value || '').trim();
     if (!url || seen.has(url)) continue;
     seen.add(url);
     urls.push(url);
   }
-
   return urls;
 }
 
-function normalizeStreamConfig(config, rawConfig) {
-  const rawStream = rawConfig.stream && typeof rawConfig.stream === 'object' ? rawConfig.stream : {};
-  const stream = config.stream && typeof config.stream === 'object' ? config.stream : clone(DEFAULT_CONFIG.stream);
-
-  stream.userAgent = String(stream.userAgent || DEFAULT_USER_AGENT).trim();
-  stream.qualityMode = inferQualityMode(rawStream);
-  stream.codecProfile = normalizeCodecProfile(stream.codecProfile);
-  stream.maxHeight = toPositiveInteger(stream.maxHeight, DEFAULT_STREAM_MAX_HEIGHT);
-  stream.useHlsMpegTs = stream.useHlsMpegTs !== false;
-
-  if (stream.qualityMode === 'high') {
-    stream.useFormatSort = rawStream.useFormatSort !== undefined ? Boolean(stream.useFormatSort) : true;
-    stream.useMergeOutputFormat = rawStream.useMergeOutputFormat !== undefined ? Boolean(stream.useMergeOutputFormat) : true;
-  } else if (stream.qualityMode === 'compatible') {
-    stream.useFormatSort = rawStream.useFormatSort !== undefined ? Boolean(stream.useFormatSort) : false;
-    stream.useMergeOutputFormat = rawStream.useMergeOutputFormat !== undefined ? Boolean(stream.useMergeOutputFormat) : false;
-  } else {
-    stream.useFormatSort = Boolean(stream.useFormatSort);
-    stream.useMergeOutputFormat = Boolean(stream.useMergeOutputFormat);
-  }
-
-  if (rawStream.formatSort !== undefined && String(rawStream.formatSort || '').trim()) {
-    stream.formatSort = String(rawStream.formatSort).trim();
-  } else {
-    stream.formatSort = buildDefaultFormatSort(stream.maxHeight);
-  }
-
-  stream.mergeOutputFormat = String(stream.mergeOutputFormat || 'mkv').trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'mkv';
-  stream.jsRuntimeMode = normalizeJsRuntimeMode(stream.jsRuntimeMode);
-  stream.jsRuntimePath = rawStream.jsRuntimePath !== undefined
-    ? String(rawStream.jsRuntimePath || '').trim()
-    : defaultJsRuntimePathForMode(stream.jsRuntimeMode);
-  stream.jsRuntimeCustomName = sanitizeJsRuntimeName(stream.jsRuntimeCustomName);
-  stream.ejsComponents = stream.jsRuntimeMode === 'disabled' ? 'none' : normalizeEjsComponents(stream.ejsComponents);
-  stream.format = buildStreamFormat(stream);
-
-  config.stream = stream;
+function normalizeRetryDelays(value) {
+  const input = Array.isArray(value) ? value : DEFAULT_CONFIG.downloads.retryDelaysMinutes;
+  const result = input
+    .map((item) => toPositiveInteger(item, 0))
+    .filter((item) => item > 0)
+    .slice(0, 10);
+  return result.length > 0 ? result : clone(DEFAULT_CONFIG.downloads.retryDelaysMinutes);
 }
 
-function normalizeYouTubeApiConfig(config) {
-  const api = config.youtubeApi && typeof config.youtubeApi === 'object' ? config.youtubeApi : clone(DEFAULT_CONFIG.youtubeApi);
+function buildDownloadsConfig(rawConfig) {
+  const rawDownloads = rawConfig.downloads && typeof rawConfig.downloads === 'object'
+    ? rawConfig.downloads
+    : {};
+  const legacyStream = rawConfig.stream && typeof rawConfig.stream === 'object'
+    ? rawConfig.stream
+    : {};
 
-  api.enabled = Boolean(api.enabled);
-  api.apiKey = String(api.apiKey || '').trim();
-  api.readMode = YOUTUBE_API_READ_MODES.has(String(api.readMode || '').trim()) ? String(api.readMode).trim() : DEFAULT_CONFIG.youtubeApi.readMode;
-  api.availabilityMode = YOUTUBE_API_AVAILABILITY_MODES.has(String(api.availabilityMode || '').trim()) ? String(api.availabilityMode).trim() : DEFAULT_CONFIG.youtubeApi.availabilityMode;
-  api.updateExistingThumbnails = Boolean(api.updateExistingThumbnails);
-  api.thumbnailFormat = String(api.thumbnailFormat || 'jpg').trim().replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() || 'jpg';
-  if (api.thumbnailFormat !== 'jpg') api.thumbnailFormat = 'jpg';
-  api.plotStrategy = YOUTUBE_API_PLOT_STRATEGIES.has(String(api.plotStrategy || '').trim()) ? String(api.plotStrategy).trim() : DEFAULT_CONFIG.youtubeApi.plotStrategy;
-  api.cacheTtlHours = Math.max(1, Number(api.cacheTtlHours) || DEFAULT_CONFIG.youtubeApi.cacheTtlHours);
-  api.timeoutSeconds = Math.max(5, Number(api.timeoutSeconds) || DEFAULT_CONFIG.youtubeApi.timeoutSeconds);
+  const maxHeightSource = hasOwn(rawDownloads, 'maxHeight')
+    ? rawDownloads.maxHeight
+    : (hasOwn(legacyStream, 'maxHeight') ? legacyStream.maxHeight : DEFAULT_CONFIG.downloads.maxHeight);
 
-  config.youtubeApi = api;
+  const runtimeModeSource = hasOwn(rawDownloads, 'jsRuntimeMode')
+    ? rawDownloads.jsRuntimeMode
+    : legacyStream.jsRuntimeMode;
+  const runtimeMode = normalizeJsRuntimeMode(runtimeModeSource);
+
+  const runtimePathSource = hasOwn(rawDownloads, 'jsRuntimePath')
+    ? rawDownloads.jsRuntimePath
+    : legacyStream.jsRuntimePath;
+
+  const ejsSource = hasOwn(rawDownloads, 'ejsComponents')
+    ? rawDownloads.ejsComponents
+    : legacyStream.ejsComponents;
+
+  const userAgentSource = hasOwn(rawDownloads, 'userAgent')
+    ? rawDownloads.userAgent
+    : legacyStream.userAgent;
+
+  return {
+    maxHeight: normalizeMaxHeight(maxHeightSource),
+    container: 'mp4',
+    codecProfile: 'mp4_h264_aac',
+    concurrentDownloads: 1,
+    userAgent: String(userAgentSource || DEFAULT_CONFIG.downloads.userAgent).trim() || DEFAULT_CONFIG.downloads.userAgent,
+    jsRuntimeMode: runtimeMode,
+    jsRuntimePath: String(runtimePathSource !== undefined ? runtimePathSource : defaultJsRuntimePath(runtimeMode)).trim(),
+    jsRuntimeCustomName: sanitizeJsRuntimeName(
+      hasOwn(rawDownloads, 'jsRuntimeCustomName')
+        ? rawDownloads.jsRuntimeCustomName
+        : legacyStream.jsRuntimeCustomName
+    ),
+    ejsComponents: normalizeEjsComponents(ejsSource, runtimeMode),
+    writeThumbnails: rawDownloads.writeThumbnails !== false,
+    updateExistingThumbnails: Boolean(
+      hasOwn(rawDownloads, 'updateExistingThumbnails')
+        ? rawDownloads.updateExistingThumbnails
+        : (rawConfig.youtubeApi && rawConfig.youtubeApi.updateExistingThumbnails)
+    ),
+    pauseOnLowDisk: rawDownloads.pauseOnLowDisk !== false,
+    minFreeSpaceGb: Math.max(1, Number(rawDownloads.minFreeSpaceGb) || DEFAULT_CONFIG.downloads.minFreeSpaceGb),
+    scanOnQueueIdle: rawDownloads.scanOnQueueIdle !== false,
+    rebuildPlayoutOnQueueIdle: rawDownloads.rebuildPlayoutOnQueueIdle !== false,
+    idleActionDelaySeconds: Math.max(3, Number(rawDownloads.idleActionDelaySeconds) || DEFAULT_CONFIG.downloads.idleActionDelaySeconds),
+    retryDelaysMinutes: normalizeRetryDelays(rawDownloads.retryDelaysMinutes)
+  };
 }
 
 function normalizeConfig(raw) {
   const rawConfig = raw && typeof raw === 'object' ? raw : {};
-  const config = deepMerge(DEFAULT_CONFIG, rawConfig);
+  const rawServer = rawConfig.server && typeof rawConfig.server === 'object' ? rawConfig.server : {};
+  const rawPaths = rawConfig.paths && typeof rawConfig.paths === 'object' ? rawConfig.paths : {};
+  const rawApi = rawConfig.youtubeApi && typeof rawConfig.youtubeApi === 'object' ? rawConfig.youtubeApi : {};
+  const rawErsatz = rawConfig.ersatztv && typeof rawConfig.ersatztv === 'object' ? rawConfig.ersatztv : {};
+  const rawScheduler = rawConfig.scheduler && typeof rawConfig.scheduler === 'object' ? rawConfig.scheduler : {};
+  const rawCleanup = rawConfig.cleanup && typeof rawConfig.cleanup === 'object' ? rawConfig.cleanup : {};
 
-  const legacyLibraryId = toOptionalPositiveNumber(rawConfig.ersatztv && rawConfig.ersatztv.libraryId);
-  const legacyPlayoutId = toOptionalPositiveNumber(rawConfig.ersatztv && rawConfig.ersatztv.playoutId);
-  const legacyStreamScriptPath = rawConfig.paths && rawConfig.paths.streamScriptPath;
+  const legacyLibraryId = toOptionalPositiveInteger(rawErsatz.libraryId);
+  const legacyPlayoutId = toOptionalPositiveInteger(rawErsatz.playoutId);
 
-  config.server.port = Number(config.server.port) || DEFAULT_CONFIG.server.port;
-  config.paths.baseDir = String(config.paths.baseDir || DEFAULT_CONFIG.paths.baseDir).trim();
-  config.paths.ytDlpPath = String(config.paths.ytDlpPath || DEFAULT_CONFIG.paths.ytDlpPath).trim();
-  config.paths.cookiesPath = String(config.paths.cookiesPath || '').trim();
-  config.paths.streamScriptName = String(config.paths.streamScriptName || DEFAULT_CONFIG.paths.streamScriptName)
-    .replace(/[\\/]/g, '')
-    .trim() || DEFAULT_CONFIG.paths.streamScriptName;
+  const config = {
+    configVersion: CONFIG_VERSION,
+    server: {
+      host: String(rawServer.host || DEFAULT_CONFIG.server.host).trim() || DEFAULT_CONFIG.server.host,
+      port: Math.min(65535, toPositiveInteger(rawServer.port, DEFAULT_CONFIG.server.port))
+    },
+    paths: {
+      baseDir: String(rawPaths.baseDir || DEFAULT_CONFIG.paths.baseDir).trim() || DEFAULT_CONFIG.paths.baseDir,
+      ytDlpPath: String(rawPaths.ytDlpPath || DEFAULT_CONFIG.paths.ytDlpPath).trim() || DEFAULT_CONFIG.paths.ytDlpPath,
+      ffmpegPath: String(rawPaths.ffmpegPath || DEFAULT_CONFIG.paths.ffmpegPath).trim() || DEFAULT_CONFIG.paths.ffmpegPath,
+      ffprobePath: String(rawPaths.ffprobePath || DEFAULT_CONFIG.paths.ffprobePath).trim() || DEFAULT_CONFIG.paths.ffprobePath,
+      // Cookies only remain enabled when explicitly configured. A legacy streamScriptPath never enables them.
+      cookiesPath: hasOwn(rawPaths, 'cookiesPath') ? String(rawPaths.cookiesPath || '').trim() : ''
+    },
+    downloads: buildDownloadsConfig(rawConfig),
+    youtubeApi: {
+      enabled: Boolean(rawApi.enabled),
+      apiKey: String(rawApi.apiKey || '').trim(),
+      readMode: YOUTUBE_API_READ_MODES.has(String(rawApi.readMode || '').trim())
+        ? String(rawApi.readMode).trim()
+        : DEFAULT_CONFIG.youtubeApi.readMode,
+      cacheTtlHours: Math.max(1, Number(rawApi.cacheTtlHours) || DEFAULT_CONFIG.youtubeApi.cacheTtlHours),
+      timeoutSeconds: Math.max(5, Number(rawApi.timeoutSeconds) || DEFAULT_CONFIG.youtubeApi.timeoutSeconds)
+    },
+    ersatztv: {
+      url: String(rawErsatz.url || DEFAULT_CONFIG.ersatztv.url).trim().replace(/\/+$/, '') || DEFAULT_CONFIG.ersatztv.url,
+      apiTimeoutSeconds: Math.max(1, Number(rawErsatz.apiTimeoutSeconds) || DEFAULT_CONFIG.ersatztv.apiTimeoutSeconds)
+    },
+    playlists: [],
+    scheduler: {
+      enabled: Boolean(rawScheduler.enabled),
+      intervalMinutes: Math.max(1, Number(rawScheduler.intervalMinutes) || DEFAULT_CONFIG.scheduler.intervalMinutes),
+      runOnStartup: Boolean(rawScheduler.runOnStartup)
+    },
+    cleanup: {
+      removeEmptyArtistFolders: rawCleanup.removeEmptyArtistFolders !== false
+    }
+  };
 
-  if (!config.paths.cookiesPath && legacyStreamScriptPath) {
-    config.paths.cookiesPath = DEFAULT_CONFIG.paths.cookiesPath;
-  }
-
-  normalizeStreamConfig(config, rawConfig);
-  normalizeYouTubeApiConfig(config);
-
-  config.ersatztv = config.ersatztv && typeof config.ersatztv === 'object' ? config.ersatztv : clone(DEFAULT_CONFIG.ersatztv);
-  config.ersatztv.url = String(config.ersatztv.url || DEFAULT_CONFIG.ersatztv.url).trim().replace(/\/+$/, '');
-  config.ersatztv.apiTimeoutSeconds = Math.max(1, Number(config.ersatztv.apiTimeoutSeconds) || 10);
-  delete config.ersatztv.libraryId;
-  delete config.ersatztv.playoutId;
-  delete config.ersatztv.scanWaitSeconds;
-
-  config.scheduler.intervalMinutes = Math.max(1, Number(config.scheduler.intervalMinutes) || 60);
-  config.scheduler.enabled = Boolean(config.scheduler.enabled);
-  config.scheduler.runOnStartup = Boolean(config.scheduler.runOnStartup);
-
-  if (!Array.isArray(config.playlists)) {
-    config.playlists = [];
-  }
-
-  config.playlists = config.playlists
+  const rawPlaylists = Array.isArray(rawConfig.playlists) ? rawConfig.playlists : [];
+  config.playlists = rawPlaylists
     .map((playlist) => {
       const urls = normalizePlaylistUrls(playlist);
       return {
-        name: String(playlist.name || '').trim(),
+        name: String(playlist && playlist.name || '').trim(),
         url: urls[0] || '',
         urls,
-        enabled: playlist.enabled !== false,
-        libraryId: toOptionalPositiveNumber(playlist.libraryId) || legacyLibraryId,
-        playoutId: toOptionalPositiveNumber(playlist.playoutId) || legacyPlayoutId,
-        cookiesPath: String(playlist.cookiesPath || '').trim()
+        enabled: !playlist || playlist.enabled !== false,
+        libraryId: toOptionalPositiveInteger(playlist && playlist.libraryId) || legacyLibraryId,
+        playoutId: toOptionalPositiveInteger(playlist && playlist.playoutId) || legacyPlayoutId,
+        cookiesPath: String(playlist && playlist.cookiesPath || '').trim(),
+        maxHeight: normalizeOptionalMaxHeight(playlist && playlist.maxHeight)
       };
     })
     .filter((playlist) => playlist.name && playlist.urls.length > 0);
 
-  config.cleanup = config.cleanup && typeof config.cleanup === 'object' ? config.cleanup : {};
-  config.cleanup.removeEmptyArtistFolders = config.cleanup.removeEmptyArtistFolders !== false;
-  delete config.cleanup.removeDisabledPlaylistFolders;
-  delete config.cleanup.removeMissingVideos;
+  if (config.playlists.length === 0 && Number(rawConfig.configVersion) !== CONFIG_VERSION) {
+    config.playlists = clone(DEFAULT_CONFIG.playlists);
+  }
 
   return config;
+}
+
+
+function validateConfig(config) {
+  if (!path.isAbsolute(config.paths.baseDir)) {
+    throw new Error('A pasta base das bibliotecas precisa ser um caminho absoluto.');
+  }
+  if (isDangerousBaseDir(config.paths.baseDir)) {
+    throw new Error('A pasta base informada e ampla demais. Use uma subpasta exclusiva para as bibliotecas.');
+  }
+
+  const requiredTools = [
+    ['yt-dlp', config.paths.ytDlpPath],
+    ['ffmpeg', config.paths.ffmpegPath],
+    ['ffprobe', config.paths.ffprobePath]
+  ];
+  for (const [label, value] of requiredTools) {
+    if (!String(value || '').trim()) throw new Error(`O caminho do ${label} nao pode ficar vazio.`);
+  }
+
+  const seenFolders = new Map();
+  for (const playlist of config.playlists || []) {
+    const folder = sanitizeName(playlist.name).toLowerCase();
+    if (!folder) throw new Error('Toda biblioteca precisa ter um nome valido.');
+    if (seenFolders.has(folder)) {
+      throw new Error(`As bibliotecas "${seenFolders.get(folder)}" e "${playlist.name}" geram a mesma pasta. Use nomes diferentes.`);
+    }
+    seenFolders.set(folder, playlist.name);
+  }
+
+  return config;
+}
+
+function timestampForFilename() {
+  return new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '').replace('T', '-');
+}
+
+async function atomicWriteJson(filePath, value) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+  await fs.writeFile(tempPath, JSON.stringify(value, null, 2) + '\n', 'utf8');
+  await fs.rename(tempPath, filePath);
 }
 
 async function ensureConfigFile() {
@@ -364,43 +341,50 @@ async function ensureConfigFile() {
   try {
     await fs.access(CONFIG_PATH);
   } catch {
-    await fs.writeFile(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2) + '\n', 'utf8');
+    await atomicWriteJson(CONFIG_PATH, DEFAULT_CONFIG);
   }
+}
+
+async function migrateConfigFile(raw, normalized) {
+  const backupPath = path.join(CONFIG_DIR, `config.v1.backup-${timestampForFilename()}.json`);
+  await fs.writeFile(backupPath, JSON.stringify(raw, null, 2) + '\n', 'utf8');
+  await atomicWriteJson(CONFIG_PATH, normalized);
+  return backupPath;
 }
 
 async function loadConfig() {
   await ensureConfigFile();
   const content = await fs.readFile(CONFIG_PATH, 'utf8');
   const raw = JSON.parse(content);
-  return normalizeConfig(raw);
+  const normalized = validateConfig(normalizeConfig(raw));
+
+  if (Number(raw.configVersion) !== CONFIG_VERSION) {
+    await migrateConfigFile(raw, normalized);
+  }
+
+  return normalized;
 }
 
 async function saveConfig(config) {
-  await fs.mkdir(CONFIG_DIR, { recursive: true });
-  const normalized = normalizeConfig(config);
-  await fs.writeFile(CONFIG_PATH, JSON.stringify(normalized, null, 2) + '\n', 'utf8');
+  const normalized = validateConfig(normalizeConfig({ ...config, configVersion: CONFIG_VERSION }));
+  await atomicWriteJson(CONFIG_PATH, normalized);
   return normalized;
 }
 
 module.exports = {
   ROOT_DIR,
   CONFIG_PATH,
+  CONFIG_VERSION,
   DEFAULT_CONFIG,
   DEFAULT_USER_AGENT,
-  DEFAULT_STREAM_FORMAT,
-  DEFAULT_HIGH_QUALITY_FORMAT,
-  DEFAULT_STREAM_MAX_HEIGHT,
-  STREAM_CODEC_PROFILES,
+  DEFAULT_MAX_HEIGHT,
+  ALLOWED_MAX_HEIGHTS,
   JS_RUNTIME_MODES,
   EJS_COMPONENT_OPTIONS,
   YOUTUBE_API_READ_MODES,
-  YOUTUBE_API_AVAILABILITY_MODES,
-  YOUTUBE_API_PLOT_STRATEGIES,
-  buildCompatibleFormat,
-  buildHighQualityFormat,
-  buildDefaultFormatSort,
-  buildStreamFormat,
+  normalizeMaxHeight,
+  normalizeConfig,
+  validateConfig,
   loadConfig,
-  saveConfig,
-  normalizeConfig
+  saveConfig
 };

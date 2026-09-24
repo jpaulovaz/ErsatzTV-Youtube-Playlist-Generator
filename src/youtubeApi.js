@@ -437,6 +437,13 @@ async function fetchSourcesViaApi(config, playlist) {
     });
   }
 
+  const invalidSources = sourceResults.filter((source) => source.error);
+  if (invalidSources.length > 0) {
+    throw new YouTubeApiError(invalidSources.map((source) => `Fonte ${source.index + 1}: ${source.error}`).join(' '), {
+      reason: 'unsupported-source'
+    });
+  }
+
   const ids = [...byVideoId.keys()];
   const details = await fetchVideoDetails(config, ids, { useCache: true });
   quotaUnitsUsed += details.quotaUnitsUsed;

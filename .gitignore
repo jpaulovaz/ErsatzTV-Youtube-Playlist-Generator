@@ -2,5 +2,21 @@ node_modules/
 npm-debug.log*
 .DS_Store
 .env
+
+# Estado e logs locais
 /data/*.log
+/data/download-state.json
+/data/*.tmp-*
+
+# Configuracao ativa, segredos e backups de migracao
 /config/config.local.json
+/config/config.v1.backup-*.json
+
+# Temporarios que podem existir quando a pasta base aponta para o projeto
+.youtube-downloader-work/
+
+# Pacotes gerados
+/dist/
+*.zip
+*.tar.gz
+*.sha256

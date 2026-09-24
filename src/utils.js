@@ -4,58 +4,40 @@ const path = require('path');
 function sanitizeName(value) {
   return String(value || '')
     .replace(/[\\/*?:"<>|]/g, '')
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
     .replace(/[\r\n\t]+/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
+    .replace(/[. ]+$/g, '');
+}
+
+function truncateComponent(value, maxLength = 180) {
+  const text = String(value || '');
+  if (text.length <= maxLength) return text;
+  return text.slice(0, Math.max(1, maxLength)).trim().replace(/[. ]+$/g, '');
+}
+
+function sanitizeFileComponent(value, fallback = 'Sem Titulo', maxLength = 180) {
+  return truncateComponent(sanitizeName(value) || fallback, maxLength) || fallback;
 }
 
 function extractArtistAndTitle(rawTitle) {
-  const cleanName = sanitizeName(rawTitle || 'Sem_Titulo');
+  const cleanName = sanitizeFileComponent(rawTitle || 'Sem Titulo');
   if (cleanName.includes('-')) {
     const [artistPart, ...titleParts] = cleanName.split('-');
-    const artist = sanitizeName(artistPart) || 'Outros';
-    const title = sanitizeName(titleParts.join('-')) || 'Sem_Titulo';
+    const artist = sanitizeFileComponent(artistPart, 'Outros', 100);
+    const title = sanitizeFileComponent(titleParts.join('-'), 'Sem Titulo', 170);
     return { artist, title };
   }
 
-  return { artist: 'Outros', title: cleanName || 'Sem_Titulo' };
+  return {
+    artist: 'Outros',
+    title: sanitizeFileComponent(cleanName, 'Sem Titulo', 180)
+  };
 }
 
-function secondsToDuration(seconds) {
-  const total = Math.max(0, Number(seconds) || 0);
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const secs = Math.floor(total % 60);
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-}
-
-function yamlDoubleQuoted(value) {
-  return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
-function shellCommandQuote(value) {
-  const text = String(value || '');
-  if (/^[A-Za-z0-9_/:.,@%+=-]+$/.test(text)) return text;
-  return `'${text.replace(/'/g, `'\\''`)}'`;
-}
-
-async function pathExists(targetPath) {
-  try {
-    await fs.access(targetPath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function listDirectories(targetPath) {
-  try {
-    const entries = await fs.readdir(targetPath, { withFileTypes: true });
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-  } catch (error) {
-    if (error.code === 'ENOENT') return [];
-    throw error;
-  }
+function pathExists(targetPath) {
+  return fs.access(targetPath).then(() => true).catch(() => false);
 }
 
 async function walkFiles(targetPath) {
@@ -108,13 +90,20 @@ async function removeEmptyDirectories(targetPath, stopAtPath, logger) {
     if (after.length === 0 && normalizedTarget !== normalizedStop) {
       await fs.rmdir(normalizedTarget);
       removed += 1;
-      if (logger) await logger.info(`Pasta vazia removida na limpeza manual: ${normalizedTarget}`);
+      if (logger) await logger.info(`Pasta vazia removida: ${normalizedTarget}`);
     }
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
   }
 
   return removed;
+}
+
+function isPathInside(parentPath, candidatePath) {
+  const parent = path.resolve(parentPath);
+  const candidate = path.resolve(candidatePath);
+  const relative = path.relative(parent, candidate);
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
 function isDangerousBaseDir(baseDir) {
@@ -127,18 +116,32 @@ function isDangerousBaseDir(baseDir) {
   if (resolved === '/home' || resolved === '/Users' || resolved === '/var' || resolved === '/opt') return true;
 
   const parts = resolved.split(path.sep).filter(Boolean);
-  return parts.length < 3;
+  return parts.length < 2;
+}
+
+function formatBytes(value) {
+  const bytes = Number(value) || 0;
+  if (bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const amount = bytes / (1024 ** exponent);
+  return `${amount >= 10 || exponent === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[exponent]}`;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 }
 
 module.exports = {
   sanitizeName,
+  sanitizeFileComponent,
+  truncateComponent,
   extractArtistAndTitle,
-  secondsToDuration,
-  yamlDoubleQuoted,
-  shellCommandQuote,
   pathExists,
-  listDirectories,
   walkFiles,
   removeEmptyDirectories,
-  isDangerousBaseDir
+  isPathInside,
+  isDangerousBaseDir,
+  formatBytes,
+  sleep
 };

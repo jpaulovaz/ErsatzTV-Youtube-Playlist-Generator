@@ -1,141 +1,285 @@
-# ErsatzTV YouTube Playlist Generator
+# ErsatzTV YouTube Downloader 2.0
 
-Aplicativo para criar e manter arquivos `.yml` de Remote Streams do ErsatzTV a partir de playlists e videos avulsos do YouTube.
+Aplicativo Node.js para descobrir vídeos de playlists e URLs individuais do YouTube, enfileirar downloads persistentes e entregar arquivos locais ao ErsatzTV.
 
-A partir desta versao, a rotina normal pode usar a **YouTube Data API** para listar fontes, buscar metadados, validar duracao, gerar thumbnails e montar os YML sem usar cookies e sem chamar `yt-dlp`. O `yt-dlp` continua sendo usado pelo `stream-yt.sh` quando o ErsatzTV realmente toca o video.
+A versão 2.0 substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido.
 
-## Recursos principais
+## Arquitetura
 
-- Interface web para configuracao e acompanhamento.
-- Uma ou mais fontes por biblioteca: playlists, videos avulsos ou ambos.
-- Deduplicacao por ID do YouTube dentro da mesma biblioteca.
-- Leitura via YouTube Data API, recomendada para rotina agendada.
-- Fallback por `yt-dlp` para compatibilidade.
-- Geração de `.yml` com `script`, `is_live`, `duration`, `title`, `plot` e `year` quando disponivel.
-- Download de thumbnail local ao lado do `.yml`, com o mesmo nome base.
-- Painel de saude por biblioteca: ativos, fora das fontes, suspeitos, sem duracao e thumbnails pendentes.
-- Script `stream-yt.sh` criado automaticamente dentro de cada pasta.
-- `Library ID` e `Playout ID` por biblioteca.
-- Agendador interno por intervalo em minutos.
-- Teste ativo de `cookies.txt` usando `yt-dlp`.
-- Configuracoes de qualidade, resolucao maxima, codec/container e runtime JS/EJS do `yt-dlp`.
-- Limpeza manual de YML ausentes, com remocao de thumbnails sidecar e pastas vazias.
-- Scan automatico da biblioteca somente quando houver YML ou thumbnail criado, atualizado ou movido.
+```text
+Playlist ou vídeo do YouTube
+          ↓
+Descoberta (YouTube Data API ou yt-dlp)
+          ↓
+Deduplicação por videoId
+          ↓
+Fila persistente, um item por vez
+          ↓
+yt-dlp + ffmpeg/ffprobe
+          ↓
+MP4 / H.264 / AAC + JPG
+          ↓
+Biblioteca local do ErsatzTV
+```
+
+## Principais recursos
+
+- Uma ou mais bibliotecas, cada uma com várias fontes.
+- Fontes do tipo playlist e vídeo individual.
+- YouTube Data API como modo preferencial, com fallback automático para `yt-dlp`.
+- Fila persistente em JSON; reiniciar o aplicativo não perde os itens pendentes.
+- Um download simultâneo, evitando picos de CPU, rede e disco.
+- Arquivos finais padronizados em MP4, vídeo H.264 e áudio AAC.
+- Resolução máxima geral ou específica por biblioteca: 360p, 480p, 720p, 1080p, 1440p e 2160p.
+- Organização `Biblioteca/Artista/Artista - Título.mp4`.
+- Thumbnail JPG ao lado do vídeo.
+- Deduplicação por ID do YouTube, independentemente de alterações futuras no título.
+- Retentativas automáticas após 1, 5 e 15 minutos.
+- Pausa automática quando o espaço livre fica abaixo da reserva configurada.
+- Itens removidos de uma fonte são marcados como órfãos e nunca apagados automaticamente.
+- Controles de pausar, retomar, cancelar, priorizar, remover e tentar novamente.
+- Scan da biblioteca e rebuild do playout quando a fila entra em repouso.
+- Limpeza manual de órfãos e de arquivos legados `.yml`.
+- Migração automática da configuração da versão 1.
 
 ## Requisitos
 
+- Linux recomendado.
 - Node.js 18 ou superior.
-- ErsatzTV acessivel pela rede, normalmente em `http://localhost:8409`.
-- YouTube Data API Key para o modo recomendado de leitura.
-- `yt-dlp` instalado, normalmente em `/usr/local/bin/yt-dlp`, para streaming e teste de cookies.
-- Opcional: `cookies.txt` em formato Netscape quando o YouTube exigir login/cookies.
-- Recomendado: Deno em `/usr/local/bin/deno` para ajudar o `yt-dlp` a resolver desafios recentes do YouTube.
+- `yt-dlp` atualizado.
+- `ffmpeg` e `ffprobe`.
+- Acesso de gravação à pasta definida em `paths.baseDir`.
+- ErsatzTV acessível pela rede para scan/rebuild automáticos.
+- Opcional: Deno para os desafios JavaScript atuais do YouTube.
+- Opcional: uma YouTube Data API Key.
+- Opcional: `cookies.txt` em formato Netscape para vídeos que exigem sessão.
 
-## Como iniciar
+Exemplo de verificação:
 
 ```bash
-npm install
+node --version
+/usr/local/bin/yt-dlp --version
+/usr/bin/ffmpeg -version | head -n 1
+/usr/bin/ffprobe -version | head -n 1
+/usr/local/bin/deno --version
+```
+
+## Instalação nova
+
+1. Extraia o pacote completo em uma pasta permanente.
+2. Ajuste `config/config.json` pela interface ou use `config/config.example.json` como referência.
+3. Valide o projeto:
+
+```bash
+npm run verify
+```
+
+4. Inicie:
+
+```bash
 npm start
 ```
 
-Depois acesse:
+5. Acesse:
 
 ```text
-http://localhost:3099
+http://ENDERECO_DO_SERVIDOR:3099
 ```
 
-## Validar arquivos do projeto
+O projeto não usa dependências npm externas nesta versão; `npm install` não é necessário para a execução normal.
+
+## Atualização direta da versão 1
+
+Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json` nem o conteúdo de `data/`, portanto preserva a configuração e o estado operacional existentes.
+
+Na primeira inicialização da versão 2:
+
+1. `config/config.json` é lido no formato antigo.
+2. Os campos úteis são migrados.
+3. É criado `config/config.v1.backup-AAAAmmdd-HHMMSS.json`.
+4. O novo `config/config.json` é gravado com `configVersion: 2`.
+
+São preservados, quando existentes:
+
+- host e porta da interface;
+- pasta base;
+- caminho do `yt-dlp`;
+- bibliotecas e respectivas fontes;
+- resolução máxima;
+- runtime JavaScript;
+- URL e IDs do ErsatzTV;
+- estado do agendador.
+
+O antigo `streamScriptPath` é descartado. Um caminho legado de script não ativa cookies automaticamente. Cookies só são usados quando `paths.cookiesPath` ou o campo da biblioteca estiver explicitamente preenchido.
+
+Consulte também [UPGRADE.md](UPGRADE.md).
+
+## Estrutura dos arquivos
+
+Com uma biblioteca chamada `Mix_Principal`, o resultado é semelhante a:
+
+```text
+/srv/media/youtube/
+├── .youtube-downloader-work/        # arquivos temporários; não é biblioteca
+└── Mix_Principal/
+    ├── Queen/
+    │   ├── Queen - Bohemian Rhapsody.mp4
+    │   └── Queen - Bohemian Rhapsody.jpg
+    └── Outros/
+        ├── Vídeo sem separador de artista.mp4
+        └── Vídeo sem separador de artista.jpg
+```
+
+O aplicativo divide o título no primeiro ` - ` ou hífen reconhecido. Quando não consegue determinar o artista, usa a pasta `Outros`.
+
+Em caso de colisão de nome, o ID do YouTube é acrescentado ao arquivo. O índice interno continua sendo o `videoId`.
+
+O nome da biblioteca também é sua identidade interna e define a pasta física. Renomeá-la depois que a fila já possui itens é tratado como a criação de outra biblioteca; não use uma simples renomeação para mover arquivos existentes. Mudanças de `paths.baseDir` também devem ser feitas com a fila parada e com migração planejada dos arquivos e do estado.
+
+## Configuração no ErsatzTV
+
+Use uma biblioteca local do tipo **Music Videos** para o conteúdo musical. Para cada biblioteca do aplicativo, adicione ao ErsatzTV a pasta correspondente, por exemplo:
+
+```text
+/srv/media/youtube/Mix_Principal
+```
+
+Aponte o `Library ID` do aplicativo para a biblioteca local que deve receber o scan. O `Playout ID` é opcional e serve para rebuild automático depois que a fila entra em repouso.
+
+Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, use `Limpar YML antigos` no aplicativo e remova a configuração antiga no ErsatzTV.
+
+## Descoberta e fila
+
+`Buscar novidades` não baixa tudo ao mesmo tempo. A descoberta atualiza o índice e acrescenta somente itens desconhecidos à fila.
+
+Estados principais:
+
+- `pending`: aguardando a vez ou uma retentativa;
+- `downloading`: download/processamento em andamento;
+- `completed`: arquivo local validado;
+- `failed`: esgotou as tentativas automáticas;
+- `cancelled`: cancelado pelo operador;
+- `orphaned`: não está mais nas fontes atuais, mas foi preservado;
+- `removed`: retirado manualmente da fila e suprimido até uma ação de retry.
+
+Ao reiniciar o aplicativo, um item que estava em `downloading` volta para `pending`. Arquivos temporários ficam em `.youtube-downloader-work` e não são apresentados ao ErsatzTV como itens concluídos.
+
+## Compatibilidade de mídia
+
+O aplicativo tenta obter H.264/AAC diretamente quando a resolução é 1080p ou inferior. Para resoluções maiores, pode baixar codecs como VP9/AV1 e normalizar o arquivo localmente.
+
+Antes de concluir um item:
+
+1. `ffprobe` valida que há vídeo e áudio.
+2. Quando necessário, `ffmpeg` remuxa o container.
+3. Se os codecs não forem H.264/AAC, `ffmpeg` transcodifica.
+4. O arquivo final é validado novamente.
+5. Somente então ele é movido para o destino `.mp4`.
+
+Um arquivo final preexistente que falhar na validação é preservado com sufixo `.invalid-TIMESTAMP` para análise, em vez de ser sobrescrito silenciosamente.
+
+## Espaço em disco
+
+A interface mostra total, usado e livre. Por padrão, novos downloads são bloqueados quando o espaço disponível fica abaixo de 20 GB.
+
+A pausa por pouco espaço não exclui arquivos nem remove itens da fila. Depois de liberar espaço, o worker volta a prosseguir automaticamente.
+
+## Órfãos
+
+Quando um vídeo deixa de pertencer às fontes configuradas:
+
+- o arquivo local é preservado;
+- o item recebe marcação de órfão;
+- não há exclusão automática;
+- a interface permite visualizar e remover órfãos de forma explícita.
+
+A limpeza de órfãos remove o MP4, a thumbnail, o estado daquele item e pastas de artista que ficarem vazias.
+
+## Cookies
+
+Cookies são opcionais. Deixe ambos os campos vazios para executar sem `--cookies`:
+
+- `paths.cookiesPath`: padrão global;
+- `cookiesPath` dentro de uma biblioteca: sobrescreve o padrão global.
+
+O botão `Testar cookies` realiza uma consulta simulada por `yt-dlp`. Um arquivo antigo pode expirar ou ser rotacionado pelo YouTube; nesse caso, substitua-o por uma exportação nova ou deixe o campo vazio quando o conteúdo for público.
+
+Nunca armazene o conteúdo dos cookies diretamente no JSON; informe somente o caminho do arquivo e restrinja suas permissões:
 
 ```bash
-npm run check
+chmod 600 /caminho/cookies.txt
 ```
 
-## Executar sem abrir a interface
+## YouTube Data API
+
+Quando habilitada no modo `api`, a API é usada para descobrir IDs e metadados. Se a API falhar ou receber uma fonte não suportada, o aplicativo tenta `yt-dlp` para aquela descoberta.
+
+A API não substitui o `yt-dlp` para baixar vídeo e áudio.
+
+## Agendador
+
+O intervalo recomendado é 360 minutos. O agendador apenas procura novidades e alimenta a fila; o worker continua processando itens independentemente do agendador.
+
+`runOnStartup` dispara uma descoberta logo após a inicialização. Em uma migração com uma playlist grande, isso pode enfileirar imediatamente todos os vídeos ainda não registrados.
+
+## Ações do ErsatzTV
+
+Quando a fila fica sem item executável e existem arquivos novos:
+
+1. o aplicativo espera `idleActionDelaySeconds`;
+2. solicita scan usando `Library ID`, se configurado;
+3. solicita rebuild usando `Playout ID`, se configurado;
+4. registra o resultado no estado da biblioteca.
+
+Isso evita um scan para cada vídeo individual.
+
+## Remoção de bibliotecas
+
+- `Remover configuração` retira a biblioteca do JSON e preserva todos os arquivos.
+- `Excluir biblioteca e arquivos` exige digitar exatamente o nome e remove a pasta, os itens do índice e os temporários relacionados.
+
+A segunda ação é destrutiva e não possui restauração automática.
+
+## Arquivos de estado
+
+```text
+config/config.json                  configuração ativa
+data/download-state.json            fila, histórico e índice por videoId
+data/app.log                        log operacional
+.youtube-downloader-work/           arquivos temporários dentro da pasta base
+```
+
+Faça backup de `config/` e `data/`. A mídia pode ser copiada separadamente conforme sua política de armazenamento.
+
+## Comandos
 
 ```bash
-npm run sync
+npm start          # interface + worker + agendador
+npm run sync       # uma descoberta pelo terminal
+npm run check      # valida sintaxe JavaScript
+npm test           # testes automatizados
+npm run verify     # sintaxe + testes
 ```
 
-## Configuracao
+## Serviço systemd
 
-A configuracao fica em:
+Há um exemplo em:
 
 ```text
-config/config.json
+deploy/ersatztv-youtube-downloader.service.example
 ```
 
-A interface edita esse arquivo. Mudancas de host ou porta exigem reiniciar o processo Node.js.
+Ajuste `User`, `Group` e `WorkingDirectory`, copie para `/etc/systemd/system/ersatztv-youtube-downloader.service` e execute:
 
-## YouTube API
-
-1. Crie ou use um projeto no Google Cloud.
-2. Ative a YouTube Data API v3.
-3. Gere uma API Key.
-4. Informe a chave na secao `YouTube API` da interface.
-5. Clique em `Testar API`.
-6. Mantenha o modo de leitura em `YouTube API` para que a rotina agendada nao use cookies.
-
-A API e usada para catalogo e metadados. Ela nao entrega video/audio para streaming. O stream continua sendo feito pelo ErsatzTV chamando o `stream-yt.sh`, que usa `yt-dlp`.
-
-## Fontes do YouTube
-
-Cada biblioteca aceita mais de uma fonte. Exemplos:
-
-```text
-https://www.youtube.com/playlist?list=PL...
-https://www.youtube.com/watch?v=ID_DO_VIDEO&list=PL...
-https://www.youtube.com/watch?v=ID_DO_VIDEO
-https://youtu.be/ID_DO_VIDEO
-https://www.youtube.com/shorts/ID_DO_VIDEO
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now ersatztv-youtube-downloader
+sudo journalctl -u ersatztv-youtube-downloader -f
 ```
 
-Links com `list=` sao tratados como playlist. Para usar apenas um video de uma URL com `list=`, remova o parametro `list=`.
+## Segurança operacional
 
-## Thumbnails
-
-Quando a YouTube API esta ativa, o app baixa uma imagem `.jpg` ao lado do `.yml` com o mesmo nome base:
-
-```text
-Artista - Musica.yml
-Artista - Musica.jpg
-```
-
-Por padrao, imagens existentes nao sao substituidas. Use `Atualizar thumbnails existentes` ou o botao `Thumbnails` da biblioteca quando quiser forcar a atualizacao.
-
-## Cookies do YouTube
-
-O campo de cookies recebe o caminho de um arquivo `cookies.txt` salvo no servidor. Nao cole o conteudo bruto dos cookies na interface.
-
-Exemplo:
-
-```text
-/home/usuario/youtube/cookies.txt
-```
-
-Use o botao `Testar cookies` da biblioteca para validar se o YouTube ainda aceita aquele arquivo. O teste executa o `yt-dlp` em modo simulado e nao baixa o video.
-
-## Qualidade do stream
-
-- `Compativel`: prioriza estabilidade. Usa formatos com video e audio juntos quando possivel.
-- `Alta qualidade`: tenta combinar video e audio separados para conseguir resolucoes maiores.
-- `Personalizado`: libera o seletor manual `-f` do `yt-dlp`.
-
-A resolucao maxima e apenas um limite. Se o YouTube nao oferecer aquela resolucao para o video, o `yt-dlp` usara a melhor opcao disponivel abaixo dela.
-
-## Limpeza
-
-A execucao automatica nao remove YML antigos. Para remover arquivos que nao estao mais nas fontes da biblioteca, use o botao `Limpar YML` na propria biblioteca.
-
-Essa acao tambem remove thumbnails sidecar correspondentes e pastas vazias deixadas apos a exclusao dos YML.
-
-## Acoes por biblioteca
-
-- `Executar`: atualiza apenas aquela biblioteca.
-- `Testar cookies`: valida o cookies.txt com uma chamada real ao YouTube via `yt-dlp`.
-- `Verificar`: atualiza o painel de saude sem apagar arquivos.
-- `Thumbnails`: atualiza thumbnails usando a YouTube API.
-- `Limpar YML`: remove arquivos que nao pertencem mais as fontes atuais.
-- `Scan`: solicita scan da biblioteca no ErsatzTV.
-- `Limpar lixo`: solicita limpeza de lixo da biblioteca no ErsatzTV.
-- `Atualizar playout`: solicita rebuild do playout no ErsatzTV.
-- `Remover`: remove a biblioteca da configuracao local.
+- Não exponha a interface diretamente à internet sem autenticação/reverse proxy.
+- Proteja API Keys, cookies e backups da configuração.
+- O processo precisa escrever apenas na pasta da aplicação, na pasta base e nos arquivos de log/estado.
+- Antes de usar exclusões, mantenha um backup ou snapshot do armazenamento.

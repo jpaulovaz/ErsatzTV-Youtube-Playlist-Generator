@@ -1,13 +1,16 @@
 {
-  "name": "ersatztv-youtube-playlist-generator",
-  "version": "1.1.0",
-  "description": "Gerador de arquivos YML para ErsatzTV com YouTube Data API, thumbnails, painel de saude, interface web, agendador e yt-dlp para streaming.",
+  "name": "ersatztv-youtube-downloader",
+  "version": "2.0.0",
+  "description": "Gerenciador de bibliotecas do YouTube para ErsatzTV com descoberta, fila persistente e downloads locais MP4/H.264/AAC.",
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {
     "start": "node src/main.js",
     "sync": "node src/cli-sync.js",
-    "check": "node --check src/main.js && node --check src/server.js && node --check src/syncService.js && node --check src/youtubeApi.js && node --check src/config.js && node --check src/logger.js && node --check src/scheduler.js && node --check src/utils.js && node --check src/cli-sync.js"
+    "discover": "node src/cli-sync.js",
+    "check": "node --check src/main.js && node --check src/server.js && node --check src/downloadManager.js && node --check src/ersatztvService.js && node --check src/syncService.js && node --check src/youtubeApi.js && node --check src/config.js && node --check src/logger.js && node --check src/scheduler.js && node --check src/utils.js && node --check src/cli-sync.js && node --check public/app.js",
+    "test": "node --test",
+    "verify": "npm run check && npm test"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -17,8 +20,9 @@
     "youtube",
     "yt-dlp",
     "playlist",
-    "scheduler",
-    "yml"
+    "downloader",
+    "mp4",
+    "scheduler"
   ],
   "author": "",
   "license": "MIT"

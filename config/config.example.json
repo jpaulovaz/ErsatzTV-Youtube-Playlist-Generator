@@ -1,29 +1,45 @@
 {
+  "configVersion": 2,
   "server": {
     "host": "0.0.0.0",
     "port": 3099
   },
   "paths": {
-    "baseDir": "/home/joaopaulovaz/comerciais/videclipes/youtube/youtube",
+    "baseDir": "/srv/media/youtube",
     "ytDlpPath": "/usr/local/bin/yt-dlp",
-    "cookiesPath": "/home/joaopaulovaz/comerciais/videclipes/youtube/cookies.txt",
-    "streamScriptName": "stream-yt.sh"
+    "ffmpegPath": "/usr/bin/ffmpeg",
+    "ffprobePath": "/usr/bin/ffprobe",
+    "cookiesPath": ""
   },
-  "stream": {
+  "downloads": {
+    "maxHeight": 1080,
+    "container": "mp4",
+    "codecProfile": "mp4_h264_aac",
+    "concurrentDownloads": 1,
     "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "qualityMode": "compatible",
-    "maxHeight": 720,
-    "format": "best[height<=720][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]",
-    "useHlsMpegTs": true,
-    "useFormatSort": false,
-    "formatSort": "res:720,fps",
-    "useMergeOutputFormat": false,
-    "mergeOutputFormat": "mkv",
     "jsRuntimeMode": "deno",
     "jsRuntimePath": "/usr/local/bin/deno",
     "jsRuntimeCustomName": "deno",
     "ejsComponents": "ejs:github",
-    "codecProfile": "auto"
+    "writeThumbnails": true,
+    "updateExistingThumbnails": false,
+    "pauseOnLowDisk": true,
+    "minFreeSpaceGb": 20,
+    "scanOnQueueIdle": true,
+    "rebuildPlayoutOnQueueIdle": true,
+    "idleActionDelaySeconds": 15,
+    "retryDelaysMinutes": [
+      1,
+      5,
+      15
+    ]
+  },
+  "youtubeApi": {
+    "enabled": false,
+    "apiKey": "",
+    "readMode": "api",
+    "cacheTtlHours": 168,
+    "timeoutSeconds": 20
   },
   "ersatztv": {
     "url": "http://localhost:8409",
@@ -32,33 +48,23 @@
   "playlists": [
     {
       "name": "Mix_Principal",
-      "url": "https://www.youtube.com/watch?v=u2ah9tWTkmk&list=PLHg022HMFzFCRq-5ZVR3hiiCkGPJ3Ur1D",
-      "enabled": true,
-      "libraryId": 27,
-      "playoutId": 33,
-      "cookiesPath": "",
+      "url": "https://www.youtube.com/playlist?list=PL_EXEMPLO",
       "urls": [
-        "https://www.youtube.com/watch?v=u2ah9tWTkmk&list=PLHg022HMFzFCRq-5ZVR3hiiCkGPJ3Ur1D"
-      ]
+        "https://www.youtube.com/playlist?list=PL_EXEMPLO"
+      ],
+      "enabled": true,
+      "libraryId": null,
+      "playoutId": null,
+      "cookiesPath": "",
+      "maxHeight": null
     }
   ],
   "scheduler": {
     "enabled": false,
-    "intervalMinutes": 60,
+    "intervalMinutes": 360,
     "runOnStartup": false
   },
   "cleanup": {
     "removeEmptyArtistFolders": true
-  },
-  "youtubeApi": {
-    "enabled": false,
-    "apiKey": "",
-    "readMode": "api",
-    "availabilityMode": "light",
-    "updateExistingThumbnails": false,
-    "thumbnailFormat": "jpg",
-    "plotStrategy": "title",
-    "cacheTtlHours": 168,
-    "timeoutSeconds": 20
   }
 }
