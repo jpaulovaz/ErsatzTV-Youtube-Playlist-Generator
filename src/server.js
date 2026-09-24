@@ -20,7 +20,7 @@ const logger = require('./logger');
 const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const PACKAGE_PATH = path.join(ROOT_DIR, 'package.json');
 const MAX_BODY_BYTES = 1024 * 1024;
-const PUBLIC_LOGIN_ASSETS = new Set(['/login', '/login.html', '/login.js', '/styles.css', '/favicon.ico']);
+const PUBLIC_LOGIN_ASSETS = new Set(['/login', '/login.html', '/login.js', '/styles.css', '/brand-mark.svg', '/favicon.ico']);
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -288,9 +288,9 @@ async function handleDownloadAction(req, res, url) {
 async function getVersion() {
   try {
     const pkg = JSON.parse(await fs.readFile(PACKAGE_PATH, 'utf8'));
-    return pkg.version || '2.1.0';
+    return pkg.version || '2.2.0';
   } catch {
-    return '2.1.0';
+    return '2.2.0';
   }
 }
 
@@ -459,7 +459,7 @@ async function startServer(config) {
   const host = config.server.host || '0.0.0.0';
   const port = Number(config.server.port) || 3099;
   await new Promise((resolve) => server.listen(port, host, resolve));
-  await logger.info(`Interface v2.1 iniciada em http://${host}:${port}`);
+  await logger.info(`Interface v2.2 iniciada em http://${host}:${port}`);
   if (auth.setupRequired) {
     await logger.warn('A interface esta bloqueada ate que config/auth.json seja criado com npm run auth:set.');
   }

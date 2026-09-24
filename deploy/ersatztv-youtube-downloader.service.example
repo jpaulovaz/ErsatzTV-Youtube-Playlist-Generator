@@ -1,5 +1,5 @@
 [Unit]
-Description=ErsatzTV YouTube Downloader 2.1
+Description=ErsatzTV YouTube Downloader 2.2
 After=network-online.target
 Wants=network-online.target
 

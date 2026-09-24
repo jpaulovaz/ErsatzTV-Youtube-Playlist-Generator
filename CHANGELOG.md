@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.2.0
+
+- Interface administrativa redesenhada com linguagem visual mais sóbria e profissional.
+- Navegação lateral por Visão geral, Downloads, Bibliotecas, Configurações e Logs.
+- Novo símbolo vetorial da aplicação, substituindo o ícone textual `YT`.
+- Configurações reorganizadas integralmente em sanfonas fechadas por padrão.
+- Bibliotecas convertidas em sanfonas individuais com resumo, estado e métricas.
+- Fila e histórico preservados em sanfona, com visual mais compacto.
+- Revisão de espaçamentos, tipografia, métricas, tabelas, ações e comportamento responsivo.
+- Tela de login mantida e integrada ao novo símbolo.
+- Nenhuma alteração no formato da configuração, fila, autenticação ou arquivos de mídia.
+
 ## 2.1.0
 
 - Login administrativo local obrigatório, sem dependências externas.

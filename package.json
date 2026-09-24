@@ -1,7 +1,7 @@
 {
   "name": "ersatztv-youtube-downloader",
-  "version": "2.1.0",
-  "description": "Gerenciador protegido de bibliotecas do YouTube para ErsatzTV, com fila persistente, downloads locais MP4/H.264/AAC e login administrativo.",
+  "version": "2.2.0",
+  "description": "Gerenciador protegido de bibliotecas do YouTube para ErsatzTV, com fila persistente, downloads locais MP4/H.264/AAC e interface administrativa profissional.",
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {

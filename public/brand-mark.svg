@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">ErsatzTV YouTube Downloader</title>
+  <desc id="desc">Símbolo de reprodução e biblioteca de mídia</desc>
+  <defs>
+    <linearGradient id="bg" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6ea8ff"/>
+      <stop offset="1" stop-color="#2dd4bf"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="20" y1="18" x2="47" y2="47" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff" stop-opacity=".98"/>
+      <stop offset="1" stop-color="#dcecff" stop-opacity=".82"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="17" fill="#0c1627" stroke="#2d4564" stroke-width="2"/>
+  <path d="M11 32c0-11.598 9.402-21 21-21 5.622 0 10.728 2.21 14.498 5.81A21 21 0 1 1 11 32Z" fill="url(#bg)" opacity=".18"/>
+  <path d="M20 18.85c0-1.52 1.682-2.438 2.96-1.614l20.574 13.15c1.184.757 1.184 2.471 0 3.228L22.96 46.764C21.682 47.582 20 46.67 20 45.15v-26.3Z" fill="url(#shine)"/>
+  <path d="M42.5 20.5h8M45 27h7.5M46.5 33.5H53M45 40h7.5M42.5 46.5h8" stroke="#9bc4ef" stroke-width="2.4" stroke-linecap="round" opacity=".92"/>
+</svg>

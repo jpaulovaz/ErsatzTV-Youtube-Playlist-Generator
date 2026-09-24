@@ -7,10 +7,38 @@ let toastTimer = null;
 let refreshInFlight = false;
 let downloadRequestInFlight = false;
 let downloadPagination = { total: 0, offset: 0, limit: 100, hasMore: false };
+let activeView = 'overview';
 const DOWNLOAD_PAGE_SIZE = 100;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+
+const APP_VIEWS = new Set(['overview', 'downloads', 'libraries', 'settings', 'logs']);
+
+function setActiveView(view, { persist = true, scroll = false } = {}) {
+  const nextView = APP_VIEWS.has(view) ? view : 'overview';
+  activeView = nextView;
+  $$('[data-view-panel]').forEach((panel) => {
+    panel.classList.toggle('active', panel.dataset.viewPanel === nextView);
+  });
+  $$('.nav-button[data-view]').forEach((button) => {
+    const selected = button.dataset.view === nextView;
+    button.classList.toggle('active', selected);
+    if (selected) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  });
+  if (persist) sessionStorage.setItem('ersatztv_active_view', nextView);
+  if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function updateSettingsAccordionToggle() {
+  const button = $('#settingsAccordionToggle');
+  if (!button) return;
+  const accordions = $$('.settings-accordion');
+  button.textContent = accordions.length > 0 && accordions.every((item) => item.open)
+    ? 'Recolher tudo'
+    : 'Expandir tudo';
+}
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -204,6 +232,7 @@ function renderLibraries() {
   const container = $('#playlistList');
   container.innerHTML = '';
   const playlists = config && Array.isArray(config.playlists) ? config.playlists : [];
+  $('#navLibrariesBadge').textContent = String(playlists.length);
 
   if (playlists.length === 0) {
     container.innerHTML = '<div class="empty-state">Nenhuma biblioteca configurada.</div>';
@@ -213,45 +242,69 @@ function renderLibraries() {
 
   playlists.forEach((playlist, index) => {
     const stats = libraryStatsFor(playlist);
-    const row = document.createElement('div');
-    row.className = 'playlist-row';
+    const row = document.createElement('details');
+    row.className = 'playlist-row library-accordion';
     row.dataset.index = String(index);
     const maxHeight = playlist.maxHeight == null ? '' : String(playlist.maxHeight);
     const badges = libraryBadgesHtml(stats);
+    const sourcesCount = (playlist.urls || []).filter(Boolean).length;
+    const qualityText = maxHeight ? `${maxHeight}p` : 'Qualidade global';
+    const enabled = playlist.enabled !== false;
 
     row.innerHTML = `
-      <div class="playlist-header">
-        <div class="playlist-title">
-          <h3>${escapeHtml(playlist.name || `Biblioteca ${index + 1}`)}</h3>
-          <p>${escapeHtml((playlist.urls || []).length)} fonte(s) configurada(s).</p>
-          <div class="library-stats">${badges}</div>
+      <summary>
+        <div class="library-summary-main">
+          <span class="library-index">${String(index + 1).padStart(2, '0')}</span>
+          <div class="playlist-title">
+            <h3>${escapeHtml(playlist.name || `Biblioteca ${index + 1}`)}</h3>
+            <p>${sourcesCount} fonte(s) · ${qualityText}</p>
+            <div class="library-stats">${badges}</div>
+          </div>
         </div>
-        <label class="check-row"><input data-field="enabled" type="checkbox" ${playlist.enabled !== false ? 'checked' : ''}><span>Ativa</span></label>
-      </div>
-      <div class="form-grid three">
-        <label>Nome<input data-field="name" type="text" value="${escapeHtml(playlist.name || '')}"></label>
-        <label>Library ID<input data-field="libraryId" type="number" min="1" value="${playlist.libraryId || ''}"></label>
-        <label>Playout ID<input data-field="playoutId" type="number" min="1" value="${playlist.playoutId || ''}"></label>
-        <label class="wide">Fontes, uma URL por linha<textarea data-field="urls" rows="4">${escapeHtml((playlist.urls || []).join('\n'))}</textarea></label>
-        <label>Resolução desta biblioteca
-          <select data-field="maxHeight">
-            <option value="" ${maxHeight === '' ? 'selected' : ''}>Herdar configuração geral</option>
-            ${[360, 480, 720, 1080, 1440, 2160].map((height) => `<option value="${height}" ${maxHeight === String(height) ? 'selected' : ''}>${height}p</option>`).join('')}
-          </select>
-        </label>
-        <label class="wide">cookies.txt desta biblioteca, opcional<input data-field="cookiesPath" type="text" value="${escapeHtml(playlist.cookiesPath || '')}" placeholder="Vazio usa o campo global; ambos vazios desativam cookies"></label>
-      </div>
-      <div class="library-actions">
-        <button class="small primary" data-library-action="run">Buscar novidades</button>
-        <button class="small" data-library-action="test-cookies">Testar cookies</button>
-        <button class="small" data-library-action="refresh-thumbnails">Thumbnails</button>
-        <button class="small" data-library-action="scan">Scan</button>
-        <button class="small" data-library-action="empty-trash">Limpar lixo</button>
-        <button class="small" data-library-action="rebuild-playout">Atualizar playout</button>
-        <button class="small" data-library-action="orphans-cleanup">Limpar órfãos</button>
-        <span class="spacer"></span>
-        <button class="small danger" data-library-action="remove-config">Remover configuração</button>
-        <button class="small danger" data-library-action="delete-with-files">Excluir biblioteca e arquivos</button>
+        <div class="library-summary-state">
+          <span class="badge library-enabled-state ${enabled ? 'ok' : ''}">${enabled ? 'Ativa' : 'Pausada'}</span>
+          <span class="accordion-chevron" aria-hidden="true"></span>
+        </div>
+      </summary>
+      <div class="library-body">
+        <div class="form-grid three">
+          <label>Nome<input data-field="name" type="text" value="${escapeHtml(playlist.name || '')}"></label>
+          <label>Library ID<input data-field="libraryId" type="number" min="1" value="${playlist.libraryId || ''}"></label>
+          <label>Playout ID<input data-field="playoutId" type="number" min="1" value="${playlist.playoutId || ''}"></label>
+          <label class="wide">Fontes, uma URL por linha<textarea data-field="urls" rows="4">${escapeHtml((playlist.urls || []).join('\n'))}</textarea></label>
+          <label>Resolução desta biblioteca
+            <select data-field="maxHeight">
+              <option value="" ${maxHeight === '' ? 'selected' : ''}>Herdar configuração geral</option>
+              ${[360, 480, 720, 1080, 1440, 2160].map((height) => `<option value="${height}" ${maxHeight === String(height) ? 'selected' : ''}>${height}p</option>`).join('')}
+            </select>
+          </label>
+          <label class="check-row"><input data-field="enabled" type="checkbox" ${enabled ? 'checked' : ''}><span>Biblioteca ativa</span></label>
+          <label class="wide">cookies.txt desta biblioteca, opcional<input data-field="cookiesPath" type="text" value="${escapeHtml(playlist.cookiesPath || '')}" placeholder="Vazio usa a configuração global"></label>
+        </div>
+
+        <div class="library-actions-panel">
+          <div class="library-action-group">
+            <span class="library-action-group-title">Conteúdo</span>
+            <div class="library-actions">
+              <button class="small primary" type="button" data-library-action="run">Buscar novidades</button>
+              <button class="small" type="button" data-library-action="test-cookies">Testar cookies</button>
+              <button class="small" type="button" data-library-action="refresh-thumbnails">Atualizar thumbnails</button>
+            </div>
+          </div>
+          <div class="library-action-group">
+            <span class="library-action-group-title">ErsatzTV</span>
+            <div class="library-actions">
+              <button class="small" type="button" data-library-action="scan">Executar scan</button>
+              <button class="small" type="button" data-library-action="empty-trash">Limpar lixo</button>
+              <button class="small" type="button" data-library-action="rebuild-playout">Atualizar playout</button>
+              <button class="small" type="button" data-library-action="orphans-cleanup">Limpar órfãos</button>
+            </div>
+          </div>
+          <div class="library-actions library-danger-actions">
+            <button class="small danger" type="button" data-library-action="remove-config">Remover configuração</button>
+            <button class="small danger" type="button" data-library-action="delete-with-files">Excluir biblioteca e arquivos</button>
+          </div>
+        </div>
       </div>
     `;
     container.appendChild(row);
@@ -336,7 +389,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '2.1.0'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '2.2.0'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -363,6 +416,7 @@ function renderStatus() {
   $('#queueOverviewLastCompleted').textContent = queue.lastCompletedAt ? formatDate(queue.lastCompletedAt) : '-';
 
   const activeCount = Number(queue.activeItems) || 0;
+  $('#navDownloadsBadge').textContent = String(activeCount);
   $('#queueAccordionBadge').textContent = `${activeCount} ativo${activeCount === 1 ? '' : 's'}`;
   $('#queueAccordionHint').textContent = `${counts.pending || 0} pendente(s), ${counts.failed || 0} falha(s), ${queue.historyItems || 0} item(ns) no histórico.`;
   $('#clearQueueBtn').disabled = (queue.totalItems || 0) - (counts.completed || 0) <= 0;
@@ -373,6 +427,13 @@ function renderStatus() {
   else if (queue.paused || discovery.running || queue.running) pill.classList.add('warn');
   else pill.classList.add('ok');
   pill.textContent = queue.lowDiskBlocked ? 'Disco abaixo da reserva' : (queue.paused ? 'Fila pausada' : (queue.running ? 'Download ativo' : 'Operacional'));
+  $('#sidebarStatusText').textContent = pill.textContent;
+  $('#sidebarNextRun').textContent = scheduler.enabled
+    ? `Próxima busca: ${formatDate(scheduler.nextRunAt)}`
+    : 'Agendador desativado';
+  const sidebarDot = $('.sidebar-status-dot');
+  sidebarDot.classList.toggle('warn', queue.paused || discovery.running || queue.running);
+  sidebarDot.classList.toggle('danger', queue.lowDiskBlocked || counts.failed > 0);
 
   const queueToggle = $('#queueToggleBtn');
   queueToggle.textContent = queue.paused ? 'Retomar fila' : 'Pausar fila';
@@ -641,6 +702,18 @@ async function logout() {
 }
 
 function bindEvents() {
+  $$('.nav-button[data-view]').forEach((button) => {
+    button.addEventListener('click', () => setActiveView(button.dataset.view, { scroll: true }));
+  });
+
+  $('#settingsAccordionToggle').addEventListener('click', () => {
+    const accordions = $$('.settings-accordion');
+    const shouldOpen = !accordions.every((item) => item.open);
+    accordions.forEach((item) => { item.open = shouldOpen; });
+    updateSettingsAccordionToggle();
+  });
+  $$('.settings-accordion').forEach((item) => item.addEventListener('toggle', updateSettingsAccordionToggle));
+
   $('#saveBtn').addEventListener('click', () => saveConfiguration().catch((error) => showToast(error.message, true)));
   $('#saveBtnBottom').addEventListener('click', () => saveConfiguration().catch((error) => showToast(error.message, true)));
   $('#runNowBtn').addEventListener('click', () => runDiscovery().catch((error) => showToast(error.message, true)));
@@ -698,6 +771,23 @@ function bindEvents() {
       maxHeight: null
     });
     renderLibraries();
+    requestAnimationFrame(() => {
+      const created = $$('#playlistList .playlist-row').at(-1);
+      if (created) {
+        created.open = true;
+        created.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  $('#playlistList').addEventListener('change', (event) => {
+    const input = event.target.closest('[data-field="enabled"]');
+    if (!input) return;
+    const row = input.closest('.playlist-row');
+    const badge = row && row.querySelector('.library-enabled-state');
+    if (!badge) return;
+    badge.textContent = input.checked ? 'Ativa' : 'Pausada';
+    badge.classList.toggle('ok', input.checked);
   });
 
   $('#playlistList').addEventListener('click', (event) => {
@@ -737,6 +827,9 @@ async function bootstrap() {
   $('#signedInUser').textContent = authSession.username || 'Usuário';
   $('#userInitial').textContent = String(authSession.username || 'U').slice(0, 1).toUpperCase();
   $('#downloadsAccordion').open = false;
+  $$('.settings-accordion').forEach((item) => { item.open = false; });
+  setActiveView(sessionStorage.getItem('ersatztv_active_view') || 'overview', { persist: false });
+  updateSettingsAccordionToggle();
   bindEvents();
   await loadInitial();
   setInterval(() => refreshAll(false), 4000);

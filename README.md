@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 2.1
+# ErsatzTV YouTube Downloader 2.2
 
 Aplicativo Node.js para descobrir vídeos de playlists e URLs individuais do YouTube, enfileirar downloads persistentes e entregar arquivos locais ao ErsatzTV.
 
-A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.1 acrescenta autenticação local, limpeza segura da fila e uma listagem recolhível/paginada para bibliotecas grandes.
+A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.2 preserva a segurança e a operação da linha 2.x, com uma interface administrativa mais compacta, navegação lateral e configurações organizadas em sanfonas.
 
 ## Arquitetura
 
@@ -39,6 +39,7 @@ Biblioteca local do ErsatzTV
 - Itens removidos de uma fonte são marcados como órfãos e nunca apagados automaticamente.
 - Controles de pausar, retomar, cancelar, priorizar, remover, limpar a fila e tentar novamente.
 - Resumo permanente da fila e listagem recolhível/paginada, fechada por padrão.
+- Interface profissional com navegação por áreas, bibliotecas recolhíveis e configurações em sanfona.
 - Login administrativo local com senha derivada por scrypt, sessão HttpOnly, CSRF e bloqueio de tentativas.
 - Scan da biblioteca e rebuild do playout quando a fila entra em repouso.
 - Limpeza manual de órfãos.
@@ -156,7 +157,7 @@ Use uma biblioteca local do tipo **Music Videos** para o conteúdo musical. Para
 
 Aponte o `Library ID` do aplicativo para a biblioteca local que deve receber o scan. O `Playout ID` é opcional e serve para rebuild automático depois que a fila entra em repouso.
 
-Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, remova manualmente a configuração antiga no ErsatzTV. A versão 2.1 não contém mais ações relacionadas a YML.
+Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, remova manualmente a configuração antiga no ErsatzTV. A versão 2.2 não contém ações relacionadas a YML.
 
 ## Descoberta e fila
 
