@@ -39,6 +39,7 @@ test('migrates useful v1 settings without enabling legacy cookies', () => {
   assert.equal(config.playlists[0].libraryId, 27);
   assert.equal(config.playlists[0].playoutId, 33);
   assert.equal(config.scheduler.intervalMinutes, 60);
+  assert.equal(config.ersatztv.apiKey, '');
 });
 
 test('preserves explicitly configured cookies', () => {
@@ -66,4 +67,21 @@ test('rejects unsafe base paths and duplicate library folders', () => {
     ]
   });
   assert.throws(() => validateConfig(duplicate), /mesma pasta/);
+});
+
+
+test('preserves the ErsatzTV API Key when explicitly configured', () => {
+  const config = normalizeConfig({
+    configVersion: 2,
+    paths: { baseDir: '/srv/media/youtube' },
+    ersatztv: {
+      url: 'http://localhost:8409',
+      apiKey: 'etv-test-key',
+      apiTimeoutSeconds: 12
+    },
+    playlists: []
+  });
+
+  assert.equal(config.ersatztv.apiKey, 'etv-test-key');
+  assert.equal(config.ersatztv.apiTimeoutSeconds, 12);
 });

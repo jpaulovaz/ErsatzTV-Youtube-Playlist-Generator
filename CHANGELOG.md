@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.3.1
+
+- Suporte à autenticação da API do ErsatzTV por `X-Etv-Api-Key`.
+- Novo campo protegido `Configurações → ErsatzTV → API Key do ErsatzTV`.
+- A chave é enviada em scan de biblioteca, limpeza de lixo e rebuild de playout.
+- Respostas HTTP 401/403 da API agora indicam chave ausente ou inválida.
+- Configurações existentes continuam compatíveis; nenhuma chave é inventada ou migrada automaticamente.
+- Novos testes automatizados para envio do header e falhas de autorização.
+
 ## 2.3.0
 
 - Interface móvel dedicada sem alterar a experiência consolidada do desktop.

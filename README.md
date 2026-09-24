@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 2.3
+# ErsatzTV YouTube Downloader 2.3.1
 
 Aplicativo Node.js para descobrir vídeos de playlists e URLs individuais do YouTube, enfileirar downloads persistentes e entregar arquivos locais ao ErsatzTV.
 
-A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.3 preserva a segurança e a operação da linha 2.x, com interface administrativa adaptativa: navegação lateral no desktop e uma experiência móvel dedicada com navegação inferior, controles em painel deslizante e downloads apresentados como cartões.
+A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.3.1 preserva a segurança e a operação da linha 2.x, com interface administrativa adaptativa: navegação lateral no desktop e uma experiência móvel dedicada com navegação inferior, controles em painel deslizante e downloads apresentados como cartões.
 
 ## Arquitetura
 
@@ -43,7 +43,7 @@ Biblioteca local do ErsatzTV
 - Painel móvel de ações rápidas para descoberta, fila, atualização e encerramento da sessão.
 - Lista de downloads convertida automaticamente em cartões no celular, sem tabela horizontal.
 - Login administrativo local com senha derivada por scrypt, sessão HttpOnly, CSRF e bloqueio de tentativas.
-- Scan da biblioteca e rebuild do playout quando a fila entra em repouso.
+- Scan da biblioteca e rebuild do playout quando a fila entra em repouso, com suporte ao header `X-Etv-Api-Key`.
 - Limpeza manual de órfãos.
 - Migração automática da configuração da versão 1.
 
@@ -55,6 +55,7 @@ Biblioteca local do ErsatzTV
 - `ffmpeg` e `ffprobe`.
 - Acesso de gravação à pasta definida em `paths.baseDir`.
 - ErsatzTV acessível pela rede para scan/rebuild automáticos.
+- API Key do ErsatzTV quando a versão instalada exigir autenticação em `/api` (`X-Etv-Api-Key`).
 - Opcional: Deno para os desafios JavaScript atuais do YouTube.
 - Opcional: uma YouTube Data API Key.
 - Opcional: `cookies.txt` em formato Netscape para vídeos que exigem sessão.
@@ -159,7 +160,9 @@ Use uma biblioteca local do tipo **Music Videos** para o conteúdo musical. Para
 
 Aponte o `Library ID` do aplicativo para a biblioteca local que deve receber o scan. O `Playout ID` é opcional e serve para rebuild automático depois que a fila entra em repouso.
 
-Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, remova manualmente a configuração antiga no ErsatzTV. A versão 2.3 não contém ações relacionadas a YML.
+Nas versões atuais do ErsatzTV que protegem as rotas `/api`, preencha também **Configurações → ErsatzTV → API Key do ErsatzTV**. O aplicativo enviará essa chave como `X-Etv-Api-Key` nas ações `scan`, `empty-trash` e `rebuild-playout`. A chave nunca é escrita nos logs.
+
+Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, remova manualmente a configuração antiga no ErsatzTV. A versão 2.3.1 não contém ações relacionadas a YML.
 
 ## Descoberta e fila
 

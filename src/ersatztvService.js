@@ -1,20 +1,31 @@
 const logger = require('./logger');
 
-async function apiRequest(url, method = 'POST', timeoutSeconds = 10) {
+function buildApiHeaders(config) {
+  const apiKey = String(config && config.ersatztv && config.ersatztv.apiKey || '').trim();
+  return apiKey ? { 'X-Etv-Api-Key': apiKey } : {};
+}
+
+async function apiRequest(url, method = 'POST', timeoutSeconds = 10, headers = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), Math.max(1, Number(timeoutSeconds) || 10) * 1000);
 
   try {
     const response = await fetch(url, {
       method,
+      headers,
       body: '',
       signal: controller.signal
     });
 
+    let statusText = response.statusText;
+    if (response.status === 401 || response.status === 403) {
+      statusText = 'API Key do ErsatzTV ausente ou invalida';
+    }
+
     return {
       ok: [200, 202, 204].includes(response.status),
       status: response.status,
-      statusText: response.statusText
+      statusText
     };
   } catch (error) {
     return {
@@ -70,7 +81,7 @@ async function runLibraryAction(config, playlist, action) {
   }
 
   await logger.info(`Disparando ${label} (${playlist.folderName || playlist.name})...`);
-  const result = await apiRequest(url, 'POST', timeoutSeconds);
+  const result = await apiRequest(url, 'POST', timeoutSeconds, buildApiHeaders(config));
 
   if (result.ok) {
     await logger.info(`Acao concluida: ${label} (${playlist.folderName || playlist.name}).`, result);
@@ -104,6 +115,7 @@ async function scanAndRebuild(config, playlist) {
 
 module.exports = {
   apiRequest,
+  buildApiHeaders,
   runLibraryAction,
   scanAndRebuild
 };

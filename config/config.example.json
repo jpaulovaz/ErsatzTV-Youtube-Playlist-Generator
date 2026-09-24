@@ -43,7 +43,8 @@
   },
   "ersatztv": {
     "url": "http://localhost:8409",
-    "apiTimeoutSeconds": 10
+    "apiTimeoutSeconds": 10,
+    "apiKey": ""
   },
   "playlists": [
     {

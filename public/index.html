@@ -440,7 +440,7 @@
               <span class="settings-index">05</span>
               <span class="settings-summary-copy">
                 <strong>ErsatzTV</strong>
-                <small>Endpoint e timeout da API.</small>
+                <small>Endpoint, API Key e timeout da API.</small>
               </span>
               <span class="accordion-chevron" aria-hidden="true"></span>
             </summary>
@@ -448,7 +448,9 @@
               <div class="form-grid two">
                 <label>URL<input name="ersatztv.url" type="text" placeholder="http://localhost:8409"></label>
                 <label>Timeout da API (segundos)<input name="ersatztv.apiTimeoutSeconds" type="number" min="1"></label>
+                <label class="wide">API Key do ErsatzTV<input name="ersatztv.apiKey" type="password" autocomplete="off" placeholder="X-Etv-Api-Key"></label>
               </div>
+              <p class="hint">A chave é enviada no header <code>X-Etv-Api-Key</code> em todas as ações da API do ErsatzTV, incluindo scan, limpeza e rebuild.</p>
             </div>
           </details>
 

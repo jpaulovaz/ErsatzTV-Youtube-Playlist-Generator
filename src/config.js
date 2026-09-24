@@ -55,6 +55,7 @@ const DEFAULT_CONFIG = {
   },
   ersatztv: {
     url: 'http://localhost:8409',
+    apiKey: '',
     apiTimeoutSeconds: 10
   },
   playlists: [
@@ -257,6 +258,7 @@ function normalizeConfig(raw) {
     },
     ersatztv: {
       url: String(rawErsatz.url || DEFAULT_CONFIG.ersatztv.url).trim().replace(/\/+$/, '') || DEFAULT_CONFIG.ersatztv.url,
+      apiKey: String(rawErsatz.apiKey || '').trim(),
       apiTimeoutSeconds: Math.max(1, Number(rawErsatz.apiTimeoutSeconds) || DEFAULT_CONFIG.ersatztv.apiTimeoutSeconds)
     },
     playlists: [],
