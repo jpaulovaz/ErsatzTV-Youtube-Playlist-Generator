@@ -210,6 +210,9 @@ function collectConfigForm() {
         languages: [...row.querySelectorAll('[data-subtitle-language]')]
           .filter((input) => input.checked)
           .map((input) => input.value)
+      },
+      movieMetadata: {
+        enabled: row.querySelector('[data-field="movieMetadataEnabled"]').checked
       }
     };
   }).filter((playlist) => playlist.name && playlist.urls.length > 0);
@@ -295,6 +298,8 @@ function renderLibraries() {
     const subtitleLanguages = Array.isArray(subtitles.languages) ? subtitles.languages : ['pt-BR', 'pt', 'en', 'es'];
     const subtitleDisabled = subtitles.enabled ? '' : 'disabled';
     const subtitleText = subtitles.enabled ? ` · Legendas SRT (${subtitleLanguages.join(', ')})` : '';
+    const movieMetadata = playlist.movieMetadata || { enabled: false };
+    const metadataText = movieMetadata.enabled ? ' · NFO/Poster para Filmes' : '';
 
     row.innerHTML = `
       <summary>
@@ -302,7 +307,7 @@ function renderLibraries() {
           <span class="library-index">${String(index + 1).padStart(2, '0')}</span>
           <div class="playlist-title">
             <h3>${escapeHtml(playlist.name || `Biblioteca ${index + 1}`)}</h3>
-            <p>${sourcesCount} fonte(s) · ${qualityText}${subtitleText}</p>
+            <p>${sourcesCount} fonte(s) · ${qualityText}${subtitleText}${metadataText}</p>
             <div class="library-stats">${badges}</div>
           </div>
         </div>
@@ -352,6 +357,18 @@ function renderLibraries() {
               <p class="field-help">Marque um ou mais idiomas. O aplicativo baixa todos os selecionados que existirem no YouTube; ausência de legenda não transforma o vídeo em falha.</p>
             </div>
           </div>
+
+          <div class="wide library-subtitle-settings">
+            <div class="library-subtitle-heading">
+              <div>
+                <strong>Metadados para ErsatzTV (Filmes)</strong>
+                <small>Cria uma subpasta por vídeo, grava NFO com artista/título e usa <code>poster.jpg</code> como artwork do filme.</small>
+              </div>
+              <span class="badge info">NFO</span>
+            </div>
+            <label class="check-row"><input data-field="movieMetadataEnabled" type="checkbox" ${movieMetadata.enabled ? 'checked' : ''}><span>Preparar novos vídeos para biblioteca do tipo Filmes</span></label>
+            <p class="field-help">Bibliotecas existentes não são reorganizadas automaticamente. Depois de salvar, use <strong>Preparar NFOs existentes</strong>. Essa ação move somente arquivos já concluídos para subpastas individuais; não baixa os MP4 novamente.</p>
+          </div>
         </div>
 
         <div class="library-actions-panel">
@@ -362,6 +379,7 @@ function renderLibraries() {
               <button class="small" type="button" data-library-action="test-cookies">Testar cookies</button>
               <button class="small" type="button" data-library-action="refresh-thumbnails">Atualizar thumbnails</button>
               <button class="small" type="button" data-library-action="refresh-subtitles">Buscar legendas ausentes</button>
+              <button class="small" type="button" data-library-action="prepare-movie-metadata">Preparar NFOs existentes</button>
             </div>
           </div>
           <div class="library-action-group">
@@ -462,7 +480,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '2.4.0'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '2.5.0'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -741,6 +759,13 @@ async function handleLibraryAction(button) {
     return;
   }
 
+  if (action === 'prepare-movie-metadata') {
+    if (!playlist.movieMetadata || !playlist.movieMetadata.enabled) {
+      throw new Error('Ative "Metadados para ErsatzTV (Filmes)" nesta biblioteca e salve antes de preparar os arquivos existentes.');
+    }
+    if (!confirm('Esta ação reorganiza os vídeos concluídos em subpastas individuais, move SRT/JPG relacionados, renomeia a arte para poster.jpg e cria NFO. Os MP4 não serão baixados novamente. Continuar?')) return;
+  }
+
   if (action === 'orphans-cleanup') {
     const preview = await api(`/api/playlists/${encodeURIComponent(name)}/orphans-preview`, { method: 'POST', body: '{}' });
     const info = preview.result;
@@ -766,6 +791,9 @@ async function handleLibraryAction(button) {
     showToast(details.queued > 0
       ? `Legendas: ${details.queued} vídeo(s) enfileirado(s) para verificação. O scan do ErsatzTV ocorrerá uma vez ao final.`
       : `Legendas: nenhum download necessário; ${details.alreadyComplete || 0} vídeo(s) já possuem os idiomas selecionados.`);
+  } else if (action === 'prepare-movie-metadata') {
+    const details = result.result;
+    showToast(`Metadados: ${details.reorganized || 0} vídeo(s) reorganizado(s), ${details.nfoWritten || 0} NFO(s), ${(details.postersMoved || 0) + (details.postersDownloaded || 0)} poster(es), ${details.failed || 0} falha(s).`);
   } else {
     showToast(result.result && result.result.ok === false ? 'A ação foi enviada, mas o ErsatzTV retornou falha.' : 'Ação concluída.');
   }
@@ -917,6 +945,9 @@ function bindEvents() {
         enabled: false,
         includeAuto: true,
         languages: ['pt-BR', 'pt', 'en', 'es']
+      },
+      movieMetadata: {
+        enabled: false
       }
     });
     renderLibraries();

@@ -176,6 +176,7 @@ function normalizeYtDlpVideo(video, sourceUrl, sourceIndex, sourceKind) {
     duration: Number(video && video.duration) || null,
     thumbnailUrl: getThumbnailFromYtDlp(video || {}),
     year: Number(video && video.release_year) || yearFromDate || null,
+    channelTitle: String(video && (video.channel || video.channel_title || video.uploader) || '').trim(),
     webpage_url: id ? canonicalWatchUrl(id) : String(video && video.webpage_url || sourceUrl),
     sourceUrl,
     sourceIndex,

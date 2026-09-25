@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 2.4.0
+# ErsatzTV YouTube Downloader 2.5.0
 
 Aplicativo Node.js para descobrir vídeos de playlists e URLs individuais do YouTube, enfileirar downloads persistentes e entregar arquivos locais ao ErsatzTV.
 
-A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.4.0 preserva a segurança e a operação da linha 2.x e acrescenta legendas SRT opcionais por biblioteca, mantendo a interface administrativa adaptativa no desktop e no celular.
+A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.5.0 preserva a segurança, as legendas SRT e a operação da linha 2.x e acrescenta NFO + `poster.jpg` opcionais por biblioteca para o cenário em que videoclipes são cadastrados no ErsatzTV como Filmes.
 
 ## Arquitetura
 
@@ -17,7 +17,7 @@ Fila persistente, um item por vez
           ↓
 yt-dlp + ffmpeg/ffprobe
           ↓
-MP4 / H.264 / AAC + JPG + SRT opcional
+MP4 / H.264 / AAC + JPG/SRT + NFO/poster opcional
           ↓
 Biblioteca local do ErsatzTV
 ```
@@ -31,11 +31,13 @@ Biblioteca local do ErsatzTV
 - Um download simultâneo, evitando picos de CPU, rede e disco.
 - Arquivos finais padronizados em MP4, vídeo H.264 e áudio AAC.
 - Resolução máxima geral ou específica por biblioteca: 360p, 480p, 720p, 1080p, 1440p e 2160p.
-- Organização `Biblioteca/Artista/Artista - Título.mp4`.
-- Thumbnail JPG ao lado do vídeo.
+- Organização padrão `Biblioteca/Artista/Artista - Título.mp4`.
+- Modo opcional para ErsatzTV/Filmes com `Biblioteca/Artista/Artista - Título/`, NFO e `poster.jpg`.
+- Thumbnail JPG ao lado do vídeo no modo padrão ou `poster.jpg` no modo Filmes.
 - Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
 - Seleção múltipla de idiomas: `pt-BR`, `pt`, `en` e `es`.
 - Ação **Buscar legendas ausentes** para o acervo já baixado, sem baixar novamente os vídeos.
+- Ação **Preparar NFOs existentes** para reorganizar conteúdo concluído em subpastas de filme, criar NFO e reaproveitar a thumbnail como `poster.jpg`, sem baixar novamente o MP4.
 - Deduplicação por ID do YouTube, independentemente de alterações futuras no título.
 - Retentativas automáticas após 1, 5 e 15 minutos.
 - Pausa automática quando o espaço livre fica abaixo da reserva configurada.
@@ -165,7 +167,7 @@ Aponte o `Library ID` do aplicativo para a biblioteca local que deve receber o s
 
 Nas versões atuais do ErsatzTV que protegem as rotas `/api`, preencha também **Configurações → ErsatzTV → API Key do ErsatzTV**. O aplicativo enviará essa chave como `X-Etv-Api-Key` nas ações `scan`, `empty-trash` e `rebuild-playout`. A chave nunca é escrita nos logs.
 
-Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, remova manualmente a configuração antiga no ErsatzTV. A versão 2.4.0 não contém ações relacionadas a YML.
+Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, remova manualmente a configuração antiga no ErsatzTV. A versão 2.5.0 não contém ações relacionadas a YML.
 
 ## Descoberta e fila
 
@@ -218,6 +220,22 @@ Para vídeos novos, a busca de legendas entra no fluxo automaticamente depois qu
 Para o acervo existente, habilite as legendas na biblioteca, selecione os idiomas e clique em **Buscar legendas ausentes**. O aplicativo verifica apenas os vídeos concluídos, não baixa o MP4 novamente e, quando novos SRT forem adicionados, dispara **um único scan da biblioteca no ErsatzTV ao final da operação**.
 
 O `yt-dlp` usa `--write-subs`, `--write-auto-subs` quando habilitado, `--sub-langs` para os idiomas selecionados e `--convert-subs srt`. O aplicativo preserva SRT já existentes e busca somente os idiomas selecionados que ainda estiverem ausentes.
+
+## Metadados NFO e poster para bibliotecas do tipo Filmes
+
+A opção **Metadados para ErsatzTV (Filmes)** é configurada por biblioteca e fica desativada por padrão. Quando ativa para novos vídeos, cada item é armazenado em uma subpasta própria, recebe um NFO e utiliza `poster.jpg` como artwork:
+
+```text
+Biblioteca/Artista/Artista - Música/
+├── Artista - Música.mp4
+├── Artista - Música.nfo
+├── Artista - Música.pt-BR.srt
+└── poster.jpg
+```
+
+O NFO usa o artista como `title`, a música como `outline` e `plot`, `Artista - Música` como `sorttitle`, além de `genre=Music`, `tag=Music Video` e `uniqueid` do YouTube. Sufixos de apresentação comuns do YouTube, como `(Official Video)`, são removidos apenas dos metadados, sem renomear o arquivo original.
+
+Para conteúdo já concluído, a ação **Preparar NFOs existentes** reorganiza MP4/SRT/JPG em subpastas individuais, cria/atualiza o NFO e atualiza o estado interno sem baixar novamente os vídeos. A ação é manual, pede confirmação e executa no máximo um scan do ErsatzTV ao final quando houve alterações.
 
 ## Compatibilidade de mídia
 

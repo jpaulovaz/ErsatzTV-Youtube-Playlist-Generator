@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.5.0
+
+- Metadados NFO opcionais por biblioteca para uso das bibliotecas locais como **Filmes** no ErsatzTV.
+- Recurso desativado por padrão para bibliotecas existentes; ativação explícita pela interface.
+- Novos vídeos de bibliotecas habilitadas usam uma subpasta individual por item, compatível com o layout documentado de Movies do ErsatzTV.
+- NFO grava artista em `title`, música em `outline`/`plot`, `sorttitle` como `Artista - Música`, gênero `Music`, tag `Music Video` e `uniqueid` do YouTube.
+- Sufixos comuns do YouTube como `(Official Video)`, `(Official Music Video)`, `(Official Audio)`, `(Lyric Video)` e `(Visualizer)` são removidos apenas dos metadados da música; o nome físico original é preservado.
+- Artwork passa a usar `poster.jpg` dentro da pasta individual do vídeo. O JPG já existente é reaproveitado/movido; se estiver ausente e houver URL de thumbnail, o aplicativo tenta baixá-lo.
+- Nova ação **Preparar NFOs existentes** reorganiza somente vídeos concluídos, movendo MP4/SRT/JPG relacionados sem baixar novamente os vídeos.
+- A preparação existente executa no máximo um scan da biblioteca no ErsatzTV ao final quando houve alterações.
+- Limpeza de órfãos passa a remover também o NFO associado.
+- Novos vídeos habilitados geram NFO automaticamente ao concluir o download.
+
 ## 2.4.0
 
 - Legendas SRT opcionais e configuráveis por biblioteca.

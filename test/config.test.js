@@ -85,3 +85,23 @@ test('preserves the ErsatzTV API Key when explicitly configured', () => {
   assert.equal(config.ersatztv.apiKey, 'etv-test-key');
   assert.equal(config.ersatztv.apiTimeoutSeconds, 12);
 });
+
+test('movie metadata stays disabled for existing libraries unless explicitly enabled', () => {
+  const existing = normalizeConfig({
+    configVersion: 2,
+    paths: { baseDir: '/srv/media/youtube' },
+    playlists: [{ name: 'Clipes', urls: ['https://youtu.be/aaaaaaaaaaa'] }]
+  });
+  assert.deepEqual(existing.playlists[0].movieMetadata, { enabled: false });
+
+  const enabled = normalizeConfig({
+    configVersion: 2,
+    paths: { baseDir: '/srv/media/youtube' },
+    playlists: [{
+      name: 'Clipes',
+      urls: ['https://youtu.be/aaaaaaaaaaa'],
+      movieMetadata: { enabled: true }
+    }]
+  });
+  assert.deepEqual(enabled.playlists[0].movieMetadata, { enabled: true });
+});

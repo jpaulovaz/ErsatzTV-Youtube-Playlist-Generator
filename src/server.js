@@ -222,6 +222,8 @@ async function handlePlaylistAction(req, res, url) {
     result = await downloadManager.refreshThumbnails(playlist.folderName);
   } else if (action === 'refresh-subtitles') {
     result = await downloadManager.queueMissingSubtitles(playlist.folderName);
+  } else if (action === 'prepare-movie-metadata') {
+    result = await downloadManager.prepareMovieMetadata(playlist.folderName);
   } else if (action === 'orphans-preview') {
     result = downloadManager.previewOrphans(playlist.folderName);
   } else if (action === 'orphans-cleanup') {
@@ -290,9 +292,9 @@ async function handleDownloadAction(req, res, url) {
 async function getVersion() {
   try {
     const pkg = JSON.parse(await fs.readFile(PACKAGE_PATH, 'utf8'));
-    return pkg.version || '2.4.0';
+    return pkg.version || '2.5.0';
   } catch {
-    return '2.4.0';
+    return '2.5.0';
   }
 }
 
@@ -461,7 +463,7 @@ async function startServer(config) {
   const host = config.server.host || '0.0.0.0';
   const port = Number(config.server.port) || 3099;
   await new Promise((resolve) => server.listen(port, host, resolve));
-  await logger.info(`Interface v2.4 iniciada em http://${host}:${port}`);
+  await logger.info(`Interface v2.5 iniciada em http://${host}:${port}`);
   if (auth.setupRequired) {
     await logger.warn('A interface esta bloqueada ate que config/auth.json seja criado com npm run auth:set.');
   }

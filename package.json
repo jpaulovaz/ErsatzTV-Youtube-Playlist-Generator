@@ -1,7 +1,7 @@
 {
   "name": "ersatztv-youtube-downloader",
-  "version": "2.4.0",
-  "description": "Gerenciador protegido de bibliotecas do YouTube para ErsatzTV, com fila persistente, downloads locais MP4/H.264/AAC, legendas SRT por biblioteca, API Key do ErsatzTV e interface administrativa responsiva.",
+  "version": "2.5.0",
+  "description": "Gerenciador protegido de bibliotecas do YouTube para ErsatzTV, com fila persistente, MP4/H.264/AAC, legendas SRT, NFO/poster por biblioteca, API Key do ErsatzTV e interface responsiva.",
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {
@@ -9,7 +9,7 @@
     "sync": "node src/cli-sync.js",
     "discover": "node src/cli-sync.js",
     "auth:set": "node src/cli-auth.js",
-    "check": "node --check src/main.js && node --check src/server.js && node --check src/auth.js && node --check src/cli-auth.js && node --check src/downloadManager.js && node --check src/ersatztvService.js && node --check src/syncService.js && node --check src/subtitleService.js && node --check src/youtubeApi.js && node --check src/config.js && node --check src/logger.js && node --check src/scheduler.js && node --check src/utils.js && node --check src/cli-sync.js && node --check public/app.js && node --check public/login.js",
+    "check": "node --check src/main.js && node --check src/server.js && node --check src/auth.js && node --check src/cli-auth.js && node --check src/downloadManager.js && node --check src/ersatztvService.js && node --check src/syncService.js && node --check src/subtitleService.js && node --check src/movieMetadataService.js && node --check src/youtubeApi.js && node --check src/config.js && node --check src/logger.js && node --check src/scheduler.js && node --check src/utils.js && node --check src/cli-sync.js && node --check public/app.js && node --check public/login.js",
     "test": "node --test",
     "verify": "npm run check && npm test"
   },

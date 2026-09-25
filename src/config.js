@@ -75,6 +75,9 @@ const DEFAULT_CONFIG = {
         enabled: false,
         includeAuto: true,
         languages: [...DEFAULT_SUBTITLE_LANGUAGES]
+      },
+      movieMetadata: {
+        enabled: false
       }
     }
   ],
@@ -239,6 +242,15 @@ function normalizePlaylistSubtitles(playlist) {
   };
 }
 
+function normalizePlaylistMovieMetadata(playlist) {
+  const raw = playlist && playlist.movieMetadata && typeof playlist.movieMetadata === 'object'
+    ? playlist.movieMetadata
+    : {};
+  return {
+    enabled: Boolean(raw.enabled)
+  };
+}
+
 function normalizeConfig(raw) {
   const rawConfig = raw && typeof raw === 'object' ? raw : {};
   const rawServer = rawConfig.server && typeof rawConfig.server === 'object' ? rawConfig.server : {};
@@ -304,7 +316,8 @@ function normalizeConfig(raw) {
         playoutId: toOptionalPositiveInteger(playlist && playlist.playoutId) || legacyPlayoutId,
         cookiesPath: String(playlist && playlist.cookiesPath || '').trim(),
         maxHeight: normalizeOptionalMaxHeight(playlist && playlist.maxHeight),
-        subtitles: normalizePlaylistSubtitles(playlist)
+        subtitles: normalizePlaylistSubtitles(playlist),
+        movieMetadata: normalizePlaylistMovieMetadata(playlist)
       };
     })
     .filter((playlist) => playlist.name && playlist.urls.length > 0);

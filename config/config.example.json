@@ -67,6 +67,9 @@
           "en",
           "es"
         ]
+      },
+      "movieMetadata": {
+        "enabled": false
       }
     }
   ],
