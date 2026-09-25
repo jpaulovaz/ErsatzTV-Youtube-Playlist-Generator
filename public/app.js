@@ -203,7 +203,14 @@ function collectConfigForm() {
       libraryId: numberOrNull(row.querySelector('[data-field="libraryId"]').value),
       playoutId: numberOrNull(row.querySelector('[data-field="playoutId"]').value),
       cookiesPath: row.querySelector('[data-field="cookiesPath"]').value.trim(),
-      maxHeight: numberOrNull(row.querySelector('[data-field="maxHeight"]').value)
+      maxHeight: numberOrNull(row.querySelector('[data-field="maxHeight"]').value),
+      subtitles: {
+        enabled: row.querySelector('[data-field="subtitlesEnabled"]').checked,
+        includeAuto: row.querySelector('[data-field="subtitlesIncludeAuto"]').checked,
+        languages: [...row.querySelectorAll('[data-subtitle-language]')]
+          .filter((input) => input.checked)
+          .map((input) => input.value)
+      }
     };
   }).filter((playlist) => playlist.name && playlist.urls.length > 0);
 
@@ -217,14 +224,24 @@ function libraryStatsFor(playlist) {
 
 function libraryBadgesHtml(stats) {
   if (!stats) return '<span class="badge">Sem estatísticas</span>';
-  return [
+  const badges = [
     `<span class="badge info">${stats.total || 0} itens</span>`,
     `<span class="badge warn">${stats.pending || 0} pendentes</span>`,
     `<span class="badge ok">${stats.completed || 0} concluídos</span>`,
     `<span class="badge danger">${stats.failed || 0} falhas</span>`,
     `<span class="badge">${stats.orphaned || 0} órfãos</span>`,
     `<span class="badge">${formatBytes(stats.totalBytes || 0)}</span>`
-  ].join('');
+  ];
+  if (stats.subtitlesEnabled) {
+    const pending = Number(stats.subtitlePending) || 0;
+    const failed = Number(stats.subtitleFailed) || 0;
+    const klass = failed > 0 ? 'danger' : (pending > 0 ? 'warn' : 'ok');
+    const text = failed > 0
+      ? `Legendas: ${failed} falha(s)`
+      : (pending > 0 ? `Legendas: ${pending} pendente(s)` : 'Legendas ativas');
+    badges.push(`<span class="badge ${klass}">${text}</span>`);
+  }
+  return badges.join('');
 }
 
 function updateLibraryStats() {
@@ -274,6 +291,10 @@ function renderLibraries() {
     const sourcesCount = (playlist.urls || []).filter(Boolean).length;
     const qualityText = maxHeight ? `${maxHeight}p` : 'Qualidade global';
     const enabled = playlist.enabled !== false;
+    const subtitles = playlist.subtitles || { enabled: false, includeAuto: true, languages: ['pt-BR', 'pt', 'en', 'es'] };
+    const subtitleLanguages = Array.isArray(subtitles.languages) ? subtitles.languages : ['pt-BR', 'pt', 'en', 'es'];
+    const subtitleDisabled = subtitles.enabled ? '' : 'disabled';
+    const subtitleText = subtitles.enabled ? ` · Legendas SRT (${subtitleLanguages.join(', ')})` : '';
 
     row.innerHTML = `
       <summary>
@@ -281,7 +302,7 @@ function renderLibraries() {
           <span class="library-index">${String(index + 1).padStart(2, '0')}</span>
           <div class="playlist-title">
             <h3>${escapeHtml(playlist.name || `Biblioteca ${index + 1}`)}</h3>
-            <p>${sourcesCount} fonte(s) · ${qualityText}</p>
+            <p>${sourcesCount} fonte(s) · ${qualityText}${subtitleText}</p>
             <div class="library-stats">${badges}</div>
           </div>
         </div>
@@ -304,6 +325,33 @@ function renderLibraries() {
           </label>
           <label class="check-row"><input data-field="enabled" type="checkbox" ${enabled ? 'checked' : ''}><span>Biblioteca ativa</span></label>
           <label class="wide">cookies.txt desta biblioteca, opcional<input data-field="cookiesPath" type="text" value="${escapeHtml(playlist.cookiesPath || '')}" placeholder="Vazio usa a configuração global"></label>
+          <div class="wide library-subtitle-settings">
+            <div class="library-subtitle-heading">
+              <div>
+                <strong>Legendas</strong>
+                <small>SRT externo, com o mesmo nome-base do vídeo. Novos vídeos são processados automaticamente.</small>
+              </div>
+              <span class="badge info">SRT</span>
+            </div>
+            <label class="check-row"><input data-field="subtitlesEnabled" type="checkbox" ${subtitles.enabled ? 'checked' : ''}><span>Baixar legendas nesta biblioteca</span></label>
+            <div class="subtitle-options ${subtitles.enabled ? '' : 'is-disabled'}" data-subtitle-options>
+              <label class="check-row"><input data-field="subtitlesIncludeAuto" type="checkbox" ${subtitles.includeAuto !== false ? 'checked' : ''} ${subtitleDisabled}><span>Incluir legendas automáticas quando disponíveis</span></label>
+              <div class="subtitle-language-grid" role="group" aria-label="Idiomas de legenda">
+                ${[
+                  ['pt-BR', 'Português (Brasil)'],
+                  ['pt', 'Português'],
+                  ['en', 'English'],
+                  ['es', 'Español']
+                ].map(([code, label]) => `
+                  <label class="subtitle-language-option">
+                    <input data-subtitle-language type="checkbox" value="${code}" ${subtitleLanguages.includes(code) ? 'checked' : ''} ${subtitleDisabled}>
+                    <span>${label}<small>${code}</small></span>
+                  </label>
+                `).join('')}
+              </div>
+              <p class="field-help">Marque um ou mais idiomas. O aplicativo baixa todos os selecionados que existirem no YouTube; ausência de legenda não transforma o vídeo em falha.</p>
+            </div>
+          </div>
         </div>
 
         <div class="library-actions-panel">
@@ -313,6 +361,7 @@ function renderLibraries() {
               <button class="small primary" type="button" data-library-action="run">Buscar novidades</button>
               <button class="small" type="button" data-library-action="test-cookies">Testar cookies</button>
               <button class="small" type="button" data-library-action="refresh-thumbnails">Atualizar thumbnails</button>
+              <button class="small" type="button" data-library-action="refresh-subtitles">Buscar legendas ausentes</button>
             </div>
           </div>
           <div class="library-action-group">
@@ -413,7 +462,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '2.3.0'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '2.4.0'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -712,6 +761,11 @@ async function handleLibraryAction(button) {
     showToast(`${details.message}${details.ytDlp && details.ytDlp.stderr ? `\n${details.ytDlp.stderr.slice(-800)}` : ''}`, !details.ok && details.status !== 'not-configured');
   } else if (action === 'refresh-thumbnails') {
     showToast(`Thumbnails: ${result.result.created || 0} criadas, ${result.result.updated || 0} atualizadas, ${result.result.failed || 0} falhas.`);
+  } else if (action === 'refresh-subtitles') {
+    const details = result.result;
+    showToast(details.queued > 0
+      ? `Legendas: ${details.queued} vídeo(s) enfileirado(s) para verificação. O scan do ErsatzTV ocorrerá uma vez ao final.`
+      : `Legendas: nenhum download necessário; ${details.alreadyComplete || 0} vídeo(s) já possuem os idiomas selecionados.`);
   } else {
     showToast(result.result && result.result.ok === false ? 'A ação foi enviada, mas o ErsatzTV retornou falha.' : 'Ação concluída.');
   }
@@ -858,7 +912,12 @@ function bindEvents() {
       libraryId: null,
       playoutId: null,
       cookiesPath: '',
-      maxHeight: null
+      maxHeight: null,
+      subtitles: {
+        enabled: false,
+        includeAuto: true,
+        languages: ['pt-BR', 'pt', 'en', 'es']
+      }
     });
     renderLibraries();
     requestAnimationFrame(() => {
@@ -871,13 +930,25 @@ function bindEvents() {
   });
 
   $('#playlistList').addEventListener('change', (event) => {
-    const input = event.target.closest('[data-field="enabled"]');
+    const input = event.target.closest('[data-field]');
     if (!input) return;
     const row = input.closest('.playlist-row');
-    const badge = row && row.querySelector('.library-enabled-state');
-    if (!badge) return;
-    badge.textContent = input.checked ? 'Ativa' : 'Pausada';
-    badge.classList.toggle('ok', input.checked);
+    if (!row) return;
+
+    if (input.dataset.field === 'enabled') {
+      const badge = row.querySelector('.library-enabled-state');
+      if (!badge) return;
+      badge.textContent = input.checked ? 'Ativa' : 'Pausada';
+      badge.classList.toggle('ok', input.checked);
+      return;
+    }
+
+    if (input.dataset.field === 'subtitlesEnabled') {
+      const options = row.querySelector('[data-subtitle-options]');
+      if (!options) return;
+      options.classList.toggle('is-disabled', !input.checked);
+      options.querySelectorAll('input').forEach((control) => { control.disabled = !input.checked; });
+    }
   });
 
   $('#playlistList').addEventListener('click', (event) => {

@@ -1,6 +1,7 @@
 const fs = require('fs/promises');
 const path = require('path');
 const { sanitizeName, isDangerousBaseDir } = require('./utils');
+const { DEFAULT_SUBTITLE_LANGUAGES, normalizeSubtitleLanguages } = require('./subtitleService');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const CONFIG_DIR = path.join(ROOT_DIR, 'config');
@@ -69,7 +70,12 @@ const DEFAULT_CONFIG = {
       libraryId: 27,
       playoutId: 33,
       cookiesPath: '',
-      maxHeight: null
+      maxHeight: null,
+      subtitles: {
+        enabled: false,
+        includeAuto: true,
+        languages: [...DEFAULT_SUBTITLE_LANGUAGES]
+      }
     }
   ],
   scheduler: {
@@ -220,6 +226,19 @@ function buildDownloadsConfig(rawConfig) {
   };
 }
 
+function normalizePlaylistSubtitles(playlist) {
+  const raw = playlist && playlist.subtitles && typeof playlist.subtitles === 'object'
+    ? playlist.subtitles
+    : {};
+  const languagesConfigured = hasOwn(raw, 'languages');
+  const languages = normalizeSubtitleLanguages(raw.languages);
+  return {
+    enabled: Boolean(raw.enabled),
+    includeAuto: raw.includeAuto !== false,
+    languages: languagesConfigured ? languages : [...DEFAULT_SUBTITLE_LANGUAGES]
+  };
+}
+
 function normalizeConfig(raw) {
   const rawConfig = raw && typeof raw === 'object' ? raw : {};
   const rawServer = rawConfig.server && typeof rawConfig.server === 'object' ? rawConfig.server : {};
@@ -284,7 +303,8 @@ function normalizeConfig(raw) {
         libraryId: toOptionalPositiveInteger(playlist && playlist.libraryId) || legacyLibraryId,
         playoutId: toOptionalPositiveInteger(playlist && playlist.playoutId) || legacyPlayoutId,
         cookiesPath: String(playlist && playlist.cookiesPath || '').trim(),
-        maxHeight: normalizeOptionalMaxHeight(playlist && playlist.maxHeight)
+        maxHeight: normalizeOptionalMaxHeight(playlist && playlist.maxHeight),
+        subtitles: normalizePlaylistSubtitles(playlist)
       };
     })
     .filter((playlist) => playlist.name && playlist.urls.length > 0);
@@ -322,6 +342,9 @@ function validateConfig(config) {
       throw new Error(`As bibliotecas "${seenFolders.get(folder)}" e "${playlist.name}" geram a mesma pasta. Use nomes diferentes.`);
     }
     seenFolders.set(folder, playlist.name);
+    if (playlist.subtitles && playlist.subtitles.enabled && (!Array.isArray(playlist.subtitles.languages) || playlist.subtitles.languages.length === 0)) {
+      throw new Error(`A biblioteca "${playlist.name}" esta com legendas ativas, mas nenhum idioma foi selecionado.`);
+    }
   }
 
   return config;

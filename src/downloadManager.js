@@ -3,7 +3,14 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { ROOT_DIR, normalizeMaxHeight } = require('./config');
 const logger = require('./logger');
-const { scanAndRebuild } = require('./ersatztvService');
+const { scanAndRebuild, runLibraryAction } = require('./ersatztvService');
+const {
+  getSubtitleSettings,
+  findExistingSubtitleLanguages,
+  buildSubtitleDownloadArgs,
+  finalizeStagedSubtitles,
+  listSubtitleSidecars
+} = require('./subtitleService');
 const {
   sanitizeName,
   sanitizeFileComponent,
@@ -171,6 +178,33 @@ function parseFileLine(line) {
   return String(line).slice(index + marker.length).trim();
 }
 
+function normalizeSubtitleState(raw) {
+  const state = raw && typeof raw === 'object' ? raw : {};
+  return {
+    status: String(state.status || 'not-checked'),
+    requestedLanguages: Array.isArray(state.requestedLanguages)
+      ? state.requestedLanguages.map((value) => String(value || '').trim()).filter(Boolean)
+      : [],
+    foundLanguages: Array.isArray(state.foundLanguages)
+      ? state.foundLanguages.map((value) => String(value || '').trim()).filter(Boolean)
+      : [],
+    missingLanguages: Array.isArray(state.missingLanguages)
+      ? state.missingLanguages.map((value) => String(value || '').trim()).filter(Boolean)
+      : [],
+    includeAuto: state.includeAuto !== false,
+    attempts: Math.max(0, Number(state.attempts) || 0),
+    nextAttemptAt: state.nextAttemptAt || null,
+    lastAttemptAt: state.lastAttemptAt || null,
+    lastCompletedAt: state.lastCompletedAt || null,
+    lastError: state.lastError || null,
+    updatedAt: state.updatedAt || null
+  };
+}
+
+function isSubtitleUnavailableOutput(output) {
+  return /there are no subtitles|no subtitles|requested subtitles?.*(?:not available|not found)|did not get any subtitles|no automatic captions/i.test(String(output || ''));
+}
+
 function createDefaultState() {
   return {
     version: STATE_VERSION,
@@ -212,6 +246,7 @@ function normalizeState(raw) {
     item.sourceActive = item.sourceActive !== false;
     item.orphaned = Boolean(item.orphaned || item.sourceActive === false);
     item.suppressed = Boolean(item.suppressed);
+    item.subtitles = normalizeSubtitleState(item.subtitles);
     normalized.items[id] = item;
   }
 
@@ -494,6 +529,19 @@ class DownloadManager {
         return;
       }
 
+      const nextSubtitleItem = this.findNextSubtitleRunnableItem();
+      if (nextSubtitleItem) {
+        this.idleSinceMs = null;
+        this.currentPromise = this.processSubtitleItem(nextSubtitleItem)
+          .catch((error) => logger.error(`Erro inesperado ao processar legendas de ${nextSubtitleItem.id}: ${error.message}`))
+          .finally(() => {
+            this.currentPromise = null;
+            this.kick();
+          });
+        return;
+      }
+
+      await this.maybeFinalizeSubtitleBackfills();
       await this.maybeRunIdleActions();
     } finally {
       this.ticking = false;
@@ -526,6 +574,340 @@ class DownloadManager {
     return candidates[0] || null;
   }
 
+  findNextSubtitleRunnableItem() {
+    const now = Date.now();
+    const configured = new Map(
+      (this.config.playlists || []).map((playlist) => [sanitizeName(playlist.name), playlist])
+    );
+
+    const candidates = Object.values(this.state.items).filter((item) => {
+      if (item.status !== 'completed' || item.orphaned || item.sourceActive === false) return false;
+      const playlist = configured.get(item.libraryFolder);
+      if (!playlist || !getSubtitleSettings(playlist).enabled) return false;
+      const subtitleState = normalizeSubtitleState(item.subtitles);
+      item.subtitles = subtitleState;
+      if (subtitleState.status !== 'pending') return false;
+      if (subtitleState.nextAttemptAt && new Date(subtitleState.nextAttemptAt).getTime() > now) return false;
+      return true;
+    });
+
+    candidates.sort((a, b) => {
+      const left = new Date(a.subtitles && a.subtitles.updatedAt || a.updatedAt || 0).getTime();
+      const right = new Date(b.subtitles && b.subtitles.updatedAt || b.updatedAt || 0).getTime();
+      return left - right;
+    });
+    return candidates[0] || null;
+  }
+
+  async scheduleSubtitlesForItem(item, playlist, options = {}) {
+    const settings = getSubtitleSettings(playlist);
+    if (!settings.enabled || !item.targetPath || item.status !== 'completed') return false;
+
+    const found = await findExistingSubtitleLanguages(item.targetPath, settings.languages);
+    const missing = settings.languages.filter((language) => !found.includes(language));
+    item.subtitles = normalizeSubtitleState(item.subtitles);
+    item.subtitles.requestedLanguages = [...settings.languages];
+    item.subtitles.foundLanguages = found;
+    item.subtitles.missingLanguages = missing;
+    item.subtitles.includeAuto = settings.includeAuto;
+    item.subtitles.updatedAt = nowIso();
+
+    if (missing.length === 0) {
+      item.subtitles.status = 'complete';
+      item.subtitles.nextAttemptAt = null;
+      item.subtitles.lastError = null;
+      return false;
+    }
+
+    item.subtitles.status = 'pending';
+    item.subtitles.nextAttemptAt = null;
+    item.subtitles.lastError = null;
+    if (options.resetAttempts !== false) item.subtitles.attempts = 0;
+    return true;
+  }
+
+  async processSubtitleItem(item) {
+    const playlist = findPlaylistByFolder(this.config, item.libraryFolder);
+    if (!playlist) return;
+    const settings = getSubtitleSettings(playlist);
+    if (!settings.enabled) {
+      item.subtitles = normalizeSubtitleState(item.subtitles);
+      item.subtitles.status = 'disabled';
+      item.subtitles.nextAttemptAt = null;
+      item.subtitles.updatedAt = nowIso();
+      await this.saveNow();
+      return;
+    }
+
+    if (!item.targetPath || !(await pathExists(item.targetPath))) {
+      item.subtitles = normalizeSubtitleState(item.subtitles);
+      item.subtitles.status = 'failed';
+      item.subtitles.nextAttemptAt = null;
+      item.subtitles.lastError = 'Arquivo de video local nao encontrado para baixar as legendas.';
+      item.subtitles.updatedAt = nowIso();
+      await this.saveNow();
+      return;
+    }
+
+    const foundBefore = await findExistingSubtitleLanguages(item.targetPath, settings.languages);
+    const missing = settings.languages.filter((language) => !foundBefore.includes(language));
+    item.subtitles = normalizeSubtitleState(item.subtitles);
+    item.subtitles.requestedLanguages = [...settings.languages];
+    item.subtitles.foundLanguages = foundBefore;
+    item.subtitles.missingLanguages = missing;
+    item.subtitles.includeAuto = settings.includeAuto;
+
+    if (missing.length === 0) {
+      item.subtitles.status = 'complete';
+      item.subtitles.nextAttemptAt = null;
+      item.subtitles.lastError = null;
+      item.subtitles.updatedAt = nowIso();
+      await this.saveNow();
+      return;
+    }
+
+    const workDir = path.join(this.getWorkDir(item), 'subtitles');
+    await fs.rm(workDir, { recursive: true, force: true });
+    await fs.mkdir(workDir, { recursive: true });
+
+    item.subtitles.status = 'checking';
+    item.subtitles.attempts = Math.max(0, Number(item.subtitles.attempts) || 0) + 1;
+    item.subtitles.lastAttemptAt = nowIso();
+    item.subtitles.updatedAt = item.subtitles.lastAttemptAt;
+    item.subtitles.nextAttemptAt = null;
+    item.subtitles.lastError = null;
+    await this.saveNow();
+
+    const context = {
+      itemId: item.id,
+      child: null,
+      cancelRequested: false,
+      shutdownRequested: false,
+      startedAt: item.subtitles.lastAttemptAt,
+      phase: 'subtitles'
+    };
+    this.current = context;
+
+    const args = buildSubtitleDownloadArgs(this.config, playlist, item, workDir, missing);
+    await logger.info(`Buscando legendas SRT: ${item.title} (${item.videoId})`, {
+      playlist: item.libraryFolder,
+      languages: missing,
+      includeAuto: settings.includeAuto,
+      attempt: item.subtitles.attempts
+    });
+
+    let stderrTail = '';
+    let stdoutTail = '';
+    try {
+      const child = spawn(this.config.paths.ytDlpPath, args, {
+        cwd: workDir,
+        env: process.env,
+        shell: false,
+        detached: process.platform !== 'win32'
+      });
+      context.child = child;
+      attachLineReader(child.stdout, (line) => { stdoutTail = appendTail(stdoutTail, line); });
+      attachLineReader(child.stderr, (line) => { stderrTail = appendTail(stderrTail, line); });
+
+      const closeResult = await new Promise((resolve) => {
+        let resolved = false;
+        child.on('error', (error) => {
+          if (resolved) return;
+          resolved = true;
+          resolve({ code: null, signal: null, error });
+        });
+        child.on('close', (code, signal) => {
+          if (resolved) return;
+          resolved = true;
+          resolve({ code, signal, error: null });
+        });
+      });
+      context.child = null;
+
+      if (context.shutdownRequested) {
+        item.subtitles.status = 'pending';
+        item.subtitles.nextAttemptAt = null;
+        item.subtitles.lastError = 'Busca de legendas interrompida durante o encerramento; sera retomada depois.';
+        item.subtitles.updatedAt = nowIso();
+        await this.saveNow();
+        return;
+      }
+
+      const output = [stderrTail, stdoutTail].filter(Boolean).join('\n').trim();
+      if (closeResult.error || closeResult.code !== 0) {
+        if (isSubtitleUnavailableOutput(output)) {
+          await this.finishSubtitleAttempt(item, playlist, workDir, settings, { unavailable: true });
+          return;
+        }
+        const detail = closeResult.error
+          ? closeResult.error.message
+          : `yt-dlp terminou com codigo ${closeResult.code}${closeResult.signal ? ` (${closeResult.signal})` : ''}`;
+        await this.handleSubtitleFailure(item, output ? `${detail}\n${output}` : detail);
+        return;
+      }
+
+      await this.finishSubtitleAttempt(item, playlist, workDir, settings, { unavailable: false });
+    } catch (error) {
+      await this.handleSubtitleFailure(item, error.message);
+    } finally {
+      context.child = null;
+      if (this.current === context) this.current = null;
+      await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  async finishSubtitleAttempt(item, playlist, workDir, settings, options = {}) {
+    const finalized = await finalizeStagedSubtitles(workDir, item.targetPath);
+    const found = await findExistingSubtitleLanguages(item.targetPath, settings.languages);
+    const missing = settings.languages.filter((language) => !found.includes(language));
+    const changed = finalized.moved.length;
+
+    item.subtitles = normalizeSubtitleState(item.subtitles);
+    item.subtitles.status = found.length > 0 ? 'complete' : 'unavailable';
+    item.subtitles.requestedLanguages = [...settings.languages];
+    item.subtitles.foundLanguages = found;
+    item.subtitles.missingLanguages = missing;
+    item.subtitles.includeAuto = settings.includeAuto;
+    item.subtitles.nextAttemptAt = null;
+    item.subtitles.lastCompletedAt = nowIso();
+    item.subtitles.updatedAt = item.subtitles.lastCompletedAt;
+    item.subtitles.lastError = null;
+
+    if (changed > 0) {
+      const libraryState = this.ensureLibraryState(item.libraryFolder);
+      libraryState.dirty = true;
+      if (libraryState.subtitleBackfill && libraryState.subtitleBackfill.active) {
+        libraryState.subtitleBackfill.changed = Math.max(0, Number(libraryState.subtitleBackfill.changed) || 0) + changed;
+      }
+      await logger.info(`Legendas adicionadas para ${item.title} (${item.videoId}): ${finalized.moved.map((entry) => entry.language).join(', ')}`, {
+        playlist: item.libraryFolder,
+        files: finalized.moved.map((entry) => entry.targetPath)
+      });
+    } else if (options.unavailable || found.length === 0) {
+      await logger.info(`Nenhuma legenda selecionada foi encontrada para ${item.title} (${item.videoId}).`, {
+        playlist: item.libraryFolder,
+        requestedLanguages: settings.languages
+      });
+    }
+
+    await this.saveNow();
+  }
+
+  async handleSubtitleFailure(item, message) {
+    item.subtitles = normalizeSubtitleState(item.subtitles);
+    const delays = this.config.downloads.retryDelaysMinutes || [1, 5, 15];
+    const maxAttempts = delays.length + 1;
+    const shortMessage = String(message || 'Falha desconhecida').slice(-16000);
+    item.subtitles.lastError = shortMessage;
+    item.subtitles.updatedAt = nowIso();
+
+    if (item.subtitles.attempts < maxAttempts) {
+      const delayMinutes = Number(delays[item.subtitles.attempts - 1]) || 1;
+      item.subtitles.status = 'pending';
+      item.subtitles.nextAttemptAt = new Date(Date.now() + delayMinutes * 60 * 1000).toISOString();
+      await logger.warn(`Falha ao baixar legendas; nova tentativa em ${delayMinutes} minuto(s): ${item.title} (${item.videoId}).`, {
+        playlist: item.libraryFolder,
+        attempt: item.subtitles.attempts,
+        maxAttempts,
+        error: shortMessage.slice(-1500)
+      });
+    } else {
+      item.subtitles.status = 'failed';
+      item.subtitles.nextAttemptAt = null;
+      await logger.warn(`Falha definitiva ao baixar legendas apos ${item.subtitles.attempts} tentativa(s): ${item.title} (${item.videoId}). O video permanece concluido.`, {
+        playlist: item.libraryFolder,
+        error: shortMessage.slice(-1500)
+      });
+    }
+    await this.saveNow();
+  }
+
+  async queueMissingSubtitles(libraryFolder) {
+    const folder = sanitizeName(libraryFolder);
+    const playlist = findPlaylistByFolder(this.config, folder);
+    if (!playlist) {
+      const error = new Error('Biblioteca nao encontrada na configuracao.');
+      error.statusCode = 404;
+      throw error;
+    }
+    const settings = getSubtitleSettings(playlist);
+    if (!settings.enabled) {
+      const error = new Error('Ative as legendas desta biblioteca e salve a configuracao antes de buscar legendas ausentes.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const summary = {
+      playlist: folder,
+      requestedLanguages: [...settings.languages],
+      checked: 0,
+      queued: 0,
+      alreadyComplete: 0,
+      skipped: 0,
+      startedAt: nowIso()
+    };
+
+    for (const item of Object.values(this.state.items)) {
+      if (item.libraryFolder !== folder || item.status !== 'completed' || item.orphaned || item.sourceActive === false) continue;
+      summary.checked += 1;
+      if (!item.targetPath || !(await pathExists(item.targetPath))) {
+        summary.skipped += 1;
+        continue;
+      }
+      const queued = await this.scheduleSubtitlesForItem(item, playlist, { resetAttempts: true });
+      if (queued) summary.queued += 1;
+      else summary.alreadyComplete += 1;
+    }
+
+    const libraryState = this.ensureLibraryState(folder);
+    const preExistingDirty = Boolean(libraryState.dirty);
+    libraryState.subtitleBackfill = {
+      active: summary.queued > 0,
+      requestedAt: summary.startedAt,
+      requestedLanguages: [...settings.languages],
+      checked: summary.checked,
+      queued: summary.queued,
+      changed: 0,
+      preExistingDirty,
+      finishedAt: summary.queued > 0 ? null : nowIso(),
+      scan: null
+    };
+    await this.saveNow();
+    if (summary.queued > 0) this.kick();
+    await logger.info(`Busca de legendas ausentes preparada para ${folder}: ${summary.queued} item(ns) enfileirado(s).`, summary);
+    return summary;
+  }
+
+  async maybeFinalizeSubtitleBackfills() {
+    let changedState = false;
+    for (const [folder, libraryState] of Object.entries(this.state.libraries)) {
+      const job = libraryState && libraryState.subtitleBackfill;
+      if (!job || !job.active) continue;
+      const pending = Object.values(this.state.items).some((item) => (
+        item.libraryFolder === folder &&
+        item.subtitles &&
+        ['pending', 'checking'].includes(item.subtitles.status)
+      ));
+      if (pending) continue;
+
+      const playlist = findPlaylistByFolder(this.config, folder);
+      let scan = null;
+      if (Number(job.changed) > 0 && playlist && playlist.libraryId) {
+        scan = await runLibraryAction(this.config, playlist, 'scan');
+        if (scan && scan.ok && !job.preExistingDirty) libraryState.dirty = false;
+      }
+      job.active = false;
+      job.finishedAt = nowIso();
+      job.scan = scan;
+      changedState = true;
+      await logger.info(`Busca de legendas ausentes finalizada para ${folder}.`, {
+        changed: Number(job.changed) || 0,
+        scan
+      });
+    }
+    if (changedState) await this.saveNow();
+  }
+
   getWorkDir(item) {
     return path.join(this.config.paths.baseDir, '.youtube-downloader-work', item.libraryFolder, item.videoId);
   }
@@ -535,10 +917,10 @@ class DownloadManager {
     if (!playlist || playlist.enabled === false) return;
 
     if (item.targetPath && await pathExists(item.targetPath)) {
+      let existingFileValid = false;
       try {
         await this.validateMedia(item.targetPath);
-        await this.markCompletedFromExistingFile(item);
-        return;
+        existingFileValid = true;
       } catch (error) {
         const quarantinePath = `${item.targetPath}.invalid-${Date.now()}`;
         await fs.rename(item.targetPath, quarantinePath);
@@ -546,6 +928,17 @@ class DownloadManager {
           videoId: item.videoId,
           error: error.message
         });
+      }
+
+      if (existingFileValid) {
+        await this.markCompletedFromExistingFile(item);
+        try {
+          await this.scheduleSubtitlesForItem(item, playlist, { resetAttempts: true });
+          await this.saveNow();
+        } catch (error) {
+          await logger.warn(`Video local reconhecido, mas a preparacao das legendas falhou: ${item.title} (${item.videoId}): ${error.message}`);
+        }
+        return;
       }
     }
 
@@ -681,6 +1074,12 @@ class DownloadManager {
       await this.validateMedia(compatibleMedia);
       if (await this.applyInterruption(item, context)) return;
       await this.finalizeDownload(item, compatibleMedia, workDir);
+      try {
+        await this.scheduleSubtitlesForItem(item, playlist, { resetAttempts: true });
+        await this.saveNow();
+      } catch (error) {
+        await logger.warn(`Video concluido, mas a preparacao das legendas falhou: ${item.title} (${item.videoId}): ${error.message}`);
+      }
       await logger.info(`Download concluido: ${item.title} (${item.videoId})`, {
         playlist: item.libraryFolder,
         targetPath: item.targetPath,
@@ -1033,7 +1432,8 @@ class DownloadManager {
         lastCompletedAt: null,
         lastIdleActionAt: null,
         lastIdleActionResult: null,
-        lastIdleActionError: null
+        lastIdleActionError: null,
+        subtitleBackfill: null
       };
     }
     return this.state.libraries[libraryFolder];
@@ -1041,7 +1441,16 @@ class DownloadManager {
 
   async maybeRunIdleActions() {
     const dirtyFolders = Object.entries(this.state.libraries)
-      .filter(([, value]) => value && value.dirty)
+      .filter(([folder, value]) => {
+        if (!value || !value.dirty) return false;
+        if (value.subtitleBackfill && value.subtitleBackfill.active) return false;
+        const subtitleWorkPending = Object.values(this.state.items).some((item) => (
+          item.libraryFolder === folder &&
+          item.subtitles &&
+          ['pending', 'checking'].includes(item.subtitles.status)
+        ));
+        return !subtitleWorkPending;
+      })
       .map(([folder]) => folder);
     if (dirtyFolders.length === 0) {
       this.idleSinceMs = null;
@@ -1643,7 +2052,13 @@ class DownloadManager {
         lastDiscoveryAt: null,
         dirtyForScan: false,
         lastIdleActionAt: null,
-        lastIdleActionError: null
+        lastIdleActionError: null,
+        subtitlesEnabled: getSubtitleSettings(playlist).enabled,
+        subtitlePending: 0,
+        subtitleFailed: 0,
+        subtitleComplete: 0,
+        subtitleUnavailable: 0,
+        subtitleBackfill: null
       };
 
       for (const item of Object.values(this.state.items)) {
@@ -1652,6 +2067,12 @@ class DownloadManager {
         if (stats[item.status] !== undefined) stats[item.status] += 1;
         if (item.orphaned && item.status === 'completed') stats.orphaned += 1;
         stats.totalBytes += Number(item.fileSizeBytes) || 0;
+        if (item.subtitles && item.status === 'completed') {
+          if (['pending', 'checking'].includes(item.subtitles.status)) stats.subtitlePending += 1;
+          else if (item.subtitles.status === 'failed') stats.subtitleFailed += 1;
+          else if (item.subtitles.status === 'complete') stats.subtitleComplete += 1;
+          else if (item.subtitles.status === 'unavailable') stats.subtitleUnavailable += 1;
+        }
       }
 
       const libraryState = this.state.libraries[playlist.folderName] || {};
@@ -1659,6 +2080,7 @@ class DownloadManager {
       stats.dirtyForScan = Boolean(libraryState.dirty);
       stats.lastIdleActionAt = libraryState.lastIdleActionAt || null;
       stats.lastIdleActionError = libraryState.lastIdleActionError || null;
+      stats.subtitleBackfill = libraryState.subtitleBackfill ? clone(libraryState.subtitleBackfill) : null;
       result[playlist.folderName] = stats;
       result[playlist.name] = stats;
     }
@@ -1690,7 +2112,7 @@ class DownloadManager {
       throw new Error('Existe um item orfao em download. Cancele-o antes da limpeza.');
     }
 
-    const summary = { playlist: folder, itemsRemoved: 0, videosRemoved: 0, thumbnailsRemoved: 0, bytesRemoved: 0 };
+    const summary = { playlist: folder, itemsRemoved: 0, videosRemoved: 0, thumbnailsRemoved: 0, subtitlesRemoved: 0, bytesRemoved: 0 };
     const idsToDelete = [];
     for (const [id, item] of Object.entries(this.state.items)) {
       if (item.libraryFolder !== folder || !item.orphaned) continue;
@@ -1703,6 +2125,12 @@ class DownloadManager {
       if (item.thumbnailPath && await pathExists(item.thumbnailPath)) {
         await fs.rm(item.thumbnailPath, { force: true });
         summary.thumbnailsRemoved += 1;
+      }
+      if (item.targetPath) {
+        for (const subtitlePath of await listSubtitleSidecars(item.targetPath)) {
+          await fs.rm(subtitlePath, { force: true });
+          summary.subtitlesRemoved += 1;
+        }
       }
       await fs.rm(this.getWorkDir(item), { recursive: true, force: true });
       idsToDelete.push(id);

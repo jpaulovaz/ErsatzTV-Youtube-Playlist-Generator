@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 2.3.1
+# ErsatzTV YouTube Downloader 2.4.0
 
 Aplicativo Node.js para descobrir vídeos de playlists e URLs individuais do YouTube, enfileirar downloads persistentes e entregar arquivos locais ao ErsatzTV.
 
-A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.3.1 preserva a segurança e a operação da linha 2.x, com interface administrativa adaptativa: navegação lateral no desktop e uma experiência móvel dedicada com navegação inferior, controles em painel deslizante e downloads apresentados como cartões.
+A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.4.0 preserva a segurança e a operação da linha 2.x e acrescenta legendas SRT opcionais por biblioteca, mantendo a interface administrativa adaptativa no desktop e no celular.
 
 ## Arquitetura
 
@@ -17,7 +17,7 @@ Fila persistente, um item por vez
           ↓
 yt-dlp + ffmpeg/ffprobe
           ↓
-MP4 / H.264 / AAC + JPG
+MP4 / H.264 / AAC + JPG + SRT opcional
           ↓
 Biblioteca local do ErsatzTV
 ```
@@ -33,6 +33,9 @@ Biblioteca local do ErsatzTV
 - Resolução máxima geral ou específica por biblioteca: 360p, 480p, 720p, 1080p, 1440p e 2160p.
 - Organização `Biblioteca/Artista/Artista - Título.mp4`.
 - Thumbnail JPG ao lado do vídeo.
+- Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
+- Seleção múltipla de idiomas: `pt-BR`, `pt`, `en` e `es`.
+- Ação **Buscar legendas ausentes** para o acervo já baixado, sem baixar novamente os vídeos.
 - Deduplicação por ID do YouTube, independentemente de alterações futuras no título.
 - Retentativas automáticas após 1, 5 e 15 minutos.
 - Pausa automática quando o espaço livre fica abaixo da reserva configurada.
@@ -162,7 +165,7 @@ Aponte o `Library ID` do aplicativo para a biblioteca local que deve receber o s
 
 Nas versões atuais do ErsatzTV que protegem as rotas `/api`, preencha também **Configurações → ErsatzTV → API Key do ErsatzTV**. O aplicativo enviará essa chave como `X-Etv-Api-Key` nas ações `scan`, `empty-trash` e `rebuild-playout`. A chave nunca é escrita nos logs.
 
-Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, remova manualmente a configuração antiga no ErsatzTV. A versão 2.3.1 não contém ações relacionadas a YML.
+Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, remova manualmente a configuração antiga no ErsatzTV. A versão 2.4.0 não contém ações relacionadas a YML.
 
 ## Descoberta e fila
 
@@ -190,6 +193,31 @@ A ação `Limpar fila` pode atuar sobre todas as bibliotecas ou apenas uma. Ela:
 - mantém esses itens como `removed` e `suppressed`, evitando que a mesma descoberta os recoloque automaticamente.
 
 Antes da próxima busca, remova ou corrija a URL da playlist errada. Um item suprimido ainda pode ser reativado individualmente com `Tentar novamente`. A listagem detalhada da fila inicia fechada e carrega os itens em páginas de 100 registros.
+
+## Legendas por biblioteca
+
+As legendas são configuradas individualmente em **Bibliotecas**. Para bibliotecas existentes, o recurso permanece **desativado por padrão** até ser habilitado explicitamente.
+
+Quando ativado, o aplicativo pode buscar:
+
+- legendas publicadas pelo canal/criador;
+- legendas automáticas geradas pelo YouTube;
+- um ou mais dos idiomas `pt-BR`, `pt`, `en` e `es`;
+- sempre em arquivo externo `.srt`.
+
+Os arquivos usam o mesmo nome-base do vídeo, por exemplo:
+
+```text
+Artista - Musica.mp4
+Artista - Musica.pt-BR.srt
+Artista - Musica.en.srt
+```
+
+Para vídeos novos, a busca de legendas entra no fluxo automaticamente depois que o MP4 é concluído. A ausência de legenda não transforma o download do vídeo em falha. Se houver uma falha temporária no `yt-dlp`, o vídeo permanece `completed` e a legenda recebe retentativas independentes.
+
+Para o acervo existente, habilite as legendas na biblioteca, selecione os idiomas e clique em **Buscar legendas ausentes**. O aplicativo verifica apenas os vídeos concluídos, não baixa o MP4 novamente e, quando novos SRT forem adicionados, dispara **um único scan da biblioteca no ErsatzTV ao final da operação**.
+
+O `yt-dlp` usa `--write-subs`, `--write-auto-subs` quando habilitado, `--sub-langs` para os idiomas selecionados e `--convert-subs srt`. O aplicativo preserva SRT já existentes e busca somente os idiomas selecionados que ainda estiverem ausentes.
 
 ## Compatibilidade de mídia
 
@@ -220,7 +248,7 @@ Quando um vídeo deixa de pertencer às fontes configuradas:
 - não há exclusão automática;
 - a interface permite visualizar e remover órfãos de forma explícita.
 
-A limpeza de órfãos remove o MP4, a thumbnail, o estado daquele item e pastas de artista que ficarem vazias.
+A limpeza de órfãos remove o MP4, a thumbnail, os SRT sidecar associados, o estado daquele item e pastas de artista que ficarem vazias.
 
 ## Autenticação e proxy reverso
 
@@ -284,7 +312,7 @@ Quando a fila fica sem item executável e existem arquivos novos:
 3. solicita rebuild usando `Playout ID`, se configurado;
 4. registra o resultado no estado da biblioteca.
 
-Isso evita um scan para cada vídeo individual.
+Isso evita um scan para cada vídeo individual. A ação manual **Buscar legendas ausentes** também agrupa o trabalho e executa somente um scan ao final quando algum SRT novo foi criado.
 
 ## Remoção de bibliotecas
 

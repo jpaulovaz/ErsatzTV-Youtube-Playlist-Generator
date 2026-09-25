@@ -57,7 +57,17 @@
       "libraryId": null,
       "playoutId": null,
       "cookiesPath": "",
-      "maxHeight": null
+      "maxHeight": null,
+      "subtitles": {
+        "enabled": false,
+        "includeAuto": true,
+        "languages": [
+          "pt-BR",
+          "pt",
+          "en",
+          "es"
+        ]
+      }
     }
   ],
   "scheduler": {

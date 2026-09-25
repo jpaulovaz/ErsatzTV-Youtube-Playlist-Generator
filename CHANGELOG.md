@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.4.0
+
+- Legendas SRT opcionais e configuráveis por biblioteca.
+- Bibliotecas existentes permanecem com legendas desativadas até ativação explícita pela interface.
+- Suporte simultâneo aos idiomas `pt-BR`, `pt`, `en` e `es`, com seleção múltipla.
+- Legendas manuais e automáticas do YouTube, usando `yt-dlp` sem baixar novamente o vídeo.
+- Arquivos sidecar seguem o mesmo nome-base do MP4, por exemplo `Video.pt-BR.srt`.
+- Novos vídeos recebem a busca de legendas depois que o MP4 é concluído; falta de legenda não falha o vídeo.
+- Falhas temporárias de legenda têm fila e retentativas independentes do download do vídeo.
+- Nova ação **Buscar legendas ausentes** para bibliotecas já existentes.
+- Backfill preserva MP4/JPG, baixa somente SRT ausentes e executa um único scan do ErsatzTV ao final quando houve alteração.
+- Limpeza de órfãos passa a remover também os SRT sidecar associados.
+- 25 testes automatizados cobrindo configuração, argumentos do yt-dlp, sidecars, backfill, retry e scan único.
+
 ## 2.3.1
 
 - Suporte à autenticação da API do ErsatzTV por `X-Etv-Api-Key`.

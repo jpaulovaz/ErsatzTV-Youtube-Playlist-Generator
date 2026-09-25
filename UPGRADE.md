@@ -1,6 +1,8 @@
-# Atualização para a versão 2.3.1
+# Atualização para a versão 2.4.0
 
-Esta atualização parte da versão 2.3.0 e adiciona suporte à API Key exigida pelas versões atuais do ErsatzTV. O pacote `update` não contém `config/config.json`, `config/auth.json` nem `data/`, portanto preserva toda a configuração e o estado operacional existentes.
+Esta atualização parte da versão 2.3.1 e adiciona legendas SRT por biblioteca. O pacote `update` não contém `config/config.json`, `config/auth.json` nem `data/`, portanto preserva a configuração, autenticação, fila e histórico existentes.
+
+Bibliotecas já existentes continuam com legendas **desativadas por padrão**. Nenhum backfill é iniciado automaticamente após a atualização.
 
 ## 1. Pare a aplicação
 
@@ -21,7 +23,7 @@ cp -a data "data.bak-$(date +%Y%m%d-%H%M%S)"
 
 ```bash
 cd /caminho/da/aplicacao
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v2.3.1-update.zip -d .
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v2.4.0-update.zip -d .
 ```
 
 ## 4. Valide e reinicie
@@ -33,16 +35,21 @@ pm2 save
 pm2 logs ersatztv-youtube-downloader --lines 100
 ```
 
-## 5. Configure a chave do ErsatzTV
+## 5. Ative as legendas onde desejar
 
-Na interface, abra **Configurações → ErsatzTV** e preencha **API Key do ErsatzTV** com a chave gerada pelo próprio ErsatzTV.
+Na interface, abra **Bibliotecas**, expanda a biblioteca e habilite **Baixar legendas nesta biblioteca**.
 
-A aplicação enviará automaticamente:
+Por padrão ficam disponíveis, todos selecionáveis em conjunto:
 
 ```text
-X-Etv-Api-Key: <sua-chave>
+pt-BR  Português (Brasil)
+pt     Português
+en     English
+es     Español
 ```
 
-para as ações de scan de biblioteca, limpeza de lixo e rebuild de playout.
+A opção de legendas automáticas vem habilitada. O formato é sempre SRT externo.
 
-Não use a chave do Pocket ID nesse campo.
+Para os vídeos que já estavam no disco antes da atualização, clique em **Buscar legendas ausentes**. Essa ação não baixa novamente os MP4. Quando novos SRT forem criados, o aplicativo faz um único scan da biblioteca no ErsatzTV ao final.
+
+A ausência de uma legenda não é tratada como erro do vídeo. Falhas temporárias na busca de legendas recebem retentativas independentes.
