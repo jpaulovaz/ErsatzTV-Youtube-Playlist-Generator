@@ -1,95 +1,61 @@
-# Atualização para a versão 2.5.0
+# Atualização para a versão 2.6.0
 
-Esta atualização parte da versão 2.4.0 e adiciona metadados NFO/artwork opcionais por biblioteca para o cenário em que os videoclipes são cadastrados no ErsatzTV como **Filmes**.
+Esta atualização parte da versão 2.5.0 e padroniza o nome do artista usado em novos destinos e nos metadados NFO.
 
-O pacote `update` não contém `config/config.json`, `config/auth.json` nem `data/`, portanto preserva configuração, autenticação, fila e histórico existentes.
+O pacote `update` não contém `config/config.json`, `config/auth.json` nem `data/`, portanto preserva configuração, autenticação, fila e histórico existentes. A atualização também **não move nem renomeia automaticamente vídeos já concluídos**.
 
-Bibliotecas existentes permanecem com **Metadados para ErsatzTV (Filmes)** desativados até ativação explícita. A atualização não reorganiza nenhum arquivo automaticamente.
+## O que muda
 
-## 1. Pare a aplicação
+Quando o YouTube fornece variações como:
 
-```bash
-pm2 stop ersatztv-youtube-downloader
+```text
+TWENTY ONE PILOTS
+twenty one pilots
+Twenty One Pilots
 ```
 
-## 2. Faça backup
+o aplicativo passa a usar, para novos destinos:
+
+```text
+Twenty One Pilots
+```
+
+A consolidação também é case-insensitive dentro de cada biblioteca, evitando pastas separadas que diferem apenas por maiúsculas/minúsculas. Nomes estilizados são tratados de forma conservadora e não são alterados quando a capitalização pode ser intencional.
+
+A separação de artista e título agora usa o primeiro separador ` - ` com espaços. Isso evita quebrar nomes como `blink-182`.
+
+## Atualização
 
 ```bash
 cd /caminho/da/aplicacao
+
+pm2 stop ersatztv-youtube-downloader
+
 cp config/config.json "config/config.json.bak-$(date +%Y%m%d-%H%M%S)"
 [ ! -f config/auth.json ] || cp config/auth.json "config/auth.backup-$(date +%Y%m%d-%H%M%S).json"
 cp -a data "data.bak-$(date +%Y%m%d-%H%M%S)"
-```
 
-Como a ação de preparação pode reorganizar MP4/SRT/JPG já existentes, faça também um backup da biblioteca de mídia antes de executar **Preparar NFOs existentes** pela primeira vez.
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v2.6.0-update.zip -d .
 
-## 3. Extraia a atualização
-
-```bash
-cd /caminho/da/aplicacao
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v2.5.0-update.zip -d .
-```
-
-## 4. Valide e reinicie
-
-```bash
 npm run verify
+
 pm2 restart ersatztv-youtube-downloader --update-env
 pm2 save
 pm2 logs ersatztv-youtube-downloader --lines 100
 ```
 
-## 5. Ative somente nas bibliotecas desejadas
-
-Na interface:
+O resultado esperado da validação desta release é:
 
 ```text
-Bibliotecas
-  → abra a biblioteca
-  → Metadados para ErsatzTV (Filmes)
-  → Preparar novos vídeos para biblioteca do tipo Filmes
-  → Salvar
+tests 38
+pass 38
+fail 0
 ```
 
-Para vídeos futuros, a estrutura passa a ser semelhante a:
+## Sobre o acervo que já existe
 
-```text
-Biblioteca/
-└── Artista/
-    └── Artista - Música (Official Video)/
-        ├── Artista - Música (Official Video).mp4
-        ├── Artista - Música (Official Video).nfo
-        ├── Artista - Música (Official Video).pt-BR.srt
-        └── poster.jpg
-```
+Não foi adicionada uma ação de normalização por biblioteca. Isso evita poluir a interface com uma ferramenta de migração de uso pontual.
 
-O nome físico é preservado. No NFO, sufixos de apresentação do YouTube são removidos, resultando por exemplo em:
+Se quiser refazer o acervo neste estágio inicial do projeto, remova os arquivos usando o procedimento que já utiliza e faça nova descoberta. Quando um item conhecido estiver sem o arquivo físico, a 2.6.0 recalcula o destino antes do novo download, aplicando a regra atual de artista.
 
-```xml
-<movie>
-  <title>Twenty One Pilots</title>
-  <sorttitle>Twenty One Pilots - City Walls</sorttitle>
-  <outline>City Walls</outline>
-  <plot>City Walls</plot>
-  <genre>Music</genre>
-  <tag>Music Video</tag>
-  <uniqueid type="youtube" default="true">VIDEO_ID</uniqueid>
-</movie>
-```
-
-## 6. Preparar vídeos já existentes
-
-Depois de salvar a opção, use **Preparar NFOs existentes**.
-
-A ação:
-
-- não baixa novamente MP4;
-- cria uma subpasta individual por vídeo;
-- move o MP4 e as legendas SRT sidecar para a nova pasta;
-- transforma o JPG já controlado pelo aplicativo em `poster.jpg`;
-- baixa a thumbnail somente se o poster estiver ausente e houver URL conhecida;
-- cria/atualiza o NFO;
-- atualiza os caminhos persistidos pelo aplicativo;
-- dispara um único scan do ErsatzTV ao final, quando Library ID estiver configurado.
-
-A ação pede confirmação antes de reorganizar os arquivos.
+Arquivos concluídos que continuam presentes no disco permanecem exatamente onde estão.

@@ -428,3 +428,53 @@ test('new completed downloads create poster.jpg and NFO automatically in movie m
   assert.match(nfo, /<plot>City Walls<\/plot>/);
   assert.equal(item.movieMetadata.status, 'complete');
 });
+
+test('consolidates artist casing for new targets and NFO-facing metadata', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-v26-casing-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const config = makeConfig(path.join(root, 'media'));
+  config.playlists[0].movieMetadata = { enabled: true };
+  const playlist = { ...config.playlists[0], folderName: 'Teste' };
+  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
+  await manager.init(config);
+
+  await manager.reconcileLibrary(config, playlist, [
+    { id: 'jjjjjjjjjjj', title: 'TWENTY ONE PILOTS - City Walls' },
+    { id: 'kkkkkkkkkkk', title: 'twenty one pilots - The Line' }
+  ]);
+
+  const first = manager.state.items[makeItemId('Teste', 'jjjjjjjjjjj')];
+  const second = manager.state.items[makeItemId('Teste', 'kkkkkkkkkkk')];
+  assert.equal(first.artist, 'Twenty One Pilots');
+  assert.equal(second.artist, 'Twenty One Pilots');
+  assert.equal(path.basename(path.dirname(path.dirname(first.targetPath))), 'Twenty One Pilots');
+  assert.equal(path.basename(path.dirname(path.dirname(second.targetPath))), 'Twenty One Pilots');
+});
+
+test('recomputes a missing legacy target path before redownload using current artist rules', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-v26-redownload-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const config = makeConfig(path.join(root, 'media'));
+  const playlist = { ...config.playlists[0], folderName: 'Teste' };
+  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
+  await manager.init(config);
+
+  await manager.reconcileLibrary(config, playlist, [
+    { id: 'lllllllllll', title: 'TWENTY ONE PILOTS - City Walls' }
+  ]);
+  const id = makeItemId('Teste', 'lllllllllll');
+  const item = manager.state.items[id];
+  item.status = 'completed';
+  item.artist = 'TWENTY ONE PILOTS';
+  item.targetPath = path.join(config.paths.baseDir, 'Teste', 'TWENTY ONE PILOTS', 'TWENTY ONE PILOTS - City Walls.mp4');
+  item.mediaPath = item.targetPath;
+
+  const result = await manager.reconcileLibrary(config, playlist, [
+    { id: 'lllllllllll', title: 'TWENTY ONE PILOTS - City Walls' }
+  ]);
+
+  assert.equal(result.reactivated, 1);
+  assert.equal(item.status, 'pending');
+  assert.equal(item.artist, 'Twenty One Pilots');
+  assert.equal(path.basename(path.dirname(item.targetPath)), 'Twenty One Pilots');
+});

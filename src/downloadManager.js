@@ -19,6 +19,8 @@ const {
 const {
   sanitizeName,
   sanitizeFileComponent,
+  normalizeArtistDisplayName,
+  findCaseInsensitiveDirectoryName,
   extractArtistAndTitle,
   pathExists,
   removeEmptyDirectories,
@@ -1583,8 +1585,26 @@ class DownloadManager {
 
   chooseTargetPaths(playlist, video, itemId) {
     const playlistDir = path.join(this.config.paths.baseDir, playlist.folderName);
-    const { artist, title } = extractArtistAndTitle(video.title || 'Sem Titulo');
-    const artistDir = path.join(playlistDir, sanitizeFileComponent(artist, 'Outros', 100));
+    const extracted = extractArtistAndTitle(video.title || 'Sem Titulo');
+    let artist = normalizeArtistDisplayName(extracted.artist);
+    const title = extracted.title;
+
+    // Usa um unico nome canonico para o artista dentro da biblioteca, ignorando
+    // diferencas apenas de maiusculas/minusculas vindas do YouTube.
+    const artistKey = artist.toLocaleLowerCase('pt-BR');
+    for (const existing of Object.values(this.state.items)) {
+      if (existing.id === itemId || existing.libraryFolder !== playlist.folderName || !existing.artist) continue;
+      const existingArtist = normalizeArtistDisplayName(existing.artist);
+      if (existingArtist.toLocaleLowerCase('pt-BR') === artistKey) {
+        artist = existingArtist;
+        break;
+      }
+    }
+
+    const desiredArtistFolder = sanitizeFileComponent(artist, 'Outros', 100);
+    const existingArtistFolder = findCaseInsensitiveDirectoryName(playlistDir, desiredArtistFolder);
+    const artistFolderName = existingArtistFolder || desiredArtistFolder;
+    const artistDir = path.join(playlistDir, artistFolderName);
     const preferredBase = artist !== 'Outros'
       ? sanitizeFileComponent(`${artist} - ${title}`, `Video ${video.id}`, 220)
       : sanitizeFileComponent(title, `Video ${video.id}`, 220);
@@ -1672,6 +1692,7 @@ class DownloadManager {
 
       if (existing) {
         const wasOrphaned = existing.orphaned || existing.sourceActive === false || existing.status === 'orphaned';
+        const previousPathExists = Boolean(existing.targetPath && await pathExists(existing.targetPath));
         Object.assign(existing, metadata, {
           libraryName: playlist.name,
           libraryFolder,
@@ -1682,6 +1703,13 @@ class DownloadManager {
           lastSeenAt: nowIso(),
           updatedAt: nowIso()
         });
+
+        // Se o arquivo local foi apagado, recalcula o destino com as regras atuais.
+        // Isso permite apagar o acervo inicial e baixar novamente sem herdar paths
+        // antigos com casing inconsistente de artista.
+        if (!previousPathExists && !(existing.status === 'removed' && existing.suppressed)) {
+          Object.assign(existing, this.chooseTargetPaths(playlist, video, id));
+        }
 
         if (existing.status === 'completed' && existing.targetPath && !(await pathExists(existing.targetPath))) {
           existing.status = 'pending';

@@ -46,3 +46,19 @@ test('builds an ErsatzTV movie NFO with artist as title and song as plot', () =>
   assert.match(nfo, /<tag>Music Video<\/tag>/);
   assert.match(nfo, /<uniqueid type="youtube" default="true">abcdefghijk<\/uniqueid>/);
 });
+
+test('normalizes obvious artist casing in the generated movie metadata', () => {
+  const upper = getMovieMetadata({
+    artist: 'TWENTY ONE PILOTS',
+    trackTitle: 'City Walls',
+    videoId: 'abcdefghijk'
+  });
+  assert.equal(upper.artist, 'Twenty One Pilots');
+
+  const stylized = getMovieMetadata({
+    artist: 'AC/DC',
+    trackTitle: 'Thunderstruck',
+    videoId: 'abcdefghijk'
+  });
+  assert.equal(stylized.artist, 'AC/DC');
+});

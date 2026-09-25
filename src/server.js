@@ -292,9 +292,9 @@ async function handleDownloadAction(req, res, url) {
 async function getVersion() {
   try {
     const pkg = JSON.parse(await fs.readFile(PACKAGE_PATH, 'utf8'));
-    return pkg.version || '2.5.0';
+    return pkg.version || '2.6.0';
   } catch {
-    return '2.5.0';
+    return '2.6.0';
   }
 }
 

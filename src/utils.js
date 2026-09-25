@@ -1,4 +1,5 @@
 const fs = require('fs/promises');
+const fsSync = require('fs');
 const path = require('path');
 
 function sanitizeName(value) {
@@ -21,12 +22,60 @@ function sanitizeFileComponent(value, fallback = 'Sem Titulo', maxLength = 180) 
   return truncateComponent(sanitizeName(value) || fallback, maxLength) || fallback;
 }
 
+function normalizeArtistDisplayName(value) {
+  const artist = String(value || '')
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() || 'Outros';
+  if (artist.toLocaleLowerCase('pt-BR') === 'outros') return 'Outros';
+
+  // Corrige apenas casing claramente ruidoso em nomes simples com duas ou mais palavras.
+  // Nomes estilizados (AC/DC, P!NK, deadmau5, blink-182, CHVRCHES) sao preservados.
+  const simpleMultiWord = /^[\p{L}\p{M}]+(?:\s+[\p{L}\p{M}]+)+$/u.test(artist);
+  if (!simpleMultiWord) return artist;
+
+  const upper = artist.toLocaleUpperCase('pt-BR');
+  const lower = artist.toLocaleLowerCase('pt-BR');
+  if (artist !== upper && artist !== lower) return artist;
+
+  return lower
+    .split(/\s+/)
+    .map((word) => {
+      const chars = Array.from(word);
+      if (chars.length === 0) return word;
+      return `${chars[0].toLocaleUpperCase('pt-BR')}${chars.slice(1).join('')}`;
+    })
+    .join(' ');
+}
+
+function findCaseInsensitiveDirectoryName(parentDir, desiredName) {
+  const desired = String(desiredName || '').trim();
+  if (!desired) return null;
+
+  try {
+    const entries = fsSync.readdirSync(parentDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+    const exact = entries.find((name) => name === desired);
+    if (exact) return exact;
+    return entries.find((name) => name.localeCompare(desired, 'pt-BR', { sensitivity: 'accent' }) === 0) || null;
+  } catch (error) {
+    if (error && error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
 function extractArtistAndTitle(rawTitle) {
   const cleanName = sanitizeFileComponent(rawTitle || 'Sem Titulo');
-  if (cleanName.includes('-')) {
-    const [artistPart, ...titleParts] = cleanName.split('-');
-    const artist = sanitizeFileComponent(artistPart, 'Outros', 100);
-    const title = sanitizeFileComponent(titleParts.join('-'), 'Sem Titulo', 170);
+  const separator = /\s+-\s+/;
+  const match = separator.exec(cleanName);
+  if (match) {
+    const separatorIndex = match.index;
+    const artistPart = cleanName.slice(0, separatorIndex);
+    const titlePart = cleanName.slice(separatorIndex + match[0].length);
+    const artist = normalizeArtistDisplayName(artistPart);
+    const title = sanitizeFileComponent(titlePart, 'Sem Titulo', 170);
     return { artist, title };
   }
 
@@ -136,6 +185,8 @@ module.exports = {
   sanitizeName,
   sanitizeFileComponent,
   truncateComponent,
+  normalizeArtistDisplayName,
+  findCaseInsensitiveDirectoryName,
   extractArtistAndTitle,
   pathExists,
   walkFiles,

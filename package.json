@@ -1,7 +1,7 @@
 {
   "name": "ersatztv-youtube-downloader",
-  "version": "2.5.0",
-  "description": "Gerenciador protegido de bibliotecas do YouTube para ErsatzTV, com fila persistente, MP4/H.264/AAC, legendas SRT, NFO/poster por biblioteca, API Key do ErsatzTV e interface responsiva.",
+  "version": "2.6.0",
+  "description": "Gerenciador protegido de bibliotecas do YouTube para ErsatzTV, com fila persistente, MP4/H.264/AAC, legendas SRT, NFO/poster, normalizacao de artistas e API Key do ErsatzTV.",
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {

@@ -1,5 +1,6 @@
 const fs = require('fs/promises');
 const path = require('path');
+const { normalizeArtistDisplayName } = require('./utils');
 
 const OFFICIAL_SUFFIX_PATTERNS = [
   /\s*[\[(](?:official\s+)?music\s+video[\])]\s*$/i,
@@ -58,9 +59,10 @@ function xmlEscape(value) {
 function getMovieMetadata(item) {
   const itemArtist = cleanArtist(item && item.artist);
   const channelArtist = cleanArtist(item && item.channelTitle);
-  const artist = itemArtist && itemArtist.toLowerCase() !== 'outros'
+  const artistSource = itemArtist && itemArtist.toLowerCase() !== 'outros'
     ? itemArtist
     : (channelArtist || 'Artista Desconhecido');
+  const artist = normalizeArtistDisplayName(artistSource);
   const trackTitle = cleanTrackTitle(
     item && (item.trackTitle || item.title) || 'Sem Titulo'
   );

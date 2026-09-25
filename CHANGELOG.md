@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.6.0
+
+- Normalizacao automatica e conservadora do nome do artista para novos destinos: nomes simples com duas ou mais palavras totalmente em maiusculas ou minusculas passam para capitalizacao legivel, por exemplo `TWENTY ONE PILOTS` e `twenty one pilots` viram `Twenty One Pilots`.
+- Nomes estilizados ou potencialmente intencionais, como `AC/DC`, `P!NK`, `deadmau5`, `blink-182` e `CHVRCHES`, sao preservados no metadado do artista.
+- Consolidacao case-insensitive por biblioteca impede a criacao de pastas duplicadas que diferem apenas por maiusculas/minusculas.
+- O NFO usa o mesmo nome canonico de artista, mantendo pasta, estado interno e metadados do ErsatzTV consistentes.
+- Separacao `Artista - Titulo` passa a usar o primeiro separador com espacos (` - `), preservando hifens que fazem parte do nome do artista ou da musica.
+- Quando um arquivo concluido foi removido do disco e o item volta para download, o caminho de destino e recalculado com as regras atuais de artista; nao e necessario manter uma funcao de migracao por biblioteca.
+- Nenhum arquivo concluido existente e movido ou renomeado automaticamente durante a atualizacao.
+- 38 testes automatizados aprovados.
+
 ## 2.5.0
 
 - Metadados NFO opcionais por biblioteca para uso das bibliotecas locais como **Filmes** no ErsatzTV.

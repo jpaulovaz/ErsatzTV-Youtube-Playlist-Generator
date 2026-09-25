@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 2.5.0
+# ErsatzTV YouTube Downloader 2.6.0
 
 Aplicativo Node.js para descobrir vídeos de playlists e URLs individuais do YouTube, enfileirar downloads persistentes e entregar arquivos locais ao ErsatzTV.
 
-A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.5.0 preserva a segurança, as legendas SRT e a operação da linha 2.x e acrescenta NFO + `poster.jpg` opcionais por biblioteca para o cenário em que videoclipes são cadastrados no ErsatzTV como Filmes.
+A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.6.0 preserva os recursos da linha 2.x e acrescenta normalização conservadora e consolidação case-insensitive do nome do artista, mantendo pastas e NFO consistentes mesmo quando o YouTube alterna a capitalização entre vídeos.
 
 ## Arquitetura
 
@@ -31,7 +31,7 @@ Biblioteca local do ErsatzTV
 - Um download simultâneo, evitando picos de CPU, rede e disco.
 - Arquivos finais padronizados em MP4, vídeo H.264 e áudio AAC.
 - Resolução máxima geral ou específica por biblioteca: 360p, 480p, 720p, 1080p, 1440p e 2160p.
-- Organização padrão `Biblioteca/Artista/Artista - Título.mp4`.
+- Organização padrão `Biblioteca/Artista/Artista - Título.mp4`, com nome canônico de artista para evitar duplicação apenas por diferenças de maiúsculas/minúsculas.
 - Modo opcional para ErsatzTV/Filmes com `Biblioteca/Artista/Artista - Título/`, NFO e `poster.jpg`.
 - Thumbnail JPG ao lado do vídeo no modo padrão ou `poster.jpg` no modo Filmes.
 - Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
@@ -149,7 +149,7 @@ Com uma biblioteca chamada `Mix_Principal`, o resultado é semelhante a:
         └── Vídeo sem separador de artista.jpg
 ```
 
-O aplicativo divide o título no primeiro ` - ` ou hífen reconhecido. Quando não consegue determinar o artista, usa a pasta `Outros`.
+O aplicativo divide o título no primeiro separador ` - ` (com espaços), preservando hífens que façam parte do artista ou da música. Quando não consegue determinar o artista, usa a pasta `Outros`. Nomes simples de artista com duas ou mais palavras totalmente em maiúsculas ou minúsculas são normalizados para capitalização legível; grafias estilizadas são preservadas.
 
 Em caso de colisão de nome, o ID do YouTube é acrescentado ao arquivo. O índice interno continua sendo o `videoId`.
 
@@ -167,7 +167,7 @@ Aponte o `Library ID` do aplicativo para a biblioteca local que deve receber o s
 
 Nas versões atuais do ErsatzTV que protegem as rotas `/api`, preencha também **Configurações → ErsatzTV → API Key do ErsatzTV**. O aplicativo enviará essa chave como `X-Etv-Api-Key` nas ações `scan`, `empty-trash` e `rebuild-playout`. A chave nunca é escrita nos logs.
 
-Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, remova manualmente a configuração antiga no ErsatzTV. A versão 2.5.0 não contém ações relacionadas a YML.
+Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, remova manualmente a configuração antiga no ErsatzTV. A versão 2.6.0 não contém ações relacionadas a YML.
 
 ## Descoberta e fila
 
@@ -234,6 +234,8 @@ Biblioteca/Artista/Artista - Música/
 ```
 
 O NFO usa o artista como `title`, a música como `outline` e `plot`, `Artista - Música` como `sorttitle`, além de `genre=Music`, `tag=Music Video` e `uniqueid` do YouTube. Sufixos de apresentação comuns do YouTube, como `(Official Video)`, são removidos apenas dos metadados, sem renomear o arquivo original.
+
+A partir da 2.6.0, diferenças de casing do mesmo artista são consolidadas. Por exemplo, `TWENTY ONE PILOTS` e `twenty one pilots` passam a usar `Twenty One Pilots` para novos destinos e para o NFO. O tratamento é deliberadamente conservador: grafias como `AC/DC`, `P!NK`, `deadmau5`, `blink-182` e `CHVRCHES` não são forçadas para title case. Arquivos concluídos que já existem no disco não são movidos automaticamente; se forem apagados e redescobertos, o destino é recalculado com a regra atual.
 
 Para conteúdo já concluído, a ação **Preparar NFOs existentes** reorganiza MP4/SRT/JPG em subpastas individuais, cria/atualiza o NFO e atualiza o estado interno sem baixar novamente os vídeos. A ação é manual, pede confirmação e executa no máximo um scan do ErsatzTV ao final quando houve alterações.
 
