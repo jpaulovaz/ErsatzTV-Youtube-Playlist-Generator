@@ -12,12 +12,17 @@ const {
   listSubtitleSidecars
 } = require('./subtitleService');
 const {
-  getShowMetadataSettings,
-  resolveShowIdentity,
-  getShowMetadata,
+  MEDIA_PROFILES,
+  getMediaProfileSettings,
+  resolveMediaIdentity,
+  getGenericMetadata,
+  getMovieMetadata,
+  getMusicClipMetadata,
+  writeGenericNfo,
+  writeMovieNfo,
   writeTvShowNfo,
   writeEpisodeNfo
-} = require('./showMetadataService');
+} = require('./mediaProfileService');
 const {
   sanitizeName,
   sanitizeFileComponent,
@@ -50,7 +55,7 @@ function makeItemId(libraryFolder, videoId) {
 
 function getAssignedShowEpisodeNumber(state, libraryFolder, artist, itemId) {
   const current = state && state.items ? state.items[itemId] : null;
-  const currentNumber = Number(current && (current.showEpisodeNumber || current.showMetadata && current.showMetadata.episodeNumber));
+  const currentNumber = Number(current && (current.showEpisodeNumber || current.mediaMetadata && current.mediaMetadata.episodeNumber || current.showMetadata && current.showMetadata.episodeNumber));
   if (Number.isInteger(currentNumber) && currentNumber > 0) return currentNumber;
 
   const artistKey = normalizeArtistDisplayName(artist).toLocaleLowerCase('pt-BR');
@@ -58,10 +63,10 @@ function getAssignedShowEpisodeNumber(state, libraryFolder, artist, itemId) {
   for (const existing of Object.values(state && state.items || {})) {
     if (!existing || existing.id === itemId || existing.libraryFolder !== libraryFolder) continue;
     const existingArtist = normalizeArtistDisplayName(
-      existing.artist || resolveShowIdentity(existing).artist
+      existing.artist || resolveMediaIdentity(existing).artist
     );
     if (existingArtist.toLocaleLowerCase('pt-BR') !== artistKey) continue;
-    const episodeNumber = Number(existing.showEpisodeNumber || existing.showMetadata && existing.showMetadata.episodeNumber);
+    const episodeNumber = Number(existing.showEpisodeNumber || existing.mediaMetadata && existing.mediaMetadata.episodeNumber || existing.showMetadata && existing.showMetadata.episodeNumber);
     if (Number.isInteger(episodeNumber) && episodeNumber > maxEpisode) maxEpisode = episodeNumber;
   }
   return maxEpisode + 1;
@@ -1341,9 +1346,10 @@ class DownloadManager {
     }
 
     const playlist = findPlaylistByFolder(this.config, item.libraryFolder);
-    const showSettings = getShowMetadataSettings(playlist);
+    const profileSettings = getMediaProfileSettings(playlist);
     const stagedThumbnail = await this.findStagedThumbnail(workDir);
-    if (this.config.downloads.writeThumbnails !== false || showSettings.enabled) {
+    const forceArtwork = profileSettings.movie || profileSettings.musicClips;
+    if (this.config.downloads.writeThumbnails !== false || forceArtwork) {
       const shouldReplace = this.config.downloads.updateExistingThumbnails === true;
       if (stagedThumbnail && (shouldReplace || !(await pathExists(item.thumbnailPath)))) {
         if (shouldReplace) await fs.rm(item.thumbnailPath, { force: true });
@@ -1360,51 +1366,91 @@ class DownloadManager {
       }
     }
 
-    if (showSettings.enabled) {
-      delete item.movieMetadata;
-      const baseName = path.parse(item.targetPath).name;
-      const seasonDir = path.dirname(item.targetPath);
-      const showDir = path.dirname(seasonDir);
-      item.nfoPath = item.nfoPath || path.join(seasonDir, `${baseName}.nfo`);
-      item.showNfoPath = item.showNfoPath || path.join(showDir, 'tvshow.nfo');
-      item.showPosterPath = item.showPosterPath || path.join(showDir, 'poster.jpg');
-      item.mediaLayout = 'show-season';
-      try {
+    delete item.showMetadata;
+    delete item.movieMetadata;
+    item.mediaProfile = profileSettings.profile;
+
+    try {
+      if (profileSettings.musicClips) {
+        const baseName = path.parse(item.targetPath).name;
+        const seasonDir = path.dirname(item.targetPath);
+        const showDir = path.dirname(seasonDir);
+        item.nfoPath = item.nfoPath || path.join(seasonDir, `${baseName}.nfo`);
+        item.showNfoPath = item.showNfoPath || path.join(showDir, 'tvshow.nfo');
+        item.showPosterPath = item.showPosterPath || path.join(showDir, 'poster.jpg');
+        item.mediaLayout = 'show-season';
+
         await writeTvShowNfo(item, item.showNfoPath);
         await writeEpisodeNfo(item, item.nfoPath);
-
-        // Mantem a thumbnail do clipe como arte do episodio e usa a primeira
-        // imagem disponivel apenas como poster geral do artista/show.
         if (!(await pathExists(item.showPosterPath)) && await pathExists(item.thumbnailPath)) {
           await fs.copyFile(item.thumbnailPath, item.showPosterPath);
         }
 
-        const showMetadata = getShowMetadata(item);
-        item.showMetadata = {
+        const metadata = getMusicClipMetadata(item);
+        item.mediaMetadata = {
           status: 'complete',
-          artist: showMetadata.artist,
-          title: showMetadata.trackTitle,
-          seasonNumber: showMetadata.seasonNumber,
-          episodeNumber: showMetadata.episodeNumber,
+          profile: profileSettings.profile,
+          artist: metadata.artist,
+          title: metadata.trackTitle,
+          seasonNumber: metadata.seasonNumber,
+          episodeNumber: metadata.episodeNumber,
           nfoPath: item.nfoPath,
           showNfoPath: item.showNfoPath,
-          episodeThumbPath: item.thumbnailPath,
+          artworkPath: item.thumbnailPath,
           showPosterPath: item.showPosterPath,
           updatedAt: nowIso(),
           lastError: null
         };
-      } catch (error) {
-        item.showMetadata = {
-          status: 'failed',
+      } else if (profileSettings.movie) {
+        const baseName = path.parse(item.targetPath).name;
+        item.nfoPath = item.nfoPath || path.join(path.dirname(item.targetPath), `${baseName}.nfo`);
+        item.showNfoPath = null;
+        item.showPosterPath = null;
+        item.mediaLayout = 'movie-folder';
+
+        await writeMovieNfo(item, item.nfoPath);
+        const metadata = getMovieMetadata(item);
+        item.mediaMetadata = {
+          status: 'complete',
+          profile: profileSettings.profile,
+          artist: metadata.artist,
+          title: metadata.trackTitle,
           nfoPath: item.nfoPath,
-          showNfoPath: item.showNfoPath,
-          episodeThumbPath: item.thumbnailPath,
-          showPosterPath: item.showPosterPath,
+          artworkPath: item.thumbnailPath,
           updatedAt: nowIso(),
-          lastError: error.message
+          lastError: null
         };
-        await logger.warn(`Video concluido, mas os metadados Show de ${item.videoId} nao puderam ser salvos: ${error.message}`);
+      } else {
+        const baseName = path.parse(item.targetPath).name;
+        item.nfoPath = item.nfoPath || path.join(path.dirname(item.targetPath), `${baseName}.nfo`);
+        item.showNfoPath = null;
+        item.showPosterPath = null;
+        item.mediaLayout = 'generic-flat';
+
+        await writeGenericNfo(item, item.nfoPath);
+        const metadata = getGenericMetadata(item);
+        item.mediaMetadata = {
+          status: 'complete',
+          profile: profileSettings.profile,
+          title: metadata.title,
+          nfoPath: item.nfoPath,
+          artworkPath: item.thumbnailPath,
+          updatedAt: nowIso(),
+          lastError: null
+        };
       }
+    } catch (error) {
+      item.mediaMetadata = {
+        status: 'failed',
+        profile: profileSettings.profile,
+        nfoPath: item.nfoPath || null,
+        showNfoPath: item.showNfoPath || null,
+        artworkPath: item.thumbnailPath || null,
+        showPosterPath: item.showPosterPath || null,
+        updatedAt: nowIso(),
+        lastError: error.message
+      };
+      await logger.warn(`Video concluido, mas os metadados ${profileSettings.profile} de ${item.videoId} nao puderam ser salvos: ${error.message}`);
     }
 
     const stats = await fs.stat(item.targetPath);
@@ -1625,10 +1671,10 @@ class DownloadManager {
 
   chooseTargetPaths(playlist, video, itemId) {
     const playlistDir = path.join(this.config.paths.baseDir, playlist.folderName);
-    const showSettings = getShowMetadataSettings(playlist);
+    const profileSettings = getMediaProfileSettings(playlist);
     const extracted = extractArtistAndTitle(video.title || 'Sem Titulo');
-    const identity = showSettings.enabled
-      ? resolveShowIdentity({
+    const identity = profileSettings.musicClips
+      ? resolveMediaIdentity({
         ...video,
         artist: extracted.artist,
         trackTitle: extracted.title
@@ -1657,14 +1703,14 @@ class DownloadManager {
     const artistFolderName = existingArtistFolder || desiredArtistFolder;
     const artistDir = path.join(playlistDir, artistFolderName);
 
-    const showSeasonNumber = showSettings.enabled ? showSettings.seasonNumber : null;
-    const showEpisodeNumber = showSettings.enabled
+    const showSeasonNumber = profileSettings.musicClips ? profileSettings.seasonNumber : null;
+    const showEpisodeNumber = profileSettings.musicClips
       ? getAssignedShowEpisodeNumber(this.state, playlist.folderName, artist, itemId)
       : null;
-    const seasonLabel = showSettings.enabled ? String(showSeasonNumber).padStart(2, '0') : '';
-    const episodeLabel = showSettings.enabled ? String(showEpisodeNumber).padStart(2, '0') : '';
+    const seasonLabel = profileSettings.musicClips ? String(showSeasonNumber).padStart(2, '0') : '';
+    const episodeLabel = profileSettings.musicClips ? String(showEpisodeNumber).padStart(2, '0') : '';
 
-    const preferredBase = showSettings.enabled
+    const preferredBase = profileSettings.musicClips
       ? sanitizeFileComponent(
         `${artist} - S${seasonLabel}E${episodeLabel} - ${title}`,
         `Video ${video.id}`,
@@ -1680,10 +1726,13 @@ class DownloadManager {
     }
 
     let baseName = preferredBase;
-    const seasonDir = showSettings.enabled
+    const seasonDir = profileSettings.musicClips
       ? path.join(artistDir, `Season ${seasonLabel}`)
       : artistDir;
-    const buildTargetPath = () => path.join(seasonDir, `${baseName}.mp4`);
+    const buildTargetPath = () => {
+      if (profileSettings.movie) return path.join(artistDir, baseName, `${baseName}.mp4`);
+      return path.join(seasonDir, `${baseName}.mp4`);
+    };
     let targetPath = buildTargetPath();
     let counter = 1;
     while (true) {
@@ -1697,19 +1746,26 @@ class DownloadManager {
     }
 
     const targetDir = path.dirname(targetPath);
+    const thumbnailPath = profileSettings.musicClips
+      ? path.join(targetDir, `${baseName}-thumb.jpg`)
+      : profileSettings.movie
+        ? path.join(targetDir, 'poster.jpg')
+        : path.join(artistDir, `${baseName}.jpg`);
+
     return {
       artist,
       trackTitle: title,
       targetPath,
-      thumbnailPath: showSettings.enabled
-        ? path.join(targetDir, `${baseName}-thumb.jpg`)
-        : path.join(artistDir, `${baseName}.jpg`),
-      nfoPath: showSettings.enabled ? path.join(targetDir, `${baseName}.nfo`) : null,
-      showNfoPath: showSettings.enabled ? path.join(artistDir, 'tvshow.nfo') : null,
-      showPosterPath: showSettings.enabled ? path.join(artistDir, 'poster.jpg') : null,
+      thumbnailPath,
+      nfoPath: path.join(targetDir, `${baseName}.nfo`),
+      showNfoPath: profileSettings.musicClips ? path.join(artistDir, 'tvshow.nfo') : null,
+      showPosterPath: profileSettings.musicClips ? path.join(artistDir, 'poster.jpg') : null,
       showSeasonNumber,
       showEpisodeNumber,
-      mediaLayout: showSettings.enabled ? 'show-season' : 'flat-artist'
+      mediaProfile: profileSettings.profile,
+      mediaLayout: profileSettings.musicClips
+        ? 'show-season'
+        : (profileSettings.movie ? 'movie-folder' : 'generic-flat')
     };
   }
 

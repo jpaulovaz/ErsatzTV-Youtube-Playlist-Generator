@@ -211,9 +211,7 @@ function collectConfigForm() {
           .filter((input) => input.checked)
           .map((input) => input.value)
       },
-      showMetadata: {
-        enabled: row.querySelector('[data-field="showMetadataEnabled"]').checked
-      }
+      mediaProfile: row.querySelector('[data-field="mediaProfile"]').value
     };
   }).filter((playlist) => playlist.name && playlist.urls.length > 0);
 
@@ -298,8 +296,9 @@ function renderLibraries() {
     const subtitleLanguages = Array.isArray(subtitles.languages) ? subtitles.languages : ['pt-BR', 'pt', 'en', 'es'];
     const subtitleDisabled = subtitles.enabled ? '' : 'disabled';
     const subtitleText = subtitles.enabled ? ` · Legendas SRT (${subtitleLanguages.join(', ')})` : '';
-    const showMetadata = playlist.showMetadata || { enabled: false };
-    const metadataText = showMetadata.enabled ? ' · NFO para Shows' : '';
+    const mediaProfile = playlist.mediaProfile || 'generic';
+    const profileLabels = { generic: 'Genérico', movie: 'Show / vídeo completo', music_clips: 'Clipes musicais' };
+    const metadataText = ` · ${profileLabels[mediaProfile] || profileLabels.generic}`;
 
     row.innerHTML = `
       <summary>
@@ -326,6 +325,13 @@ function renderLibraries() {
             <select data-field="maxHeight">
               <option value="" ${maxHeight === '' ? 'selected' : ''}>Herdar configuração geral</option>
               ${[360, 480, 720, 1080, 1440, 2160].map((height) => `<option value="${height}" ${maxHeight === String(height) ? 'selected' : ''}>${height}p</option>`).join('')}
+            </select>
+          </label>
+          <label>Perfil
+            <select data-field="mediaProfile">
+              <option value="generic" ${mediaProfile === 'generic' ? 'selected' : ''}>Genérico</option>
+              <option value="movie" ${mediaProfile === 'movie' ? 'selected' : ''}>Show / vídeo completo (Filmes)</option>
+              <option value="music_clips" ${mediaProfile === 'music_clips' ? 'selected' : ''}>Clipes musicais (Seriados)</option>
             </select>
           </label>
           <label class="check-row"><input data-field="enabled" type="checkbox" ${enabled ? 'checked' : ''}><span>Biblioteca ativa</span></label>
@@ -358,17 +364,6 @@ function renderLibraries() {
             </div>
           </div>
 
-          <div class="wide library-subtitle-settings">
-            <div class="library-subtitle-heading">
-              <div>
-                <strong>Metadados para ErsatzTV (Shows)</strong>
-                <small>Organiza cada artista como Show, cria <code>tvshow.nfo</code> e cada música como episódio em <code>Season 01</code>.</small>
-              </div>
-              <span class="badge info">NFO</span>
-            </div>
-            <label class="check-row"><input data-field="showMetadataEnabled" type="checkbox" ${showMetadata.enabled ? 'checked' : ''}><span>Preparar novos vídeos para biblioteca local do tipo Shows</span></label>
-            <p class="field-help">No ErsatzTV, crie a biblioteca local como <strong>Shows</strong>. O artista vira o Show e o título da música vira o episódio/subtítulo do EPG. A estrutura antiga de Filmes não é migrada automaticamente.</p>
-          </div>
         </div>
 
         <div class="library-actions-panel">
@@ -479,7 +474,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '2.7.0'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '2.8.0'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -935,9 +930,7 @@ function bindEvents() {
         includeAuto: true,
         languages: ['pt-BR', 'pt', 'en', 'es']
       },
-      showMetadata: {
-        enabled: false
-      }
+      mediaProfile: 'generic'
     });
     renderLibraries();
     requestAnimationFrame(() => {

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.8.0
+
+- Cada biblioteca passa a ter um único **Perfil** de mídia: `Genérico`, `Show / vídeo completo (Filmes)` ou `Clipes musicais (Seriados)`.
+- A interface foi simplificada: o perfil fica em um único seletor na biblioteca, sem bloco adicional de explicações.
+- **Genérico** mantém o layout simples por artista, cria JPG sidecar quando habilitado e grava um NFO básico com título, plot e `uniqueid` do YouTube.
+- **Show / vídeo completo (Filmes)** preserva o modelo da v2.6.0: uma subpasta individual por vídeo, `poster.jpg` e NFO de filme com artista em `title` e nome do vídeo em `outline`/`plot`.
+- **Clipes musicais (Seriados)** preserva o modelo da v2.7.0: artista como Show, `Season 01`, música como episódio, `tvshow.nfo`, NFO de episódio, `-thumb.jpg` e `poster.jpg` do Show.
+- O campo único `mediaProfile` substitui as flags `movieMetadata`/`showMetadata` no schema v4. Configurações v2.7 com Shows habilitado são convertidas para `music_clips`; configurações antigas de Filmes habilitadas são convertidas para `movie`.
+- Normalização de artista, legendas SRT, deduplicação por `videoId`, API Key do ErsatzTV e ações de scan/rebuild permanecem inalteradas.
+- 43 testes automatizados aprovados.
+
 ## 2.7.0
 
 - O modo de metadados do ErsatzTV passa de **Filmes** para **Shows**. No ErsatzTV, a biblioteca local correspondente deve usar `Media Kind = Shows`.

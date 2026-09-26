@@ -1,38 +1,20 @@
-# Atualização para a versão 2.7.0
+# Atualização para a versão 2.8.0
 
-Esta atualização parte da versão 2.6.0 e troca o modo opcional de metadados do ErsatzTV de **Filmes** para **Shows**.
+Esta atualização parte da versão 2.7.0 e substitui o antigo modo único de metadados por três perfis selecionáveis por biblioteca.
 
-O pacote `update` não contém `config/config.json`, `config/auth.json` nem `data/`, portanto preserva configuração, autenticação, fila e histórico. Ao iniciar a 2.7.0, o schema de configuração v2 é migrado automaticamente para v3 e uma cópia de backup do `config.json` anterior é criada.
+O pacote `update` não contém `config/config.json`, `config/auth.json` nem `data/`, portanto preserva configuração, autenticação, fila e histórico. Ao iniciar, o schema de configuração é atualizado para v4 e o arquivo anterior recebe backup automático.
 
-## Mudança no ErsatzTV
+## Perfis
 
-A biblioteca local usada por esse acervo deve ser criada como:
+Na edição de cada biblioteca existe apenas o campo **Perfil**:
 
-```text
-Media Kind: Shows
-```
+- `Genérico`
+- `Show / vídeo completo (Filmes)`
+- `Clipes musicais (Seriados)`
 
-O diretório passa a seguir o formato:
+Uma configuração v2.7 com `showMetadata.enabled=true` é convertida para `Clipes musicais`. Configurações antigas com `movieMetadata.enabled=true` são convertidas para `Show / vídeo completo`.
 
-```text
-Biblioteca/
-└── Artista/
-    ├── tvshow.nfo
-    ├── poster.jpg
-    └── Season 01/
-        ├── Artista - S01E01 - Musica.mp4
-        ├── Artista - S01E01 - Musica.nfo
-        ├── Artista - S01E01 - Musica-thumb.jpg
-        └── Artista - S01E01 - Musica.pt-BR.srt
-```
-
-O artista vira o título do Show e a música vira o título do episódio. Essa estrutura permite ao ErsatzTV tratar a música como `sub-title`/episódio no EPG sem alterar o template global dos demais canais.
-
-## Acervo antigo
-
-A 2.7.0 não tenta reorganizar automaticamente o layout antigo de Filmes. Para o estágio atual do projeto, a migração recomendada é limpar os arquivos da biblioteca e executar novamente a descoberta.
-
-O índice continua deduplicando por `videoId`. Quando o arquivo antigo não existe, o caminho é recalculado no novo layout de Shows antes do download.
+Como o projeto ainda está no início, não há migração física entre layouts. Se for trocar o perfil de uma biblioteca que já contém arquivos, a forma mais limpa é remover o acervo e permitir novo download com o perfil correto. A deduplicação continua sendo feita pelo `videoId`; quando o arquivo físico não existe, o destino é recalculado.
 
 ## Atualização
 
@@ -45,7 +27,7 @@ cp config/config.json "config/config.json.bak-$(date +%Y%m%d-%H%M%S)"
 [ ! -f config/auth.json ] || cp config/auth.json "config/auth.backup-$(date +%Y%m%d-%H%M%S).json"
 cp -a data "data.bak-$(date +%Y%m%d-%H%M%S)"
 
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v2.7.0-update.zip -d .
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v2.8.0-update.zip -d .
 
 npm run verify
 
@@ -54,10 +36,10 @@ pm2 save
 pm2 logs ersatztv-youtube-downloader --lines 100
 ```
 
-O resultado esperado da validação desta release é:
+Resultado esperado:
 
 ```text
-tests 38
-pass 38
+tests 43
+pass 43
 fail 0
 ```

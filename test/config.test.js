@@ -30,7 +30,7 @@ test('migrates useful v1 settings without enabling legacy cookies', () => {
     scheduler: { enabled: false, intervalMinutes: 60 }
   });
 
-  assert.equal(config.configVersion, 3);
+  assert.equal(config.configVersion, 4);
   assert.equal(config.paths.baseDir, '/srv/media/youtube');
   assert.equal(config.paths.cookiesPath, '');
   assert.equal(config.paths.ffmpegPath, '/usr/bin/ffmpeg');
@@ -86,26 +86,26 @@ test('preserves the ErsatzTV API Key when explicitly configured', () => {
   assert.equal(config.ersatztv.apiTimeoutSeconds, 12);
 });
 
-test('show metadata stays disabled by default and migrates the legacy movie setting', () => {
+test('media profile defaults to generic and accepts the three supported values', () => {
   const existing = normalizeConfig({
-    configVersion: 2,
+    configVersion: 4,
     paths: { baseDir: '/srv/media/youtube' },
-    playlists: [{ name: 'Clipes', urls: ['https://youtu.be/aaaaaaaaaaa'] }]
+    playlists: [{ name: 'Generica', urls: ['https://youtu.be/aaaaaaaaaaa'] }]
   });
-  assert.deepEqual(existing.playlists[0].showMetadata, { enabled: false });
+  assert.equal(existing.playlists[0].mediaProfile, 'generic');
 
+  for (const mediaProfile of ['generic', 'movie', 'music_clips']) {
+    const normalized = normalizeConfig({
+      configVersion: 4,
+      paths: { baseDir: '/srv/media/youtube' },
+      playlists: [{ name: `Perfil ${mediaProfile}`, urls: ['https://youtu.be/aaaaaaaaaaa'], mediaProfile }]
+    });
+    assert.equal(normalized.playlists[0].mediaProfile, mediaProfile);
+  }
+});
+
+test('v2.7 show metadata migrates to the music clips profile', () => {
   const migrated = normalizeConfig({
-    configVersion: 2,
-    paths: { baseDir: '/srv/media/youtube' },
-    playlists: [{
-      name: 'Clipes',
-      urls: ['https://youtu.be/aaaaaaaaaaa'],
-      movieMetadata: { enabled: true }
-    }]
-  });
-  assert.deepEqual(migrated.playlists[0].showMetadata, { enabled: true });
-
-  const enabled = normalizeConfig({
     configVersion: 3,
     paths: { baseDir: '/srv/media/youtube' },
     playlists: [{
@@ -114,5 +114,18 @@ test('show metadata stays disabled by default and migrates the legacy movie sett
       showMetadata: { enabled: true }
     }]
   });
-  assert.deepEqual(enabled.playlists[0].showMetadata, { enabled: true });
+  assert.equal(migrated.playlists[0].mediaProfile, 'music_clips');
+});
+
+test('legacy movie metadata migrates to the movie profile', () => {
+  const migrated = normalizeConfig({
+    configVersion: 2,
+    paths: { baseDir: '/srv/media/youtube' },
+    playlists: [{
+      name: 'Shows completos',
+      urls: ['https://youtu.be/aaaaaaaaaaa'],
+      movieMetadata: { enabled: true }
+    }]
+  });
+  assert.equal(migrated.playlists[0].mediaProfile, 'movie');
 });

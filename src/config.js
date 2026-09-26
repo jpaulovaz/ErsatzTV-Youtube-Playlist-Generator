@@ -2,11 +2,12 @@ const fs = require('fs/promises');
 const path = require('path');
 const { sanitizeName, isDangerousBaseDir } = require('./utils');
 const { DEFAULT_SUBTITLE_LANGUAGES, normalizeSubtitleLanguages } = require('./subtitleService');
+const { MEDIA_PROFILES, normalizeMediaProfile } = require('./mediaProfileService');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const CONFIG_DIR = path.join(ROOT_DIR, 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
-const CONFIG_VERSION = 3;
+const CONFIG_VERSION = 4;
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const DEFAULT_MAX_HEIGHT = 1080;
@@ -76,9 +77,7 @@ const DEFAULT_CONFIG = {
         includeAuto: true,
         languages: [...DEFAULT_SUBTITLE_LANGUAGES]
       },
-      showMetadata: {
-        enabled: false
-      }
+      mediaProfile: MEDIA_PROFILES.GENERIC
     }
   ],
   scheduler: {
@@ -242,17 +241,13 @@ function normalizePlaylistSubtitles(playlist) {
   };
 }
 
-function normalizePlaylistShowMetadata(playlist) {
-  const showRaw = playlist && playlist.showMetadata && typeof playlist.showMetadata === 'object'
-    ? playlist.showMetadata
-    : null;
-  const legacyMovieRaw = playlist && playlist.movieMetadata && typeof playlist.movieMetadata === 'object'
-    ? playlist.movieMetadata
-    : null;
-  const raw = showRaw || legacyMovieRaw || {};
-  return {
-    enabled: Boolean(raw.enabled)
-  };
+function normalizePlaylistMediaProfile(playlist) {
+  if (playlist && playlist.mediaProfile) return normalizeMediaProfile(playlist.mediaProfile);
+
+  // Compatibilidade de transicao apenas para a configuracao imediatamente anterior.
+  if (playlist && playlist.showMetadata && playlist.showMetadata.enabled) return MEDIA_PROFILES.MUSIC_CLIPS;
+  if (playlist && playlist.movieMetadata && playlist.movieMetadata.enabled) return MEDIA_PROFILES.MOVIE;
+  return MEDIA_PROFILES.GENERIC;
 }
 
 function normalizeConfig(raw) {
@@ -321,7 +316,7 @@ function normalizeConfig(raw) {
         cookiesPath: String(playlist && playlist.cookiesPath || '').trim(),
         maxHeight: normalizeOptionalMaxHeight(playlist && playlist.maxHeight),
         subtitles: normalizePlaylistSubtitles(playlist),
-        showMetadata: normalizePlaylistShowMetadata(playlist)
+        mediaProfile: normalizePlaylistMediaProfile(playlist)
       };
     })
     .filter((playlist) => playlist.name && playlist.urls.length > 0);

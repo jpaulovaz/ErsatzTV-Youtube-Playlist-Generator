@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 2.7.0
+# ErsatzTV YouTube Downloader 2.8.0
 
 Aplicativo Node.js para descobrir vídeos de playlists e URLs individuais do YouTube, enfileirar downloads persistentes e entregar arquivos locais ao ErsatzTV.
 
-A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.7.0 mantém a normalização de artistas e passa a gerar uma estrutura nativa de **Shows** para o ErsatzTV: artista como Show, cada música como episódio e legendas SRT ao lado do episódio.
+A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.8.0 adiciona três perfis por biblioteca: **Genérico**, **Show / vídeo completo (Filmes)** e **Clipes musicais (Seriados)**.
 
 ## Arquitetura
 
@@ -17,7 +17,7 @@ Fila persistente, um item por vez
           ↓
 yt-dlp + ffmpeg/ffprobe
           ↓
-MP4 / H.264 / AAC + JPG/SRT + NFO de Show/Episódio opcional
+MP4 / H.264 / AAC + JPG/SRT + NFO conforme o perfil da biblioteca
           ↓
 Biblioteca local do ErsatzTV
 ```
@@ -106,31 +106,11 @@ http://ENDERECO_DO_SERVIDOR:3099
 
 O projeto não usa dependências npm externas nesta versão; `npm install` não é necessário para a execução normal.
 
-## Atualização direta da versão 1
+## Atualização
 
-Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json` nem o conteúdo de `data/`, portanto preserva a configuração e o estado operacional existentes.
+Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-Na primeira inicialização da versão 2:
-
-1. `config/config.json` é lido no formato antigo.
-2. Os campos úteis são migrados.
-3. É criado `config/config.v1.backup-AAAAmmdd-HHMMSS.json`.
-4. O novo `config/config.json` é gravado com `configVersion: 2`.
-
-São preservados, quando existentes:
-
-- host e porta da interface;
-- pasta base;
-- caminho do `yt-dlp`;
-- bibliotecas e respectivas fontes;
-- resolução máxima;
-- runtime JavaScript;
-- URL e IDs do ErsatzTV;
-- estado do agendador.
-
-O antigo `streamScriptPath` é descartado. Um caminho legado de script não ativa cookies automaticamente. Cookies só são usados quando `paths.cookiesPath` ou o campo da biblioteca estiver explicitamente preenchido.
-
-Consulte também [UPGRADE.md](UPGRADE.md).
+Ao carregar uma configuração anterior, o aplicativo normaliza o schema atual e cria um backup do `config.json` antes de gravar a versão migrada. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Estrutura dos arquivos
 
@@ -142,10 +122,12 @@ Com uma biblioteca chamada `Mix_Principal`, o resultado é semelhante a:
 └── Mix_Principal/
     ├── Queen/
     │   ├── Queen - Bohemian Rhapsody.mp4
-    │   └── Queen - Bohemian Rhapsody.jpg
+    │   ├── Queen - Bohemian Rhapsody.jpg
+    │   └── Queen - Bohemian Rhapsody.nfo
     └── Outros/
         ├── Vídeo sem separador de artista.mp4
-        └── Vídeo sem separador de artista.jpg
+        ├── Vídeo sem separador de artista.jpg
+        └── Vídeo sem separador de artista.nfo
 ```
 
 O aplicativo divide o título no primeiro separador ` - ` (com espaços), preservando hífens que façam parte do artista ou da música. Quando não consegue determinar o artista, usa a pasta `Outros`. Nomes simples de artista com duas ou mais palavras totalmente em maiúsculas ou minúsculas são normalizados para capitalização legível; grafias estilizadas são preservadas.
@@ -162,14 +144,15 @@ Para cada biblioteca do aplicativo, adicione ao ErsatzTV a pasta correspondente,
 /srv/media/youtube/Mix_Principal
 ```
 
-- se **Metadados para ErsatzTV (Shows)** estiver desativado, use o tipo de biblioteca compatível com o seu fluxo normal (por exemplo, **Music Videos**);
-- se **Metadados para ErsatzTV (Shows)** estiver ativado, a biblioteca local correspondente deve ser criada com **Media Kind = Shows**.
+Use o tipo local conforme o perfil escolhido no aplicativo:
+
+- **Genérico**: estrutura simples; use o tipo que fizer sentido no seu fluxo, normalmente `Other Videos`.
+- **Show / vídeo completo (Filmes)**: `Movies`.
+- **Clipes musicais (Seriados)**: `Shows`.
 
 Aponte o `Library ID` do aplicativo para a biblioteca local que deve receber o scan. O `Playout ID` é opcional e serve para rebuild automático depois que a fila entra em repouso.
 
-Nas versões atuais do ErsatzTV que protegem as rotas `/api`, preencha também **Configurações → ErsatzTV → API Key do ErsatzTV**. O aplicativo enviará essa chave como `X-Etv-Api-Key` nas ações `scan`, `empty-trash` e `rebuild-playout`. A chave nunca é escrita nos logs.
-
-Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, remova manualmente a configuração antiga no ErsatzTV. A aplicação não cria nem depende de arquivos YML para metadados de mídia.
+Nas versões atuais do ErsatzTV que protegem as rotas `/api`, preencha também **Configurações → ErsatzTV → API Key do ErsatzTV**. O aplicativo envia essa chave como `X-Etv-Api-Key` nas ações `scan`, `empty-trash` e `rebuild-playout`.
 
 ## Descoberta e fila
 
@@ -223,11 +206,44 @@ Para o acervo existente, habilite as legendas na biblioteca, selecione os idioma
 
 O `yt-dlp` usa `--write-subs`, `--write-auto-subs` quando habilitado, `--sub-langs` para os idiomas selecionados e `--convert-subs srt`. O aplicativo preserva SRT já existentes e busca somente os idiomas selecionados que ainda estiverem ausentes.
 
-## Metadados para bibliotecas locais do tipo Shows
+## Perfis de mídia
 
-A opção **Metadados para ErsatzTV (Shows)** é configurada por biblioteca. No ErsatzTV, a biblioteca local correspondente deve ser criada com **Media Kind = Shows**. A partir da 2.7.0, configurações antigas que tinham o modo de Filmes ativado são migradas automaticamente para o novo modo de Shows.
+O perfil é escolhido diretamente na biblioteca. Não existem switches separados de Movie/Show.
 
-Cada artista vira um Show e cada música vira um episódio da `Season 01`:
+### Genérico
+
+Mantém o layout simples:
+
+```text
+Biblioteca/
+└── Artista/
+    ├── Artista - Titulo.mp4
+    ├── Artista - Titulo.jpg
+    ├── Artista - Titulo.nfo
+    └── Artista - Titulo.pt-BR.srt
+```
+
+O NFO é básico e grava título, plot e `uniqueid` do YouTube.
+
+### Show / vídeo completo (Filmes)
+
+Preserva o modelo usado na v2.6.0:
+
+```text
+Biblioteca/
+└── Artista/
+    └── Artista - Titulo/
+        ├── Artista - Titulo.mp4
+        ├── Artista - Titulo.nfo
+        ├── Artista - Titulo.pt-BR.srt
+        └── poster.jpg
+```
+
+O NFO coloca o artista em `title` e o nome do vídeo em `outline`/`plot`.
+
+### Clipes musicais (Seriados)
+
+Preserva o modelo usado na v2.7.0:
 
 ```text
 Biblioteca/
@@ -238,19 +254,12 @@ Biblioteca/
         ├── Twenty One Pilots - S01E01 - City Walls.mp4
         ├── Twenty One Pilots - S01E01 - City Walls.nfo
         ├── Twenty One Pilots - S01E01 - City Walls-thumb.jpg
-        ├── Twenty One Pilots - S01E01 - City Walls.pt-BR.srt
-        └── Twenty One Pilots - S01E01 - City Walls.en.srt
+        └── Twenty One Pilots - S01E01 - City Walls.pt-BR.srt
 ```
 
-O `tvshow.nfo` grava o artista como título do Show. O NFO do episódio grava o nome da música em `title` e `plot`, além de temporada e número do episódio. Isso permite que o ErsatzTV trate o artista como o programa e a música como o episódio/subtítulo do EPG.
+O artista vira o Show e a música vira o episódio. A numeração é estável por artista.
 
-Os episódios recebem numeração estável por artista (`S01E01`, `S01E02`, ...). Vídeos adicionados depois recebem o próximo número disponível sem renumerar os itens conhecidos. Sufixos comuns do YouTube, como `(Official Video)`, `(Official Music Video)`, `(Official Audio)`, `(Lyric Video)` e `(Visualizer)`, são removidos do título lógico da música.
-
-A thumbnail do YouTube é gravada como artwork do episódio usando o padrão `Nome-do-episodio-thumb.jpg`. A primeira thumbnail disponível também é copiada para `poster.jpg` no nível do Show para fornecer artwork geral do artista.
-
-A normalização de artistas continua conservadora: `TWENTY ONE PILOTS` e `twenty one pilots` são consolidados como `Twenty One Pilots`, enquanto grafias estilizadas como `AC/DC`, `P!NK`, `deadmau5`, `blink-182` e `CHVRCHES` são preservadas.
-
-A estrutura antiga de Filmes não é reorganizada automaticamente. Para esta mudança de modelo, a forma mais limpa é esvaziar o acervo inicial e permitir que o aplicativo baixe novamente com a estrutura de Shows. O estado persistente continua deduplicando por `videoId` e recalcula o novo destino quando o arquivo físico antigo não existe.
+A normalização de nomes continua conservadora: casing claramente ruidoso é corrigido, enquanto grafias estilizadas como `AC/DC`, `P!NK`, `deadmau5`, `blink-182` e `CHVRCHES` são preservadas.
 
 ## Compatibilidade de mídia
 
