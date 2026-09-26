@@ -1,37 +1,17 @@
-ErsatzTV YouTube Downloader 3.0.0
+ErsatzTV YouTube Downloader 3.0.1
 
-Arquivos alterados em relacao a baseline v2.8.0:
+Arquivos alterados em relacao a v3.0.0:
 
-M	.gitignore
 M	CHANGELOG.md
 M	MODIFIED_FILES.txt
 M	README.md
 M	UPDATE_CONTENTS.txt
 M	UPGRADE.md
-M	config/config.example.json
 M	package.json
 M	public/app.js
 M	public/index.html
+M	public/js/channelsView.js
 M	public/login.html
 M	public/styles.css
-M	src/config.js
-M	src/downloadManager.js
-M	src/main.js
-D	src/movieMetadataService.js
 M	src/server.js
-D	src/showMetadataService.js
-M	src/syncService.js
-M	src/youtubeApi.js
-M	test/config.test.js
-D	test/movieMetadataService.test.js
-D	test/showMetadataService.test.js
-??	public/js/
-??	src/channelActionsService.js
-??	src/channelConfig.js
-??	src/channelScheduler.js
-??	src/destinationService.js
-??	src/discovery/
-??	src/download/
-??	src/routes/
-??	test/channels.test.js
-??	test/ui-v3.test.js
+M	test/ui-v3.test.js

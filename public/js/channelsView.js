@@ -10,6 +10,7 @@
   let catalog = null;
   let editingChannelId = '';
   let busy = false;
+  const summaryOpenState = new Map();
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -52,16 +53,193 @@
     return all && all.channelState && all.channelState.channels && all.channelState.channels[channelId] || null;
   }
 
+  function stateForDestination(channelId, sourceKind, playlistId = '') {
+    const all = ctx && ctx.getStatus ? ctx.getStatus() : null;
+    const states = all && all.channelState && all.channelState.destinations;
+    return states && states[destinationId(channelId, sourceKind, playlistId)] || null;
+  }
+
   function statsHtml(stats) {
     if (!stats) return '<span class="badge">Sem estatísticas</span>';
-    return [
+    const badges = [
       `<span class="badge info">${stats.total || 0} itens</span>`,
       `<span class="badge warn">${stats.pending || 0} pendentes</span>`,
       `<span class="badge ok">${stats.completed || 0} concluídos</span>`,
       `<span class="badge danger">${stats.failed || 0} falhas</span>`,
       `<span class="badge">${stats.orphaned || 0} órfãos</span>`,
       `<span class="badge">${ctx.formatBytes(stats.totalBytes || 0)}</span>`
-    ].join('');
+    ];
+    if (stats.subtitlesEnabled) {
+      const pending = Number(stats.subtitlePending) || 0;
+      const failed = Number(stats.subtitleFailed) || 0;
+      const klass = failed > 0 ? 'danger' : (pending > 0 ? 'warn' : 'ok');
+      const text = failed > 0
+        ? `Legendas: ${failed} falha(s)`
+        : (pending > 0 ? `Legendas: ${pending} pendente(s)` : 'Legendas ativas');
+      badges.push(`<span class="badge ${klass}">${text}</span>`);
+    }
+    return badges.join('');
+  }
+
+  function subtitleSummary(value) {
+    const subtitles = global.DestinationForm.normalizedSubtitles(value);
+    if (!subtitles.enabled) return 'Desativadas';
+    const languages = subtitles.languages.length ? subtitles.languages.join(', ') : '-';
+    return `${languages}${subtitles.includeAuto ? ' + automáticas' : ''}`;
+  }
+
+  function profileLabel(value) {
+    const labels = global.DestinationForm.PROFILE_LABELS || {};
+    return labels[value] || labels.generic || 'Genérico';
+  }
+
+  function destinationStatus(channel, sourceKind, playlistId = '', enabled = true) {
+    const state = stateForDestination(channel.channelId, sourceKind, playlistId);
+    if (state && state.available === false) return { label: 'Indisponível', className: 'warn' };
+    if (channel.enabled === false || enabled === false) return { label: 'Pausada', className: '' };
+    return { label: 'Ativa', className: 'ok' };
+  }
+
+  function aggregateChannelStats(channel) {
+    const totals = {
+      total: 0,
+      pending: 0,
+      completed: 0,
+      failed: 0,
+      orphaned: 0,
+      totalBytes: 0,
+      found: false
+    };
+    const add = (stats) => {
+      if (!stats) return;
+      totals.found = true;
+      totals.total += Number(stats.total) || 0;
+      totals.pending += Number(stats.pending) || 0;
+      totals.completed += Number(stats.completed) || 0;
+      totals.failed += Number(stats.failed) || 0;
+      totals.orphaned += Number(stats.orphaned) || 0;
+      totals.totalBytes += Number(stats.totalBytes) || 0;
+    };
+    Object.keys(SOURCE_META).forEach((kind) => {
+      if (channel.globalSources && channel.globalSources[kind]) add(statsFor(channel.channelId, kind));
+    });
+    (channel.playlists || []).forEach((playlist) => add(statsFor(channel.channelId, 'playlist', playlist.playlistId)));
+    return totals;
+  }
+
+  function channelStatsHtml(channel) {
+    const stats = aggregateChannelStats(channel);
+    if (!stats.found) return '<span class="badge">Sem estatísticas</span>';
+    return [
+      `<span class="badge info">${stats.total} itens</span>`,
+      `<span class="badge ok">${stats.completed} concluídos</span>`,
+      `<span class="badge warn">${stats.pending} pendentes</span>`,
+      `<span class="badge danger">${stats.failed} falhas</span>`,
+      stats.orphaned ? `<span class="badge">${stats.orphaned} órfãos</span>` : '',
+      `<span class="badge">${ctx.formatBytes(stats.totalBytes)}</span>`
+    ].filter(Boolean).join('');
+  }
+
+  function readOnlyField(label, value) {
+    return `<div class="channel-readonly-field"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value == null || value === '' ? '-' : value)}</strong></div>`;
+  }
+
+  function renderGlobalSourceSummary(channel, kind) {
+    const meta = SOURCE_META[kind];
+    const stats = statsFor(channel.channelId, kind);
+    const state = stateForDestination(channel.channelId, kind);
+    const status = destinationStatus(channel, kind);
+    const lastSyncAt = state && state.lastSyncAt || stats && stats.lastDiscoveryAt || null;
+    return `
+      <details class="channel-readonly-item" data-channel-summary-source="${escapeHtml(kind)}">
+        <summary>
+          <div class="channel-readonly-summary-copy">
+            <strong>${escapeHtml(meta.label)}</strong>
+            <small>Genérico · Legendas ${escapeHtml(subtitleSummary(channel.globalSources && channel.globalSources.subtitles))}</small>
+            <div class="library-stats">${statsHtml(stats)}</div>
+          </div>
+          <div class="channel-readonly-summary-state">
+            <span class="badge ${status.className}">${status.label}</span>
+            <span class="accordion-chevron" aria-hidden="true"></span>
+          </div>
+        </summary>
+        <div class="channel-readonly-body">
+          <div class="channel-readonly-grid">
+            ${readOnlyField('Perfil', 'Genérico')}
+            ${readOnlyField('Legendas', subtitleSummary(channel.globalSources && channel.globalSources.subtitles))}
+            ${readOnlyField('Pasta', meta.folderName)}
+            ${readOnlyField('Última atualização', lastSyncAt ? ctx.formatDate(lastSyncAt) : '-')}
+          </div>
+        </div>
+      </details>`;
+  }
+
+  function renderPlaylistSummary(channel, playlist, index) {
+    const stats = statsFor(channel.channelId, 'playlist', playlist.playlistId);
+    const state = stateForDestination(channel.channelId, 'playlist', playlist.playlistId);
+    const status = destinationStatus(channel, 'playlist', playlist.playlistId, playlist.enabled !== false);
+    const qualityText = playlist.maxHeight ? `${playlist.maxHeight}p` : 'Qualidade global';
+    const subtitleText = subtitleSummary(playlist.subtitles);
+    const profileText = profileLabel(playlist.mediaProfile || 'generic');
+    const lastSyncAt = state && state.lastSyncAt || stats && stats.lastDiscoveryAt || null;
+    return `
+      <details class="channel-readonly-playlist library-accordion" data-channel-summary-playlist="${escapeHtml(playlist.playlistId)}">
+        <summary>
+          <div class="library-summary-main">
+            <span class="library-index">${String(index + 1).padStart(2, '0')}</span>
+            <div class="playlist-title">
+              <h3>${escapeHtml(playlist.name)}</h3>
+              <p>${escapeHtml(`${qualityText} · ${profileText} · Legendas ${subtitleText}`)}</p>
+              <div class="library-stats">${statsHtml(stats)}</div>
+            </div>
+          </div>
+          <div class="library-summary-state">
+            <span class="badge ${status.className}">${status.label}</span>
+            <span class="accordion-chevron" aria-hidden="true"></span>
+          </div>
+        </summary>
+        <div class="library-body channel-readonly-body">
+          <div class="channel-readonly-grid">
+            ${readOnlyField('Perfil', profileText)}
+            ${readOnlyField('Resolução', qualityText)}
+            ${readOnlyField('Library ID', playlist.libraryId || '-')}
+            ${readOnlyField('Playout ID', playlist.playoutId || '-')}
+            ${readOnlyField('Legendas', subtitleText)}
+            ${readOnlyField('Cookies', playlist.cookiesPath ? 'Personalizado' : 'Global')}
+            ${readOnlyField('Pasta', playlist.folderName || playlist.name)}
+            ${readOnlyField('Última atualização', lastSyncAt ? ctx.formatDate(lastSyncAt) : '-')}
+          </div>
+        </div>
+      </details>`;
+  }
+
+  function renderSelectedContent(channel) {
+    const selectedKinds = Object.keys(SOURCE_META).filter((kind) => channel.globalSources && channel.globalSources[kind]);
+    const playlists = channel.playlists || [];
+    if (!selectedKinds.length && !playlists.length) return '';
+    return `
+      <details class="channel-selected-content" data-channel-selected-content>
+        <summary>
+          <span class="accordion-copy">
+            <strong class="accordion-title">Conteúdo selecionado</strong>
+            <small>${selectedKinds.length} fonte(s) · ${playlists.length} playlist(s)</small>
+          </span>
+          <span class="accordion-state"><span class="accordion-chevron" aria-hidden="true"></span></span>
+        </summary>
+        <div class="channel-selected-content-body">
+          ${selectedKinds.map((kind) => renderGlobalSourceSummary(channel, kind)).join('')}
+          ${playlists.length ? `
+            <details class="channel-selection-group" data-channel-summary-playlists>
+              <summary>
+                <span class="accordion-copy"><strong class="accordion-title">Playlists</strong><small>${playlists.length} selecionada(s)</small></span>
+                <span class="accordion-state"><span class="accordion-chevron" aria-hidden="true"></span></span>
+              </summary>
+              <div class="channel-selection-group-body">
+                ${playlists.map((playlist, index) => renderPlaylistSummary(channel, playlist, index)).join('')}
+              </div>
+            </details>` : ''}
+        </div>
+      </details>`;
   }
 
   function setBusy(value) {
@@ -383,12 +561,41 @@
     return Object.keys(SOURCE_META).filter((kind) => channel.globalSources && channel.globalSources[kind]).length;
   }
 
+  function summaryDetailsKey(details) {
+    if (!details) return '';
+    const channelCard = details.closest('[data-channel-id]');
+    const channelId = channelCard && channelCard.dataset.channelId;
+    if (!channelId) return '';
+    if (details.hasAttribute('data-channel-selected-content')) return `${channelId}:selected`;
+    if (details.dataset.channelSummarySource) return `${channelId}:source:${details.dataset.channelSummarySource}`;
+    if (details.hasAttribute('data-channel-summary-playlists')) return `${channelId}:playlists`;
+    if (details.dataset.channelSummaryPlaylist) return `${channelId}:playlist:${details.dataset.channelSummaryPlaylist}`;
+    return '';
+  }
+
+  function rememberSummaryOpenState(root) {
+    if (!root) return;
+    root.querySelectorAll('details[data-channel-selected-content], details[data-channel-summary-source], details[data-channel-summary-playlists], details[data-channel-summary-playlist]').forEach((details) => {
+      const key = summaryDetailsKey(details);
+      if (key) summaryOpenState.set(key, details.open);
+    });
+  }
+
+  function restoreSummaryOpenState(root) {
+    if (!root) return;
+    root.querySelectorAll('details[data-channel-selected-content], details[data-channel-summary-source], details[data-channel-summary-playlists], details[data-channel-summary-playlist]').forEach((details) => {
+      const key = summaryDetailsKey(details);
+      if (key && summaryOpenState.has(key)) details.open = summaryOpenState.get(key);
+    });
+  }
+
   function render() {
     if (!ctx) return;
     const root = $('#channelList');
     if (!root) return;
     const channels = currentConfig() && currentConfig().channels || [];
     $('#navChannelsBadge').textContent = String(channels.length);
+    rememberSummaryOpenState(root);
     if (!channels.length) {
       root.innerHTML = '<div class="empty-state">Nenhum canal configurado.</div>';
       return;
@@ -400,22 +607,27 @@
       const statusClass = state && state.available === false ? 'warn' : (channel.enabled === false ? '' : 'ok');
       return `
         <article class="channel-card" data-channel-id="${escapeHtml(channel.channelId)}">
-          <div class="channel-card-main">
-            ${channel.thumbnailUrl ? `<img class="channel-card-thumb" src="${escapeHtml(channel.thumbnailUrl)}" alt="">` : '<span class="channel-card-thumb channel-avatar-placeholder">▶</span>'}
-            <div class="channel-card-copy">
-              <div class="channel-card-title"><h3>${escapeHtml(channel.name)}</h3><span class="badge ${statusClass}">${status}</span></div>
-              <p>${escapeHtml(channel.handle || channel.channelId)}</p>
-              <small>${selectedSources} fonte(s) · ${(channel.playlists || []).length} playlist(s)${state && state.lastCatalogAt ? ` · ${ctx.formatDate(state.lastCatalogAt)}` : ''}</small>
+          <div class="channel-card-top">
+            <div class="channel-card-main">
+              ${channel.thumbnailUrl ? `<img class="channel-card-thumb" src="${escapeHtml(channel.thumbnailUrl)}" alt="">` : '<span class="channel-card-thumb channel-avatar-placeholder">▶</span>'}
+              <div class="channel-card-copy">
+                <div class="channel-card-title"><h3>${escapeHtml(channel.name)}</h3><span class="badge ${statusClass}">${status}</span></div>
+                <p>${escapeHtml(channel.handle || channel.channelId)}</p>
+                <small>${selectedSources} fonte(s) · ${(channel.playlists || []).length} playlist(s)${state && state.lastCatalogAt ? ` · ${ctx.formatDate(state.lastCatalogAt)}` : ''}</small>
+              </div>
+            </div>
+            <div class="channel-card-actions">
+              <button type="button" class="small primary" data-channel-action="run">Atualizar agora</button>
+              <button type="button" class="small" data-channel-action="edit">Editar</button>
+              <button type="button" class="small danger" data-channel-action="remove-config">Remover configuração</button>
+              <button type="button" class="small danger" data-channel-action="delete-with-files">Excluir canal e arquivos</button>
             </div>
           </div>
-          <div class="channel-card-actions">
-            <button type="button" class="small primary" data-channel-action="run">Atualizar agora</button>
-            <button type="button" class="small" data-channel-action="edit">Editar</button>
-            <button type="button" class="small danger" data-channel-action="remove-config">Remover configuração</button>
-            <button type="button" class="small danger" data-channel-action="delete-with-files">Excluir canal e arquivos</button>
-          </div>
+          <div class="channel-card-stats">${channelStatsHtml(channel)}</div>
+          ${renderSelectedContent(channel)}
         </article>`;
     }).join('');
+    restoreSummaryOpenState(root);
   }
 
   async function runPlaylistAction(channelId, playlistId, action) {

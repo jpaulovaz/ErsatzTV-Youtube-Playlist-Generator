@@ -197,9 +197,9 @@ async function handleAuthApi(req, res, url) {
 async function getVersion() {
   try {
     const pkg = JSON.parse(await fs.readFile(PACKAGE_PATH, 'utf8'));
-    return pkg.version || '3.0.0';
+    return pkg.version || '3.0.1';
   } catch {
-    return '3.0.0';
+    return '3.0.1';
   }
 }
 

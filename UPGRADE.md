@@ -1,8 +1,10 @@
-# Atualização para 3.0.0
+# Atualização para 3.0.1
 
-A versão 3.0.0 é compatível com a configuração da v2.8.0. O carregamento migra o schema para `configVersion: 5` e cria um backup automático do `config.json` anterior.
+A versão 3.0.1 é uma atualização corretiva sobre a v3.0.0. Não altera o schema de configuração, a fila persistente, autenticação, caminhos de mídia ou regras de download.
 
 ## Antes de atualizar
+
+Como prática de segurança, mantenha backup da configuração e dos dados persistentes:
 
 ```bash
 cp config/config.json "config/config.json.bak-$(date +%Y%m%d-%H%M%S)"
@@ -12,32 +14,25 @@ cp -a data "data.bak-$(date +%Y%m%d-%H%M%S)"
 
 ## Aplicar o pacote update
 
-Pare o processo, extraia `ErsatzTV-YouTube-Downloader-v3.0.0-update.zip` por cima da instalação e valide:
+Pare o processo, extraia `ErsatzTV-YouTube-Downloader-v3.0.1-update.zip` por cima da instalação v3.0.0 e valide:
 
 ```bash
-npm run verify
+npm run check
+npm test
 ```
 
 Depois reinicie o processo normalmente. O pacote update não contém `config/config.json`, `config/auth.json` nem a pasta `data`.
 
-## Novos campos
+## O que muda
 
-- `paths.channelsBaseDir`: pasta base independente para o módulo Canais. Quando ausente, é derivada ao lado de `paths.baseDir` como `youtube-channels`.
-- `channels`: lista de canais cadastrados; inicia vazia.
-- `channelScheduler`: agendador independente; inicia desativado.
+- Canais salvos exibem resumo externo do conteúdo selecionado e das estatísticas por destino.
+- Fontes globais e playlists usam sanfonas compactas e somente leitura.
+- Sanfonas abertas permanecem abertas durante o refresh automático de status.
 
-Bibliotecas atuais, autenticação, fila persistente e arquivos locais são preservados.
+## Compatibilidade
 
-## Primeiro uso de Canais
-
-1. Abra **Canais**.
-2. Clique em **Adicionar canal**.
-3. Informe a URL e clique em **Analisar**. A análise não baixa nada.
-4. Selecione fontes globais e/ou playlists.
-5. Para playlists, defina o perfil e, quando necessário, Library ID/Playout ID, legendas e demais opções.
-6. Salve o canal.
-7. Use **Atualizar agora** quando quiser iniciar a primeira sincronização.
+A v3.0.1 mantém `configVersion: 5` e o mesmo formato de estado da v3.0.0. Não há migração adicional nesta atualização.
 
 ## Rollback
 
-Antes de qualquer download de Canais, basta restaurar o código da v2.8.0 e o backup do `config.json`. Depois que Canais já tiver baixado mídia, o rollback do código continua possível, mas os arquivos novos devem ser preservados/manuseados manualmente; não há rollback destrutivo automático.
+Como não há mudança de schema ou persistência, o rollback para v3.0.0 é apenas a restauração dos arquivos de código da versão anterior. Configuração, autenticação, fila e arquivos de mídia devem ser preservados.

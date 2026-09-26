@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.0.1
+
+- Cards de Canais salvos passam a exibir um resumo compacto, somente leitura, do conteúdo selecionado e das estatísticas por destino.
+- Fontes globais e playlists selecionadas ficam organizadas em sanfonas fechadas por padrão, preservando a interface clean.
+- A atualização automática de status preserva o estado aberto/fechado das sanfonas de Canais, inclusive grupos e playlists internas.
+- Nenhuma alteração em schema, fila, worker, regras de download ou armazenamento.
+- 67 testes automatizados aprovados, incluindo validação da preservação de estado das sanfonas.
+
 ## 3.0.0
 
 - Novo módulo **Canais**, separado de Bibliotecas, com análise por URL antes de qualquer persistência ou download.

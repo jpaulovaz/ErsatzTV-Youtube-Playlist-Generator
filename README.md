@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.0.0
+# ErsatzTV YouTube Downloader 3.0.1
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.0.0 mantém o módulo **Bibliotecas** e adiciona o módulo independente **Canais**. Um canal pode expor Todos os uploads, Vídeos, Shorts, Transmissões finalizadas e playlists públicas. Cada playlist selecionada funciona como uma biblioteca embutida, com perfil de mídia, legendas e integração própria com o ErsatzTV. A deduplicação é feita por destino: o mesmo vídeo pode existir intencionalmente em destinos diferentes.
+A versão 3.0.1 mantém os módulos **Bibliotecas** e **Canais** da v3.0.0 e corrige a experiência de acompanhamento dos canais salvos. Um canal pode expor Todos os uploads, Vídeos, Shorts, Transmissões finalizadas e playlists públicas. Cada playlist selecionada funciona como uma biblioteca embutida, com perfil de mídia, legendas e integração própria com o ErsatzTV. A deduplicação é feita por destino: o mesmo vídeo pode existir intencionalmente em destinos diferentes.
 
 ## Arquitetura
 
