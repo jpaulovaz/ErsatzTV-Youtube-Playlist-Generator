@@ -919,34 +919,53 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
     z-index: 55;
     width: 100%;
     max-height: none;
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 0;
-    padding: 6px 5px calc(6px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 3px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 6px 7px calc(6px + env(safe-area-inset-bottom));
     border: 1px solid rgba(87, 107, 137, .5);
     border-bottom: 0;
     border-radius: 17px 17px 0 0;
     background: rgba(10, 18, 31, .97);
     box-shadow: 0 -10px 32px rgba(0, 0, 0, .36);
     backdrop-filter: blur(18px);
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    transform: translateY(0);
+    opacity: 1;
+    transition: transform .22s ease, opacity .16s ease;
+    will-change: transform, opacity;
+  }
+  .sidebar::-webkit-scrollbar { display: none; }
+  .sidebar.mobile-nav-hidden {
+    transform: translateY(calc(100% + 10px));
+    opacity: 0;
+    pointer-events: none;
   }
   .nav-group { display: contents; }
   .nav-label, .sidebar-footer { display: none; }
   .nav-button {
     position: relative;
-    width: 100%;
-    min-width: 0;
+    width: 76px;
+    min-width: 76px;
     min-height: 58px;
+    flex: 0 0 76px;
     flex-direction: column;
     justify-content: center;
     gap: 3px;
-    padding: 5px 2px;
+    padding: 5px 3px;
     border: 0;
     border-radius: 10px;
     color: #778aa3;
     font-size: 9px;
     line-height: 1.1;
     text-align: center;
+    scroll-snap-align: center;
   }
   .nav-button svg { width: 20px; height: 20px; }
   .nav-button:hover { border: 0; }
@@ -1723,4 +1742,9 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
   .channel-editor-actions { display: grid; grid-template-columns: 1fr 1fr; }
   .channel-editor-actions button { width: 100%; }
   .login-clean-shell { padding: 16px; }
+}
+
+
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) {
+  .sidebar { transition: none; scroll-behavior: auto; }
 }

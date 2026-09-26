@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.0\.1/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.0\.1/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.0\.2/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.0\.2/);
   assert.match(html, /rev=channel-summary-2/);
 });
 
@@ -65,4 +65,30 @@ test('Channel summary accordions preserve their open state across automatic stat
   assert.match(view, /data-channel-summary-source/);
   assert.match(view, /data-channel-summary-playlists/);
   assert.match(view, /data-channel-summary-playlist/);
+});
+
+
+test('mobile navigation stays on one horizontal row and auto-hides without covering content', () => {
+  const app = read('app.js');
+  const css = read('styles.css');
+
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.sidebar \{[\s\S]*?display: flex;[\s\S]*?flex-direction: row;/);
+  assert.match(css, /\.sidebar \{[\s\S]*?overflow-x: auto;/);
+  assert.match(css, /scroll-snap-type: x proximity/);
+  assert.match(css, /\.nav-button \{[\s\S]*?flex: 0 0 76px;/);
+  assert.match(css, /\.sidebar\.mobile-nav-hidden/);
+  assert.match(css, /transform: translateY\(calc\(100% \+ 10px\)\)/);
+  assert.match(css, /padding: 12px 12px calc\(var\(--mobile-nav-height\) \+ 24px \+ env\(safe-area-inset-bottom\)\)/);
+
+  assert.match(app, /const MOBILE_NAV_IDLE_MS = 3600/);
+  assert.match(app, /function hideMobileNav\(\)/);
+  assert.match(app, /function showMobileNav\(/);
+  assert.match(app, /function bindMobileNavBehavior\(\)/);
+  assert.match(app, /window\.addEventListener\('scroll'/);
+  assert.match(app, /document\.addEventListener\('touchstart'/);
+  assert.match(app, /document\.addEventListener\('touchend'/);
+  assert.match(app, /delta > 0[\s\S]*hideMobileNav\(\)/);
+  assert.match(app, /else showMobileNav\(\{ scheduleHide: true \}\)/);
+  assert.match(app, /window\.setTimeout\(\(\) => hideMobileNav\(\), MOBILE_NAV_IDLE_MS\)/);
+  assert.match(app, /centerActiveMobileNav/);
 });

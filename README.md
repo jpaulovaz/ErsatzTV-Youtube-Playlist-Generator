@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.0.1
+# ErsatzTV YouTube Downloader 3.0.2
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.0.1 mantém os módulos **Bibliotecas** e **Canais** da v3.0.0 e corrige a experiência de acompanhamento dos canais salvos. Um canal pode expor Todos os uploads, Vídeos, Shorts, Transmissões finalizadas e playlists públicas. Cada playlist selecionada funciona como uma biblioteca embutida, com perfil de mídia, legendas e integração própria com o ErsatzTV. A deduplicação é feita por destino: o mesmo vídeo pode existir intencionalmente em destinos diferentes.
+A versão 3.0.2 mantém os módulos **Bibliotecas** e **Canais** da v3.0.1 e aprimora a navegação móvel. A barra inferior passa a funcionar em uma única linha horizontal, com rolagem lateral e ocultação automática durante a navegação, sem alterar configuração, fila ou regras de download. Um canal pode expor Todos os uploads, Vídeos, Shorts, Transmissões finalizadas e playlists públicas. Cada playlist selecionada funciona como uma biblioteca embutida, com perfil de mídia, legendas e integração própria com o ErsatzTV.
 
 ## Arquitetura
 
@@ -43,7 +43,7 @@ Biblioteca local do ErsatzTV
 - Itens removidos de uma fonte são marcados como órfãos e nunca apagados automaticamente.
 - Controles de pausar, retomar, cancelar, priorizar, remover, limpar a fila e tentar novamente.
 - Resumo permanente da fila e listagem recolhível/paginada, fechada por padrão.
-- Interface profissional com navegação lateral no desktop e navegação inferior no celular.
+- Interface profissional com navegação lateral no desktop e barra móvel inferior em carrossel horizontal, com ocultação automática e reaparecimento por interação.
 - Painel móvel de ações rápidas para descoberta, fila, atualização e encerramento da sessão.
 - Lista de downloads convertida automaticamente em cartões no celular, sem tabela horizontal.
 - Login administrativo local com senha derivada por scrypt, sessão HttpOnly, CSRF e bloqueio de tentativas.

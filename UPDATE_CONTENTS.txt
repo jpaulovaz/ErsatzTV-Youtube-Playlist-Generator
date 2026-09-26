@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.0.1 - pacote de atualização
+ErsatzTV YouTube Downloader 3.0.2 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.0.0.
+Extraia este ZIP sobre uma instalação v3.0.1.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,9 +9,10 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principais mudanças:
-- resumo externo somente leitura nos cards de Canais;
-- sanfonas para fontes globais e playlists selecionadas;
-- preservação do estado aberto/fechado das sanfonas durante o refresh automático;
+- barra inferior móvel em carrossel horizontal de uma única linha;
+- ocultação ao rolar para baixo e reaparecimento ao rolar para cima;
+- reaparecimento por toque/gesto compatível;
+- ocultação automática após inatividade;
 - nenhuma alteração em schema, fila, worker ou regras de download.
 
 Consulte UPGRADE.md antes da atualização.

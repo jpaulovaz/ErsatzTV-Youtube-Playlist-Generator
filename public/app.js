@@ -14,6 +14,104 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 const APP_VIEWS = new Set(['overview', 'downloads', 'libraries', 'channels', 'settings', 'logs']);
+const MOBILE_NAV_BREAKPOINT = 760;
+const MOBILE_NAV_IDLE_MS = 3600;
+const MOBILE_NAV_SCROLL_THRESHOLD = 8;
+let mobileNavHideTimer = null;
+let mobileNavLastScrollY = Math.max(0, window.scrollY || 0);
+let mobileNavTouchStartY = null;
+let mobileNavTouchStartX = null;
+
+function isMobileNavMode() {
+  return window.innerWidth <= MOBILE_NAV_BREAKPOINT;
+}
+
+function clearMobileNavHideTimer() {
+  if (!mobileNavHideTimer) return;
+  window.clearTimeout(mobileNavHideTimer);
+  mobileNavHideTimer = null;
+}
+
+function hideMobileNav() {
+  if (!isMobileNavMode()) return;
+  clearMobileNavHideTimer();
+  $('.sidebar')?.classList.add('mobile-nav-hidden');
+}
+
+function scheduleMobileNavHide() {
+  clearMobileNavHideTimer();
+  if (!isMobileNavMode() || document.body.classList.contains('mobile-sheet-open')) return;
+  mobileNavHideTimer = window.setTimeout(() => hideMobileNav(), MOBILE_NAV_IDLE_MS);
+}
+
+function centerActiveMobileNav({ behavior = 'smooth' } = {}) {
+  if (!isMobileNavMode()) return;
+  const sidebar = $('.sidebar');
+  const active = sidebar?.querySelector('.nav-button.active');
+  if (!sidebar || !active) return;
+  const targetLeft = Math.max(0, active.offsetLeft - ((sidebar.clientWidth - active.offsetWidth) / 2));
+  sidebar.scrollTo({ left: targetLeft, behavior });
+}
+
+function showMobileNav({ scheduleHide = true, centerActive = false } = {}) {
+  if (!isMobileNavMode()) return;
+  $('.sidebar')?.classList.remove('mobile-nav-hidden');
+  if (centerActive) window.requestAnimationFrame(() => centerActiveMobileNav());
+  if (scheduleHide) scheduleMobileNavHide();
+}
+
+function syncMobileNavForViewport() {
+  const sidebar = $('.sidebar');
+  if (!sidebar) return;
+  if (!isMobileNavMode()) {
+    clearMobileNavHideTimer();
+    sidebar.classList.remove('mobile-nav-hidden');
+    sidebar.scrollLeft = 0;
+    return;
+  }
+  mobileNavLastScrollY = Math.max(0, window.scrollY || 0);
+  showMobileNav({ scheduleHide: true, centerActive: true });
+}
+
+function bindMobileNavBehavior() {
+  const sidebar = $('.sidebar');
+  if (!sidebar) return;
+
+  window.addEventListener('scroll', () => {
+    if (!isMobileNavMode()) return;
+    const currentY = Math.max(0, window.scrollY || document.documentElement.scrollTop || 0);
+    const delta = currentY - mobileNavLastScrollY;
+    if (Math.abs(delta) < MOBILE_NAV_SCROLL_THRESHOLD) return;
+
+    if (delta > 0 && currentY > MOBILE_NAV_SCROLL_THRESHOLD) hideMobileNav();
+    else showMobileNav({ scheduleHide: true });
+    mobileNavLastScrollY = currentY;
+  }, { passive: true });
+
+  document.addEventListener('touchstart', (event) => {
+    if (!isMobileNavMode()) return;
+    mobileNavTouchStartY = event.touches?.[0]?.clientY ?? null;
+    mobileNavTouchStartX = event.touches?.[0]?.clientX ?? null;
+  }, { passive: true });
+
+  document.addEventListener('touchend', (event) => {
+    if (!isMobileNavMode() || mobileNavTouchStartY === null || mobileNavTouchStartX === null) return;
+    const endY = event.changedTouches?.[0]?.clientY ?? mobileNavTouchStartY;
+    const endX = event.changedTouches?.[0]?.clientX ?? mobileNavTouchStartX;
+    const deltaY = endY - mobileNavTouchStartY;
+    const deltaX = endX - mobileNavTouchStartX;
+    mobileNavTouchStartY = null;
+    mobileNavTouchStartX = null;
+
+    const verticalGesture = Math.abs(deltaY) > Math.abs(deltaX);
+    if (verticalGesture && deltaY < -MOBILE_NAV_SCROLL_THRESHOLD) hideMobileNav();
+    else showMobileNav({ scheduleHide: true });
+  }, { passive: true });
+
+  sidebar.addEventListener('pointerdown', () => showMobileNav({ scheduleHide: false }));
+  sidebar.addEventListener('pointerup', () => scheduleMobileNavHide());
+  sidebar.addEventListener('pointercancel', () => scheduleMobileNavHide());
+}
 
 
 function setMobileActionSheet(open) {
@@ -52,6 +150,7 @@ function setActiveView(view, { persist = true, scroll = false } = {}) {
   });
   if (persist) sessionStorage.setItem('ersatztv_active_view', nextView);
   setMobileActionSheet(false);
+  if (isMobileNavMode()) showMobileNav({ scheduleHide: true, centerActive: true });
   if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -438,7 +537,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '3.0.1'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '3.0.2'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -864,7 +963,8 @@ function bindEvents() {
     }
   });
   window.addEventListener('resize', () => {
-    if (window.innerWidth > 760) setMobileActionSheet(false);
+    if (window.innerWidth > MOBILE_NAV_BREAKPOINT) setMobileActionSheet(false);
+    syncMobileNavForViewport();
   });
 
   $('#cancelCurrentBtn').addEventListener('click', (event) => {
@@ -977,6 +1077,8 @@ async function bootstrap() {
   setActiveView(sessionStorage.getItem('ersatztv_active_view') || 'overview', { persist: false });
   updateSettingsAccordionToggle();
   bindEvents();
+  bindMobileNavBehavior();
+  syncMobileNavForViewport();
   if (window.ChannelView) {
     window.ChannelView.init({
       api,

@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.0.2
+
+- Navegação inferior no celular passa a usar uma única linha horizontal em formato de carrossel, sem quebra de itens.
+- A barra móvel se oculta ao rolar a página para baixo e reaparece ao rolar para cima.
+- Toques e gestos que não continuam a rolagem para baixo tornam a barra visível novamente.
+- Após alguns segundos sem interação, a barra volta a se ocultar automaticamente.
+- O item de navegação ativo é centralizado no carrossel quando necessário.
+- Mantido o espaço seguro no rodapé e o suporte a `safe-area`, evitando sobreposição de conteúdo.
+- Nenhuma alteração em schema, fila, worker, regras de download ou armazenamento.
+- 68 testes automatizados aprovados, incluindo validação estrutural da navegação móvel.
+
 ## 3.0.1
 
 - Cards de Canais salvos passam a exibir um resumo compacto, somente leitura, do conteúdo selecionado e das estatísticas por destino.
