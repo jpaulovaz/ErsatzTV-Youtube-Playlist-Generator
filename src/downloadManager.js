@@ -2,6 +2,15 @@ const fs = require('fs/promises');
 const path = require('path');
 const { spawn } = require('child_process');
 const { ROOT_DIR, normalizeMaxHeight } = require('./config');
+const { STATE_VERSION, normalizeSubtitleState, createDefaultState, normalizeState, atomicWriteJson } = require('./download/queueState');
+const { getDiskStats, moveAcrossFileSystems, downloadRemoteFile } = require('./download/storageUtils');
+const { findNextRunnableItem: selectNextRunnableItem, findNextSubtitleRunnableItem: selectNextSubtitleRunnableItem } = require('./download/workerSelector');
+const {
+  DESTINATION_TYPES,
+  libraryDestination,
+  findDestinationById,
+  getAllDestinations
+} = require('./destinationService');
 const logger = require('./logger');
 const { scanAndRebuild, runLibraryAction } = require('./ersatztvService');
 const {
@@ -35,7 +44,6 @@ const {
 } = require('./utils');
 
 const STATE_PATH = path.join(ROOT_DIR, 'data', 'download-state.json');
-const STATE_VERSION = 2;
 const TICK_INTERVAL_MS = 1000;
 const PROGRESS_SAVE_DELAY_MS = 1500;
 const STORAGE_REFRESH_MS = 30000;
@@ -49,11 +57,11 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function makeItemId(libraryFolder, videoId) {
-  return `${libraryFolder}::${videoId}`;
+function makeItemId(destinationId, videoId) {
+  return `${destinationId}::${videoId}`;
 }
 
-function getAssignedShowEpisodeNumber(state, libraryFolder, artist, itemId) {
+function getAssignedShowEpisodeNumber(state, destinationId, artist, itemId) {
   const current = state && state.items ? state.items[itemId] : null;
   const currentNumber = Number(current && (current.showEpisodeNumber || current.mediaMetadata && current.mediaMetadata.episodeNumber || current.showMetadata && current.showMetadata.episodeNumber));
   if (Number.isInteger(currentNumber) && currentNumber > 0) return currentNumber;
@@ -61,7 +69,7 @@ function getAssignedShowEpisodeNumber(state, libraryFolder, artist, itemId) {
   const artistKey = normalizeArtistDisplayName(artist).toLocaleLowerCase('pt-BR');
   let maxEpisode = 0;
   for (const existing of Object.values(state && state.items || {})) {
-    if (!existing || existing.id === itemId || existing.libraryFolder !== libraryFolder) continue;
+    if (!existing || existing.id === itemId || (existing.destinationId || existing.libraryFolder) !== destinationId) continue;
     const existingArtist = normalizeArtistDisplayName(
       existing.artist || resolveMediaIdentity(existing).artist
     );
@@ -90,10 +98,19 @@ function normalizePlaylist(playlist) {
 }
 
 function findPlaylistByFolder(config, libraryFolder) {
-  const target = sanitizeName(libraryFolder);
-  return (config.playlists || [])
-    .map(normalizePlaylist)
-    .find((playlist) => playlist.folderName === target || playlist.name === libraryFolder);
+  const target = String(libraryFolder || '').trim();
+  const destination = findDestinationById(config, target, { includeDisabled: true });
+  if (destination) return destination;
+  const normalizedTarget = sanitizeName(target);
+  const raw = (config.playlists || []).map(normalizePlaylist).find((playlist) => playlist.folderName === normalizedTarget || playlist.name === target);
+  return raw ? libraryDestination(config, raw) : null;
+}
+
+
+function resolveDestinationId(config, value) {
+  const raw = decodeURIComponent(String(value || '').trim());
+  if (!raw) return '';
+  return findDestinationById(config, raw, { includeDisabled: true }) ? raw : sanitizeName(raw);
 }
 
 function getEffectiveCookiesPath(config, playlist) {
@@ -211,86 +228,8 @@ function parseFileLine(line) {
   return String(line).slice(index + marker.length).trim();
 }
 
-function normalizeSubtitleState(raw) {
-  const state = raw && typeof raw === 'object' ? raw : {};
-  return {
-    status: String(state.status || 'not-checked'),
-    requestedLanguages: Array.isArray(state.requestedLanguages)
-      ? state.requestedLanguages.map((value) => String(value || '').trim()).filter(Boolean)
-      : [],
-    foundLanguages: Array.isArray(state.foundLanguages)
-      ? state.foundLanguages.map((value) => String(value || '').trim()).filter(Boolean)
-      : [],
-    missingLanguages: Array.isArray(state.missingLanguages)
-      ? state.missingLanguages.map((value) => String(value || '').trim()).filter(Boolean)
-      : [],
-    includeAuto: state.includeAuto !== false,
-    attempts: Math.max(0, Number(state.attempts) || 0),
-    nextAttemptAt: state.nextAttemptAt || null,
-    lastAttemptAt: state.lastAttemptAt || null,
-    lastCompletedAt: state.lastCompletedAt || null,
-    lastError: state.lastError || null,
-    updatedAt: state.updatedAt || null
-  };
-}
-
 function isSubtitleUnavailableOutput(output) {
   return /there are no subtitles|no subtitles|requested subtitles?.*(?:not available|not found)|did not get any subtitles|no automatic captions/i.test(String(output || ''));
-}
-
-function createDefaultState() {
-  return {
-    version: STATE_VERSION,
-    paused: false,
-    pauseReason: null,
-    nextSequence: 1,
-    items: {},
-    libraries: {},
-    updatedAt: nowIso()
-  };
-}
-
-function normalizeState(raw) {
-  const state = raw && typeof raw === 'object' ? raw : createDefaultState();
-  const normalized = {
-    version: STATE_VERSION,
-    paused: Boolean(state.paused),
-    pauseReason: state.pauseReason || null,
-    nextSequence: Math.max(1, Number(state.nextSequence) || 1),
-    items: state.items && typeof state.items === 'object' ? state.items : {},
-    libraries: state.libraries && typeof state.libraries === 'object' ? state.libraries : {},
-    updatedAt: state.updatedAt || nowIso()
-  };
-
-  for (const [id, rawItem] of Object.entries(normalized.items)) {
-    const item = rawItem && typeof rawItem === 'object' ? rawItem : {};
-    item.id = id;
-    item.status = String(item.status || 'pending');
-    if (item.status === 'downloading') {
-      item.status = item.sourceActive === false ? 'orphaned' : 'pending';
-      item.nextAttemptAt = null;
-      item.lastError = 'Download interrompido pela reinicializacao; item devolvido para a fila.';
-      item.phase = null;
-    }
-    item.attempts = Math.max(0, Number(item.attempts) || 0);
-    item.priority = Number(item.priority) || 0;
-    item.queueOrder = Math.max(1, Number(item.queueOrder) || normalized.nextSequence++);
-    item.progress = item.progress && typeof item.progress === 'object' ? item.progress : {};
-    item.sourceActive = item.sourceActive !== false;
-    item.orphaned = Boolean(item.orphaned || item.sourceActive === false);
-    item.suppressed = Boolean(item.suppressed);
-    item.subtitles = normalizeSubtitleState(item.subtitles);
-    normalized.items[id] = item;
-  }
-
-  return normalized;
-}
-
-async function atomicWriteJson(filePath, value) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  await fs.writeFile(tempPath, JSON.stringify(value, null, 2) + '\n', 'utf8');
-  await fs.rename(tempPath, filePath);
 }
 
 function attachLineReader(stream, callback) {
@@ -371,71 +310,6 @@ function runCommand(command, args, options = {}) {
       resolve({ code, signal, stdout, stderr, timedOut });
     });
   });
-}
-
-async function getDiskStats(targetPath) {
-  await fs.mkdir(targetPath, { recursive: true });
-
-  if (typeof fs.statfs === 'function') {
-    const stats = await fs.statfs(targetPath);
-    const blockSize = Number(stats.bsize || stats.frsize || 0);
-    const totalBytes = blockSize * Number(stats.blocks || 0);
-    const freeBytes = blockSize * Number(stats.bfree || 0);
-    const availableBytes = blockSize * Number(stats.bavail || stats.bfree || 0);
-    return {
-      path: targetPath,
-      totalBytes,
-      freeBytes,
-      availableBytes,
-      usedBytes: Math.max(0, totalBytes - freeBytes),
-      checkedAt: nowIso(),
-      error: null
-    };
-  }
-
-  const result = await runCommand('/bin/df', ['-Pk', targetPath], { timeoutMs: 10000 });
-  if (result.code !== 0) throw new Error(result.stderr.trim() || 'df falhou');
-  const lines = result.stdout.trim().split(/\r?\n/);
-  const fields = lines[lines.length - 1].trim().split(/\s+/);
-  const totalBytes = Number(fields[1]) * 1024;
-  const usedBytes = Number(fields[2]) * 1024;
-  const availableBytes = Number(fields[3]) * 1024;
-  return {
-    path: targetPath,
-    totalBytes,
-    freeBytes: Math.max(0, totalBytes - usedBytes),
-    availableBytes,
-    usedBytes,
-    checkedAt: nowIso(),
-    error: null
-  };
-}
-
-async function moveAcrossFileSystems(sourcePath, targetPath) {
-  await fs.mkdir(path.dirname(targetPath), { recursive: true });
-  try {
-    await fs.rename(sourcePath, targetPath);
-  } catch (error) {
-    if (error.code !== 'EXDEV') throw error;
-    const tempTarget = `${targetPath}.importing-${process.pid}`;
-    await fs.copyFile(sourcePath, tempTarget);
-    await fs.rename(tempTarget, targetPath);
-    await fs.rm(sourcePath, { force: true });
-  }
-}
-
-async function downloadRemoteFile(url, targetPath, timeoutMs = 30000) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-    if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    const buffer = Buffer.from(await response.arrayBuffer());
-    await fs.writeFile(targetPath, buffer);
-    return buffer.length;
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 class DownloadManager {
@@ -583,53 +457,13 @@ class DownloadManager {
   }
 
   findNextRunnableItem() {
-    const now = Date.now();
-    const enabledFolders = new Set(
-      (this.config.playlists || [])
-        .filter((playlist) => playlist.enabled !== false)
-        .map((playlist) => sanitizeName(playlist.name))
-    );
-
-    const candidates = Object.values(this.state.items).filter((item) => {
-      if (item.status !== 'pending') return false;
-      if (item.sourceActive === false || item.orphaned) return false;
-      if (!enabledFolders.has(item.libraryFolder)) return false;
-      if (item.nextAttemptAt && new Date(item.nextAttemptAt).getTime() > now) return false;
-      return true;
-    });
-
-    candidates.sort((a, b) => {
-      const priorityDelta = (Number(b.priority) || 0) - (Number(a.priority) || 0);
-      if (priorityDelta !== 0) return priorityDelta;
-      return (Number(a.queueOrder) || 0) - (Number(b.queueOrder) || 0);
-    });
-
-    return candidates[0] || null;
+    return selectNextRunnableItem(this.state, getAllDestinations(this.config));
   }
 
   findNextSubtitleRunnableItem() {
-    const now = Date.now();
-    const configured = new Map(
-      (this.config.playlists || []).map((playlist) => [sanitizeName(playlist.name), playlist])
-    );
-
-    const candidates = Object.values(this.state.items).filter((item) => {
-      if (item.status !== 'completed' || item.orphaned || item.sourceActive === false) return false;
-      const playlist = configured.get(item.libraryFolder);
-      if (!playlist || !getSubtitleSettings(playlist).enabled) return false;
-      const subtitleState = normalizeSubtitleState(item.subtitles);
-      item.subtitles = subtitleState;
-      if (subtitleState.status !== 'pending') return false;
-      if (subtitleState.nextAttemptAt && new Date(subtitleState.nextAttemptAt).getTime() > now) return false;
-      return true;
-    });
-
-    candidates.sort((a, b) => {
-      const left = new Date(a.subtitles && a.subtitles.updatedAt || a.updatedAt || 0).getTime();
-      const right = new Date(b.subtitles && b.subtitles.updatedAt || b.updatedAt || 0).getTime();
-      return left - right;
-    });
-    return candidates[0] || null;
+    const item = selectNextSubtitleRunnableItem(this.state, getAllDestinations(this.config, { includeDisabled: true }));
+    if (item) item.subtitles = normalizeSubtitleState(item.subtitles);
+    return item;
   }
 
   async scheduleSubtitlesForItem(item, playlist, options = {}) {
@@ -660,7 +494,7 @@ class DownloadManager {
   }
 
   async processSubtitleItem(item) {
-    const playlist = findPlaylistByFolder(this.config, item.libraryFolder);
+    const playlist = findPlaylistByFolder(this.config, item.destinationId || item.libraryFolder);
     if (!playlist) return;
     const settings = getSubtitleSettings(playlist);
     if (!settings.enabled) {
@@ -856,7 +690,7 @@ class DownloadManager {
   }
 
   async queueMissingSubtitles(libraryFolder) {
-    const folder = sanitizeName(libraryFolder);
+    const folder = resolveDestinationId(this.config, libraryFolder);
     const playlist = findPlaylistByFolder(this.config, folder);
     if (!playlist) {
       const error = new Error('Biblioteca nao encontrada na configuracao.');
@@ -942,11 +776,15 @@ class DownloadManager {
   }
 
   getWorkDir(item) {
-    return path.join(this.config.paths.baseDir, '.youtube-downloader-work', item.libraryFolder, item.videoId);
+    const destination = findPlaylistByFolder(this.config, item.destinationId || item.libraryFolder);
+    const workRoot = destination && destination.workRootPath
+      ? destination.workRootPath
+      : path.join(this.config.paths.baseDir, '.youtube-downloader-work', item.libraryFolder);
+    return path.join(workRoot, item.videoId);
   }
 
   async processItem(item) {
-    const playlist = findPlaylistByFolder(this.config, item.libraryFolder);
+    const playlist = findPlaylistByFolder(this.config, item.destinationId || item.libraryFolder);
     if (!playlist || playlist.enabled === false) return;
 
     if (item.targetPath && await pathExists(item.targetPath)) {
@@ -1345,7 +1183,7 @@ class DownloadManager {
       await moveAcrossFileSystems(stagedMedia, item.targetPath);
     }
 
-    const playlist = findPlaylistByFolder(this.config, item.libraryFolder);
+    const playlist = findPlaylistByFolder(this.config, item.destinationId || item.libraryFolder);
     const profileSettings = getMediaProfileSettings(playlist);
     const stagedThumbnail = await this.findStagedThumbnail(workDir);
     const forceArtwork = profileSettings.movie || profileSettings.musicClips;
@@ -1601,9 +1439,14 @@ class DownloadManager {
         }
 
         if (!playlist.libraryId && !playlist.playoutId) {
-          libraryState.dirty = true;
-          libraryState.lastIdleActionError = 'Library ID e Playout ID nao configurados; os arquivos aguardam o scan automatico.';
-          this.nextIdleActionAtMs = Date.now() + RETRY_IDLE_ACTION_MS;
+          if (playlist.type === DESTINATION_TYPES.LIBRARY) {
+            libraryState.dirty = true;
+            libraryState.lastIdleActionError = 'Library ID e Playout ID nao configurados; os arquivos aguardam o scan automatico.';
+            this.nextIdleActionAtMs = Date.now() + RETRY_IDLE_ACTION_MS;
+          } else {
+            libraryState.dirty = false;
+            libraryState.lastIdleActionError = null;
+          }
           continue;
         }
 
@@ -1633,27 +1476,33 @@ class DownloadManager {
     if (!this.config || !this.config.paths || !this.config.paths.baseDir) return null;
     if (!force && this.storage && Date.now() - this.storageCheckedAtMs < STORAGE_REFRESH_MS) return this.storage;
 
-    try {
-      const stats = await getDiskStats(this.config.paths.baseDir);
-      const minBytes = Math.max(1, Number(this.config.downloads.minFreeSpaceGb) || 20) * 1024 ** 3;
-      this.storage = {
-        ...stats,
-        minFreeBytes: minBytes,
-        low: stats.availableBytes < minBytes
-      };
-    } catch (error) {
-      this.storage = {
-        path: this.config.paths.baseDir,
-        totalBytes: 0,
-        freeBytes: 0,
-        availableBytes: 0,
-        usedBytes: 0,
-        minFreeBytes: Math.max(1, Number(this.config.downloads.minFreeSpaceGb) || 20) * 1024 ** 3,
-        low: false,
-        checkedAt: nowIso(),
-        error: error.message
-      };
+    const roots = [...new Set([
+      this.config.paths.baseDir,
+      this.config.paths.channelsBaseDir
+    ].map((value) => String(value || '').trim()).filter(Boolean))];
+    const minBytes = Math.max(1, Number(this.config.downloads.minFreeSpaceGb) || 20) * 1024 ** 3;
+    const volumes = [];
+
+    for (const rootPath of roots) {
+      try {
+        await fs.mkdir(rootPath, { recursive: true });
+        const stats = await getDiskStats(rootPath);
+        volumes.push({ ...stats, minFreeBytes: minBytes, low: stats.availableBytes < minBytes });
+      } catch (error) {
+        volumes.push({
+          path: rootPath, totalBytes: 0, freeBytes: 0, availableBytes: 0, usedBytes: 0,
+          minFreeBytes: minBytes, low: false, checkedAt: nowIso(), error: error.message
+        });
+      }
     }
+
+    const healthy = volumes.filter((entry) => !entry.error);
+    const limiting = healthy.slice().sort((a, b) => a.availableBytes - b.availableBytes)[0] || volumes[0] || null;
+    this.storage = limiting ? {
+      ...limiting,
+      low: healthy.some((entry) => entry.low),
+      volumes
+    } : null;
     this.storageCheckedAtMs = Date.now();
     return this.storage;
   }
@@ -1670,7 +1519,7 @@ class DownloadManager {
   }
 
   chooseTargetPaths(playlist, video, itemId) {
-    const playlistDir = path.join(this.config.paths.baseDir, playlist.folderName);
+    const playlistDir = playlist.rootPath || path.join(this.config.paths.baseDir, playlist.folderName);
     const profileSettings = getMediaProfileSettings(playlist);
     const extracted = extractArtistAndTitle(video.title || 'Sem Titulo');
     const identity = profileSettings.musicClips
@@ -1690,7 +1539,7 @@ class DownloadManager {
     // diferencas apenas de maiusculas/minusculas vindas do YouTube.
     const artistKey = artist.toLocaleLowerCase('pt-BR');
     for (const existing of Object.values(this.state.items)) {
-      if (existing.id === itemId || existing.libraryFolder !== playlist.folderName || !existing.artist) continue;
+      if (existing.id === itemId || (existing.destinationId || existing.libraryFolder) !== (playlist.id || playlist.folderName) || !existing.artist) continue;
       const existingArtist = normalizeArtistDisplayName(existing.artist);
       if (existingArtist.toLocaleLowerCase('pt-BR') === artistKey) {
         artist = existingArtist;
@@ -1705,7 +1554,7 @@ class DownloadManager {
 
     const showSeasonNumber = profileSettings.musicClips ? profileSettings.seasonNumber : null;
     const showEpisodeNumber = profileSettings.musicClips
-      ? getAssignedShowEpisodeNumber(this.state, playlist.folderName, artist, itemId)
+      ? getAssignedShowEpisodeNumber(this.state, playlist.id || playlist.folderName, artist, itemId)
       : null;
     const seasonLabel = profileSettings.musicClips ? String(showSeasonNumber).padStart(2, '0') : '';
     const episodeLabel = profileSettings.musicClips ? String(showEpisodeNumber).padStart(2, '0') : '';
@@ -1769,16 +1618,20 @@ class DownloadManager {
     };
   }
 
-  async reconcileLibrary(config, playlistInput, videos) {
+  async reconcileDestination(config, destinationInput, videos) {
     await this.init(config);
     this.configure(config);
-    const playlist = normalizePlaylist(playlistInput);
-    const libraryFolder = playlist.folderName;
-    if (!libraryFolder) throw new Error('Nome de biblioteca invalido.');
+    const destination = destinationInput && destinationInput.id && destinationInput.rootPath
+      ? destinationInput
+      : libraryDestination(config, normalizePlaylist(destinationInput));
+    if (!destination || !destination.id || !destination.rootPath) throw new Error('Destino invalido.');
 
+    const destinationId = destination.id;
     const discoveredIds = new Set();
     const summary = {
-      library: libraryFolder,
+      destinationId,
+      destinationType: destination.type,
+      library: destination.folderName,
       discovered: 0,
       queued: 0,
       alreadyCompleted: 0,
@@ -1788,7 +1641,7 @@ class DownloadManager {
       skipped: 0
     };
 
-    await fs.mkdir(path.join(config.paths.baseDir, libraryFolder), { recursive: true });
+    await fs.mkdir(destination.rootPath, { recursive: true });
 
     for (const video of videos || []) {
       const videoId = String(video && video.id || '').trim();
@@ -1799,7 +1652,7 @@ class DownloadManager {
 
       discoveredIds.add(videoId);
       summary.discovered += 1;
-      const id = makeItemId(libraryFolder, videoId);
+      const id = makeItemId(destinationId, videoId);
       const existing = this.state.items[id];
       const metadata = {
         title: String(video.title || existing && existing.title || `Video ${videoId}`).trim(),
@@ -1811,17 +1664,26 @@ class DownloadManager {
         url: String(video.webpage_url || video.url || `https://www.youtube.com/watch?v=${videoId}`).trim(),
         sourceUrl: String(video.sourceUrl || '').trim(),
         sourceIndex: Number.isFinite(Number(video.sourceIndex)) ? Number(video.sourceIndex) : null,
-        sourceKind: String(video.sourceKind || '').trim(),
-        maxHeight: getEffectiveMaxHeight(config, playlist)
+        sourceKind: String(video.sourceKind || destination.sourceKind || '').trim(),
+        maxHeight: getEffectiveMaxHeight(config, destination)
+      };
+
+      const destinationFields = {
+        libraryName: destination.displayName,
+        libraryFolder: destinationId,
+        destinationId,
+        destinationType: destination.type,
+        channelId: destination.channelId || null,
+        playlistId: destination.playlistId || null,
+        targetRoot: destination.rootPath,
+        workRootPath: destination.workRootPath,
+        videoId
       };
 
       if (existing) {
         const wasOrphaned = existing.orphaned || existing.sourceActive === false || existing.status === 'orphaned';
         const previousPathExists = Boolean(existing.targetPath && await pathExists(existing.targetPath));
-        Object.assign(existing, metadata, {
-          libraryName: playlist.name,
-          libraryFolder,
-          videoId,
+        Object.assign(existing, metadata, destinationFields, {
           sourceActive: true,
           orphaned: false,
           orphanedAt: null,
@@ -1829,11 +1691,8 @@ class DownloadManager {
           updatedAt: nowIso()
         });
 
-        // Se o arquivo local foi apagado, recalcula o destino com as regras atuais.
-        // Isso permite apagar o acervo inicial e baixar novamente sem herdar paths
-        // antigos com casing inconsistente de artista.
         if (!previousPathExists && !(existing.status === 'removed' && existing.suppressed)) {
-          Object.assign(existing, this.chooseTargetPaths(playlist, video, id));
+          Object.assign(existing, this.chooseTargetPaths(destination, video, id));
         }
 
         if (existing.status === 'completed' && existing.targetPath && !(await pathExists(existing.targetPath))) {
@@ -1862,14 +1721,12 @@ class DownloadManager {
         continue;
       }
 
-      const target = this.chooseTargetPaths(playlist, video, id);
+      const target = this.chooseTargetPaths(destination, video, id);
       const exists = await pathExists(target.targetPath);
       const createdAt = nowIso();
       this.state.items[id] = {
         id,
-        libraryName: playlist.name,
-        libraryFolder,
-        videoId,
+        ...destinationFields,
         ...metadata,
         ...target,
         status: exists ? 'completed' : 'pending',
@@ -1897,7 +1754,7 @@ class DownloadManager {
     }
 
     for (const item of Object.values(this.state.items)) {
-      if (item.libraryFolder !== libraryFolder || discoveredIds.has(item.videoId)) continue;
+      if ((item.destinationId || item.libraryFolder) !== destinationId || discoveredIds.has(item.videoId)) continue;
       if (item.sourceActive === false && item.orphaned) continue;
 
       item.sourceActive = false;
@@ -1912,12 +1769,17 @@ class DownloadManager {
       summary.orphaned += 1;
     }
 
-    const libraryState = this.ensureLibraryState(libraryFolder);
-    libraryState.lastDiscoveryAt = nowIso();
-    libraryState.lastDiscoverySummary = summary;
+    const destinationState = this.ensureLibraryState(destinationId);
+    destinationState.lastDiscoveryAt = nowIso();
+    destinationState.lastDiscoverySummary = summary;
     await this.saveNow();
     this.kick();
     return summary;
+  }
+
+  async reconcileLibrary(config, playlistInput, videos) {
+    const destination = libraryDestination(config, normalizePlaylist(playlistInput));
+    return this.reconcileDestination(config, destination, videos);
   }
 
   async pause(reason = 'Fila pausada pelo usuario.') {
@@ -1937,7 +1799,7 @@ class DownloadManager {
 
   async clearQueue(options = {}) {
     const requestedLibrary = String(options.library || '').trim();
-    const libraryFolder = requestedLibrary ? sanitizeName(requestedLibrary) : '';
+    const libraryFolder = requestedLibrary ? resolveDestinationId(this.config, requestedLibrary) : '';
     const cancelCurrent = options.cancelCurrent !== false;
     const summary = {
       library: libraryFolder || null,
@@ -2181,7 +2043,7 @@ class DownloadManager {
 
   filterAndSortItems(options = {}) {
     const statusFilter = String(options.status || '').trim();
-    const libraryFilter = sanitizeName(options.library || '');
+    const libraryFilter = resolveDestinationId(this.config || { playlists: [], channels: [] }, options.library || '');
     const statusRank = {
       downloading: 0,
       pending: 1,
@@ -2287,8 +2149,67 @@ class DownloadManager {
   }
 
 
+  getDestinationStats(config = this.config, destinationId = '') {
+    const destination = findDestinationById(config, destinationId, { includeDisabled: true });
+    if (!destination) return null;
+    const stats = {
+      destinationId: destination.id,
+      destinationType: destination.type,
+      displayName: destination.displayName,
+      total: 0,
+      pending: 0,
+      downloading: 0,
+      completed: 0,
+      failed: 0,
+      cancelled: 0,
+      orphaned: 0,
+      removed: 0,
+      totalBytes: 0,
+      lastDiscoveryAt: null,
+      dirtyForScan: false,
+      lastIdleActionAt: null,
+      lastIdleActionError: null,
+      subtitlesEnabled: getSubtitleSettings(destination).enabled,
+      subtitlePending: 0,
+      subtitleFailed: 0,
+      subtitleComplete: 0,
+      subtitleUnavailable: 0,
+      subtitleBackfill: null
+    };
+    for (const item of Object.values(this.state.items)) {
+      if ((item.destinationId || item.libraryFolder) !== destination.id) continue;
+      stats.total += 1;
+      if (stats[item.status] !== undefined) stats[item.status] += 1;
+      if (item.orphaned && item.status === 'completed') stats.orphaned += 1;
+      stats.totalBytes += Number(item.fileSizeBytes) || 0;
+      if (item.subtitles && item.status === 'completed') {
+        if (['pending', 'checking'].includes(item.subtitles.status)) stats.subtitlePending += 1;
+        else if (item.subtitles.status === 'failed') stats.subtitleFailed += 1;
+        else if (item.subtitles.status === 'complete') stats.subtitleComplete += 1;
+        else if (item.subtitles.status === 'unavailable') stats.subtitleUnavailable += 1;
+      }
+    }
+    const state = this.state.libraries[destination.id] || {};
+    stats.lastDiscoveryAt = state.lastDiscoveryAt || null;
+    stats.dirtyForScan = Boolean(state.dirty);
+    stats.lastIdleActionAt = state.lastIdleActionAt || null;
+    stats.lastIdleActionError = state.lastIdleActionError || null;
+    stats.subtitleBackfill = state.subtitleBackfill ? clone(state.subtitleBackfill) : null;
+    return stats;
+  }
+
+  getChannelStats(config = this.config, channelId = '') {
+    const result = {};
+    for (const destination of getAllDestinations(config, { includeDisabled: true })) {
+      if (destination.channelId !== channelId) continue;
+      result[destination.id] = this.getDestinationStats(config, destination.id);
+    }
+    return result;
+  }
+
+
   previewOrphans(libraryFolder) {
-    const folder = sanitizeName(libraryFolder);
+    const folder = resolveDestinationId(this.config, libraryFolder);
     const items = Object.values(this.state.items).filter((item) => item.libraryFolder === folder && item.orphaned);
     return {
       playlist: folder,
@@ -2306,7 +2227,7 @@ class DownloadManager {
   }
 
   async cleanupOrphans(libraryFolder) {
-    const folder = sanitizeName(libraryFolder);
+    const folder = resolveDestinationId(this.config, libraryFolder);
     if (this.current && this.state.items[this.current.itemId] && this.state.items[this.current.itemId].libraryFolder === folder && this.state.items[this.current.itemId].orphaned) {
       throw new Error('Existe um item orfao em download. Cancele-o antes da limpeza.');
     }
@@ -2364,7 +2285,8 @@ class DownloadManager {
       }
     }
 
-    const playlistDir = path.join(this.config.paths.baseDir, folder);
+    const destination = findPlaylistByFolder(this.config, folder);
+    const playlistDir = destination && destination.rootPath ? destination.rootPath : path.join(this.config.paths.baseDir, folder);
     if (this.config.cleanup.removeEmptyArtistFolders) {
       await removeEmptyDirectories(playlistDir, playlistDir, logger);
     }
@@ -2376,7 +2298,7 @@ class DownloadManager {
   }
 
   async refreshThumbnails(libraryFolder) {
-    const folder = sanitizeName(libraryFolder);
+    const folder = resolveDestinationId(this.config, libraryFolder);
     const summary = { playlist: folder, checked: 0, created: 0, updated: 0, skipped: 0, failed: 0 };
 
     for (const item of Object.values(this.state.items)) {
@@ -2411,15 +2333,17 @@ class DownloadManager {
     return summary;
   }
 
-  async deleteLibraryData(config, playlistInput) {
-    const playlist = normalizePlaylist(playlistInput);
-    const libraryFolder = playlist.folderName;
-    const libraryDir = path.join(config.paths.baseDir, libraryFolder);
-    if (!isPathInside(config.paths.baseDir, libraryDir)) throw new Error('Caminho da biblioteca fora da pasta base.');
+  async deleteDestinationData(config, destination) {
+    if (!destination || !destination.id || !destination.rootPath) throw new Error('Destino invalido para exclusao.');
+    const destinationId = destination.id;
+    const destinationDir = destination.rootPath;
+    if (!isPathInside(destination.baseRootPath, destinationDir) && path.resolve(destination.baseRootPath) !== path.resolve(destinationDir)) {
+      throw new Error('Caminho do destino fora da pasta base.');
+    }
 
     if (this.current) {
       const currentItem = this.state.items[this.current.itemId];
-      if (currentItem && currentItem.libraryFolder === libraryFolder) {
+      if (currentItem && (currentItem.destinationId || currentItem.libraryFolder) === destinationId) {
         this.current.cancelRequested = true;
         killProcessTree(this.current.child);
         await Promise.race([
@@ -2430,15 +2354,54 @@ class DownloadManager {
     }
 
     const ids = Object.values(this.state.items)
-      .filter((item) => item.libraryFolder === libraryFolder)
+      .filter((item) => (item.destinationId || item.libraryFolder) === destinationId)
       .map((item) => item.id);
     for (const id of ids) delete this.state.items[id];
-    delete this.state.libraries[libraryFolder];
+    delete this.state.libraries[destinationId];
 
-    await fs.rm(libraryDir, { recursive: true, force: true });
-    await fs.rm(path.join(config.paths.baseDir, '.youtube-downloader-work', libraryFolder), { recursive: true, force: true });
+    await fs.rm(destinationDir, { recursive: true, force: true });
+    if (destination.workRootPath) await fs.rm(destination.workRootPath, { recursive: true, force: true });
     await this.saveNow();
-    return { playlist: libraryFolder, itemsRemoved: ids.length, directoryRemoved: libraryDir };
+    return { destinationId, itemsRemoved: ids.length, directoryRemoved: destinationDir };
+  }
+
+  async deleteChannelData(config, channel) {
+    if (!channel || !channel.channelId || !channel.folderName) throw new Error('Canal invalido para exclusao.');
+    const channelId = String(channel.channelId);
+    const channelRoot = path.join(config.paths.channelsBaseDir, channel.folderName);
+    if (!isPathInside(config.paths.channelsBaseDir, channelRoot)) {
+      throw new Error('Caminho do canal fora da pasta base de Canais.');
+    }
+
+    if (this.current) {
+      const currentItem = this.state.items[this.current.itemId];
+      if (currentItem && (currentItem.channelId === channelId || String(currentItem.destinationId || '').startsWith(`channel:${channelId}:`))) {
+        this.current.cancelRequested = true;
+        killProcessTree(this.current.child);
+        await Promise.race([
+          this.currentPromise ? this.currentPromise.catch(() => {}) : Promise.resolve(),
+          new Promise((resolve) => setTimeout(resolve, 8000))
+        ]);
+      }
+    }
+
+    const ids = Object.values(this.state.items)
+      .filter((item) => item.channelId === channelId || String(item.destinationId || item.libraryFolder || '').startsWith(`channel:${channelId}:`))
+      .map((item) => item.id);
+    for (const id of ids) delete this.state.items[id];
+    for (const key of Object.keys(this.state.libraries)) {
+      if (key.startsWith(`channel:${channelId}:`)) delete this.state.libraries[key];
+    }
+
+    await fs.rm(channelRoot, { recursive: true, force: true });
+    await fs.rm(path.join(config.paths.channelsBaseDir, '.youtube-downloader-work', channelId), { recursive: true, force: true });
+    await this.saveNow();
+    return { channelId, itemsRemoved: ids.length, directoryRemoved: channelRoot };
+  }
+
+  async deleteLibraryData(config, playlistInput) {
+    const destination = libraryDestination(config, normalizePlaylist(playlistInput));
+    return this.deleteDestinationData(config, destination);
   }
 
   async saveNow() {

@@ -1,20 +1,37 @@
-.gitignore
-CHANGELOG.md
-README.md
-UPGRADE.md
-package.json
-config/auth.example.json
-deploy/ersatztv-youtube-downloader.service.example
-public/app.js
-public/index.html
-public/login.html
-public/login.js
-public/styles.css
-src/auth.js
-src/cli-auth.js
-src/downloadManager.js
-src/main.js
-src/server.js
-src/syncService.js
-test/auth.test.js
-test/downloadManager.test.js
+ErsatzTV YouTube Downloader 3.0.0
+
+Arquivos alterados em relacao a baseline v2.8.0:
+
+M	.gitignore
+M	CHANGELOG.md
+M	MODIFIED_FILES.txt
+M	README.md
+M	UPDATE_CONTENTS.txt
+M	UPGRADE.md
+M	config/config.example.json
+M	package.json
+M	public/app.js
+M	public/index.html
+M	public/login.html
+M	public/styles.css
+M	src/config.js
+M	src/downloadManager.js
+M	src/main.js
+D	src/movieMetadataService.js
+M	src/server.js
+D	src/showMetadataService.js
+M	src/syncService.js
+M	src/youtubeApi.js
+M	test/config.test.js
+D	test/movieMetadataService.test.js
+D	test/showMetadataService.test.js
+??	public/js/
+??	src/channelActionsService.js
+??	src/channelConfig.js
+??	src/channelScheduler.js
+??	src/destinationService.js
+??	src/discovery/
+??	src/download/
+??	src/routes/
+??	test/channels.test.js
+??	test/ui-v3.test.js

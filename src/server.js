@@ -5,15 +5,19 @@ const { URL } = require('url');
 const { ROOT_DIR, loadConfig, saveConfig } = require('./config');
 const {
   runSync,
-  runPlaylistApiAction,
-  testPlaylistCookies,
   testYouTubeApi,
   getAllPlaylistHealth,
-  findPlaylist,
   getState
 } = require('./syncService');
 const downloadManager = require('./downloadManager');
 const scheduler = require('./scheduler');
+const channelScheduler = require('./channelScheduler');
+const channelSyncService = require('./discovery/channelSyncService');
+const channelState = require('./discovery/channelState');
+const discoveryLock = require('./discovery/discoveryLock');
+const { handleLibraryRoutes } = require('./routes/libraryRoutes');
+const { handleDownloadRoutes } = require('./routes/downloadRoutes');
+const { handleChannelRoutes } = require('./routes/channelRoutes');
 const auth = require('./auth');
 const logger = require('./logger');
 
@@ -32,7 +36,7 @@ const MIME_TYPES = {
 };
 
 function applySecurityHeaders(req, res) {
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -190,118 +194,25 @@ async function handleAuthApi(req, res, url) {
   return true;
 }
 
-async function handlePlaylistAction(req, res, url) {
-  const parts = url.pathname.split('/').filter(Boolean);
-  if (req.method !== 'POST' || parts.length !== 4 || parts[0] !== 'api' || parts[1] !== 'playlists') return false;
-
-  const playlistName = parts[2];
-  const action = parts[3];
-  let config = await loadConfig();
-  const playlist = findPlaylist(config, playlistName);
-  if (!playlist) {
-    sendJson(res, 404, { ok: false, error: 'Biblioteca nao encontrada na configuracao.' });
-    return true;
-  }
-
-  if (action === 'run') {
-    if (getState().running) {
-      sendJson(res, 409, { ok: false, error: 'Ja existe uma descoberta em execucao.' });
-      return true;
-    }
-    runSync(config, { trigger: 'manual-playlist', playlistName }).catch((error) => {
-      logger.error(`Descoberta manual da biblioteca falhou: ${error.message}`);
-    });
-    sendJson(res, 202, { ok: true, message: `Descoberta iniciada para ${playlist.folderName}.` });
-    return true;
-  }
-
-  let result;
-  if (action === 'test-cookies') {
-    result = await testPlaylistCookies(config, playlistName);
-  } else if (action === 'refresh-thumbnails') {
-    result = await downloadManager.refreshThumbnails(playlist.folderName);
-  } else if (action === 'refresh-subtitles') {
-    result = await downloadManager.queueMissingSubtitles(playlist.folderName);
-  } else if (action === 'orphans-preview') {
-    result = downloadManager.previewOrphans(playlist.folderName);
-  } else if (action === 'orphans-cleanup') {
-    result = await downloadManager.cleanupOrphans(playlist.folderName);
-  } else if (action === 'delete-with-files') {
-    const payload = await readJson(req);
-    const confirmation = String(payload.confirmation || '').trim();
-    if (confirmation !== playlist.name && confirmation !== playlist.folderName) {
-      sendJson(res, 400, { ok: false, error: 'Confirmacao invalida. Digite exatamente o nome da biblioteca.' });
-      return true;
-    }
-    const deleteResult = await downloadManager.deleteLibraryData(config, playlist);
-    config.playlists = (config.playlists || []).filter((entry) => sanitizeEntryName(entry.name) !== playlist.folderName);
-    config = await saveConfig(config);
-    scheduler.configure(config);
-    downloadManager.configure(config);
-    result = { ...deleteResult, config };
-  } else {
-    result = await runPlaylistApiAction(config, playlistName, action);
-  }
-
-  sendJson(res, 200, { ok: true, result });
-  return true;
-}
-
-function sanitizeEntryName(value) {
-  return String(value || '').replace(/[\\/*?:"<>|]/g, '').replace(/\s+/g, ' ').trim().replace(/[. ]+$/g, '');
-}
-
-async function handleDownloadAction(req, res, url) {
-  const parts = url.pathname.split('/').filter(Boolean);
-  if (req.method !== 'POST' || parts[0] !== 'api' || parts[1] !== 'downloads') return false;
-
-  if (parts.length === 3 && parts[2] === 'pause') {
-    sendJson(res, 200, { ok: true, queue: await downloadManager.pause() });
-    return true;
-  }
-  if (parts.length === 3 && parts[2] === 'resume') {
-    sendJson(res, 200, { ok: true, queue: await downloadManager.resume() });
-    return true;
-  }
-  if (parts.length === 3 && parts[2] === 'clear') {
-    const payload = await readJson(req);
-    const result = await downloadManager.clearQueue({
-      library: String(payload.library || '').trim(),
-      cancelCurrent: payload.cancelCurrent !== false
-    });
-    sendJson(res, 200, { ok: true, result, queue: downloadManager.getQueueStatus() });
-    return true;
-  }
-  if (parts.length !== 4) return false;
-
-  const id = decodeURIComponent(parts[2]);
-  const action = parts[3];
-  let result;
-  if (action === 'retry') result = await downloadManager.retryItem(id);
-  else if (action === 'cancel') result = await downloadManager.cancelItem(id);
-  else if (action === 'priority') result = await downloadManager.prioritizeItem(id);
-  else if (action === 'remove') result = await downloadManager.removeItem(id);
-  else return false;
-
-  sendJson(res, 200, { ok: true, result });
-  return true;
-}
-
 async function getVersion() {
   try {
     const pkg = JSON.parse(await fs.readFile(PACKAGE_PATH, 'utf8'));
-    return pkg.version || '2.8.0';
+    return pkg.version || '3.0.0';
   } catch {
-    return '2.8.0';
+    return '3.0.0';
   }
 }
 
 async function handleApi(req, res, url) {
+  const routeDeps = { readJson, sendJson, loadConfig, saveConfig, downloadManager, channelScheduler, libraryScheduler: scheduler };
   if (url.pathname.startsWith('/api/playlists/')) {
-    if (await handlePlaylistAction(req, res, url)) return;
+    if (await handleLibraryRoutes(req, res, url, routeDeps)) return;
   }
   if (url.pathname.startsWith('/api/downloads/')) {
-    if (await handleDownloadAction(req, res, url)) return;
+    if (await handleDownloadRoutes(req, res, url, routeDeps)) return;
+  }
+  if (url.pathname.startsWith('/api/channels')) {
+    if (await handleChannelRoutes(req, res, url, routeDeps)) return;
   }
 
   if (req.method === 'GET' && url.pathname === '/api/config') {
@@ -312,8 +223,9 @@ async function handleApi(req, res, url) {
   if (req.method === 'PUT' && url.pathname === '/api/config') {
     const config = await saveConfig(await readJson(req));
     scheduler.configure(config);
+    channelScheduler.configure(config);
     downloadManager.configure(config);
-    await logger.info('Configuracao v2 salva pela interface.');
+    await logger.info('Configuracao salva pela interface.');
     sendJson(res, 200, { ok: true, config });
     return;
   }
@@ -325,8 +237,8 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/run') {
-    if (getState().running) {
-      sendJson(res, 409, { ok: false, error: 'Ja existe uma descoberta em execucao.' });
+    if (discoveryLock.getStatus().locked) {
+      sendJson(res, 409, { ok: false, error: 'Ja existe uma descoberta/sincronizacao em execucao.' });
       return;
     }
     const config = await loadConfig();
@@ -338,12 +250,22 @@ async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/status') {
     const config = await loadConfig();
     await downloadManager.refreshStorage(false);
+    const persistentChannelState = await channelState.load();
+    const channelsHealth = {};
+    for (const channel of config.channels || []) {
+      channelsHealth[channel.channelId] = downloadManager.getChannelStats(config, channel.channelId);
+    }
     sendJson(res, 200, {
       version: await getVersion(),
       discovery: getState(),
+      channelDiscovery: channelSyncService.getState(),
+      discoveryLock: discoveryLock.getStatus(),
       queue: downloadManager.getQueueStatus(),
       scheduler: scheduler.getStatus(),
+      channelScheduler: channelScheduler.getStatus(),
       health: getAllPlaylistHealth(config),
+      channelsHealth,
+      channelState: persistentChannelState,
       now: new Date().toISOString()
     });
     return;
@@ -461,7 +383,7 @@ async function startServer(config) {
   const host = config.server.host || '0.0.0.0';
   const port = Number(config.server.port) || 3099;
   await new Promise((resolve) => server.listen(port, host, resolve));
-  await logger.info(`Interface v2.5 iniciada em http://${host}:${port}`);
+  await logger.info(`Interface v3.0 iniciada em http://${host}:${port}`);
   if (auth.setupRequired) {
     await logger.warn('A interface esta bloqueada ate que config/auth.json seja criado com npm run auth:set.');
   }

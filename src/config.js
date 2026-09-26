@@ -3,11 +3,12 @@ const path = require('path');
 const { sanitizeName, isDangerousBaseDir } = require('./utils');
 const { DEFAULT_SUBTITLE_LANGUAGES, normalizeSubtitleLanguages } = require('./subtitleService');
 const { MEDIA_PROFILES, normalizeMediaProfile } = require('./mediaProfileService');
+const { normalizeChannels, validateChannels } = require('./channelConfig');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const CONFIG_DIR = path.join(ROOT_DIR, 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
-const CONFIG_VERSION = 4;
+const CONFIG_VERSION = 5;
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const DEFAULT_MAX_HEIGHT = 1080;
@@ -23,7 +24,8 @@ const DEFAULT_CONFIG = {
     port: 3099
   },
   paths: {
-    baseDir: '/home/joaopaulovaz/comerciais/videclipes/youtube/youtube',
+    baseDir: '/srv/media/youtube',
+    channelsBaseDir: '/srv/media/youtube-channels',
     ytDlpPath: '/usr/local/bin/yt-dlp',
     ffmpegPath: '/usr/bin/ffmpeg',
     ffprobePath: '/usr/bin/ffprobe',
@@ -60,31 +62,18 @@ const DEFAULT_CONFIG = {
     apiKey: '',
     apiTimeoutSeconds: 10
   },
-  playlists: [
-    {
-      name: 'Mix_Principal',
-      url: 'https://www.youtube.com/watch?v=u2ah9tWTkmk&list=PLHg022HMFzFCRq-5ZVR3hiiCkGPJ3Ur1D',
-      urls: [
-        'https://www.youtube.com/watch?v=u2ah9tWTkmk&list=PLHg022HMFzFCRq-5ZVR3hiiCkGPJ3Ur1D'
-      ],
-      enabled: true,
-      libraryId: 27,
-      playoutId: 33,
-      cookiesPath: '',
-      maxHeight: null,
-      subtitles: {
-        enabled: false,
-        includeAuto: true,
-        languages: [...DEFAULT_SUBTITLE_LANGUAGES]
-      },
-      mediaProfile: MEDIA_PROFILES.GENERIC
-    }
-  ],
+  playlists: [],
   scheduler: {
     enabled: false,
     intervalMinutes: 360,
     runOnStartup: false
   },
+  channelScheduler: {
+    enabled: false,
+    intervalMinutes: 360,
+    runOnStartup: false
+  },
+  channels: [],
   cleanup: {
     removeEmptyArtistFolders: true
   }
@@ -257,10 +246,13 @@ function normalizeConfig(raw) {
   const rawApi = rawConfig.youtubeApi && typeof rawConfig.youtubeApi === 'object' ? rawConfig.youtubeApi : {};
   const rawErsatz = rawConfig.ersatztv && typeof rawConfig.ersatztv === 'object' ? rawConfig.ersatztv : {};
   const rawScheduler = rawConfig.scheduler && typeof rawConfig.scheduler === 'object' ? rawConfig.scheduler : {};
+  const rawChannelScheduler = rawConfig.channelScheduler && typeof rawConfig.channelScheduler === 'object' ? rawConfig.channelScheduler : {};
   const rawCleanup = rawConfig.cleanup && typeof rawConfig.cleanup === 'object' ? rawConfig.cleanup : {};
 
   const legacyLibraryId = toOptionalPositiveInteger(rawErsatz.libraryId);
   const legacyPlayoutId = toOptionalPositiveInteger(rawErsatz.playoutId);
+  const normalizedBaseDir = String(rawPaths.baseDir || DEFAULT_CONFIG.paths.baseDir).trim() || DEFAULT_CONFIG.paths.baseDir;
+  const defaultChannelsBaseDir = path.join(path.dirname(normalizedBaseDir), 'youtube-channels');
 
   const config = {
     configVersion: CONFIG_VERSION,
@@ -269,7 +261,8 @@ function normalizeConfig(raw) {
       port: Math.min(65535, toPositiveInteger(rawServer.port, DEFAULT_CONFIG.server.port))
     },
     paths: {
-      baseDir: String(rawPaths.baseDir || DEFAULT_CONFIG.paths.baseDir).trim() || DEFAULT_CONFIG.paths.baseDir,
+      baseDir: normalizedBaseDir,
+      channelsBaseDir: String(rawPaths.channelsBaseDir || defaultChannelsBaseDir).trim() || defaultChannelsBaseDir,
       ytDlpPath: String(rawPaths.ytDlpPath || DEFAULT_CONFIG.paths.ytDlpPath).trim() || DEFAULT_CONFIG.paths.ytDlpPath,
       ffmpegPath: String(rawPaths.ffmpegPath || DEFAULT_CONFIG.paths.ffmpegPath).trim() || DEFAULT_CONFIG.paths.ffmpegPath,
       ffprobePath: String(rawPaths.ffprobePath || DEFAULT_CONFIG.paths.ffprobePath).trim() || DEFAULT_CONFIG.paths.ffprobePath,
@@ -292,10 +285,16 @@ function normalizeConfig(raw) {
       apiTimeoutSeconds: Math.max(1, Number(rawErsatz.apiTimeoutSeconds) || DEFAULT_CONFIG.ersatztv.apiTimeoutSeconds)
     },
     playlists: [],
+    channels: normalizeChannels(rawConfig.channels, ALLOWED_MAX_HEIGHTS),
     scheduler: {
       enabled: Boolean(rawScheduler.enabled),
       intervalMinutes: Math.max(1, Number(rawScheduler.intervalMinutes) || DEFAULT_CONFIG.scheduler.intervalMinutes),
       runOnStartup: Boolean(rawScheduler.runOnStartup)
+    },
+    channelScheduler: {
+      enabled: Boolean(rawChannelScheduler.enabled),
+      intervalMinutes: Math.max(1, Number(rawChannelScheduler.intervalMinutes) || DEFAULT_CONFIG.channelScheduler.intervalMinutes),
+      runOnStartup: Boolean(rawChannelScheduler.runOnStartup)
     },
     cleanup: {
       removeEmptyArtistFolders: rawCleanup.removeEmptyArtistFolders !== false
@@ -321,7 +320,8 @@ function normalizeConfig(raw) {
     })
     .filter((playlist) => playlist.name && playlist.urls.length > 0);
 
-  if (config.playlists.length === 0 && Number(rawConfig.configVersion) !== CONFIG_VERSION) {
+  // Empty library lists are valid. Version upgrades must never create a sample library.
+  if (!Array.isArray(rawConfig.playlists) && Number(rawConfig.configVersion || 0) <= 1) {
     config.playlists = clone(DEFAULT_CONFIG.playlists);
   }
 
@@ -359,6 +359,7 @@ function validateConfig(config) {
     }
   }
 
+  validateChannels(config);
   return config;
 }
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## 3.0.0
+
+- Novo módulo **Canais**, separado de Bibliotecas, com análise por URL antes de qualquer persistência ou download.
+- Descoberta de Todos os uploads, Vídeos, Shorts, Transmissões finalizadas e playlists públicas.
+- Playlists de Canais funcionam como bibliotecas embutidas, com perfis `generic`, `movie` e `music_clips`, Library ID, Playout ID, resolução, cookies, legendas e ações do ErsatzTV.
+- Duplicidade permitida entre destinos e deduplicação apenas por `destinationId + videoId`.
+- Playlists aceitam vídeos de outros criadores sem filtro por proprietário.
+- Fontes globais usam perfil Genérico, configuração comum de legendas e limpeza segura de órfãos.
+- Novo `paths.channelsBaseDir` e `channelScheduler` independente.
+- Conteúdo removido remotamente é marcado como órfão; nenhuma exclusão automática destrutiva foi adicionada.
+- Renomes de canal/playlist atualizam o nome exibido e preservam `folderName`.
+- Novo `DestinationContext`, descoberta compartilhada e extração de fila/storage/rotas para reduzir acoplamento nos módulos monolíticos.
+- Interface de Canais reutiliza o mesmo componente de destino usado pelas Bibliotecas.
+- Clean UI: tela de login simplificada e remoção de textos redundantes na interface principal.
+- Schema de configuração v5 e estado da fila v4.
+- Testes automatizados ampliados de 43 para 56 casos.
+
 ## 2.8.0
 
 - Cada biblioteca passa a ter um único **Perfil** de mídia: `Genérico`, `Show / vídeo completo (Filmes)` ou `Clipes musicais (Seriados)`.

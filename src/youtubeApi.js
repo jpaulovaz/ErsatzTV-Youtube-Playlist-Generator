@@ -479,6 +479,105 @@ async function fetchSourcesViaApi(config, playlist) {
   };
 }
 
+function parseChannelReference(urlValue) {
+  const sourceUrl = String(urlValue || '').trim();
+  if (!sourceUrl) return { sourceUrl, kind: 'unknown', value: '' };
+  try {
+    const parsed = new URL(sourceUrl);
+    const host = normalizeHost(parsed.hostname);
+    if (!(host === 'youtube.com' || host === 'm.youtube.com' || host.endsWith('.youtube.com'))) {
+      return { sourceUrl, kind: 'unknown', value: '' };
+    }
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    if (parts[0] === 'channel' && parts[1]) return { sourceUrl, kind: 'id', value: parts[1] };
+    if (parts[0] === 'user' && parts[1]) return { sourceUrl, kind: 'username', value: parts[1] };
+    if (parts[0] && parts[0].startsWith('@')) return { sourceUrl, kind: 'handle', value: parts[0] };
+    if (parts[0] === 'c' && parts[1]) return { sourceUrl, kind: 'custom', value: parts[1] };
+  } catch {
+    if (sourceUrl.startsWith('@')) return { sourceUrl, kind: 'handle', value: sourceUrl };
+    if (/^UC[A-Za-z0-9_-]{20,}$/.test(sourceUrl)) return { sourceUrl, kind: 'id', value: sourceUrl };
+  }
+  return { sourceUrl, kind: 'unknown', value: '' };
+}
+
+function getChannelThumbnail(thumbnails) {
+  return getThumbnailUrl(thumbnails);
+}
+
+async function fetchChannelIdentityViaApi(config, urlValue) {
+  const reference = parseChannelReference(urlValue);
+  const params = { part: 'id,snippet,contentDetails', maxResults: 1 };
+  if (reference.kind === 'id') params.id = reference.value;
+  else if (reference.kind === 'handle') params.forHandle = reference.value.replace(/^@/, '');
+  else if (reference.kind === 'username') params.forUsername = reference.value;
+  else {
+    throw new YouTubeApiError('A URL do canal nao pode ser resolvida diretamente pela YouTube Data API.', { reason: 'unsupported-channel-url' });
+  }
+
+  const payload = await requestYouTube(config, 'channels', params);
+  const item = Array.isArray(payload.items) ? payload.items[0] : null;
+  if (!item || !item.id) {
+    throw new YouTubeApiError('Canal do YouTube nao encontrado.', { reason: 'channel-not-found' });
+  }
+  const snippet = item.snippet || {};
+  const related = item.contentDetails && item.contentDetails.relatedPlaylists || {};
+  const customUrl = String(snippet.customUrl || '').trim();
+  const handle = customUrl.startsWith('@') ? customUrl : '';
+  return {
+    channelId: item.id,
+    name: snippet.title || item.id,
+    handle,
+    description: snippet.description || '',
+    thumbnailUrl: getChannelThumbnail(snippet.thumbnails),
+    uploadsPlaylistId: related.uploads || '',
+    url: `https://www.youtube.com/channel/${item.id}`,
+    quotaUnitsUsed: 1
+  };
+}
+
+async function fetchChannelPlaylistsViaApi(config, channelId) {
+  const playlists = [];
+  let pageToken = '';
+  let quotaUnitsUsed = 0;
+  do {
+    const payload = await requestYouTube(config, 'playlists', {
+      part: 'id,snippet,contentDetails,status',
+      channelId,
+      maxResults: 50,
+      pageToken
+    });
+    quotaUnitsUsed += 1;
+    for (const item of payload.items || []) {
+      if (!item || !item.id) continue;
+      const snippet = item.snippet || {};
+      playlists.push({
+        playlistId: item.id,
+        name: snippet.title || item.id,
+        description: snippet.description || '',
+        thumbnailUrl: getThumbnailUrl(snippet.thumbnails),
+        itemCount: item.contentDetails && Number.isFinite(Number(item.contentDetails.itemCount))
+          ? Number(item.contentDetails.itemCount)
+          : null,
+        privacyStatus: item.status && item.status.privacyStatus || '',
+        url: `https://www.youtube.com/playlist?list=${item.id}`
+      });
+    }
+    pageToken = payload.nextPageToken || '';
+  } while (pageToken);
+  return { playlists, quotaUnitsUsed };
+}
+
+async function fetchChannelCatalogViaApi(config, urlValue) {
+  const identity = await fetchChannelIdentityViaApi(config, urlValue);
+  const playlistResult = await fetchChannelPlaylistsViaApi(config, identity.channelId);
+  return {
+    ...identity,
+    playlists: playlistResult.playlists,
+    quotaUnitsUsed: identity.quotaUnitsUsed + playlistResult.quotaUnitsUsed,
+    readMode: 'api'
+  };
+}
+
 module.exports = {
   YouTubeApiError,
   shouldUseYouTubeApi,
@@ -491,5 +590,10 @@ module.exports = {
   getThumbnailUrl,
   fetchSourcesViaApi,
   fetchVideoDetails,
-  testYouTubeApi
+  testYouTubeApi,
+  requestYouTube,
+  parseChannelReference,
+  fetchChannelIdentityViaApi,
+  fetchChannelPlaylistsViaApi,
+  fetchChannelCatalogViaApi
 };

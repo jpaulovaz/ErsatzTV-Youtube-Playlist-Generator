@@ -2,6 +2,7 @@ const { loadConfig } = require('./config');
 const { startServer } = require('./server');
 const downloadManager = require('./downloadManager');
 const scheduler = require('./scheduler');
+const channelScheduler = require('./channelScheduler');
 const logger = require('./logger');
 const auth = require('./auth');
 
@@ -13,6 +14,7 @@ async function shutdown(signal) {
   shuttingDown = true;
   await logger.info(`Encerramento solicitado por ${signal}.`);
   scheduler.stopTimer();
+  channelScheduler.stopTimer();
   await downloadManager.stop({ terminateCurrent: true });
   auth.stop();
   if (server) {
@@ -26,12 +28,20 @@ async function main() {
   await downloadManager.start(config);
   server = await startServer(config);
   scheduler.start(config);
+  channelScheduler.start(config);
 
   if (config.scheduler.enabled) {
     const status = scheduler.getStatus();
     await logger.info(`Agendador ativo: descoberta a cada ${status.intervalMinutes} minuto(s). Proxima execucao: ${status.nextRunAt}.`);
   } else {
-    await logger.info('Agendador inativo. Novos videos podem ser descobertos manualmente pela interface.');
+    await logger.info('Agendador de Bibliotecas inativo.');
+  }
+
+  if (config.channelScheduler && config.channelScheduler.enabled) {
+    const channelStatus = channelScheduler.getStatus();
+    await logger.info(`Agendador de Canais ativo: sincronizacao a cada ${channelStatus.intervalMinutes} minuto(s). Proxima execucao: ${channelStatus.nextRunAt}.`);
+  } else {
+    await logger.info('Agendador de Canais inativo.');
   }
 }
 

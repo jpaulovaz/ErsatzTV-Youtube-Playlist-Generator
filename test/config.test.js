@@ -30,7 +30,7 @@ test('migrates useful v1 settings without enabling legacy cookies', () => {
     scheduler: { enabled: false, intervalMinutes: 60 }
   });
 
-  assert.equal(config.configVersion, 4);
+  assert.equal(config.configVersion, 5);
   assert.equal(config.paths.baseDir, '/srv/media/youtube');
   assert.equal(config.paths.cookiesPath, '');
   assert.equal(config.paths.ffmpegPath, '/usr/bin/ffmpeg');

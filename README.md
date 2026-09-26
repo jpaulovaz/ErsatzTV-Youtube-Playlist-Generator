@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 2.8.0
+# ErsatzTV YouTube Downloader 3.0.0
 
-Aplicativo Node.js para descobrir vídeos de playlists e URLs individuais do YouTube, enfileirar downloads persistentes e entregar arquivos locais ao ErsatzTV.
+Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.8.0 adiciona três perfis por biblioteca: **Genérico**, **Show / vídeo completo (Filmes)** e **Clipes musicais (Seriados)**.
+A versão 3.0.0 mantém o módulo **Bibliotecas** e adiciona o módulo independente **Canais**. Um canal pode expor Todos os uploads, Vídeos, Shorts, Transmissões finalizadas e playlists públicas. Cada playlist selecionada funciona como uma biblioteca embutida, com perfil de mídia, legendas e integração própria com o ErsatzTV. A deduplicação é feita por destino: o mesmo vídeo pode existir intencionalmente em destinos diferentes.
 
 ## Arquitetura
 
@@ -11,7 +11,7 @@ Playlist ou vídeo do YouTube
           ↓
 Descoberta (YouTube Data API ou yt-dlp)
           ↓
-Deduplicação por videoId
+Deduplicação por destino + videoId
           ↓
 Fila persistente, um item por vez
           ↓
@@ -37,7 +37,7 @@ Biblioteca local do ErsatzTV
 - Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
 - Seleção múltipla de idiomas: `pt-BR`, `pt`, `en` e `es`.
 - Ação **Buscar legendas ausentes** para o acervo já baixado, sem baixar novamente os vídeos.
-- Deduplicação por ID do YouTube, independentemente de alterações futuras no título.
+- Deduplicação por ID do YouTube dentro de cada destino; o mesmo vídeo pode existir intencionalmente em destinos diferentes.
 - Retentativas automáticas após 1, 5 e 15 minutos.
 - Pausa automática quando o espaço livre fica abaixo da reserva configurada.
 - Itens removidos de uma fonte são marcados como órfãos e nunca apagados automaticamente.
@@ -135,6 +135,38 @@ O aplicativo divide o título no primeiro separador ` - ` (com espaços), preser
 Em caso de colisão de nome, o ID do YouTube é acrescentado ao arquivo. O índice interno continua sendo o `videoId`.
 
 O nome da biblioteca também é sua identidade interna e define a pasta física. Renomeá-la depois que a fila já possui itens é tratado como a criação de outra biblioteca; não use uma simples renomeação para mover arquivos existentes. Mudanças de `paths.baseDir` também devem ser feitas com a fila parada e com migração planejada dos arquivos e do estado.
+
+## Canais
+
+A área **Canais** é separada de **Bibliotecas**. O fluxo começa por **Adicionar canal → Analisar**. A análise apenas identifica o canal, fontes globais e playlists; ela não cria downloads.
+
+Fontes disponíveis:
+
+- Todos os uploads;
+- Vídeos;
+- Shorts;
+- Transmissões finalizadas;
+- playlists públicas, listadas individualmente por nome.
+
+As fontes globais usam o perfil Genérico. Playlists selecionadas podem usar os mesmos três perfis de mídia de Bibliotecas e podem ter `Library ID`, `Playout ID`, resolução, cookies e legendas próprios. Uma playlist é tratada como unidade editorial completa, inclusive quando contém vídeos publicados por outros canais.
+
+A identidade persistente é baseada em `channelId`, `playlistId` e `destinationId`. Renomes no YouTube atualizam o nome exibido, mas não movem automaticamente a pasta física. Itens removidos remotamente viram órfãos e só são excluídos após preview e confirmação manual.
+
+Por padrão, os arquivos de Canais ficam abaixo de `paths.channelsBaseDir`:
+
+```text
+/srv/media/youtube-channels/
+└── Canal/
+    ├── Uploads/
+    ├── Videos/
+    ├── Shorts/
+    ├── Streams/
+    └── Playlists/
+        ├── Playlist A/
+        └── Playlist B/
+```
+
+O intervalo automático de Canais é configurado separadamente em `channelScheduler`. O worker/fila de downloads continua sendo único para Bibliotecas e Canais.
 
 ## Configuração no ErsatzTV
 

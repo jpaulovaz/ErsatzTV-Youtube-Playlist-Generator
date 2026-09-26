@@ -13,7 +13,7 @@ const DOWNLOAD_PAGE_SIZE = 100;
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
-const APP_VIEWS = new Set(['overview', 'downloads', 'libraries', 'settings', 'logs']);
+const APP_VIEWS = new Set(['overview', 'downloads', 'libraries', 'channels', 'settings', 'logs']);
 
 
 function setMobileActionSheet(open) {
@@ -191,29 +191,10 @@ function collectConfigForm() {
   });
 
   next.playlists = $$('#playlistList .playlist-row').map((row) => {
-    const urls = row.querySelector('[data-field="urls"]').value
-      .split(/\r?\n/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-    return {
-      name: row.querySelector('[data-field="name"]').value.trim(),
-      enabled: row.querySelector('[data-field="enabled"]').checked,
-      url: urls[0] || '',
-      urls,
-      libraryId: numberOrNull(row.querySelector('[data-field="libraryId"]').value),
-      playoutId: numberOrNull(row.querySelector('[data-field="playoutId"]').value),
-      cookiesPath: row.querySelector('[data-field="cookiesPath"]').value.trim(),
-      maxHeight: numberOrNull(row.querySelector('[data-field="maxHeight"]').value),
-      subtitles: {
-        enabled: row.querySelector('[data-field="subtitlesEnabled"]').checked,
-        includeAuto: row.querySelector('[data-field="subtitlesIncludeAuto"]').checked,
-        languages: [...row.querySelectorAll('[data-subtitle-language]')]
-          .filter((input) => input.checked)
-          .map((input) => input.value)
-      },
-      mediaProfile: row.querySelector('[data-field="mediaProfile"]').value
-    };
-  }).filter((playlist) => playlist.name && playlist.urls.length > 0);
+    const playlist = window.DestinationForm.collect(row, {});
+    return playlist;
+  }).filter((playlist) => playlist.name && Array.isArray(playlist.urls) && playlist.urls.length > 0);
+
 
   return next;
 }
@@ -256,14 +237,31 @@ function updateLibraryStats() {
 
 function updateLibraryFilters() {
   const selects = [$('#downloadLibraryFilter'), $('#clearQueueLibrary')].filter(Boolean);
+  const destinations = [];
+  for (const playlist of config && Array.isArray(config.playlists) ? config.playlists : []) {
+    destinations.push({ value: playlist.name, label: playlist.name });
+  }
+  for (const channel of config && Array.isArray(config.channels) ? config.channels : []) {
+    const globalMeta = [
+      ['uploads', 'Todos os uploads'], ['videos', 'Vídeos'], ['shorts', 'Shorts'], ['streams', 'Transmissões finalizadas']
+    ];
+    for (const [kind, label] of globalMeta) {
+      if (channel.globalSources && channel.globalSources[kind]) {
+        destinations.push({ value: `channel:${channel.channelId}:${kind}`, label: `${channel.name} · ${label}` });
+      }
+    }
+    for (const playlist of channel.playlists || []) {
+      destinations.push({ value: `channel:${channel.channelId}:playlist:${playlist.playlistId}`, label: `${channel.name} · ${playlist.name}` });
+    }
+  }
   for (const select of selects) {
     const selected = select.value;
-    const firstLabel = select.id === 'clearQueueLibrary' ? 'Todas as bibliotecas' : 'Todas';
+    const firstLabel = select.id === 'clearQueueLibrary' ? 'Todos os destinos' : 'Todos';
     select.innerHTML = `<option value="">${firstLabel}</option>`;
-    for (const playlist of config && Array.isArray(config.playlists) ? config.playlists : []) {
+    for (const destination of destinations) {
       const option = document.createElement('option');
-      option.value = playlist.name;
-      option.textContent = playlist.name;
+      option.value = destination.value;
+      option.textContent = destination.label;
       select.appendChild(option);
     }
     if ([...select.options].some((option) => option.value === selected)) select.value = selected;
@@ -297,7 +295,7 @@ function renderLibraries() {
     const subtitleDisabled = subtitles.enabled ? '' : 'disabled';
     const subtitleText = subtitles.enabled ? ` · Legendas SRT (${subtitleLanguages.join(', ')})` : '';
     const mediaProfile = playlist.mediaProfile || 'generic';
-    const profileLabels = { generic: 'Genérico', movie: 'Show / vídeo completo', music_clips: 'Clipes musicais' };
+    const profileLabels = window.DestinationForm.PROFILE_LABELS;
     const metadataText = ` · ${profileLabels[mediaProfile] || profileLabels.generic}`;
 
     row.innerHTML = `
@@ -316,55 +314,7 @@ function renderLibraries() {
         </div>
       </summary>
       <div class="library-body">
-        <div class="form-grid three">
-          <label>Nome<input data-field="name" type="text" value="${escapeHtml(playlist.name || '')}"></label>
-          <label>Library ID<input data-field="libraryId" type="number" min="1" value="${playlist.libraryId || ''}"></label>
-          <label>Playout ID<input data-field="playoutId" type="number" min="1" value="${playlist.playoutId || ''}"></label>
-          <label class="wide">Fontes, uma URL por linha<textarea data-field="urls" rows="4">${escapeHtml((playlist.urls || []).join('\n'))}</textarea></label>
-          <label>Resolução desta biblioteca
-            <select data-field="maxHeight">
-              <option value="" ${maxHeight === '' ? 'selected' : ''}>Herdar configuração geral</option>
-              ${[360, 480, 720, 1080, 1440, 2160].map((height) => `<option value="${height}" ${maxHeight === String(height) ? 'selected' : ''}>${height}p</option>`).join('')}
-            </select>
-          </label>
-          <label>Perfil
-            <select data-field="mediaProfile">
-              <option value="generic" ${mediaProfile === 'generic' ? 'selected' : ''}>Genérico</option>
-              <option value="movie" ${mediaProfile === 'movie' ? 'selected' : ''}>Show / vídeo completo (Filmes)</option>
-              <option value="music_clips" ${mediaProfile === 'music_clips' ? 'selected' : ''}>Clipes musicais (Seriados)</option>
-            </select>
-          </label>
-          <label class="check-row"><input data-field="enabled" type="checkbox" ${enabled ? 'checked' : ''}><span>Biblioteca ativa</span></label>
-          <label class="wide">cookies.txt desta biblioteca, opcional<input data-field="cookiesPath" type="text" value="${escapeHtml(playlist.cookiesPath || '')}" placeholder="Vazio usa a configuração global"></label>
-          <div class="wide library-subtitle-settings">
-            <div class="library-subtitle-heading">
-              <div>
-                <strong>Legendas</strong>
-                <small>SRT externo, com o mesmo nome-base do vídeo. Novos vídeos são processados automaticamente.</small>
-              </div>
-              <span class="badge info">SRT</span>
-            </div>
-            <label class="check-row"><input data-field="subtitlesEnabled" type="checkbox" ${subtitles.enabled ? 'checked' : ''}><span>Baixar legendas nesta biblioteca</span></label>
-            <div class="subtitle-options ${subtitles.enabled ? '' : 'is-disabled'}" data-subtitle-options>
-              <label class="check-row"><input data-field="subtitlesIncludeAuto" type="checkbox" ${subtitles.includeAuto !== false ? 'checked' : ''} ${subtitleDisabled}><span>Incluir legendas automáticas quando disponíveis</span></label>
-              <div class="subtitle-language-grid" role="group" aria-label="Idiomas de legenda">
-                ${[
-                  ['pt-BR', 'Português (Brasil)'],
-                  ['pt', 'Português'],
-                  ['en', 'English'],
-                  ['es', 'Español']
-                ].map(([code, label]) => `
-                  <label class="subtitle-language-option">
-                    <input data-subtitle-language type="checkbox" value="${code}" ${subtitleLanguages.includes(code) ? 'checked' : ''} ${subtitleDisabled}>
-                    <span>${label}<small>${code}</small></span>
-                  </label>
-                `).join('')}
-              </div>
-              <p class="field-help">Marque um ou mais idiomas. O aplicativo baixa todos os selecionados que existirem no YouTube; ausência de legenda não transforma o vídeo em falha.</p>
-            </div>
-          </div>
-
-        </div>
+        ${window.DestinationForm.renderFields(playlist, { mode: 'library', includeName: true, includeIds: true, includeUrls: true, enabledLabel: 'Biblioteca ativa' })}
 
         <div class="library-actions-panel">
           <div class="library-action-group">
@@ -393,6 +343,7 @@ function renderLibraries() {
       </div>
     `;
     container.appendChild(row);
+    window.DestinationForm.syncSubtitleControls(row);
   });
   updateLibraryFilters();
 }
@@ -400,11 +351,24 @@ function renderLibraries() {
 async function saveConfiguration(showMessage = true) {
   const payload = collectConfigForm();
   const result = await api('/api/config', { method: 'PUT', body: JSON.stringify(payload) });
-  config = result.config;
-  fillConfigForm();
-  renderLibraries();
+  setConfigState(result.config);
   if (showMessage) showToast('Configuração salva.');
   return config;
+}
+
+function setConfigState(nextConfig) {
+  config = nextConfig;
+  fillConfigForm();
+  renderLibraries();
+  updateLibraryFilters();
+  if (window.ChannelView) window.ChannelView.update();
+}
+
+async function saveConfigObject(nextConfig, message = '') {
+  const result = await api('/api/config', { method: 'PUT', body: JSON.stringify(nextConfig) });
+  setConfigState(result.config);
+  if (message) showToast(message);
+  return result.config;
 }
 
 function statusLabel(status) {
@@ -474,7 +438,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '2.8.0'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '3.0.0'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -636,6 +600,7 @@ function renderDownloads() {
 async function refreshStatus() {
   statusData = await api('/api/status');
   renderStatus();
+  if (window.ChannelView) window.ChannelView.update();
 }
 
 function downloadQuery(offset = 0, limit = DOWNLOAD_PAGE_SIZE) {
@@ -702,8 +667,11 @@ async function loadInitial() {
   config = await api('/api/config');
   fillConfigForm();
   renderLibraries();
+  updateLibraryFilters();
+  if (window.ChannelView) window.ChannelView.render();
   await refreshAll(true);
   renderLibraries();
+  if (window.ChannelView) window.ChannelView.update();
 }
 
 async function runDiscovery(name = '') {
@@ -761,7 +729,7 @@ async function handleLibraryAction(button) {
       return;
     }
     if (!confirm(`Excluir ${info.count} item(ns) órfão(s), incluindo ${info.filesCount} arquivo(s) de vídeo e ${formatBytes(info.totalBytes)}?`)) return;
-    const result = await api(`/api/playlists/${encodeURIComponent(name)}/orphans-cleanup`, { method: 'POST', body: '{}' });
+    const result = await api(`/api/playlists/${encodeURIComponent(name)}/orphans-cleanup`, { method: 'POST', body: JSON.stringify({ confirmed: true }) });
     showToast(`${result.result.videosRemoved || 0} vídeo(s) órfão(s) removido(s).`);
     await refreshAll();
     return;
@@ -1009,6 +977,19 @@ async function bootstrap() {
   setActiveView(sessionStorage.getItem('ersatztv_active_view') || 'overview', { persist: false });
   updateSettingsAccordionToggle();
   bindEvents();
+  if (window.ChannelView) {
+    window.ChannelView.init({
+      api,
+      getConfig: () => config,
+      getStatus: () => statusData,
+      setConfig: setConfigState,
+      saveConfig: saveConfigObject,
+      showToast,
+      formatBytes,
+      formatDate,
+      refresh: () => refreshAll(false, { forceDownloads: $('#downloadsAccordion').open })
+    });
+  }
   await loadInitial();
   setInterval(() => refreshAll(false), 4000);
 }

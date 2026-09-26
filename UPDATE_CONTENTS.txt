@@ -1,25 +1,21 @@
-ErsatzTV YouTube Downloader 2.1.0 - pacote de atualizacao
+ErsatzTV YouTube Downloader 3.0.0 - pacote de atualização
 
-Este ZIP deve ser extraido sobre uma instalacao 2.0 existente.
+Extraia este ZIP sobre uma instalação v2.8.0.
 
-Preservado deliberadamente (nao incluido):
+Preservado deliberadamente (não incluído):
 - config/config.json
 - config/auth.json
 - data/
-- arquivos MP4/JPG das bibliotecas
+- arquivos de mídia das bibliotecas e canais
 
-Principais mudancas:
-- login local seguro, sessao e protecao CSRF;
-- tela de login dedicada;
-- limpeza total ou por biblioteca da fila;
-- resumo permanente e lista em sanfona fechada por padrao;
-- filtros e paginacao da fila;
-- remocao da funcao de limpeza de YML.
+Principais mudanças:
+- novo módulo Canais, separado de Bibliotecas;
+- análise de canal sem download;
+- fontes globais e playlists selecionáveis;
+- playlists de Canais como bibliotecas embutidas;
+- deduplicação por destino + videoId;
+- scheduler próprio para Canais;
+- Clean UI;
+- refatoração dos módulos tocados, com worker/fila compartilhados.
 
-Antes de iniciar a 2.1, crie o login:
-  npm run auth:set -- --username SEU_USUARIO
-
-Para proxy reverso exclusivamente confiavel:
-  npm run auth:set -- --username SEU_USUARIO --trust-proxy
-
-Consulte UPGRADE.md.
+Consulte UPGRADE.md antes da atualização.

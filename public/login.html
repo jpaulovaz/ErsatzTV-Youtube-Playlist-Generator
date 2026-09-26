@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>Entrar · ErsatzTV YouTube Downloader</title>
-  <link rel="icon" href="/brand-mark.svg?v=2.8.0" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=2.8.0">
+  <link rel="icon" href="/brand-mark.svg?v=3.0.0" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=3.0.0">
 </head>
-<body class="login-page">
+<body class="login-page login-clean">
   <div class="login-ambient" aria-hidden="true">
     <span class="orb orb-one"></span>
     <span class="orb orb-two"></span>
@@ -16,47 +16,14 @@
     <span class="grid-glow"></span>
   </div>
 
-  <main class="login-shell">
-    <section class="login-visual" aria-label="Apresentação">
-      <div class="login-brand-row">
-        <span class="login-logo" aria-hidden="true"><img src="/brand-mark.svg?v=2.8.0" alt=""></span>
-        <div>
-          <span class="eyebrow">ErsatzTV library automation</span>
-          <h1>Seu canal começa antes do play.</h1>
-        </div>
-      </div>
-      <p class="login-lead">Descoberta, fila persistente, downloads locais e integração com o ErsatzTV em uma única operação protegida.</p>
-      <div class="login-feature-grid">
-        <div>
-          <span class="feature-icon">01</span>
-          <strong>Fila resiliente</strong>
-          <small>Retoma downloads e mantém o histórico entre reinicializações.</small>
-        </div>
-        <div>
-          <span class="feature-icon">02</span>
-          <strong>Mídia local</strong>
-          <small>Arquivos MP4 prontos para serem lidos pelo ErsatzTV.</small>
-        </div>
-        <div>
-          <span class="feature-icon">03</span>
-          <strong>Acesso protegido</strong>
-          <small>Sessão segura, proteção contra força bruta e cookie HttpOnly.</small>
-        </div>
-      </div>
-      <div class="login-signal">
-        <span class="signal-dot"></span>
-        <span>Interface privada · autenticação local</span>
-      </div>
-    </section>
-
+  <main class="login-clean-shell">
     <section class="login-panel">
-      <div class="login-card">
-        <div class="login-card-head">
-          <span class="login-card-mark">▶</span>
+      <div class="login-card login-card-clean">
+        <div class="login-clean-brand">
+          <span class="login-logo" aria-hidden="true"><img src="/brand-mark.svg?v=3.0.0" alt=""></span>
           <div>
+            <h1>ErsatzTV YouTube Downloader</h1>
             <span class="eyebrow">Acesso administrativo</span>
-            <h2>Entre para continuar</h2>
-            <p>Use o usuário local configurado no servidor.</p>
           </div>
         </div>
 
@@ -83,7 +50,7 @@
           <div id="capsWarning" class="caps-warning hidden">Caps Lock está ativado.</div>
 
           <button id="loginButton" type="submit" class="primary login-submit">
-            <span id="loginButtonText">Entrar na aplicação</span>
+            <span id="loginButtonText">Entrar</span>
             <span class="button-arrow" aria-hidden="true">→</span>
           </button>
         </form>
@@ -92,15 +59,10 @@
         <div id="transportNotice" class="transport-notice hidden">
           Esta conexão está em HTTP. Para acesso externo, publique a aplicação somente por HTTPS.
         </div>
-
-        <div class="login-security-row">
-          <span>Senha protegida por derivação scrypt</span>
-          <span>Sessão expira automaticamente</span>
-        </div>
       </div>
     </section>
   </main>
 
-  <script src="/login.js"></script>
+  <script src="/login.js?v=3.0.0"></script>
 </body>
 </html>

@@ -5,20 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>ErsatzTV YouTube Downloader</title>
-  <link rel="icon" href="/brand-mark.svg?v=2.8.0" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=2.8.0">
+  <link rel="icon" href="/brand-mark.svg?v=3.0.0" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=3.0.0">
 </head>
 <body class="app-page">
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=2.8.0" alt=""></span>
+        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.0.0" alt=""></span>
         <div class="brand-copy">
           <div class="title-line">
             <h1>ErsatzTV YouTube Downloader</h1>
-            <span id="versionBadge" class="version-badge">v2.5</span>
+            <span id="versionBadge" class="version-badge">v3.0</span>
           </div>
-          <p>Bibliotecas locais para o ErsatzTV</p>
         </div>
       </div>
 
@@ -67,7 +66,6 @@
     <div class="mobile-session-card">
       <span id="mobileUserInitial" class="user-avatar">U</span>
       <div>
-        <small>Sessão autenticada</small>
         <strong id="mobileSignedInUser">-</strong>
       </div>
       <span id="mobileSheetStatus" class="status-pill">Carregando...</span>
@@ -76,19 +74,19 @@
     <div class="mobile-action-grid">
       <button id="mobileRunNowBtn" type="button" class="primary mobile-action-card">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg>
-        <span><strong>Buscar novidades</strong><small>Ler fontes agora</small></span>
+        <span><strong>Buscar novidades</strong></span>
       </button>
       <button id="mobileQueueToggleBtn" type="button" class="mobile-action-card">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
-        <span><strong>Pausar fila</strong><small>Controle do worker</small></span>
+        <span><strong>Pausar fila</strong></span>
       </button>
       <button id="mobileRefreshBtn" type="button" class="mobile-action-card">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5M6.2 9a7 7 0 0 1 11.6-2.1L20 11M4 13l2.2 4.1A7 7 0 0 0 17.8 15"/></svg>
-        <span><strong>Atualizar dados</strong><small>Recarregar painel</small></span>
+        <span><strong>Atualizar dados</strong></span>
       </button>
       <button id="mobileLogoutBtn" type="button" class="mobile-action-card danger">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6.8A1.8 1.8 0 0 0 5 6.8v10.4A1.8 1.8 0 0 0 6.8 19H10M14.5 8.5 18 12l-3.5 3.5M18 12H9"/></svg>
-        <span><strong>Encerrar sessão</strong><small>Sair com segurança</small></span>
+        <span><strong>Encerrar sessão</strong></span>
       </button>
     </div>
   </aside>
@@ -110,6 +108,11 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h16v13H4zM7 3.5h10v3M8 11h8M8 15h5"/></svg>
           <span>Bibliotecas</span>
           <span id="navLibrariesBadge" class="nav-count">0</span>
+        </button>
+        <button type="button" class="nav-button" data-view="channels">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM9.5 9 15 12l-5.5 3Z"/></svg>
+          <span>Canais</span>
+          <span id="navChannelsBadge" class="nav-count">0</span>
         </button>
       </div>
 
@@ -140,7 +143,6 @@
           <div>
             <span class="page-kicker">Operação</span>
             <h2>Visão geral</h2>
-            <p>Estado atual da descoberta, downloads e armazenamento.</p>
           </div>
           <button id="refreshBtn" type="button">Atualizar</button>
         </div>
@@ -149,7 +151,6 @@
           <div class="section-heading">
             <div>
               <h3>Estado da operação</h3>
-              <p>Indicadores essenciais da execução.</p>
             </div>
           </div>
 
@@ -186,7 +187,6 @@
             <summary>
               <span>
                 <strong>Última descoberta</strong>
-                <small>Resumo da última leitura das fontes.</small>
               </span>
               <span class="accordion-chevron" aria-hidden="true"></span>
             </summary>
@@ -200,7 +200,6 @@
           <div>
             <span class="page-kicker">Operação</span>
             <h2>Downloads</h2>
-            <p>Fila persistente, histórico e consumo de armazenamento.</p>
           </div>
           <button id="clearQueueBtn" type="button" class="danger">Limpar fila</button>
         </div>
@@ -209,7 +208,6 @@
           <div class="section-heading">
             <div>
               <h3>Resumo da fila</h3>
-              <p>A lista detalhada permanece recolhida até ser necessária.</p>
             </div>
           </div>
 
@@ -297,7 +295,6 @@
           <div>
             <span class="page-kicker">Catálogo</span>
             <h2>Bibliotecas</h2>
-            <p>Fontes, qualidade e integração individual com o ErsatzTV.</p>
           </div>
           <button id="addPlaylistBtn" type="button" class="primary">Adicionar biblioteca</button>
         </div>
@@ -308,12 +305,36 @@
         </section>
       </section>
 
+      <section id="view-channels" class="view-panel" data-view-panel="channels">
+        <div class="page-header">
+          <div>
+            <span class="page-kicker">Catálogo</span>
+            <h2>Canais</h2>
+          </div>
+          <div class="header-actions">
+            <button id="runChannelsBtn" type="button">Atualizar agora</button>
+            <button id="addChannelBtn" type="button" class="primary">Adicionar canal</button>
+          </div>
+        </div>
+
+        <section id="channelEditor" class="card channel-editor hidden">
+          <div class="channel-analyze-row">
+            <label>URL do canal<input id="channelUrlInput" type="url" placeholder="https://youtube.com/@canal"></label>
+            <button id="channelAnalyzeBtn" type="button" class="primary">Analisar</button>
+          </div>
+          <div id="channelAnalyzeResult"></div>
+        </section>
+
+        <section class="card channels-card">
+          <div id="channelList" class="channel-list"></div>
+        </section>
+      </section>
+
       <section id="view-settings" class="view-panel" data-view-panel="settings">
         <div class="page-header">
           <div>
             <span class="page-kicker">Sistema</span>
             <h2>Configurações</h2>
-            <p>Parâmetros de execução organizados por área.</p>
           </div>
           <div class="header-actions">
             <button id="settingsAccordionToggle" type="button">Expandir tudo</button>
@@ -327,7 +348,7 @@
               <span class="settings-index">01</span>
               <span class="settings-summary-copy">
                 <strong>Interface e arquivos</strong>
-                <small>Rede, diretórios e executáveis.</small>
+                
               </span>
               <span class="accordion-chevron" aria-hidden="true"></span>
             </summary>
@@ -336,6 +357,7 @@
                 <label>Host<input name="server.host" type="text" placeholder="0.0.0.0"></label>
                 <label>Porta<input name="server.port" type="number" min="1" max="65535"></label>
                 <label class="wide">Pasta base das bibliotecas<input name="paths.baseDir" type="text" placeholder="/home/usuario/youtube/youtube"></label>
+                <label class="wide">Pasta base dos canais<input name="paths.channelsBaseDir" type="text" placeholder="/home/usuario/youtube/youtube-channels"></label>
                 <label>Caminho do yt-dlp<input name="paths.ytDlpPath" type="text" placeholder="/usr/local/bin/yt-dlp"></label>
                 <label>Caminho do ffmpeg<input name="paths.ffmpegPath" type="text" placeholder="/usr/bin/ffmpeg"></label>
                 <label>Caminho do ffprobe<input name="paths.ffprobePath" type="text" placeholder="/usr/bin/ffprobe"></label>
@@ -349,7 +371,7 @@
               <span class="settings-index">02</span>
               <span class="settings-summary-copy">
                 <strong>Downloads</strong>
-                <small>Qualidade, armazenamento e ações automáticas.</small>
+                
               </span>
               <span class="accordion-chevron" aria-hidden="true"></span>
             </summary>
@@ -381,7 +403,7 @@
               <span class="settings-index">03</span>
               <span class="settings-summary-copy">
                 <strong>yt-dlp avançado</strong>
-                <small>Runtime JavaScript e componentes EJS.</small>
+                
               </span>
               <span class="accordion-chevron" aria-hidden="true"></span>
             </summary>
@@ -414,7 +436,7 @@
               <span class="settings-index">04</span>
               <span class="settings-summary-copy">
                 <strong>YouTube Data API</strong>
-                <small>Descoberta de vídeos, cache e fallback.</small>
+                
               </span>
               <span class="accordion-chevron" aria-hidden="true"></span>
             </summary>
@@ -440,7 +462,7 @@
               <span class="settings-index">05</span>
               <span class="settings-summary-copy">
                 <strong>ErsatzTV</strong>
-                <small>Endpoint, API Key e timeout da API.</small>
+                
               </span>
               <span class="accordion-chevron" aria-hidden="true"></span>
             </summary>
@@ -450,7 +472,6 @@
                 <label>Timeout da API (segundos)<input name="ersatztv.apiTimeoutSeconds" type="number" min="1"></label>
                 <label class="wide">API Key do ErsatzTV<input name="ersatztv.apiKey" type="password" autocomplete="off" placeholder="X-Etv-Api-Key"></label>
               </div>
-              <p class="hint">A chave é enviada no header <code>X-Etv-Api-Key</code> em todas as ações da API do ErsatzTV, incluindo scan, limpeza e rebuild.</p>
             </div>
           </details>
 
@@ -459,7 +480,7 @@
               <span class="settings-index">06</span>
               <span class="settings-summary-copy">
                 <strong>Agendador</strong>
-                <small>Periodicidade da descoberta automática.</small>
+                
               </span>
               <span class="accordion-chevron" aria-hidden="true"></span>
             </summary>
@@ -469,7 +490,14 @@
                 <label>Intervalo em minutos<input name="scheduler.intervalMinutes" type="number" min="1"></label>
                 <label class="check-row"><input name="scheduler.runOnStartup" type="checkbox"><span>Buscar ao iniciar</span></label>
               </div>
-              <p class="hint">Recomendação: 360 minutos.</p>
+              <div class="settings-subsection">
+                <strong>Canais</strong>
+                <div class="form-grid three">
+                  <label class="check-row"><input name="channelScheduler.enabled" type="checkbox"><span>Atualização periódica</span></label>
+                  <label>Intervalo em minutos<input name="channelScheduler.intervalMinutes" type="number" min="1"></label>
+                  <label class="check-row"><input name="channelScheduler.runOnStartup" type="checkbox"><span>Atualizar ao iniciar</span></label>
+                </div>
+              </div>
             </div>
           </details>
         </form>
@@ -480,7 +508,6 @@
           <div>
             <span class="page-kicker">Sistema</span>
             <h2>Logs</h2>
-            <p>Eventos de descoberta, download e integração.</p>
           </div>
           <button id="clearLogsBtn" type="button">Limpar logs</button>
         </div>
@@ -515,6 +542,8 @@
   </dialog>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="/app.js?v=2.8.0"></script>
+  <script src="/js/destinationForm.js?v=3.0.0"></script>
+  <script src="/js/channelsView.js?v=3.0.0"></script>
+  <script src="/app.js?v=3.0.0"></script>
 </body>
 </html>

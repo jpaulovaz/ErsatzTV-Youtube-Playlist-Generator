@@ -5,12 +5,12 @@ npm-debug.log*
 
 # Estado e logs locais
 /data/*.log
-/data/download-state.json
+/data/*.json
 /data/*.tmp-*
 
 # Configuracao ativa, segredos e backups de migracao
 /config/config.local.json
-/config/config.v1.backup-*.json
+/config/config.v*.backup-*.json
 
 # Temporarios que podem existir quando a pasta base aponta para o projeto
 .youtube-downloader-work/

@@ -1,45 +1,43 @@
-# Atualização para a versão 2.8.0
+# Atualização para 3.0.0
 
-Esta atualização parte da versão 2.7.0 e substitui o antigo modo único de metadados por três perfis selecionáveis por biblioteca.
+A versão 3.0.0 é compatível com a configuração da v2.8.0. O carregamento migra o schema para `configVersion: 5` e cria um backup automático do `config.json` anterior.
 
-O pacote `update` não contém `config/config.json`, `config/auth.json` nem `data/`, portanto preserva configuração, autenticação, fila e histórico. Ao iniciar, o schema de configuração é atualizado para v4 e o arquivo anterior recebe backup automático.
-
-## Perfis
-
-Na edição de cada biblioteca existe apenas o campo **Perfil**:
-
-- `Genérico`
-- `Show / vídeo completo (Filmes)`
-- `Clipes musicais (Seriados)`
-
-Uma configuração v2.7 com `showMetadata.enabled=true` é convertida para `Clipes musicais`. Configurações antigas com `movieMetadata.enabled=true` são convertidas para `Show / vídeo completo`.
-
-Como o projeto ainda está no início, não há migração física entre layouts. Se for trocar o perfil de uma biblioteca que já contém arquivos, a forma mais limpa é remover o acervo e permitir novo download com o perfil correto. A deduplicação continua sendo feita pelo `videoId`; quando o arquivo físico não existe, o destino é recalculado.
-
-## Atualização
+## Antes de atualizar
 
 ```bash
-cd /caminho/da/aplicacao
-
-pm2 stop ersatztv-youtube-downloader
-
 cp config/config.json "config/config.json.bak-$(date +%Y%m%d-%H%M%S)"
 [ ! -f config/auth.json ] || cp config/auth.json "config/auth.backup-$(date +%Y%m%d-%H%M%S).json"
 cp -a data "data.bak-$(date +%Y%m%d-%H%M%S)"
+```
 
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v2.8.0-update.zip -d .
+## Aplicar o pacote update
 
+Pare o processo, extraia `ErsatzTV-YouTube-Downloader-v3.0.0-update.zip` por cima da instalação e valide:
+
+```bash
 npm run verify
-
-pm2 restart ersatztv-youtube-downloader --update-env
-pm2 save
-pm2 logs ersatztv-youtube-downloader --lines 100
 ```
 
-Resultado esperado:
+Depois reinicie o processo normalmente. O pacote update não contém `config/config.json`, `config/auth.json` nem a pasta `data`.
 
-```text
-tests 43
-pass 43
-fail 0
-```
+## Novos campos
+
+- `paths.channelsBaseDir`: pasta base independente para o módulo Canais. Quando ausente, é derivada ao lado de `paths.baseDir` como `youtube-channels`.
+- `channels`: lista de canais cadastrados; inicia vazia.
+- `channelScheduler`: agendador independente; inicia desativado.
+
+Bibliotecas atuais, autenticação, fila persistente e arquivos locais são preservados.
+
+## Primeiro uso de Canais
+
+1. Abra **Canais**.
+2. Clique em **Adicionar canal**.
+3. Informe a URL e clique em **Analisar**. A análise não baixa nada.
+4. Selecione fontes globais e/ou playlists.
+5. Para playlists, defina o perfil e, quando necessário, Library ID/Playout ID, legendas e demais opções.
+6. Salve o canal.
+7. Use **Atualizar agora** quando quiser iniciar a primeira sincronização.
+
+## Rollback
+
+Antes de qualquer download de Canais, basta restaurar o código da v2.8.0 e o backup do `config.json`. Depois que Canais já tiver baixado mídia, o rollback do código continua possível, mas os arquivos novos devem ser preservados/manuseados manualmente; não há rollback destrutivo automático.

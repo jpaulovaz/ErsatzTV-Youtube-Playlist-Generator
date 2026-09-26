@@ -1,11 +1,12 @@
 {
-  "configVersion": 4,
+  "configVersion": 5,
   "server": {
     "host": "0.0.0.0",
     "port": 3099
   },
   "paths": {
     "baseDir": "/srv/media/youtube",
+    "channelsBaseDir": "/srv/media/youtube-channels",
     "ytDlpPath": "/usr/local/bin/yt-dlp",
     "ffmpegPath": "/usr/bin/ffmpeg",
     "ffprobePath": "/usr/bin/ffprobe",
@@ -46,32 +47,14 @@
     "apiTimeoutSeconds": 10,
     "apiKey": ""
   },
-  "playlists": [
-    {
-      "name": "Mix_Principal",
-      "url": "https://www.youtube.com/playlist?list=PL_EXEMPLO",
-      "urls": [
-        "https://www.youtube.com/playlist?list=PL_EXEMPLO"
-      ],
-      "enabled": true,
-      "libraryId": null,
-      "playoutId": null,
-      "cookiesPath": "",
-      "maxHeight": null,
-      "subtitles": {
-        "enabled": false,
-        "includeAuto": true,
-        "languages": [
-          "pt-BR",
-          "pt",
-          "en",
-          "es"
-        ]
-      },
-      "mediaProfile": "generic"
-    }
-  ],
+  "playlists": [],
+  "channels": [],
   "scheduler": {
+    "enabled": false,
+    "intervalMinutes": 360,
+    "runOnStartup": false
+  },
+  "channelScheduler": {
     "enabled": false,
     "intervalMinutes": 360,
     "runOnStartup": false

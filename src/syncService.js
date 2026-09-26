@@ -6,13 +6,16 @@ const logger = require('./logger');
 const { sanitizeName, pathExists } = require('./utils');
 const downloadManager = require('./downloadManager');
 const { runLibraryAction } = require('./ersatztvService');
+const { testYouTubeApi, canonicalWatchUrl } = require('./youtubeApi');
 const {
-  shouldUseYouTubeApi,
-  hasApiKey,
-  fetchSourcesViaApi,
-  testYouTubeApi,
-  canonicalWatchUrl
-} = require('./youtubeApi');
+  getEffectiveCookiesPath,
+  buildYtDlpCommonArgs,
+  getSourceKind,
+  parseYtDlpJsonLines,
+  fetchDestinationVideos
+} = require('./discovery/youtubeSourceProvider');
+const { libraryDestination } = require('./destinationService');
+const discoveryLock = require('./discovery/discoveryLock');
 
 const state = {
   running: false,
@@ -87,206 +90,6 @@ function findPlaylist(config, identifier) {
   ));
 }
 
-function getEffectiveCookiesPath(config, playlist) {
-  return String((playlist && playlist.cookiesPath) || config.paths.cookiesPath || '').trim();
-}
-
-function sanitizeJsRuntimeName(value) {
-  return String(value || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
-}
-
-function getYtDlpJsRuntimeArg(config) {
-  const downloads = config.downloads || {};
-  const mode = String(downloads.jsRuntimeMode || 'disabled').trim();
-  if (!mode || mode === 'disabled') return '';
-  const runtimeName = mode === 'custom'
-    ? sanitizeJsRuntimeName(downloads.jsRuntimeCustomName)
-    : sanitizeJsRuntimeName(mode);
-  if (!runtimeName) return '';
-  const runtimePath = String(downloads.jsRuntimePath || '').trim();
-  return runtimePath ? `${runtimeName}:${runtimePath}` : runtimeName;
-}
-
-function buildYtDlpCommonArgs(config, playlist) {
-  const args = [];
-  const cookiesPath = getEffectiveCookiesPath(config, playlist);
-  const runtimeArg = getYtDlpJsRuntimeArg(config);
-  const ejsComponents = runtimeArg ? String(config.downloads.ejsComponents || '').trim() : '';
-
-  if (runtimeArg) args.push('--js-runtimes', runtimeArg);
-  if (ejsComponents && ejsComponents !== 'none') args.push('--remote-components', ejsComponents);
-  if (cookiesPath) args.push('--cookies', cookiesPath);
-  if (config.downloads.userAgent) args.push('--add-header', `User-Agent: ${config.downloads.userAgent}`);
-  args.push('--no-color');
-  return args;
-}
-
-function isSingleVideoSource(urlValue) {
-  try {
-    const parsed = new URL(String(urlValue || ''));
-    const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
-    const parts = parsed.pathname.split('/').filter(Boolean);
-    if (parsed.searchParams.has('list')) return false;
-    if ((host === 'youtube.com' || host === 'm.youtube.com' || host.endsWith('.youtube.com')) && parsed.pathname === '/watch') {
-      return Boolean(parsed.searchParams.get('v'));
-    }
-    if ((host === 'youtube.com' || host === 'm.youtube.com' || host.endsWith('.youtube.com')) && ['shorts', 'embed'].includes(parts[0]) && parts[1]) {
-      return true;
-    }
-    return host === 'youtu.be' && Boolean(parts[0]);
-  } catch {
-    return false;
-  }
-}
-
-function getSourceKind(sourceUrl) {
-  return isSingleVideoSource(sourceUrl) ? 'video' : 'playlist';
-}
-
-function parseYtDlpJsonLines(stdout) {
-  const videos = [];
-  const errors = [];
-  for (const line of String(stdout || '').split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      videos.push(JSON.parse(trimmed));
-    } catch (error) {
-      errors.push({ line: trimmed.slice(0, 200), error: error.message });
-    }
-  }
-  return { videos, errors };
-}
-
-function getThumbnailFromYtDlp(video) {
-  if (video.thumbnail) return String(video.thumbnail);
-  if (!Array.isArray(video.thumbnails)) return '';
-  const candidates = video.thumbnails.filter((item) => item && item.url);
-  return candidates.length > 0 ? String(candidates[candidates.length - 1].url) : '';
-}
-
-function normalizeYtDlpVideo(video, sourceUrl, sourceIndex, sourceKind) {
-  const id = String(video && video.id || '').trim();
-  const uploadDate = String(video && video.upload_date || '').trim();
-  const yearFromDate = /^\d{4}/.test(uploadDate) ? Number(uploadDate.slice(0, 4)) : null;
-  return {
-    id,
-    title: String(video && video.title || (id ? `Video ${id}` : 'Sem Titulo')).trim(),
-    description: String(video && video.description || ''),
-    duration: Number(video && video.duration) || null,
-    thumbnailUrl: getThumbnailFromYtDlp(video || {}),
-    year: Number(video && video.release_year) || yearFromDate || null,
-    channelTitle: String(video && (video.channel || video.channel_title || video.uploader) || '').trim(),
-    webpage_url: id ? canonicalWatchUrl(id) : String(video && video.webpage_url || sourceUrl),
-    sourceUrl,
-    sourceIndex,
-    sourceKind
-  };
-}
-
-async function fetchVideosFromSourceViaYtDlp(config, playlist, sourceUrl, sourceIndex) {
-  const kind = getSourceKind(sourceUrl);
-  const args = [
-    ...buildYtDlpCommonArgs(config, playlist),
-    '--dump-json',
-    '--ignore-errors',
-    '--skip-download'
-  ];
-  if (kind === 'video') args.push('--no-playlist');
-  else args.push('--flat-playlist');
-  args.push(sourceUrl);
-
-  const result = await runCommand(config.paths.ytDlpPath, args, { timeoutMs: 15 * 60 * 1000 });
-  const parsed = parseYtDlpJsonLines(result.stdout);
-
-  if (result.stderr && result.stderr.trim()) {
-    await logger.warn(`yt-dlp informou avisos ao ler ${playlist.folderName}: ${result.stderr.trim().slice(-2000)}`);
-  }
-  for (const error of parsed.errors) {
-    await logger.warn(`Linha JSON ignorada em ${playlist.folderName}: ${error.error}`);
-  }
-
-  if (parsed.videos.length === 0) {
-    const detail = result.stderr.trim() || `codigo ${result.code}`;
-    throw new Error(`Nenhum video foi retornado para a fonte ${sourceIndex + 1} de ${playlist.folderName}: ${detail}`);
-  }
-
-  if (result.code !== 0) {
-    await logger.warn(`A fonte ${sourceIndex + 1} de ${playlist.folderName} retornou conteudo parcial (codigo ${result.code}); os videos validos serao preservados.`);
-  }
-
-  return parsed.videos
-    .map((video) => normalizeYtDlpVideo(video, sourceUrl, sourceIndex, kind))
-    .filter((video) => video.id);
-}
-
-async function fetchPlaylistVideosViaYtDlp(config, playlist) {
-  const urls = getPlaylistUrls(playlist);
-  if (urls.length === 0) throw new Error(`Nenhuma fonte configurada para ${playlist.folderName}.`);
-
-  const byVideoId = new Map();
-  const duplicates = [];
-  const sourceResults = [];
-
-  for (let index = 0; index < urls.length; index += 1) {
-    const sourceUrl = urls[index];
-    await logger.info(`Lendo fonte ${index + 1}/${urls.length} via yt-dlp para ${playlist.folderName}: ${sourceUrl}`);
-    const sourceVideos = await fetchVideosFromSourceViaYtDlp(config, playlist, sourceUrl, index);
-    let unique = 0;
-    let duplicateCount = 0;
-
-    for (const video of sourceVideos) {
-      if (byVideoId.has(video.id)) {
-        const first = byVideoId.get(video.id);
-        duplicates.push({
-          id: video.id,
-          title: video.title || first.title,
-          firstSourceIndex: first.sourceIndex,
-          duplicateSourceIndex: index,
-          firstSourceUrl: first.sourceUrl,
-          duplicateSourceUrl: sourceUrl
-        });
-        duplicateCount += 1;
-        continue;
-      }
-      byVideoId.set(video.id, video);
-      unique += 1;
-    }
-
-    sourceResults.push({
-      index,
-      url: sourceUrl,
-      kind: getSourceKind(sourceUrl),
-      fetched: sourceVideos.length,
-      unique,
-      duplicates: duplicateCount
-    });
-  }
-
-  return {
-    videos: [...byVideoId.values()],
-    duplicates,
-    sourceResults,
-    sourceCount: urls.length,
-    fetchedCount: sourceResults.reduce((total, source) => total + source.fetched, 0),
-    readMode: 'ytdlp',
-    quotaUnitsUsed: 0,
-    missingSourceIds: []
-  };
-}
-
-async function fetchPlaylistVideos(config, playlist) {
-  if (shouldUseYouTubeApi(config)) {
-    try {
-      await logger.info(`Lendo fontes via YouTube Data API para ${playlist.folderName}.`);
-      return await fetchSourcesViaApi(config, playlist);
-    } catch (error) {
-      await logger.warn(`YouTube API falhou para ${playlist.folderName}; usando yt-dlp como fallback: ${error.message}`);
-    }
-  }
-  return fetchPlaylistVideosViaYtDlp(config, playlist);
-}
-
 function createRunSummary(options) {
   return {
     startedAt: state.startedAt,
@@ -324,7 +127,8 @@ async function processPlaylist(config, playlist, summary) {
 
   await logger.info(`--- Descobrindo biblioteca: ${playlist.folderName} ---`);
   try {
-    const fetchResult = await fetchPlaylistVideos(config, playlist);
+    const destination = libraryDestination(config, playlist);
+    const fetchResult = await fetchDestinationVideos(config, destination);
     const sourceVideos = [...(fetchResult.videos || [])];
     for (const missingId of fetchResult.missingSourceIds || []) {
       if (!sourceVideos.some((video) => video && video.id === missingId)) {
@@ -345,7 +149,7 @@ async function processPlaylist(config, playlist, summary) {
     playlistSummary.videosDuplicate = (fetchResult.duplicates || []).length;
     playlistSummary.readMode = fetchResult.readMode || 'ytdlp';
     playlistSummary.quotaUnitsUsed = Number(fetchResult.quotaUnitsUsed) || 0;
-    playlistSummary.queue = await downloadManager.reconcileLibrary(config, playlist, sourceVideos);
+    playlistSummary.queue = await downloadManager.reconcileDestination(config, destination, sourceVideos);
 
     summary.playlistsProcessed += 1;
     summary.videosFound += playlistSummary.videosFound;
@@ -374,7 +178,7 @@ async function runSync(config, options = {}) {
     error.statusCode = 404;
     throw error;
   }
-  if (state.running) {
+  if (state.running || !discoveryLock.acquire('libraries')) {
     const error = new Error('Uma descoberta de fontes ja esta em execucao.');
     error.code = 'SYNC_ALREADY_RUNNING';
     throw error;
@@ -415,6 +219,7 @@ async function runSync(config, options = {}) {
     throw error;
   } finally {
     state.running = false;
+    discoveryLock.release('libraries');
   }
 }
 
@@ -498,18 +303,18 @@ async function resolveCookieTestTarget(config, playlist) {
   };
 }
 
-async function testPlaylistCookies(config, identifier) {
-  const playlist = findPlaylist(config, identifier);
-  if (!playlist) {
-    const error = new Error('Biblioteca nao encontrada na configuracao.');
+async function testDestinationCookies(config, destination) {
+  if (!destination) {
+    const error = new Error('Destino nao encontrado na configuracao.');
     error.statusCode = 404;
     throw error;
   }
 
-  const cookiesPath = getEffectiveCookiesPath(config, playlist);
+  const cookiesPath = getEffectiveCookiesPath(config, destination);
   const cookieFile = await inspectCookieFile(cookiesPath);
   const summary = {
-    playlist: playlist.folderName,
+    playlist: destination.folderName || destination.displayName,
+    destinationId: destination.id || null,
     ok: false,
     status: 'not-tested',
     message: '',
@@ -532,7 +337,7 @@ async function testPlaylistCookies(config, identifier) {
   }
 
   try {
-    summary.target = await resolveCookieTestTarget(config, playlist);
+    summary.target = await resolveCookieTestTarget(config, destination);
   } catch (error) {
     summary.status = 'target-error';
     summary.message = error.message;
@@ -540,7 +345,7 @@ async function testPlaylistCookies(config, identifier) {
   }
 
   const args = [
-    ...buildYtDlpCommonArgs(config, playlist),
+    ...buildYtDlpCommonArgs(config, destination),
     '--no-playlist',
     '--simulate',
     '--skip-download',
@@ -572,8 +377,17 @@ async function testPlaylistCookies(config, identifier) {
     summary.status = warningClassification.status;
     summary.message = warningClassification.message;
   }
-
   return summary;
+}
+
+async function testPlaylistCookies(config, identifier) {
+  const playlist = findPlaylist(config, identifier);
+  if (!playlist) {
+    const error = new Error('Biblioteca nao encontrada na configuracao.');
+    error.statusCode = 404;
+    throw error;
+  }
+  return testDestinationCookies(config, libraryDestination(config, playlist));
 }
 
 async function runPlaylistApiAction(config, identifier, action) {
@@ -606,6 +420,7 @@ module.exports = {
   runSync,
   runPlaylistApiAction,
   testPlaylistCookies,
+  testDestinationCookies,
   testYouTubeApi,
   getAllPlaylistHealth,
   findPlaylist,
