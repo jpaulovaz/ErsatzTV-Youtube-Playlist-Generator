@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 2.6.0
+# ErsatzTV YouTube Downloader 2.7.0
 
 Aplicativo Node.js para descobrir vídeos de playlists e URLs individuais do YouTube, enfileirar downloads persistentes e entregar arquivos locais ao ErsatzTV.
 
-A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.6.0 preserva os recursos da linha 2.x e acrescenta normalização conservadora e consolidação case-insensitive do nome do artista, mantendo pastas e NFO consistentes mesmo quando o YouTube alterna a capitalização entre vídeos.
+A linha 2.x substitui a arquitetura de Remote Streams/YML por arquivos de vídeo completos. O `yt-dlp` trabalha durante a preparação da biblioteca, não no momento em que o canal está sendo reproduzido. A versão 2.7.0 mantém a normalização de artistas e passa a gerar uma estrutura nativa de **Shows** para o ErsatzTV: artista como Show, cada música como episódio e legendas SRT ao lado do episódio.
 
 ## Arquitetura
 
@@ -17,7 +17,7 @@ Fila persistente, um item por vez
           ↓
 yt-dlp + ffmpeg/ffprobe
           ↓
-MP4 / H.264 / AAC + JPG/SRT + NFO/poster opcional
+MP4 / H.264 / AAC + JPG/SRT + NFO de Show/Episódio opcional
           ↓
 Biblioteca local do ErsatzTV
 ```
@@ -32,12 +32,11 @@ Biblioteca local do ErsatzTV
 - Arquivos finais padronizados em MP4, vídeo H.264 e áudio AAC.
 - Resolução máxima geral ou específica por biblioteca: 360p, 480p, 720p, 1080p, 1440p e 2160p.
 - Organização padrão `Biblioteca/Artista/Artista - Título.mp4`, com nome canônico de artista para evitar duplicação apenas por diferenças de maiúsculas/minúsculas.
-- Modo opcional para ErsatzTV/Filmes com `Biblioteca/Artista/Artista - Título/`, NFO e `poster.jpg`.
-- Thumbnail JPG ao lado do vídeo no modo padrão ou `poster.jpg` no modo Filmes.
+- Modo opcional para ErsatzTV/Shows com `Biblioteca/Artista/Season 01/`, `tvshow.nfo` e NFO por episódio.
+- Thumbnail do vídeo como artwork de episódio (`-thumb.jpg`) e `poster.jpg` no nível do artista/Show.
 - Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
 - Seleção múltipla de idiomas: `pt-BR`, `pt`, `en` e `es`.
 - Ação **Buscar legendas ausentes** para o acervo já baixado, sem baixar novamente os vídeos.
-- Ação **Preparar NFOs existentes** para reorganizar conteúdo concluído em subpastas de filme, criar NFO e reaproveitar a thumbnail como `poster.jpg`, sem baixar novamente o MP4.
 - Deduplicação por ID do YouTube, independentemente de alterações futuras no título.
 - Retentativas automáticas após 1, 5 e 15 minutos.
 - Pausa automática quando o espaço livre fica abaixo da reserva configurada.
@@ -157,17 +156,20 @@ O nome da biblioteca também é sua identidade interna e define a pasta física.
 
 ## Configuração no ErsatzTV
 
-Use uma biblioteca local do tipo **Music Videos** para o conteúdo musical. Para cada biblioteca do aplicativo, adicione ao ErsatzTV a pasta correspondente, por exemplo:
+Para cada biblioteca do aplicativo, adicione ao ErsatzTV a pasta correspondente, por exemplo:
 
 ```text
 /srv/media/youtube/Mix_Principal
 ```
 
+- se **Metadados para ErsatzTV (Shows)** estiver desativado, use o tipo de biblioteca compatível com o seu fluxo normal (por exemplo, **Music Videos**);
+- se **Metadados para ErsatzTV (Shows)** estiver ativado, a biblioteca local correspondente deve ser criada com **Media Kind = Shows**.
+
 Aponte o `Library ID` do aplicativo para a biblioteca local que deve receber o scan. O `Playout ID` é opcional e serve para rebuild automático depois que a fila entra em repouso.
 
 Nas versões atuais do ErsatzTV que protegem as rotas `/api`, preencha também **Configurações → ErsatzTV → API Key do ErsatzTV**. O aplicativo enviará essa chave como `X-Etv-Api-Key` nas ações `scan`, `empty-trash` e `rebuild-playout`. A chave nunca é escrita nos logs.
 
-Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, remova manualmente a configuração antiga no ErsatzTV. A versão 2.6.0 não contém ações relacionadas a YML.
+Não apague a biblioteca Remote Streams antiga antes de validar a nova biblioteca local. Depois que os MP4 forem reconhecidos e reproduzidos corretamente, remova manualmente a configuração antiga no ErsatzTV. A aplicação não cria nem depende de arquivos YML para metadados de mídia.
 
 ## Descoberta e fila
 
@@ -221,23 +223,34 @@ Para o acervo existente, habilite as legendas na biblioteca, selecione os idioma
 
 O `yt-dlp` usa `--write-subs`, `--write-auto-subs` quando habilitado, `--sub-langs` para os idiomas selecionados e `--convert-subs srt`. O aplicativo preserva SRT já existentes e busca somente os idiomas selecionados que ainda estiverem ausentes.
 
-## Metadados NFO e poster para bibliotecas do tipo Filmes
+## Metadados para bibliotecas locais do tipo Shows
 
-A opção **Metadados para ErsatzTV (Filmes)** é configurada por biblioteca e fica desativada por padrão. Quando ativa para novos vídeos, cada item é armazenado em uma subpasta própria, recebe um NFO e utiliza `poster.jpg` como artwork:
+A opção **Metadados para ErsatzTV (Shows)** é configurada por biblioteca. No ErsatzTV, a biblioteca local correspondente deve ser criada com **Media Kind = Shows**. A partir da 2.7.0, configurações antigas que tinham o modo de Filmes ativado são migradas automaticamente para o novo modo de Shows.
+
+Cada artista vira um Show e cada música vira um episódio da `Season 01`:
 
 ```text
-Biblioteca/Artista/Artista - Música/
-├── Artista - Música.mp4
-├── Artista - Música.nfo
-├── Artista - Música.pt-BR.srt
-└── poster.jpg
+Biblioteca/
+└── Twenty One Pilots/
+    ├── tvshow.nfo
+    ├── poster.jpg
+    └── Season 01/
+        ├── Twenty One Pilots - S01E01 - City Walls.mp4
+        ├── Twenty One Pilots - S01E01 - City Walls.nfo
+        ├── Twenty One Pilots - S01E01 - City Walls-thumb.jpg
+        ├── Twenty One Pilots - S01E01 - City Walls.pt-BR.srt
+        └── Twenty One Pilots - S01E01 - City Walls.en.srt
 ```
 
-O NFO usa o artista como `title`, a música como `outline` e `plot`, `Artista - Música` como `sorttitle`, além de `genre=Music`, `tag=Music Video` e `uniqueid` do YouTube. Sufixos de apresentação comuns do YouTube, como `(Official Video)`, são removidos apenas dos metadados, sem renomear o arquivo original.
+O `tvshow.nfo` grava o artista como título do Show. O NFO do episódio grava o nome da música em `title` e `plot`, além de temporada e número do episódio. Isso permite que o ErsatzTV trate o artista como o programa e a música como o episódio/subtítulo do EPG.
 
-A partir da 2.6.0, diferenças de casing do mesmo artista são consolidadas. Por exemplo, `TWENTY ONE PILOTS` e `twenty one pilots` passam a usar `Twenty One Pilots` para novos destinos e para o NFO. O tratamento é deliberadamente conservador: grafias como `AC/DC`, `P!NK`, `deadmau5`, `blink-182` e `CHVRCHES` não são forçadas para title case. Arquivos concluídos que já existem no disco não são movidos automaticamente; se forem apagados e redescobertos, o destino é recalculado com a regra atual.
+Os episódios recebem numeração estável por artista (`S01E01`, `S01E02`, ...). Vídeos adicionados depois recebem o próximo número disponível sem renumerar os itens conhecidos. Sufixos comuns do YouTube, como `(Official Video)`, `(Official Music Video)`, `(Official Audio)`, `(Lyric Video)` e `(Visualizer)`, são removidos do título lógico da música.
 
-Para conteúdo já concluído, a ação **Preparar NFOs existentes** reorganiza MP4/SRT/JPG em subpastas individuais, cria/atualiza o NFO e atualiza o estado interno sem baixar novamente os vídeos. A ação é manual, pede confirmação e executa no máximo um scan do ErsatzTV ao final quando houve alterações.
+A thumbnail do YouTube é gravada como artwork do episódio usando o padrão `Nome-do-episodio-thumb.jpg`. A primeira thumbnail disponível também é copiada para `poster.jpg` no nível do Show para fornecer artwork geral do artista.
+
+A normalização de artistas continua conservadora: `TWENTY ONE PILOTS` e `twenty one pilots` são consolidados como `Twenty One Pilots`, enquanto grafias estilizadas como `AC/DC`, `P!NK`, `deadmau5`, `blink-182` e `CHVRCHES` são preservadas.
+
+A estrutura antiga de Filmes não é reorganizada automaticamente. Para esta mudança de modelo, a forma mais limpa é esvaziar o acervo inicial e permitir que o aplicativo baixe novamente com a estrutura de Shows. O estado persistente continua deduplicando por `videoId` e recalcula o novo destino quando o arquivo físico antigo não existe.
 
 ## Compatibilidade de mídia
 

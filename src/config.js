@@ -6,7 +6,7 @@ const { DEFAULT_SUBTITLE_LANGUAGES, normalizeSubtitleLanguages } = require('./su
 const ROOT_DIR = path.resolve(__dirname, '..');
 const CONFIG_DIR = path.join(ROOT_DIR, 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
-const CONFIG_VERSION = 2;
+const CONFIG_VERSION = 3;
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const DEFAULT_MAX_HEIGHT = 1080;
@@ -76,7 +76,7 @@ const DEFAULT_CONFIG = {
         includeAuto: true,
         languages: [...DEFAULT_SUBTITLE_LANGUAGES]
       },
-      movieMetadata: {
+      showMetadata: {
         enabled: false
       }
     }
@@ -242,10 +242,14 @@ function normalizePlaylistSubtitles(playlist) {
   };
 }
 
-function normalizePlaylistMovieMetadata(playlist) {
-  const raw = playlist && playlist.movieMetadata && typeof playlist.movieMetadata === 'object'
+function normalizePlaylistShowMetadata(playlist) {
+  const showRaw = playlist && playlist.showMetadata && typeof playlist.showMetadata === 'object'
+    ? playlist.showMetadata
+    : null;
+  const legacyMovieRaw = playlist && playlist.movieMetadata && typeof playlist.movieMetadata === 'object'
     ? playlist.movieMetadata
-    : {};
+    : null;
+  const raw = showRaw || legacyMovieRaw || {};
   return {
     enabled: Boolean(raw.enabled)
   };
@@ -317,7 +321,7 @@ function normalizeConfig(raw) {
         cookiesPath: String(playlist && playlist.cookiesPath || '').trim(),
         maxHeight: normalizeOptionalMaxHeight(playlist && playlist.maxHeight),
         subtitles: normalizePlaylistSubtitles(playlist),
-        movieMetadata: normalizePlaylistMovieMetadata(playlist)
+        showMetadata: normalizePlaylistShowMetadata(playlist)
       };
     })
     .filter((playlist) => playlist.name && playlist.urls.length > 0);
@@ -384,7 +388,8 @@ async function ensureConfigFile() {
 }
 
 async function migrateConfigFile(raw, normalized) {
-  const backupPath = path.join(CONFIG_DIR, `config.v1.backup-${timestampForFilename()}.json`);
+  const sourceVersion = Number(raw && raw.configVersion) || 1;
+  const backupPath = path.join(CONFIG_DIR, `config.v${sourceVersion}.backup-${timestampForFilename()}.json`);
   await fs.writeFile(backupPath, JSON.stringify(raw, null, 2) + '\n', 'utf8');
   await atomicWriteJson(CONFIG_PATH, normalized);
   return backupPath;

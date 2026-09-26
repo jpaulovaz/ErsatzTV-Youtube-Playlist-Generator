@@ -12,16 +12,18 @@ const {
   listSubtitleSidecars
 } = require('./subtitleService');
 const {
-  getMovieMetadataSettings,
-  getMovieMetadata,
-  writeMovieNfo
-} = require('./movieMetadataService');
+  getShowMetadataSettings,
+  resolveShowIdentity,
+  getShowMetadata,
+  writeTvShowNfo,
+  writeEpisodeNfo
+} = require('./showMetadataService');
 const {
   sanitizeName,
   sanitizeFileComponent,
   normalizeArtistDisplayName,
-  findCaseInsensitiveDirectoryName,
   extractArtistAndTitle,
+  findCaseInsensitiveDirectoryName,
   pathExists,
   removeEmptyDirectories,
   isPathInside
@@ -44,6 +46,25 @@ function nowIso() {
 
 function makeItemId(libraryFolder, videoId) {
   return `${libraryFolder}::${videoId}`;
+}
+
+function getAssignedShowEpisodeNumber(state, libraryFolder, artist, itemId) {
+  const current = state && state.items ? state.items[itemId] : null;
+  const currentNumber = Number(current && (current.showEpisodeNumber || current.showMetadata && current.showMetadata.episodeNumber));
+  if (Number.isInteger(currentNumber) && currentNumber > 0) return currentNumber;
+
+  const artistKey = normalizeArtistDisplayName(artist).toLocaleLowerCase('pt-BR');
+  let maxEpisode = 0;
+  for (const existing of Object.values(state && state.items || {})) {
+    if (!existing || existing.id === itemId || existing.libraryFolder !== libraryFolder) continue;
+    const existingArtist = normalizeArtistDisplayName(
+      existing.artist || resolveShowIdentity(existing).artist
+    );
+    if (existingArtist.toLocaleLowerCase('pt-BR') !== artistKey) continue;
+    const episodeNumber = Number(existing.showEpisodeNumber || existing.showMetadata && existing.showMetadata.episodeNumber);
+    if (Number.isInteger(episodeNumber) && episodeNumber > maxEpisode) maxEpisode = episodeNumber;
+  }
+  return maxEpisode + 1;
 }
 
 function getPlaylistUrls(playlist) {
@@ -1320,9 +1341,9 @@ class DownloadManager {
     }
 
     const playlist = findPlaylistByFolder(this.config, item.libraryFolder);
-    const movieSettings = getMovieMetadataSettings(playlist);
+    const showSettings = getShowMetadataSettings(playlist);
     const stagedThumbnail = await this.findStagedThumbnail(workDir);
-    if (this.config.downloads.writeThumbnails !== false || movieSettings.enabled) {
+    if (this.config.downloads.writeThumbnails !== false || showSettings.enabled) {
       const shouldReplace = this.config.downloads.updateExistingThumbnails === true;
       if (stagedThumbnail && (shouldReplace || !(await pathExists(item.thumbnailPath)))) {
         if (shouldReplace) await fs.rm(item.thumbnailPath, { force: true });
@@ -1339,31 +1360,50 @@ class DownloadManager {
       }
     }
 
-    if (movieSettings.enabled) {
+    if (showSettings.enabled) {
+      delete item.movieMetadata;
       const baseName = path.parse(item.targetPath).name;
-      item.nfoPath = item.nfoPath || path.join(path.dirname(item.targetPath), `${baseName}.nfo`);
-      item.mediaLayout = 'movie-folder';
+      const seasonDir = path.dirname(item.targetPath);
+      const showDir = path.dirname(seasonDir);
+      item.nfoPath = item.nfoPath || path.join(seasonDir, `${baseName}.nfo`);
+      item.showNfoPath = item.showNfoPath || path.join(showDir, 'tvshow.nfo');
+      item.showPosterPath = item.showPosterPath || path.join(showDir, 'poster.jpg');
+      item.mediaLayout = 'show-season';
       try {
-        await writeMovieNfo(item, item.nfoPath);
-        const movieMetadata = getMovieMetadata(item);
-        item.movieMetadata = {
+        await writeTvShowNfo(item, item.showNfoPath);
+        await writeEpisodeNfo(item, item.nfoPath);
+
+        // Mantem a thumbnail do clipe como arte do episodio e usa a primeira
+        // imagem disponivel apenas como poster geral do artista/show.
+        if (!(await pathExists(item.showPosterPath)) && await pathExists(item.thumbnailPath)) {
+          await fs.copyFile(item.thumbnailPath, item.showPosterPath);
+        }
+
+        const showMetadata = getShowMetadata(item);
+        item.showMetadata = {
           status: 'complete',
-          artist: movieMetadata.artist,
-          title: movieMetadata.trackTitle,
+          artist: showMetadata.artist,
+          title: showMetadata.trackTitle,
+          seasonNumber: showMetadata.seasonNumber,
+          episodeNumber: showMetadata.episodeNumber,
           nfoPath: item.nfoPath,
-          posterPath: item.thumbnailPath,
+          showNfoPath: item.showNfoPath,
+          episodeThumbPath: item.thumbnailPath,
+          showPosterPath: item.showPosterPath,
           updatedAt: nowIso(),
           lastError: null
         };
       } catch (error) {
-        item.movieMetadata = {
+        item.showMetadata = {
           status: 'failed',
           nfoPath: item.nfoPath,
-          posterPath: item.thumbnailPath,
+          showNfoPath: item.showNfoPath,
+          episodeThumbPath: item.thumbnailPath,
+          showPosterPath: item.showPosterPath,
           updatedAt: nowIso(),
           lastError: error.message
         };
-        await logger.warn(`Video concluido, mas o NFO de ${item.videoId} nao pôde ser salvo: ${error.message}`);
+        await logger.warn(`Video concluido, mas os metadados Show de ${item.videoId} nao puderam ser salvos: ${error.message}`);
       }
     }
 
@@ -1585,9 +1625,20 @@ class DownloadManager {
 
   chooseTargetPaths(playlist, video, itemId) {
     const playlistDir = path.join(this.config.paths.baseDir, playlist.folderName);
+    const showSettings = getShowMetadataSettings(playlist);
     const extracted = extractArtistAndTitle(video.title || 'Sem Titulo');
-    let artist = normalizeArtistDisplayName(extracted.artist);
-    const title = extracted.title;
+    const identity = showSettings.enabled
+      ? resolveShowIdentity({
+        ...video,
+        artist: extracted.artist,
+        trackTitle: extracted.title
+      })
+      : {
+        artist: normalizeArtistDisplayName(extracted.artist),
+        trackTitle: extracted.title
+      };
+    let artist = identity.artist;
+    const title = identity.trackTitle;
 
     // Usa um unico nome canonico para o artista dentro da biblioteca, ignorando
     // diferencas apenas de maiusculas/minusculas vindas do YouTube.
@@ -1605,10 +1656,23 @@ class DownloadManager {
     const existingArtistFolder = findCaseInsensitiveDirectoryName(playlistDir, desiredArtistFolder);
     const artistFolderName = existingArtistFolder || desiredArtistFolder;
     const artistDir = path.join(playlistDir, artistFolderName);
-    const preferredBase = artist !== 'Outros'
-      ? sanitizeFileComponent(`${artist} - ${title}`, `Video ${video.id}`, 220)
-      : sanitizeFileComponent(title, `Video ${video.id}`, 220);
-    const movieSettings = getMovieMetadataSettings(playlist);
+
+    const showSeasonNumber = showSettings.enabled ? showSettings.seasonNumber : null;
+    const showEpisodeNumber = showSettings.enabled
+      ? getAssignedShowEpisodeNumber(this.state, playlist.folderName, artist, itemId)
+      : null;
+    const seasonLabel = showSettings.enabled ? String(showSeasonNumber).padStart(2, '0') : '';
+    const episodeLabel = showSettings.enabled ? String(showEpisodeNumber).padStart(2, '0') : '';
+
+    const preferredBase = showSettings.enabled
+      ? sanitizeFileComponent(
+        `${artist} - S${seasonLabel}E${episodeLabel} - ${title}`,
+        `Video ${video.id}`,
+        220
+      )
+      : (artist !== 'Outros'
+        ? sanitizeFileComponent(`${artist} - ${title}`, `Video ${video.id}`, 220)
+        : sanitizeFileComponent(title, `Video ${video.id}`, 220));
 
     const usedPaths = new Map();
     for (const existing of Object.values(this.state.items)) {
@@ -1616,9 +1680,10 @@ class DownloadManager {
     }
 
     let baseName = preferredBase;
-    const buildTargetPath = () => movieSettings.enabled
-      ? path.join(artistDir, baseName, `${baseName}.mp4`)
-      : path.join(artistDir, `${baseName}.mp4`);
+    const seasonDir = showSettings.enabled
+      ? path.join(artistDir, `Season ${seasonLabel}`)
+      : artistDir;
+    const buildTargetPath = () => path.join(seasonDir, `${baseName}.mp4`);
     let targetPath = buildTargetPath();
     let counter = 1;
     while (true) {
@@ -1636,11 +1701,15 @@ class DownloadManager {
       artist,
       trackTitle: title,
       targetPath,
-      thumbnailPath: movieSettings.enabled
-        ? path.join(targetDir, 'poster.jpg')
+      thumbnailPath: showSettings.enabled
+        ? path.join(targetDir, `${baseName}-thumb.jpg`)
         : path.join(artistDir, `${baseName}.jpg`),
-      nfoPath: movieSettings.enabled ? path.join(targetDir, `${baseName}.nfo`) : null,
-      mediaLayout: movieSettings.enabled ? 'movie-folder' : 'flat-artist'
+      nfoPath: showSettings.enabled ? path.join(targetDir, `${baseName}.nfo`) : null,
+      showNfoPath: showSettings.enabled ? path.join(artistDir, 'tvshow.nfo') : null,
+      showPosterPath: showSettings.enabled ? path.join(artistDir, 'poster.jpg') : null,
+      showSeasonNumber,
+      showEpisodeNumber,
+      mediaLayout: showSettings.enabled ? 'show-season' : 'flat-artist'
     };
   }
 
@@ -2161,154 +2230,6 @@ class DownloadManager {
     return result;
   }
 
-  async prepareMovieMetadata(libraryFolder) {
-    const folder = sanitizeName(libraryFolder);
-    const playlist = findPlaylistByFolder(this.config, folder);
-    if (!playlist) throw new Error('Biblioteca nao encontrada na configuracao.');
-    const settings = getMovieMetadataSettings(playlist);
-    if (!settings.enabled) {
-      throw new Error('Ative "Metadados para ErsatzTV (Filmes)" nesta biblioteca e salve a configuracao antes de preparar os arquivos existentes.');
-    }
-
-    if (this.current) {
-      const currentItem = this.state.items[this.current.itemId];
-      if (currentItem && currentItem.libraryFolder === folder) {
-        throw new Error('Aguarde o processamento atual desta biblioteca terminar antes de reorganizar os metadados.');
-      }
-    }
-
-    const libraryDir = path.join(this.config.paths.baseDir, folder);
-    const summary = {
-      playlist: folder,
-      checked: 0,
-      reorganized: 0,
-      nfoWritten: 0,
-      postersMoved: 0,
-      postersDownloaded: 0,
-      alreadyOrganized: 0,
-      skipped: 0,
-      failed: 0,
-      failures: [],
-      scan: null
-    };
-    const libraryState = this.ensureLibraryState(folder);
-    const preExistingDirty = Boolean(libraryState.dirty);
-
-    for (const item of Object.values(this.state.items)) {
-      if (item.libraryFolder !== folder || item.status !== 'completed' || item.orphaned) continue;
-      summary.checked += 1;
-      try {
-        if (!item.targetPath || !isPathInside(libraryDir, item.targetPath)) {
-          throw new Error('Caminho do video ausente ou fora da biblioteca.');
-        }
-
-        const sourceMedia = path.resolve(item.targetPath);
-        const sourceBaseName = path.parse(sourceMedia).name;
-        const sourceDir = path.dirname(sourceMedia);
-        const alreadyOrganized = path.basename(sourceDir) === sourceBaseName;
-        const movieDir = alreadyOrganized ? sourceDir : path.join(sourceDir, sourceBaseName);
-        const targetMedia = alreadyOrganized ? sourceMedia : path.join(movieDir, path.basename(sourceMedia));
-        const sourceExists = await pathExists(sourceMedia);
-        const targetExists = sourceMedia === targetMedia ? sourceExists : await pathExists(targetMedia);
-
-        if (!sourceExists && !targetExists) {
-          throw new Error('Arquivo de video concluido nao foi encontrado no disco.');
-        }
-        if (!alreadyOrganized && sourceExists && targetExists) {
-          throw new Error(`Conflito: o destino ja existe (${targetMedia}).`);
-        }
-
-        const subtitlePaths = !alreadyOrganized && sourceExists
-          ? await listSubtitleSidecars(sourceMedia)
-          : [];
-        await fs.mkdir(movieDir, { recursive: true });
-
-        if (!alreadyOrganized) {
-          if (sourceExists) await moveAcrossFileSystems(sourceMedia, targetMedia);
-          for (const subtitlePath of subtitlePaths) {
-            const subtitleTarget = path.join(movieDir, path.basename(subtitlePath));
-            if (await pathExists(subtitleTarget)) await fs.rm(subtitlePath, { force: true });
-            else await moveAcrossFileSystems(subtitlePath, subtitleTarget);
-          }
-          summary.reorganized += 1;
-        } else {
-          summary.alreadyOrganized += 1;
-        }
-
-        const posterPath = path.join(movieDir, 'poster.jpg');
-        const legacyThumbnail = item.thumbnailPath
-          ? path.resolve(item.thumbnailPath)
-          : path.join(sourceDir, `${sourceBaseName}.jpg`);
-        if (legacyThumbnail !== path.resolve(posterPath) && await pathExists(legacyThumbnail)) {
-          if (await pathExists(posterPath)) await fs.rm(legacyThumbnail, { force: true });
-          else await moveAcrossFileSystems(legacyThumbnail, posterPath);
-          summary.postersMoved += 1;
-        }
-
-        if (!(await pathExists(posterPath)) && item.thumbnailUrl) {
-          const tempPoster = `${posterPath}.tmp-${process.pid}-${Date.now()}`;
-          try {
-            await downloadRemoteFile(item.thumbnailUrl, tempPoster, 30000);
-            await moveAcrossFileSystems(tempPoster, posterPath);
-            summary.postersDownloaded += 1;
-          } finally {
-            await fs.rm(tempPoster, { force: true }).catch(() => {});
-          }
-        }
-
-        const nfoPath = path.join(movieDir, `${sourceBaseName}.nfo`);
-        const oldNfoPath = item.nfoPath ? path.resolve(item.nfoPath) : null;
-        await writeMovieNfo(item, nfoPath);
-        if (oldNfoPath && oldNfoPath !== path.resolve(nfoPath) && await pathExists(oldNfoPath)) {
-          await fs.rm(oldNfoPath, { force: true });
-        }
-        summary.nfoWritten += 1;
-
-        const metadata = getMovieMetadata(item);
-        item.targetPath = targetMedia;
-        item.mediaPath = targetMedia;
-        item.thumbnailPath = posterPath;
-        item.nfoPath = nfoPath;
-        item.mediaLayout = 'movie-folder';
-        item.movieMetadata = {
-          status: 'complete',
-          artist: metadata.artist,
-          title: metadata.trackTitle,
-          nfoPath,
-          posterPath,
-          updatedAt: nowIso(),
-          lastError: null
-        };
-        item.updatedAt = nowIso();
-      } catch (error) {
-        summary.failed += 1;
-        if (summary.failures.length < 20) {
-          summary.failures.push({ videoId: item.videoId, title: item.title, error: error.message });
-        }
-        item.movieMetadata = {
-          ...(item.movieMetadata && typeof item.movieMetadata === 'object' ? item.movieMetadata : {}),
-          status: 'failed',
-          updatedAt: nowIso(),
-          lastError: error.message
-        };
-        await logger.warn(`Falha ao preparar NFO/poster de ${item.videoId}: ${error.message}`);
-      }
-    }
-
-    const changed = summary.reorganized + summary.nfoWritten + summary.postersMoved + summary.postersDownloaded;
-    if (changed > 0) {
-      libraryState.dirty = true;
-      if (playlist.libraryId) {
-        summary.scan = await runLibraryAction(this.config, playlist, 'scan');
-        if (summary.scan && summary.scan.ok && !preExistingDirty) libraryState.dirty = false;
-      }
-    }
-    libraryState.lastMovieMetadataAt = nowIso();
-    libraryState.lastMovieMetadataSummary = summary;
-    await this.saveNow();
-    await logger.info(`Preparacao de metadados de Filmes concluida para ${folder}.`, summary);
-    return summary;
-  }
 
   previewOrphans(libraryFolder) {
     const folder = sanitizeName(libraryFolder);
@@ -2334,8 +2255,9 @@ class DownloadManager {
       throw new Error('Existe um item orfao em download. Cancele-o antes da limpeza.');
     }
 
-    const summary = { playlist: folder, itemsRemoved: 0, videosRemoved: 0, thumbnailsRemoved: 0, subtitlesRemoved: 0, nfoRemoved: 0, bytesRemoved: 0 };
+    const summary = { playlist: folder, itemsRemoved: 0, videosRemoved: 0, thumbnailsRemoved: 0, subtitlesRemoved: 0, nfoRemoved: 0, showMetadataRemoved: 0, bytesRemoved: 0 };
     const idsToDelete = [];
+    const showDirsToReview = new Set();
     for (const [id, item] of Object.entries(this.state.items)) {
       if (item.libraryFolder !== folder || !item.orphaned) continue;
       if (item.targetPath && await pathExists(item.targetPath)) {
@@ -2358,11 +2280,33 @@ class DownloadManager {
         await fs.rm(item.nfoPath, { force: true });
         summary.nfoRemoved += 1;
       }
+      if (item.mediaLayout === 'show-season') {
+        const showDir = item.showNfoPath
+          ? path.dirname(item.showNfoPath)
+          : (item.targetPath ? path.dirname(path.dirname(item.targetPath)) : null);
+        if (showDir) showDirsToReview.add(path.resolve(showDir));
+      }
       await fs.rm(this.getWorkDir(item), { recursive: true, force: true });
       idsToDelete.push(id);
       summary.itemsRemoved += 1;
     }
     for (const id of idsToDelete) delete this.state.items[id];
+
+    for (const showDir of showDirsToReview) {
+      const hasRemainingEpisode = Object.values(this.state.items).some((item) => (
+        item.libraryFolder === folder &&
+        item.targetPath &&
+        isPathInside(showDir, item.targetPath)
+      ));
+      if (hasRemainingEpisode) continue;
+      for (const showFile of ['tvshow.nfo', 'poster.jpg']) {
+        const filePath = path.join(showDir, showFile);
+        if (await pathExists(filePath)) {
+          await fs.rm(filePath, { force: true });
+          summary.showMetadataRemoved += 1;
+        }
+      }
+    }
 
     const playlistDir = path.join(this.config.paths.baseDir, folder);
     if (this.config.cleanup.removeEmptyArtistFolders) {
@@ -2397,6 +2341,9 @@ class DownloadManager {
         await downloadRemoteFile(item.thumbnailUrl, temp, 30000);
         await fs.rm(item.thumbnailPath, { force: true });
         await fs.rename(temp, item.thumbnailPath);
+        if (item.mediaLayout === 'show-season' && item.showPosterPath && !(await pathExists(item.showPosterPath))) {
+          await fs.copyFile(item.thumbnailPath, item.showPosterPath);
+        }
         if (exists) summary.updated += 1;
         else summary.created += 1;
       } catch (error) {

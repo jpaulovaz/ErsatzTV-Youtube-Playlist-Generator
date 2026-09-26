@@ -1,28 +1,38 @@
-# Atualização para a versão 2.6.0
+# Atualização para a versão 2.7.0
 
-Esta atualização parte da versão 2.5.0 e padroniza o nome do artista usado em novos destinos e nos metadados NFO.
+Esta atualização parte da versão 2.6.0 e troca o modo opcional de metadados do ErsatzTV de **Filmes** para **Shows**.
 
-O pacote `update` não contém `config/config.json`, `config/auth.json` nem `data/`, portanto preserva configuração, autenticação, fila e histórico existentes. A atualização também **não move nem renomeia automaticamente vídeos já concluídos**.
+O pacote `update` não contém `config/config.json`, `config/auth.json` nem `data/`, portanto preserva configuração, autenticação, fila e histórico. Ao iniciar a 2.7.0, o schema de configuração v2 é migrado automaticamente para v3 e uma cópia de backup do `config.json` anterior é criada.
 
-## O que muda
+## Mudança no ErsatzTV
 
-Quando o YouTube fornece variações como:
-
-```text
-TWENTY ONE PILOTS
-twenty one pilots
-Twenty One Pilots
-```
-
-o aplicativo passa a usar, para novos destinos:
+A biblioteca local usada por esse acervo deve ser criada como:
 
 ```text
-Twenty One Pilots
+Media Kind: Shows
 ```
 
-A consolidação também é case-insensitive dentro de cada biblioteca, evitando pastas separadas que diferem apenas por maiúsculas/minúsculas. Nomes estilizados são tratados de forma conservadora e não são alterados quando a capitalização pode ser intencional.
+O diretório passa a seguir o formato:
 
-A separação de artista e título agora usa o primeiro separador ` - ` com espaços. Isso evita quebrar nomes como `blink-182`.
+```text
+Biblioteca/
+└── Artista/
+    ├── tvshow.nfo
+    ├── poster.jpg
+    └── Season 01/
+        ├── Artista - S01E01 - Musica.mp4
+        ├── Artista - S01E01 - Musica.nfo
+        ├── Artista - S01E01 - Musica-thumb.jpg
+        └── Artista - S01E01 - Musica.pt-BR.srt
+```
+
+O artista vira o título do Show e a música vira o título do episódio. Essa estrutura permite ao ErsatzTV tratar a música como `sub-title`/episódio no EPG sem alterar o template global dos demais canais.
+
+## Acervo antigo
+
+A 2.7.0 não tenta reorganizar automaticamente o layout antigo de Filmes. Para o estágio atual do projeto, a migração recomendada é limpar os arquivos da biblioteca e executar novamente a descoberta.
+
+O índice continua deduplicando por `videoId`. Quando o arquivo antigo não existe, o caminho é recalculado no novo layout de Shows antes do download.
 
 ## Atualização
 
@@ -35,7 +45,7 @@ cp config/config.json "config/config.json.bak-$(date +%Y%m%d-%H%M%S)"
 [ ! -f config/auth.json ] || cp config/auth.json "config/auth.backup-$(date +%Y%m%d-%H%M%S).json"
 cp -a data "data.bak-$(date +%Y%m%d-%H%M%S)"
 
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v2.6.0-update.zip -d .
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v2.7.0-update.zip -d .
 
 npm run verify
 
@@ -51,11 +61,3 @@ tests 38
 pass 38
 fail 0
 ```
-
-## Sobre o acervo que já existe
-
-Não foi adicionada uma ação de normalização por biblioteca. Isso evita poluir a interface com uma ferramenta de migração de uso pontual.
-
-Se quiser refazer o acervo neste estágio inicial do projeto, remova os arquivos usando o procedimento que já utiliza e faça nova descoberta. Quando um item conhecido estiver sem o arquivo físico, a 2.6.0 recalcula o destino antes do novo download, aplicando a regra atual de artista.
-
-Arquivos concluídos que continuam presentes no disco permanecem exatamente onde estão.

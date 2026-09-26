@@ -211,8 +211,8 @@ function collectConfigForm() {
           .filter((input) => input.checked)
           .map((input) => input.value)
       },
-      movieMetadata: {
-        enabled: row.querySelector('[data-field="movieMetadataEnabled"]').checked
+      showMetadata: {
+        enabled: row.querySelector('[data-field="showMetadataEnabled"]').checked
       }
     };
   }).filter((playlist) => playlist.name && playlist.urls.length > 0);
@@ -298,8 +298,8 @@ function renderLibraries() {
     const subtitleLanguages = Array.isArray(subtitles.languages) ? subtitles.languages : ['pt-BR', 'pt', 'en', 'es'];
     const subtitleDisabled = subtitles.enabled ? '' : 'disabled';
     const subtitleText = subtitles.enabled ? ` · Legendas SRT (${subtitleLanguages.join(', ')})` : '';
-    const movieMetadata = playlist.movieMetadata || { enabled: false };
-    const metadataText = movieMetadata.enabled ? ' · NFO/Poster para Filmes' : '';
+    const showMetadata = playlist.showMetadata || { enabled: false };
+    const metadataText = showMetadata.enabled ? ' · NFO para Shows' : '';
 
     row.innerHTML = `
       <summary>
@@ -361,13 +361,13 @@ function renderLibraries() {
           <div class="wide library-subtitle-settings">
             <div class="library-subtitle-heading">
               <div>
-                <strong>Metadados para ErsatzTV (Filmes)</strong>
-                <small>Cria uma subpasta por vídeo, grava NFO com artista/título e usa <code>poster.jpg</code> como artwork do filme.</small>
+                <strong>Metadados para ErsatzTV (Shows)</strong>
+                <small>Organiza cada artista como Show, cria <code>tvshow.nfo</code> e cada música como episódio em <code>Season 01</code>.</small>
               </div>
               <span class="badge info">NFO</span>
             </div>
-            <label class="check-row"><input data-field="movieMetadataEnabled" type="checkbox" ${movieMetadata.enabled ? 'checked' : ''}><span>Preparar novos vídeos para biblioteca do tipo Filmes</span></label>
-            <p class="field-help">Bibliotecas existentes não são reorganizadas automaticamente. Depois de salvar, use <strong>Preparar NFOs existentes</strong>. Essa ação move somente arquivos já concluídos para subpastas individuais; não baixa os MP4 novamente.</p>
+            <label class="check-row"><input data-field="showMetadataEnabled" type="checkbox" ${showMetadata.enabled ? 'checked' : ''}><span>Preparar novos vídeos para biblioteca local do tipo Shows</span></label>
+            <p class="field-help">No ErsatzTV, crie a biblioteca local como <strong>Shows</strong>. O artista vira o Show e o título da música vira o episódio/subtítulo do EPG. A estrutura antiga de Filmes não é migrada automaticamente.</p>
           </div>
         </div>
 
@@ -379,7 +379,6 @@ function renderLibraries() {
               <button class="small" type="button" data-library-action="test-cookies">Testar cookies</button>
               <button class="small" type="button" data-library-action="refresh-thumbnails">Atualizar thumbnails</button>
               <button class="small" type="button" data-library-action="refresh-subtitles">Buscar legendas ausentes</button>
-              <button class="small" type="button" data-library-action="prepare-movie-metadata">Preparar NFOs existentes</button>
             </div>
           </div>
           <div class="library-action-group">
@@ -480,7 +479,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '2.6.0'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '2.7.0'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -759,13 +758,6 @@ async function handleLibraryAction(button) {
     return;
   }
 
-  if (action === 'prepare-movie-metadata') {
-    if (!playlist.movieMetadata || !playlist.movieMetadata.enabled) {
-      throw new Error('Ative "Metadados para ErsatzTV (Filmes)" nesta biblioteca e salve antes de preparar os arquivos existentes.');
-    }
-    if (!confirm('Esta ação reorganiza os vídeos concluídos em subpastas individuais, move SRT/JPG relacionados, renomeia a arte para poster.jpg e cria NFO. Os MP4 não serão baixados novamente. Continuar?')) return;
-  }
-
   if (action === 'orphans-cleanup') {
     const preview = await api(`/api/playlists/${encodeURIComponent(name)}/orphans-preview`, { method: 'POST', body: '{}' });
     const info = preview.result;
@@ -791,9 +783,6 @@ async function handleLibraryAction(button) {
     showToast(details.queued > 0
       ? `Legendas: ${details.queued} vídeo(s) enfileirado(s) para verificação. O scan do ErsatzTV ocorrerá uma vez ao final.`
       : `Legendas: nenhum download necessário; ${details.alreadyComplete || 0} vídeo(s) já possuem os idiomas selecionados.`);
-  } else if (action === 'prepare-movie-metadata') {
-    const details = result.result;
-    showToast(`Metadados: ${details.reorganized || 0} vídeo(s) reorganizado(s), ${details.nfoWritten || 0} NFO(s), ${(details.postersMoved || 0) + (details.postersDownloaded || 0)} poster(es), ${details.failed || 0} falha(s).`);
   } else {
     showToast(result.result && result.result.ok === false ? 'A ação foi enviada, mas o ErsatzTV retornou falha.' : 'Ação concluída.');
   }
@@ -946,7 +935,7 @@ function bindEvents() {
         includeAuto: true,
         languages: ['pt-BR', 'pt', 'en', 'es']
       },
-      movieMetadata: {
+      showMetadata: {
         enabled: false
       }
     });

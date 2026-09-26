@@ -30,7 +30,7 @@ test('migrates useful v1 settings without enabling legacy cookies', () => {
     scheduler: { enabled: false, intervalMinutes: 60 }
   });
 
-  assert.equal(config.configVersion, 2);
+  assert.equal(config.configVersion, 3);
   assert.equal(config.paths.baseDir, '/srv/media/youtube');
   assert.equal(config.paths.cookiesPath, '');
   assert.equal(config.paths.ffmpegPath, '/usr/bin/ffmpeg');
@@ -86,15 +86,15 @@ test('preserves the ErsatzTV API Key when explicitly configured', () => {
   assert.equal(config.ersatztv.apiTimeoutSeconds, 12);
 });
 
-test('movie metadata stays disabled for existing libraries unless explicitly enabled', () => {
+test('show metadata stays disabled by default and migrates the legacy movie setting', () => {
   const existing = normalizeConfig({
     configVersion: 2,
     paths: { baseDir: '/srv/media/youtube' },
     playlists: [{ name: 'Clipes', urls: ['https://youtu.be/aaaaaaaaaaa'] }]
   });
-  assert.deepEqual(existing.playlists[0].movieMetadata, { enabled: false });
+  assert.deepEqual(existing.playlists[0].showMetadata, { enabled: false });
 
-  const enabled = normalizeConfig({
+  const migrated = normalizeConfig({
     configVersion: 2,
     paths: { baseDir: '/srv/media/youtube' },
     playlists: [{
@@ -103,5 +103,16 @@ test('movie metadata stays disabled for existing libraries unless explicitly ena
       movieMetadata: { enabled: true }
     }]
   });
-  assert.deepEqual(enabled.playlists[0].movieMetadata, { enabled: true });
+  assert.deepEqual(migrated.playlists[0].showMetadata, { enabled: true });
+
+  const enabled = normalizeConfig({
+    configVersion: 3,
+    paths: { baseDir: '/srv/media/youtube' },
+    playlists: [{
+      name: 'Clipes',
+      urls: ['https://youtu.be/aaaaaaaaaaa'],
+      showMetadata: { enabled: true }
+    }]
+  });
+  assert.deepEqual(enabled.playlists[0].showMetadata, { enabled: true });
 });

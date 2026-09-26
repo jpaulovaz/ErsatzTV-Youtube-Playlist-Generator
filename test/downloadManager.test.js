@@ -313,105 +313,75 @@ test('clear queue preserves completed media and suppresses every unfinished item
   assert.equal(manager.state.items[makeItemId('Teste', 'ffffffffffc')].status, 'removed');
 });
 
-test('movie metadata mode uses one subfolder per video with poster.jpg and NFO paths', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-v25-targets-'));
+test('show metadata mode uses artist/show folders, Season 01 and stable episode numbers', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-v27-targets-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const config = makeConfig(path.join(root, 'media'));
-  config.playlists[0].movieMetadata = { enabled: true };
+  config.playlists[0].showMetadata = { enabled: true };
   const playlist = { ...config.playlists[0], folderName: 'Teste' };
   const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
   await manager.init(config);
 
-  const itemId = makeItemId('Teste', 'ggggggggggg');
-  const target = manager.chooseTargetPaths(playlist, {
-    id: 'ggggggggggg',
-    title: 'Twenty One Pilots - City Walls (Official Video)'
-  }, itemId);
+  await manager.reconcileLibrary(config, playlist, [
+    { id: 'ggggggggggg', title: 'Twenty One Pilots - City Walls (Official Video)' },
+    { id: 'hhhhhhhhhhh', title: 'Twenty One Pilots - The Line [Official Music Video]' }
+  ]);
 
-  assert.equal(path.basename(target.targetPath), 'Twenty One Pilots - City Walls (Official Video).mp4');
-  assert.equal(path.basename(path.dirname(target.targetPath)), 'Twenty One Pilots - City Walls (Official Video)');
-  assert.equal(path.basename(target.thumbnailPath), 'poster.jpg');
-  assert.equal(path.basename(target.nfoPath), 'Twenty One Pilots - City Walls (Official Video).nfo');
-  assert.equal(target.mediaLayout, 'movie-folder');
+  const first = manager.state.items[makeItemId('Teste', 'ggggggggggg')];
+  const second = manager.state.items[makeItemId('Teste', 'hhhhhhhhhhh')];
+
+  assert.equal(first.artist, 'Twenty One Pilots');
+  assert.equal(first.trackTitle, 'City Walls');
+  assert.equal(first.showSeasonNumber, 1);
+  assert.equal(first.showEpisodeNumber, 1);
+  assert.equal(second.showEpisodeNumber, 2);
+  assert.equal(path.basename(first.targetPath), 'Twenty One Pilots - S01E01 - City Walls.mp4');
+  assert.equal(path.basename(second.targetPath), 'Twenty One Pilots - S01E02 - The Line.mp4');
+  assert.equal(path.basename(path.dirname(first.targetPath)), 'Season 01');
+  assert.equal(path.basename(path.dirname(path.dirname(first.targetPath))), 'Twenty One Pilots');
+  assert.equal(path.basename(first.thumbnailPath), 'Twenty One Pilots - S01E01 - City Walls-thumb.jpg');
+  assert.equal(path.basename(first.nfoPath), 'Twenty One Pilots - S01E01 - City Walls.nfo');
+  assert.equal(path.basename(first.showNfoPath), 'tvshow.nfo');
+  assert.equal(path.basename(first.showPosterPath), 'poster.jpg');
+  assert.equal(first.mediaLayout, 'show-season');
+
+  await manager.reconcileLibrary(config, playlist, [
+    { id: 'ggggggggggg', title: 'Twenty One Pilots - City Walls (Official Video)' },
+    { id: 'hhhhhhhhhhh', title: 'Twenty One Pilots - The Line [Official Music Video]' },
+    { id: 'iiiiiiiiiii', title: 'Twenty One Pilots - Next Semester' }
+  ]);
+  const third = manager.state.items[makeItemId('Teste', 'iiiiiiiiiii')];
+  assert.equal(third.showEpisodeNumber, 3);
+  assert.equal(path.basename(third.targetPath), 'Twenty One Pilots - S01E03 - Next Semester.mp4');
 });
 
-test('prepares existing completed files for ErsatzTV movie metadata without redownloading media', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-v25-migrate-'));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
-  const mediaDir = path.join(root, 'media');
-  const config = makeConfig(mediaDir);
-  const playlist = { ...config.playlists[0], folderName: 'Teste' };
-  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
-  await manager.init(config);
-
-  await manager.reconcileLibrary(config, playlist, [{
-    id: 'hhhhhhhhhhh',
-    title: 'Twenty One Pilots - City Walls (Official Video)',
-    thumbnailUrl: ''
-  }]);
-  const id = makeItemId('Teste', 'hhhhhhhhhhh');
-  const item = manager.state.items[id];
-  await fs.mkdir(path.dirname(item.targetPath), { recursive: true });
-  await fs.writeFile(item.targetPath, 'video-placeholder');
-  await fs.writeFile(item.thumbnailPath, 'poster-placeholder');
-  const oldSubtitle = item.targetPath.replace(/\.mp4$/, '.pt-BR.srt');
-  await fs.writeFile(oldSubtitle, 'subtitle-placeholder');
-  item.status = 'completed';
-  item.mediaPath = item.targetPath;
-  item.fileSizeBytes = 17;
-  item.completedAt = new Date().toISOString();
-  await manager.saveNow();
-
-  config.playlists[0].movieMetadata = { enabled: true };
-  manager.configure(config);
-  const summary = await manager.prepareMovieMetadata('Teste');
-  const migrated = manager.state.items[id];
-
-  assert.equal(summary.reorganized, 1);
-  assert.equal(summary.nfoWritten, 1);
-  assert.equal(summary.postersMoved, 1);
-  assert.equal(summary.failed, 0);
-  assert.equal(path.basename(path.dirname(migrated.targetPath)), path.parse(migrated.targetPath).name);
-  assert.equal(path.basename(migrated.thumbnailPath), 'poster.jpg');
-  assert.equal(await fs.readFile(migrated.targetPath, 'utf8'), 'video-placeholder');
-  assert.equal(await fs.readFile(migrated.thumbnailPath, 'utf8'), 'poster-placeholder');
-  assert.equal(await fs.readFile(migrated.targetPath.replace(/\.mp4$/, '.pt-BR.srt'), 'utf8'), 'subtitle-placeholder');
-  const nfo = await fs.readFile(migrated.nfoPath, 'utf8');
-  assert.match(nfo, /<title>Twenty One Pilots<\/title>/);
-  assert.match(nfo, /<plot>City Walls<\/plot>/);
-  assert.match(nfo, /<uniqueid type="youtube" default="true">hhhhhhhhhhh<\/uniqueid>/);
-  assert.equal(await fs.access(item.targetPath).then(() => true).catch(() => false), true);
-});
-
-test('new completed downloads create poster.jpg and NFO automatically in movie metadata mode', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-v25-finalize-'));
+test('new completed downloads create tvshow NFO, episode NFO and episode artwork in show mode', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-v27-finalize-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const config = makeConfig(path.join(root, 'media'));
-  config.playlists[0].movieMetadata = { enabled: true };
+  config.playlists[0].showMetadata = { enabled: true };
   config.downloads.writeThumbnails = true;
   const playlist = { ...config.playlists[0], folderName: 'Teste' };
   const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
   await manager.init(config);
 
-  const id = makeItemId('Teste', 'iiiiiiiiiii');
+  const id = makeItemId('Teste', 'jjjjjjjjjjj');
   const target = manager.chooseTargetPaths(playlist, {
-    id: 'iiiiiiiiiii',
+    id: 'jjjjjjjjjjj',
     title: 'Twenty One Pilots - City Walls (Official Video)'
   }, id);
   const workDir = path.join(root, 'work');
   await fs.mkdir(workDir, { recursive: true });
   const stagedMedia = path.join(workDir, 'normalized.mp4');
   await fs.writeFile(stagedMedia, 'video-placeholder');
-  await fs.writeFile(path.join(workDir, 'media.jpg'), 'poster-placeholder');
+  await fs.writeFile(path.join(workDir, 'media.jpg'), 'episode-art-placeholder');
 
   const item = {
     id,
     libraryName: 'Teste',
     libraryFolder: 'Teste',
-    videoId: 'iiiiiiiiiii',
+    videoId: 'jjjjjjjjjjj',
     title: 'Twenty One Pilots - City Walls (Official Video)',
-    artist: target.artist,
-    trackTitle: target.trackTitle,
     thumbnailUrl: '',
     ...target,
     status: 'downloading',
@@ -422,59 +392,75 @@ test('new completed downloads create poster.jpg and NFO automatically in movie m
   await manager.finalizeDownload(item, stagedMedia, workDir);
 
   assert.equal(item.status, 'completed');
-  assert.equal(await fs.readFile(item.thumbnailPath, 'utf8'), 'poster-placeholder');
-  const nfo = await fs.readFile(item.nfoPath, 'utf8');
-  assert.match(nfo, /<title>Twenty One Pilots<\/title>/);
-  assert.match(nfo, /<plot>City Walls<\/plot>/);
-  assert.equal(item.movieMetadata.status, 'complete');
+  assert.equal(await fs.readFile(item.thumbnailPath, 'utf8'), 'episode-art-placeholder');
+  assert.equal(await fs.readFile(item.showPosterPath, 'utf8'), 'episode-art-placeholder');
+  const showNfo = await fs.readFile(item.showNfoPath, 'utf8');
+  const episodeNfo = await fs.readFile(item.nfoPath, 'utf8');
+  assert.match(showNfo, /<title>Twenty One Pilots<\/title>/);
+  assert.match(showNfo, /<genre>Music<\/genre>/);
+  assert.match(episodeNfo, /<title>City Walls<\/title>/);
+  assert.match(episodeNfo, /<season>1<\/season>/);
+  assert.match(episodeNfo, /<episode>1<\/episode>/);
+  assert.equal(item.showMetadata.status, 'complete');
 });
 
-test('consolidates artist casing for new targets and NFO-facing metadata', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-v26-casing-'));
+test('show mode consolidates artist casing and falls back to channel artist when title has no separator', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-v27-casing-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const config = makeConfig(path.join(root, 'media'));
-  config.playlists[0].movieMetadata = { enabled: true };
+  config.playlists[0].showMetadata = { enabled: true };
   const playlist = { ...config.playlists[0], folderName: 'Teste' };
   const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
   await manager.init(config);
 
   await manager.reconcileLibrary(config, playlist, [
-    { id: 'jjjjjjjjjjj', title: 'TWENTY ONE PILOTS - City Walls' },
-    { id: 'kkkkkkkkkkk', title: 'twenty one pilots - The Line' }
+    { id: 'kkkkkkkkkkk', title: 'TWENTY ONE PILOTS - City Walls' },
+    { id: 'lllllllllll', title: 'twenty one pilots - The Line' },
+    { id: 'mmmmmmmmmmm', title: 'Next Semester (Official Video)', channelTitle: 'TWENTY ONE PILOTS' }
   ]);
 
-  const first = manager.state.items[makeItemId('Teste', 'jjjjjjjjjjj')];
-  const second = manager.state.items[makeItemId('Teste', 'kkkkkkkkkkk')];
+  const first = manager.state.items[makeItemId('Teste', 'kkkkkkkkkkk')];
+  const second = manager.state.items[makeItemId('Teste', 'lllllllllll')];
+  const third = manager.state.items[makeItemId('Teste', 'mmmmmmmmmmm')];
   assert.equal(first.artist, 'Twenty One Pilots');
   assert.equal(second.artist, 'Twenty One Pilots');
+  assert.equal(third.artist, 'Twenty One Pilots');
+  assert.equal(third.trackTitle, 'Next Semester');
   assert.equal(path.basename(path.dirname(path.dirname(first.targetPath))), 'Twenty One Pilots');
   assert.equal(path.basename(path.dirname(path.dirname(second.targetPath))), 'Twenty One Pilots');
+  assert.equal(path.basename(path.dirname(path.dirname(third.targetPath))), 'Twenty One Pilots');
 });
 
-test('recomputes a missing legacy target path before redownload using current artist rules', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-v26-redownload-'));
+test('recomputes a missing legacy target path into the show layout before redownload', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-v27-redownload-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const config = makeConfig(path.join(root, 'media'));
+  config.playlists[0].showMetadata = { enabled: true };
   const playlist = { ...config.playlists[0], folderName: 'Teste' };
   const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
   await manager.init(config);
 
   await manager.reconcileLibrary(config, playlist, [
-    { id: 'lllllllllll', title: 'TWENTY ONE PILOTS - City Walls' }
+    { id: 'nnnnnnnnnnn', title: 'TWENTY ONE PILOTS - City Walls' }
   ]);
-  const id = makeItemId('Teste', 'lllllllllll');
+  const id = makeItemId('Teste', 'nnnnnnnnnnn');
   const item = manager.state.items[id];
   item.status = 'completed';
   item.artist = 'TWENTY ONE PILOTS';
   item.targetPath = path.join(config.paths.baseDir, 'Teste', 'TWENTY ONE PILOTS', 'TWENTY ONE PILOTS - City Walls.mp4');
   item.mediaPath = item.targetPath;
+  item.showEpisodeNumber = null;
+  item.showMetadata = null;
 
   const result = await manager.reconcileLibrary(config, playlist, [
-    { id: 'lllllllllll', title: 'TWENTY ONE PILOTS - City Walls' }
+    { id: 'nnnnnnnnnnn', title: 'TWENTY ONE PILOTS - City Walls' }
   ]);
 
   assert.equal(result.reactivated, 1);
   assert.equal(item.status, 'pending');
   assert.equal(item.artist, 'Twenty One Pilots');
-  assert.equal(path.basename(path.dirname(item.targetPath)), 'Twenty One Pilots');
+  assert.equal(item.showEpisodeNumber, 1);
+  assert.equal(path.basename(path.dirname(item.targetPath)), 'Season 01');
+  assert.equal(path.basename(path.dirname(path.dirname(item.targetPath))), 'Twenty One Pilots');
+  assert.equal(path.basename(item.targetPath), 'Twenty One Pilots - S01E01 - City Walls.mp4');
 });

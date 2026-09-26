@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.7.0
+
+- O modo de metadados do ErsatzTV passa de **Filmes** para **Shows**. No ErsatzTV, a biblioteca local correspondente deve usar `Media Kind = Shows`.
+- Cada artista é gravado como um Show em `Biblioteca/Artista/`, com `tvshow.nfo`.
+- Cada música é gravada como episódio em `Season 01`, usando nomes como `Artista - S01E01 - Musica.mp4`.
+- Cada episódio recebe NFO próprio com `title` igual ao nome da música, `season=1`, `episode=N` e `plot` igual ao nome da música.
+- Numeração de episódios é persistente e incremental por artista; novos vídeos recebem o próximo número sem renumerar itens já conhecidos.
+- Legendas SRT continuam usando o mesmo nome-base do vídeo e permanecem ao lado do episódio.
+- Thumbnails passam a usar o padrão de artwork de episódio `-thumb.jpg`; a primeira imagem disponível também é copiada como `poster.jpg` no nível do Show.
+- Sufixos comuns como `(Official Video)` e `[Official Music Video]` são removidos do título lógico da música e do novo nome físico em modo Shows.
+- Quando um título não contém `Artista - Musica`, o canal/uploader do YouTube é usado como fallback para o artista quando disponível.
+- Configuração sobe para schema v3. O antigo `movieMetadata.enabled` é migrado automaticamente para `showMetadata.enabled`, com backup automático do `config.json` anterior.
+- A ação antiga **Preparar NFOs existentes** foi removida da interface, pois a estrutura Filmes -> Shows não é migrada automaticamente.
+- 38 testes automatizados aprovados.
+
 ## 2.6.0
 
 - Normalizacao automatica e conservadora do nome do artista para novos destinos: nomes simples com duas ou mais palavras totalmente em maiusculas ou minusculas passam para capitalizacao legivel, por exemplo `TWENTY ONE PILOTS` e `twenty one pilots` viram `Twenty One Pilots`.
