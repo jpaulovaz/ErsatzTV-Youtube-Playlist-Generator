@@ -1,6 +1,6 @@
-# Atualização para 3.1.0
+# Atualização para 3.1.1
 
-A versão 3.1.0 amplia a integração com o ErsatzTV v26.10.0 sem alterar o pipeline de download.
+A versão 3.1.1 refina a integração com Smart Collections e adiciona validação automática da conexão com o ErsatzTV, sem alterar o pipeline de download.
 
 ## Antes de atualizar
 
@@ -14,7 +14,7 @@ cp -a data "data.bak-$(date +%Y%m%d-%H%M%S)"
 
 ## Aplicar o pacote update
 
-Pare o processo, extraia `ErsatzTV-YouTube-Downloader-v3.1.0-update.zip` por cima da instalação v3.0.3 e valide:
+Pare o processo, extraia `ErsatzTV-YouTube-Downloader-v3.1.1-update.zip` por cima da instalação **v3.1.0** e valide:
 
 ```bash
 npm run check
@@ -25,13 +25,7 @@ Depois reinicie o processo normalmente. O pacote update não contém `config/con
 
 ## Mudança de configuração
 
-O schema passa para `configVersion: 7`. O aplicativo preserva `Library ID` e Número do canal já configurados. Ao selecionar um Canal do ErsatzTV na nova lista por nome, também passa a persistir o nome para exibição.
-
-## Canais do ErsatzTV por nome
-
-A interface consulta `GET /api/channels` pelo backend do aplicativo. O usuário escolhe o canal pelo nome; o `channelNumber` continua armazenado apenas como identificador interno para `POST /api/channels/{channelNumber}/playout/reset`.
-
-A API Key nunca é enviada diretamente ao navegador.
+O schema passa para `configVersion: 8` e registra a última Smart Collection usada por `Library ID`. A configuração existente é normalizada com backup automático; `Library ID`, Canal do ErsatzTV e demais dados da v3.1.0 são preservados.
 
 ## Smart Collections
 
@@ -41,15 +35,20 @@ Quando uma Biblioteca ou playlist de Canal possui `Library ID`, aparece o campo 
 - **Agregar**: relê a query atual e acrescenta `(library_id:<ID>)` com `OR`, preservando a expressão existente.
 - **Substituir**: troca a query atual por `library_id:<ID>`.
 - Se a Library ID já estiver presente, **Agregar** não duplica o filtro.
-
-O aplicativo usa as rotas oficiais da v26.10.0:
-
-- `GET /api/collections/smart`
-- `POST /api/collections/smart/new`
-- `PUT /api/collections/smart/update`
+- A última Smart Collection utilizada com sucesso fica armazenada por `Library ID` e aparece ao lado do seletor.
 
 A exclusão de Smart Collections continua sendo feita no ErsatzTV.
 
+## Validação da API Key do ErsatzTV
+
+Em **Configurações → ErsatzTV**, quando URL e API Key estão preenchidas, o aplicativo consulta `GET /api/version` pelo backend.
+
+- conexão válida: mostra a versão do ErsatzTV;
+- 401/403: mostra **API Key inválida**;
+- falha de rede/timeout: mostra **ErsatzTV indisponível**.
+
+A chave não é devolvida pela rota de validação.
+
 ## Rollback
 
-A primeira inicialização com schema v7 cria backup automático da configuração anterior. Para retornar à v3.0.3, restaure também o backup do `config.json` v6.
+A primeira inicialização com schema v8 cria backup automático da configuração anterior. Para retornar à v3.1.0, restaure também o backup do `config.json` v7.

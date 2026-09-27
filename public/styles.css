@@ -607,6 +607,69 @@ input[type="checkbox"] {
 .wide { grid-column: 1 / -1; }
 .form-actions-inline { min-height: 56px; align-items: flex-end; }
 
+.ersatztv-version-status {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: rgba(8, 17, 30, .42);
+}
+.ersatztv-version-status.hidden { display: none; }
+.ersatztv-version-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  box-shadow: 0 0 0 3px rgba(126, 147, 173, .12);
+}
+.ersatztv-version-status > div { min-width: 0; display: grid; gap: 2px; }
+.ersatztv-version-status span { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.ersatztv-version-status strong { overflow: hidden; color: var(--text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.ersatztv-version-status.ok .ersatztv-version-dot { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+.ersatztv-version-status.warn .ersatztv-version-dot { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
+.ersatztv-version-status.danger .ersatztv-version-dot { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+
+
+.destination-smart-collection {
+  display: grid;
+  grid-template-columns: minmax(190px, 320px) minmax(0, 1fr);
+  align-items: end;
+  gap: 10px 12px;
+}
+.destination-smart-collection-picker { min-width: 0; }
+.destination-smart-collection-picker select { width: 100%; }
+.destination-smart-collection-last {
+  min-width: 0;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: rgba(8, 17, 30, .42);
+}
+.destination-smart-collection-last span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.destination-smart-collection-last strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Libraries */
 .libraries-card { padding: 12px; }
 .playlist-list { display: grid; gap: 8px; }
@@ -1139,6 +1202,15 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
     border-radius: 10px;
     background: rgba(8, 17, 30, .48);
   }
+
+  .destination-smart-collection {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+  }
+  .destination-smart-collection-last { min-height: 42px; }
+
+  .ersatztv-version-status { min-height: 46px; }
+
   .form-actions-inline { min-height: 0; }
   .form-actions-inline button { width: 100%; }
 

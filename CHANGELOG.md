@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.1.1
+
+- Smart Collection usada com sucesso passa a ser lembrada por `Library ID`.
+- O seletor de Smart Collection fica mais compacto e mostra ao lado a última coleção utilizada.
+- O histórico é atualizado somente após criação, agregação ou substituição concluída com sucesso.
+- Se a Smart Collection for renomeada no ErsatzTV, a interface prefere o nome atual retornado pelo catálogo.
+- Configurações valida automaticamente URL + API Key do ErsatzTV com `GET /api/version` e mostra a versão conectada sem expor a chave.
+- Falhas de autenticação e indisponibilidade do ErsatzTV aparecem como estado compacto ao lado da API Key.
+- 87 testes automatizados aprovados.
+
 ## 3.1.0
 
 - Canais do ErsatzTV passam a ser carregados por `GET /api/channels` e exibidos pelo nome; o número fica interno para Reset Playout.

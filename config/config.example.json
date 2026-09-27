@@ -1,5 +1,5 @@
 {
-  "configVersion": 7,
+  "configVersion": 8,
   "server": {
     "host": "0.0.0.0",
     "port": 3099
@@ -44,7 +44,8 @@
   "ersatztv": {
     "url": "http://localhost:8409",
     "apiTimeoutSeconds": 10,
-    "apiKey": ""
+    "apiKey": "",
+    "smartCollectionSelections": {}
   },
   "playlists": [],
   "channels": [],

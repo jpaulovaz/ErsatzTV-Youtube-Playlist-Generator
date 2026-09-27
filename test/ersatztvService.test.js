@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
-const { runLibraryAction, scanOnIdle, listErsatzTvChannels, listSmartCollections, linkSmartCollection } = require('../src/ersatztvService');
+const { runLibraryAction, scanOnIdle, listErsatzTvChannels, listSmartCollections, getErsatzTvVersion, linkSmartCollection } = require('../src/ersatztvService');
 
 async function withServer(handler, callback) {
   const server = http.createServer(handler);
@@ -160,6 +160,35 @@ test('lists Smart Collections with id, name and query', async () => {
     assert.equal(result.ok, true);
     assert.equal(result.items[0].name, '420 - BASTILLE');
     assert.equal(result.items[0].query, 'library_id:47');
+  });
+});
+
+test('validates ErsatzTV API Key with GET /api/version and returns the app version', async () => {
+  await withServer((req, res) => {
+    assert.equal(req.method, 'GET');
+    assert.equal(req.url, '/api/version');
+    assert.equal(req.headers['x-etv-api-key'], 'version-key');
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ apiVersion: 1, appVersion: '26.10.0' }));
+  }, async (url) => {
+    const result = await getErsatzTvVersion({ ersatztv: { url, apiKey: 'version-key', apiTimeoutSeconds: 5 } });
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.version, { apiVersion: 1, appVersion: '26.10.0' });
+  });
+});
+
+test('GET /api/version reports an invalid ErsatzTV API Key without exposing it', async () => {
+  await withServer((req, res) => {
+    assert.equal(req.method, 'GET');
+    assert.equal(req.url, '/api/version');
+    res.writeHead(401).end();
+  }, async (url) => {
+    const result = await getErsatzTvVersion({ ersatztv: { url, apiKey: 'wrong-key', apiTimeoutSeconds: 5 } });
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 401);
+    assert.match(result.statusText, /API Key/);
+    assert.equal(result.version, null);
+    assert.doesNotMatch(result.statusText, /wrong-key/);
   });
 });
 

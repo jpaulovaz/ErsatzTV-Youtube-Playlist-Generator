@@ -77,7 +77,7 @@ function makeConfig(root = '/srv/media') {
 
 test('v3 config normalizes Channels without changing embedded playlist identity', () => {
   const config = validateConfig(makeConfig());
-  assert.equal(config.configVersion, 7);
+  assert.equal(config.configVersion, 8);
   assert.equal(config.paths.channelsBaseDir, '/srv/media/channels');
   assert.equal(config.channels.length, 1);
   assert.equal(config.channels[0].uploadsPlaylistId, 'UU_TEST_CHANNEL');

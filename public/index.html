@@ -5,18 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>ErsatzTV YouTube Downloader</title>
-  <link rel="icon" href="/brand-mark.svg?v=3.1.0" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=3.1.0&amp;rev=channel-summary-3">
+  <link rel="icon" href="/brand-mark.svg?v=3.1.1" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=3.1.1&amp;rev=channel-summary-3">
 </head>
 <body class="app-page">
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.1.0" alt=""></span>
+        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.1.1" alt=""></span>
         <div class="brand-copy">
           <div class="title-line">
             <h1>ErsatzTV YouTube Downloader</h1>
-            <span id="versionBadge" class="version-badge">v3.1.0</span>
+            <span id="versionBadge" class="version-badge">v3.1.1</span>
           </div>
         </div>
       </div>
@@ -469,7 +469,14 @@
               <div class="form-grid two">
                 <label>URL<input name="ersatztv.url" type="text" placeholder="http://localhost:8409"></label>
                 <label>Timeout da API (segundos)<input name="ersatztv.apiTimeoutSeconds" type="number" min="1"></label>
-                <label class="wide">API Key do ErsatzTV<input name="ersatztv.apiKey" type="password" autocomplete="off" placeholder="X-Etv-Api-Key"></label>
+                <label>API Key do ErsatzTV<input name="ersatztv.apiKey" type="password" autocomplete="off" placeholder="X-Etv-Api-Key"></label>
+                <div id="ersatzTvVersionStatus" class="ersatztv-version-status hidden" aria-live="polite">
+                  <span class="ersatztv-version-dot" aria-hidden="true"></span>
+                  <div>
+                    <span>Conexão</span>
+                    <strong id="ersatzTvVersionText">Verificando...</strong>
+                  </div>
+                </div>
               </div>
             </div>
           </details>
@@ -562,8 +569,8 @@
   </dialog>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="/js/destinationForm.js?v=3.1.0"></script>
-  <script src="/js/channelsView.js?v=3.1.0&amp;rev=ersatztv-catalog-1"></script>
-  <script src="/app.js?v=3.1.0"></script>
+  <script src="/js/destinationForm.js?v=3.1.1"></script>
+  <script src="/js/channelsView.js?v=3.1.1&amp;rev=ersatztv-catalog-1"></script>
+  <script src="/app.js?v=3.1.1"></script>
 </body>
 </html>

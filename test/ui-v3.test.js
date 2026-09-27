@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.1\.0/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.1\.0/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.1\.1/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.1\.1/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -104,7 +104,10 @@ test('ErsatzTV actions select channels by name, keep number internal and expose 
   assert.match(form, /data-field="channelNumber"/);
   assert.match(form, /data-smart-collection-select/);
   assert.match(form, /data-smart-collection-region/);
+  assert.match(form, /data-smart-collection-last/);
+  assert.match(form, /lastSmartCollectionName/);
   assert.match(form, /Criar nova/);
+  assert.match(app, /smartCollectionSelections/);
   assert.doesNotMatch(form, /Número do canal/);
   assert.doesNotMatch(form, /Playout ID/);
   assert.doesNotMatch(html, /rebuildPlayoutOnQueueIdle/);
@@ -133,4 +136,32 @@ test('destructive confirmations use the application modal instead of browser ale
   assert.match(channels, /ctx\.showDialog/);
   assert.doesNotMatch(app, /\b(?:alert|confirm|prompt)\s*\(/);
   assert.doesNotMatch(channels, /\b(?:alert|confirm|prompt)\s*\(/);
+});
+
+
+test('Smart Collection selector is compact and shows the last successful selection beside it', () => {
+  const css = read('styles.css');
+  const form = read('js/destinationForm.js');
+  assert.match(css, /\.destination-smart-collection\s*\{[\s\S]*grid-template-columns: minmax\(190px, 320px\) minmax\(0, 1fr\)/);
+  assert.match(css, /\.destination-smart-collection-last/);
+  assert.match(form, />Última</);
+  assert.match(form, /lastSmartCollectionName\(libraryId\)/);
+});
+
+test('ErsatzTV settings validate the API Key through GET api version and show a compact connection state', () => {
+  const html = read('index.html');
+  const app = read('app.js');
+  const css = read('styles.css');
+  const routes = read('../src/routes/ersatztvRoutes.js');
+  const service = read('../src/ersatztvService.js');
+
+  assert.match(html, /id="ersatzTvVersionStatus"/);
+  assert.match(html, /id="ersatzTvVersionText"/);
+  assert.match(css, /\.ersatztv-version-status/);
+  assert.match(app, /\/api\/ersatztv\/version/);
+  assert.match(app, /ERSATZTV_VERSION_DEBOUNCE_MS = 650/);
+  assert.match(app, /API Key inválida/);
+  assert.match(app, /scheduleErsatzTvVersionCheck/);
+  assert.match(routes, /getErsatzTvVersion/);
+  assert.match(service, /ersatzTvJsonRequest\(config, '\/api\/version'\)/);
 });

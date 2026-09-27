@@ -30,7 +30,7 @@ test('migrates useful v1 settings without enabling legacy cookies', () => {
     scheduler: { enabled: false, intervalMinutes: 60 }
   });
 
-  assert.equal(config.configVersion, 7);
+  assert.equal(config.configVersion, 8);
   assert.equal(config.paths.baseDir, '/srv/media/youtube');
   assert.equal(config.paths.cookiesPath, '');
   assert.equal(config.paths.ffmpegPath, '/usr/bin/ffmpeg');
@@ -174,4 +174,22 @@ test('preserves the ErsatzTV channel display name with the internal channel numb
   });
   assert.equal(config.playlists[0].channelNumber, 421);
   assert.equal(config.playlists[0].channelName, 'JohnFlix Favoritos');
+});
+
+
+test('preserves the last Smart Collection used for each Library ID', () => {
+  const config = normalizeConfig({
+    configVersion: 8,
+    paths: { baseDir: '/srv/media/youtube' },
+    ersatztv: {
+      smartCollectionSelections: {
+        '47': { id: 31, name: '420 - BASTILLE' },
+        invalid: { id: 99, name: 'Ignorar' }
+      }
+    },
+    playlists: []
+  });
+  assert.deepEqual(config.ersatztv.smartCollectionSelections, {
+    '47': { id: 31, name: '420 - BASTILLE' }
+  });
 });

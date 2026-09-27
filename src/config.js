@@ -8,7 +8,7 @@ const { normalizeChannels, validateChannels } = require('./channelConfig');
 const ROOT_DIR = path.resolve(__dirname, '..');
 const CONFIG_DIR = path.join(ROOT_DIR, 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
-const CONFIG_VERSION = 7;
+const CONFIG_VERSION = 8;
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const DEFAULT_MAX_HEIGHT = 1080;
@@ -59,7 +59,8 @@ const DEFAULT_CONFIG = {
   ersatztv: {
     url: 'http://localhost:8409',
     apiKey: '',
-    apiTimeoutSeconds: 10
+    apiTimeoutSeconds: 10,
+    smartCollectionSelections: {}
   },
   playlists: [],
   scheduler: {
@@ -97,6 +98,22 @@ function toOptionalPositiveInteger(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) return null;
   return Math.floor(number);
+}
+
+function normalizeSmartCollectionSelections(value) {
+  const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const result = {};
+  for (const [libraryKey, selection] of Object.entries(raw).slice(0, 500)) {
+    const libraryId = toOptionalPositiveInteger(libraryKey);
+    if (!libraryId || !selection || typeof selection !== 'object') continue;
+    const name = String(selection.name || '').trim();
+    if (!name) continue;
+    result[String(libraryId)] = {
+      id: toOptionalPositiveInteger(selection.id),
+      name
+    };
+  }
+  return result;
 }
 
 function normalizeMaxHeight(value, fallback = DEFAULT_MAX_HEIGHT) {
@@ -280,7 +297,8 @@ function normalizeConfig(raw) {
     ersatztv: {
       url: String(rawErsatz.url || DEFAULT_CONFIG.ersatztv.url).trim().replace(/\/+$/, '') || DEFAULT_CONFIG.ersatztv.url,
       apiKey: String(rawErsatz.apiKey || '').trim(),
-      apiTimeoutSeconds: Math.max(1, Number(rawErsatz.apiTimeoutSeconds) || DEFAULT_CONFIG.ersatztv.apiTimeoutSeconds)
+      apiTimeoutSeconds: Math.max(1, Number(rawErsatz.apiTimeoutSeconds) || DEFAULT_CONFIG.ersatztv.apiTimeoutSeconds),
+      smartCollectionSelections: normalizeSmartCollectionSelections(rawErsatz.smartCollectionSelections)
     },
     playlists: [],
     channels: normalizeChannels(rawConfig.channels, ALLOWED_MAX_HEIGHTS),

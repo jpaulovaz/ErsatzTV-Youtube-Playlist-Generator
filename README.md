@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.1.0
+# ErsatzTV YouTube Downloader 3.1.1
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.1.0 amplia a integração com o ErsatzTV: Canais do ErsatzTV passam a ser selecionados pelo **nome** e o número exigido pela API fica interno; Bibliotecas com `Library ID` podem criar ou vincular **Smart Collections** sem editar queries manualmente.
+A versão 3.1.1 refina a integração com Smart Collections e a configuração do ErsatzTV: a última coleção usada fica visível ao lado do seletor e URL + API Key são validadas automaticamente por `GET /api/version`, mostrando a versão conectada. Os recursos da 3.1.0 permanecem: Canais do ErsatzTV são selecionados pelo **nome** e Bibliotecas com `Library ID` podem criar ou vincular **Smart Collections** sem editar queries manualmente.
 
 ## Arquitetura
 
@@ -50,6 +50,7 @@ Biblioteca local do ErsatzTV
 - Scan automático da biblioteca quando a fila entra em repouso, com suporte ao header `X-Etv-Api-Key`. Reset de Playout somente por ação manual confirmada.
 - Seleção de Canal do ErsatzTV por nome, carregada automaticamente por `GET /api/channels`; o número do canal fica interno.
 - Integração com Smart Collections: criar nova, agregar `library_id` a uma query existente ou substituir a query.
+- Validação automática da API Key do ErsatzTV por `GET /api/version`, com exibição compacta da versão conectada em Configurações.
 - Limpeza manual de órfãos.
 - Migração automática da configuração da versão 1.
 
@@ -188,15 +189,16 @@ Aponte o `Library ID` do aplicativo para a biblioteca local que deve receber o s
 
 Na API do ErsatzTV v26.10.0, o aplicativo usa:
 
+- `GET /api/version` para validar URL/API Key e mostrar a versão conectada;
 - `GET /api/channels` para listar canais e mostrar seus nomes;
 - `POST /api/libraries/{id}/scan` para scan da biblioteca;
 - `POST /api/maintenance/empty_trash` para esvaziar a lixeira global;
 - `POST /api/channels/{channelNumber}/playout/reset` para reset manual do Playout;
 - `GET /api/collections/smart`, `POST /api/collections/smart/new` e `PUT /api/collections/smart/update` para Smart Collections.
 
-Com `Library ID` preenchida, o formulário libera **Smart Collection**. É possível criar uma nova coleção com `library_id:<ID>`, agregar esse filtro à query atual ou substituir a query existente. A opção de exclusão de Smart Collection permanece fora do aplicativo.
+Com `Library ID` preenchida, o formulário libera **Smart Collection**. É possível criar uma nova coleção com `library_id:<ID>`, agregar esse filtro à query atual ou substituir a query existente. A opção de exclusão de Smart Collection permanece fora do aplicativo. A última Smart Collection utilizada com sucesso fica armazenada por `Library ID` e aparece ao lado do seletor.
 
-Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando a instalação proteger as rotas `/api`. O aplicativo envia a chave como `X-Etv-Api-Key`.
+Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando a instalação proteger as rotas `/api`. Com URL e chave preenchidas, a tela consulta `GET /api/version` automaticamente e mostra a versão conectada ou um estado curto de falha. O aplicativo envia a chave como `X-Etv-Api-Key`.
 
 ## Descoberta e fila
 

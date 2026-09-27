@@ -8,8 +8,11 @@ let refreshInFlight = false;
 let downloadRequestInFlight = false;
 let downloadPagination = { total: 0, offset: 0, limit: 100, hasMore: false };
 let activeView = 'overview';
-let ersatzTvCatalog = { channels: [], smartCollections: [], channelsAvailable: false, smartCollectionsAvailable: false };
+let ersatzTvCatalog = { channels: [], smartCollections: [], smartCollectionSelections: {}, channelsAvailable: false, smartCollectionsAvailable: false };
+let ersatzTvVersionTimer = null;
+let ersatzTvVersionRequest = 0;
 const DOWNLOAD_PAGE_SIZE = 100;
+const ERSATZTV_VERSION_DEBOUNCE_MS = 650;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -297,13 +300,16 @@ async function refreshErsatzTvCatalog({ showErrors = false } = {}) {
   try {
     const response = await api('/api/ersatztv/catalog');
     ersatzTvCatalog = response.catalog || ersatzTvCatalog;
+    if (config && config.ersatztv && ersatzTvCatalog.smartCollectionSelections) {
+      config.ersatztv.smartCollectionSelections = clone(ersatzTvCatalog.smartCollectionSelections);
+    }
     if (window.DestinationForm) {
       window.DestinationForm.setErsatzTvCatalog(ersatzTvCatalog);
       window.DestinationForm.refreshCatalogControls(document);
     }
     return ersatzTvCatalog;
   } catch (error) {
-    ersatzTvCatalog = { channels: [], smartCollections: [], channelsAvailable: false, smartCollectionsAvailable: false };
+    ersatzTvCatalog = { channels: [], smartCollections: [], smartCollectionSelections: config && config.ersatztv && config.ersatztv.smartCollectionSelections || {}, channelsAvailable: false, smartCollectionsAvailable: false };
     if (window.DestinationForm) {
       window.DestinationForm.setErsatzTvCatalog(ersatzTvCatalog);
       window.DestinationForm.refreshCatalogControls(document);
@@ -311,6 +317,75 @@ async function refreshErsatzTvCatalog({ showErrors = false } = {}) {
     if (showErrors) showToast(`ErsatzTV: ${error.message}`, true);
     return ersatzTvCatalog;
   }
+}
+
+function setErsatzTvVersionStatus(state = 'hidden', text = '') {
+  const status = $('#ersatzTvVersionStatus');
+  const label = $('#ersatzTvVersionText');
+  if (!status || !label) return;
+  status.classList.toggle('hidden', state === 'hidden');
+  status.classList.remove('ok', 'warn', 'danger');
+  if (state !== 'hidden' && state !== 'checking') status.classList.add(state);
+  label.textContent = String(text || 'Verificando...');
+}
+
+function currentErsatzTvConnectionForm() {
+  const url = $('#configForm [name="ersatztv.url"]')?.value.trim() || '';
+  const apiKey = $('#configForm [name="ersatztv.apiKey"]')?.value.trim() || '';
+  const timeoutField = $('#configForm [name="ersatztv.apiTimeoutSeconds"]');
+  return {
+    url,
+    apiKey,
+    apiTimeoutSeconds: Number(timeoutField?.value) || 10
+  };
+}
+
+async function checkErsatzTvVersion() {
+  const connection = currentErsatzTvConnectionForm();
+  const requestId = ++ersatzTvVersionRequest;
+  if (!connection.url || !connection.apiKey) {
+    setErsatzTvVersionStatus('hidden');
+    return;
+  }
+
+  setErsatzTvVersionStatus('checking', 'Verificando...');
+  try {
+    const response = await api('/api/ersatztv/version', {
+      method: 'POST',
+      body: JSON.stringify(connection)
+    });
+    if (requestId !== ersatzTvVersionRequest) return;
+    if (!response.ok) {
+      const authFailure = response.status === 401 || response.status === 403;
+      setErsatzTvVersionStatus(authFailure ? 'danger' : 'warn', authFailure ? 'API Key inválida' : 'ErsatzTV indisponível');
+      return;
+    }
+
+    const appVersion = String(response.version && response.version.appVersion || '').trim();
+    const apiVersion = Number(response.version && response.version.apiVersion);
+    const versionLabel = appVersion
+      ? (/^v/i.test(appVersion) ? appVersion : `v${appVersion}`)
+      : (Number.isFinite(apiVersion) ? `API ${apiVersion}` : 'Conectado');
+    setErsatzTvVersionStatus('ok', versionLabel);
+  } catch {
+    if (requestId !== ersatzTvVersionRequest) return;
+    setErsatzTvVersionStatus('warn', 'ErsatzTV indisponível');
+  }
+}
+
+function scheduleErsatzTvVersionCheck({ immediate = false } = {}) {
+  if (ersatzTvVersionTimer) window.clearTimeout(ersatzTvVersionTimer);
+  const connection = currentErsatzTvConnectionForm();
+  if (!connection.url || !connection.apiKey) {
+    ersatzTvVersionRequest += 1;
+    setErsatzTvVersionStatus('hidden');
+    return;
+  }
+  setErsatzTvVersionStatus('checking', 'Verificando...');
+  ersatzTvVersionTimer = window.setTimeout(() => {
+    ersatzTvVersionTimer = null;
+    checkErsatzTvVersion();
+  }, immediate ? 0 : ERSATZTV_VERSION_DEBOUNCE_MS);
 }
 
 async function handleSmartCollectionSelection(select) {
@@ -600,6 +675,7 @@ async function saveConfiguration(showMessage = true) {
   setConfigState(result.config);
   if (showMessage) {
     await refreshErsatzTvCatalog({ showErrors: false });
+    scheduleErsatzTvVersionCheck({ immediate: true });
     showToast('Configuração salva.');
   }
   return config;
@@ -687,7 +763,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '3.1.0'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '3.1.1'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -916,6 +992,7 @@ async function loadInitial() {
   config = await api('/api/config');
   await refreshErsatzTvCatalog({ showErrors: false });
   fillConfigForm();
+  scheduleErsatzTvVersionCheck({ immediate: true });
   renderLibraries();
   updateLibraryFilters();
   if (window.ChannelView) window.ChannelView.render();
@@ -1113,6 +1190,14 @@ function bindEvents() {
 
   $('#saveBtn').addEventListener('click', () => saveConfiguration().catch((error) => showToast(error.message, true)));
   $('#saveBtnBottom').addEventListener('click', () => saveConfiguration().catch((error) => showToast(error.message, true)));
+  for (const field of [
+    $('#configForm [name="ersatztv.url"]'),
+    $('#configForm [name="ersatztv.apiKey"]'),
+    $('#configForm [name="ersatztv.apiTimeoutSeconds"]')
+  ].filter(Boolean)) {
+    field.addEventListener('input', () => scheduleErsatzTvVersionCheck());
+    field.addEventListener('change', () => scheduleErsatzTvVersionCheck({ immediate: true }));
+  }
   $('#runNowBtn').addEventListener('click', () => runDiscovery().catch((error) => showToast(error.message, true)));
   $('#refreshBtn').addEventListener('click', () => refreshAll(true, { forceDownloads: $('#downloadsAccordion').open }));
   $('#refreshDownloadsBtn').addEventListener('click', () => refreshDownloads({ force: true }).catch((error) => showToast(error.message, true)));

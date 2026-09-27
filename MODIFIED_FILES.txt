@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.1.0
+ErsatzTV YouTube Downloader 3.1.1
 
-Arquivos alterados em relacao a v3.0.3:
+Arquivos alterados em relacao a v3.1.0:
 
 M	CHANGELOG.md
 M	MODIFIED_FILES.txt
@@ -11,14 +11,12 @@ M	config/config.example.json
 M	package.json
 M	public/app.js
 M	public/index.html
-M	public/js/channelsView.js
 M	public/js/destinationForm.js
 M	public/login.html
-M	src/channelConfig.js
+M	public/styles.css
 M	src/config.js
-M	src/destinationService.js
 M	src/ersatztvService.js
-A	src/routes/ersatztvRoutes.js
+M	src/routes/ersatztvRoutes.js
 M	src/server.js
 M	test/channels.test.js
 M	test/config.test.js

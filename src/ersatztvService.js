@@ -132,6 +132,18 @@ async function listSmartCollections(config) {
   return { ...result, items };
 }
 
+async function getErsatzTvVersion(config) {
+  const result = await ersatzTvJsonRequest(config, '/api/version');
+  const data = result.ok && result.data && typeof result.data === 'object' ? result.data : {};
+  return {
+    ...result,
+    version: result.ok ? {
+      apiVersion: Number.isFinite(Number(data.apiVersion)) ? Number(data.apiVersion) : null,
+      appVersion: String(data.appVersion || '').trim()
+    } : null
+  };
+}
+
 async function getErsatzTvCatalog(config) {
   const [channels, smartCollections] = await Promise.all([
     listErsatzTvChannels(config),
@@ -140,6 +152,7 @@ async function getErsatzTvCatalog(config) {
   return {
     channels: channels.items,
     smartCollections: smartCollections.items,
+    smartCollectionSelections: config && config.ersatztv && config.ersatztv.smartCollectionSelections || {},
     channelsAvailable: channels.ok,
     smartCollectionsAvailable: smartCollections.ok,
     channelError: channels.ok ? '' : channels.statusText,
@@ -185,8 +198,10 @@ async function linkSmartCollection(config, options = {}) {
       json: { name, query: queryForLibrary }
     });
     if (!created.ok) throw externalApiError('Nao foi possivel criar a Smart Collection', created);
-    await logger.info(`Smart Collection criada no ErsatzTV: ${name}.`, { libraryId: Number(options.libraryId) });
-    return { changed: true, created: true, name, query: queryForLibrary };
+    const createdId = Number(created.data && created.data.id) || null;
+    const createdName = String(created.data && created.data.name || name).trim() || name;
+    await logger.info(`Smart Collection criada no ErsatzTV: ${createdName}.`, { libraryId: Number(options.libraryId) });
+    return { changed: true, created: true, id: createdId, name: createdName, query: queryForLibrary };
   }
 
   if (!['aggregate', 'replace'].includes(mode)) {
@@ -305,6 +320,7 @@ module.exports = {
   ersatzTvJsonRequest,
   listErsatzTvChannels,
   listSmartCollections,
+  getErsatzTvVersion,
   getErsatzTvCatalog,
   linkSmartCollection,
   queryContainsLibraryId,

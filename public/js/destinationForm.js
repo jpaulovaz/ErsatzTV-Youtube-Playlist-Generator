@@ -9,6 +9,7 @@
   let ersatzTvCatalog = {
     channels: [],
     smartCollections: [],
+    smartCollectionSelections: {},
     channelsAvailable: false,
     smartCollectionsAvailable: false
   };
@@ -33,6 +34,9 @@
     ersatzTvCatalog = {
       channels: Array.isArray(raw.channels) ? raw.channels : [],
       smartCollections: Array.isArray(raw.smartCollections) ? raw.smartCollections : [],
+      smartCollectionSelections: raw.smartCollectionSelections && typeof raw.smartCollectionSelections === 'object'
+        ? raw.smartCollectionSelections
+        : {},
       channelsAvailable: Boolean(raw.channelsAvailable),
       smartCollectionsAvailable: Boolean(raw.smartCollectionsAvailable)
     };
@@ -77,6 +81,18 @@
         `<option value="${Number(collection.id) || ''}">${escapeHtml(collection.name || '')}</option>`
       ))
     ].join('');
+  }
+
+  function lastSmartCollectionName(libraryId) {
+    const id = numberOrNull(libraryId);
+    if (!id) return '';
+    const selection = ersatzTvCatalog.smartCollectionSelections[String(id)];
+    if (!selection || typeof selection !== 'object') return '';
+    const collectionId = numberOrNull(selection.id);
+    const current = collectionId
+      ? ersatzTvCatalog.smartCollections.find((item) => Number(item.id) === collectionId)
+      : null;
+    return String(current && current.name || selection.name || '').trim();
   }
 
   function normalizedSubtitles(value) {
@@ -138,11 +154,17 @@
             ${channelOptions(currentChannelNumber, currentChannelName)}
           </select>
         </label>
-        <label class="wide destination-smart-collection ${libraryId ? '' : 'hidden'}" data-smart-collection-region>Smart Collection
-          <select data-smart-collection-select ${ersatzTvCatalog.smartCollectionsAvailable ? '' : 'disabled'}>
-            ${smartCollectionOptions()}
-          </select>
-        </label>` : ''}
+        <div class="wide destination-smart-collection ${libraryId ? '' : 'hidden'}" data-smart-collection-region>
+          <label class="destination-smart-collection-picker">Smart Collection
+            <select data-smart-collection-select ${ersatzTvCatalog.smartCollectionsAvailable ? '' : 'disabled'}>
+              ${smartCollectionOptions()}
+            </select>
+          </label>
+          <div class="destination-smart-collection-last" data-smart-collection-last>
+            <span>Última</span>
+            <strong>${escapeHtml(lastSmartCollectionName(libraryId) || '—')}</strong>
+          </div>
+        </div>` : ''}
         ${includeUrls ? `<label class="wide">Fontes, uma URL por linha<textarea data-field="urls" rows="4">${escapeHtml((entity && entity.urls || []).join('\n'))}</textarea></label>` : ''}
         ${sourceUrl ? `<label class="wide">Fonte<input type="text" value="${escapeHtml(sourceUrl)}" readonly></label>` : ''}
         <label>Resolução
@@ -222,6 +244,8 @@
           smartRegion.classList.toggle('hidden', !hasLibrary);
           const select = smartRegion.querySelector('[data-smart-collection-select]');
           if (select) select.disabled = !hasLibrary || !ersatzTvCatalog.smartCollectionsAvailable;
+          const last = smartRegion.querySelector('[data-smart-collection-last] strong');
+          if (last) last.textContent = lastSmartCollectionName(libraryInput.value) || '—';
         };
         if (!libraryInput.dataset.boundSmartCollectionToggle) {
           libraryInput.addEventListener('input', apply);
@@ -243,6 +267,10 @@
     scope.querySelectorAll('[data-smart-collection-select]').forEach((select) => {
       select.innerHTML = smartCollectionOptions();
       select.value = '';
+      const fields = select.closest('.destination-fields');
+      const libraryInput = fields && fields.querySelector('[data-field="libraryId"]');
+      const last = fields && fields.querySelector('[data-smart-collection-last] strong');
+      if (last) last.textContent = lastSmartCollectionName(libraryInput && libraryInput.value) || '—';
     });
     syncErsatzTvControls(scope);
   }
