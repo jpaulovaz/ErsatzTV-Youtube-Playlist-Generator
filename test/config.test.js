@@ -30,7 +30,7 @@ test('migrates useful v1 settings without enabling legacy cookies', () => {
     scheduler: { enabled: false, intervalMinutes: 60 }
   });
 
-  assert.equal(config.configVersion, 6);
+  assert.equal(config.configVersion, 7);
   assert.equal(config.paths.baseDir, '/srv/media/youtube');
   assert.equal(config.paths.cookiesPath, '');
   assert.equal(config.paths.ffmpegPath, '/usr/bin/ffmpeg');
@@ -74,7 +74,7 @@ test('rejects unsafe base paths and duplicate library folders', () => {
 
 test('uses ErsatzTV channelNumber explicitly and never converts a legacy Playout ID into it', () => {
   const explicit = normalizeConfig({
-    configVersion: 6,
+    configVersion: 7,
     paths: { baseDir: '/srv/media/youtube' },
     playlists: [{
       name: 'Canal ErsatzTV',
@@ -85,6 +85,7 @@ test('uses ErsatzTV channelNumber explicitly and never converts a legacy Playout
   });
 
   assert.equal(explicit.playlists[0].channelNumber, 421);
+  assert.equal(explicit.playlists[0].channelName, '');
   assert.equal(Object.hasOwn(explicit.playlists[0], 'playoutId'), false);
 
   const legacyOnly = normalizeConfig({
@@ -157,4 +158,20 @@ test('legacy movie metadata migrates to the movie profile', () => {
     }]
   });
   assert.equal(migrated.playlists[0].mediaProfile, 'movie');
+});
+
+
+test('preserves the ErsatzTV channel display name with the internal channel number', () => {
+  const config = normalizeConfig({
+    configVersion: 7,
+    paths: { baseDir: '/srv/media/youtube' },
+    playlists: [{
+      name: 'Clipes',
+      urls: ['https://www.youtube.com/playlist?list=PLCLIPS'],
+      channelNumber: 421,
+      channelName: 'JohnFlix Favoritos'
+    }]
+  });
+  assert.equal(config.playlists[0].channelNumber, 421);
+  assert.equal(config.playlists[0].channelName, 'JohnFlix Favoritos');
 });

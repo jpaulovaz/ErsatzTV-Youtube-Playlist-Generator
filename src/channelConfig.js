@@ -49,6 +49,7 @@ function normalizeChannelPlaylist(rawPlaylist, allowedHeights) {
     mediaProfile: normalizeMediaProfile(playlist.mediaProfile || MEDIA_PROFILES.GENERIC),
     libraryId: toOptionalPositiveInteger(playlist.libraryId),
     channelNumber: toOptionalPositiveInteger(playlist.channelNumber),
+    channelName: String(playlist.channelName || '').trim(),
     maxHeight: normalizeOptionalMaxHeight(playlist.maxHeight, allowedHeights),
     cookiesPath: String(playlist.cookiesPath || '').trim(),
     subtitles: normalizeSubtitles(playlist.subtitles)

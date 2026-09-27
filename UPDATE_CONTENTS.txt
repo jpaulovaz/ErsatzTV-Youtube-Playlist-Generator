@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.0.3 - pacote de atualização
+ErsatzTV YouTube Downloader 3.1.0 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.0.2.
+Extraia este ZIP sobre uma instalação v3.0.3.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,10 +9,12 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principais mudanças:
-- Reset Playout manual pela rota oficial do ErsatzTV e por Número do canal;
-- remoção do reset/rebuild automático de Playout;
-- correção da rota de Limpar lixo para a manutenção global do ErsatzTV;
-- modais próprios do aplicativo em confirmações destrutivas;
-- schema de configuração v6, sem converter Playout ID antigo em Número do canal.
+- Canal do ErsatzTV selecionado pelo nome via GET /api/channels;
+- número do canal mantido internamente para Reset Playout;
+- Smart Collections liberadas quando existe Library ID;
+- criação de Smart Collection com library_id:<ID>;
+- agregação segura à query existente ou substituição deliberada da query;
+- API Key do ErsatzTV permanece somente no backend;
+- schema de configuração v7.
 
 Consulte UPGRADE.md antes da atualização.

@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.0.3
+# ErsatzTV YouTube Downloader 3.1.0
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.0.3 mantém a interface e os módulos **Bibliotecas** e **Canais** da v3.0.2 e corrige a integração com a API do ErsatzTV. O reset de Playout passa a usar o número do canal exigido pela API, o reset automático é removido e as confirmações destrutivas passam a usar modais próprios do aplicativo.
+A versão 3.1.0 amplia a integração com o ErsatzTV: Canais do ErsatzTV passam a ser selecionados pelo **nome** e o número exigido pela API fica interno; Bibliotecas com `Library ID` podem criar ou vincular **Smart Collections** sem editar queries manualmente.
 
 ## Arquitetura
 
@@ -48,6 +48,8 @@ Biblioteca local do ErsatzTV
 - Lista de downloads convertida automaticamente em cartões no celular, sem tabela horizontal.
 - Login administrativo local com senha derivada por scrypt, sessão HttpOnly, CSRF e bloqueio de tentativas.
 - Scan automático da biblioteca quando a fila entra em repouso, com suporte ao header `X-Etv-Api-Key`. Reset de Playout somente por ação manual confirmada.
+- Seleção de Canal do ErsatzTV por nome, carregada automaticamente por `GET /api/channels`; o número do canal fica interno.
+- Integração com Smart Collections: criar nova, agregar `library_id` a uma query existente ou substituir a query.
 - Limpeza manual de órfãos.
 - Migração automática da configuração da versão 1.
 
@@ -148,7 +150,7 @@ Fontes disponíveis:
 - Transmissões finalizadas;
 - playlists públicas, listadas individualmente por nome.
 
-As fontes globais usam o perfil Genérico. Playlists selecionadas podem usar os mesmos três perfis de mídia de Bibliotecas e podem ter `Library ID`, `Número do canal` do ErsatzTV, resolução, cookies e legendas próprios. Uma playlist é tratada como unidade editorial completa, inclusive quando contém vídeos publicados por outros canais.
+As fontes globais usam o perfil Genérico. Playlists selecionadas podem usar os mesmos três perfis de mídia de Bibliotecas e podem ter `Library ID`, **Canal no ErsatzTV** selecionado por nome, resolução, cookies e legendas próprios. Uma playlist é tratada como unidade editorial completa, inclusive quando contém vídeos publicados por outros canais.
 
 A identidade persistente é baseada em `channelId`, `playlistId` e `destinationId`. Renomes no YouTube atualizam o nome exibido, mas não movem automaticamente a pasta física. Itens removidos remotamente viram órfãos e só são excluídos após preview e confirmação manual.
 
@@ -182,13 +184,17 @@ Use o tipo local conforme o perfil escolhido no aplicativo:
 - **Show / vídeo completo (Filmes)**: `Movies`.
 - **Clipes musicais (Seriados)**: `Shows`.
 
-Aponte o `Library ID` do aplicativo para a biblioteca local que deve receber o scan. Para **Reset Playout**, informe o **Número do canal** mostrado no ErsatzTV. Esse número não é o antigo Playout ID.
+Aponte o `Library ID` do aplicativo para a biblioteca local que deve receber o scan. Quando a conexão com o ErsatzTV estiver disponível, o campo **Canal no ErsatzTV** lista os canais por nome e guarda internamente o número necessário ao **Reset Playout**.
 
 Na API do ErsatzTV v26.10.0, o aplicativo usa:
 
+- `GET /api/channels` para listar canais e mostrar seus nomes;
 - `POST /api/libraries/{id}/scan` para scan da biblioteca;
 - `POST /api/maintenance/empty_trash` para esvaziar a lixeira global;
-- `POST /api/channels/{channelNumber}/playout/reset` para reset manual do Playout.
+- `POST /api/channels/{channelNumber}/playout/reset` para reset manual do Playout;
+- `GET /api/collections/smart`, `POST /api/collections/smart/new` e `PUT /api/collections/smart/update` para Smart Collections.
+
+Com `Library ID` preenchida, o formulário libera **Smart Collection**. É possível criar uma nova coleção com `library_id:<ID>`, agregar esse filtro à query atual ou substituir a query existente. A opção de exclusão de Smart Collection permanece fora do aplicativo.
 
 Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando a instalação proteger as rotas `/api`. O aplicativo envia a chave como `X-Etv-Api-Key`.
 

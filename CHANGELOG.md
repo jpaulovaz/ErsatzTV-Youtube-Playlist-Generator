@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.1.0
+
+- Canais do ErsatzTV passam a ser carregados por `GET /api/channels` e exibidos pelo nome; o número fica interno para Reset Playout.
+- `Library ID` continua manual, pois a v26.10.0 não expõe listagem pública de Libraries.
+- Bibliotecas e playlists de Canais com `Library ID` passam a oferecer integração com Smart Collections.
+- Smart Collections existentes são listadas por nome via `GET /api/collections/smart`.
+- Nova Smart Collection pode ser criada com query `library_id:<ID>` via `POST /api/collections/smart/new`.
+- Em coleção existente, **Agregar** relê a query atual antes do `PUT`, preserva a expressão e adiciona `OR (library_id:<ID>)`; IDs já presentes não são duplicados.
+- **Substituir** troca deliberadamente a query por `library_id:<ID>` via `PUT /api/collections/smart/update`.
+- API Key do ErsatzTV permanece somente no backend do aplicativo.
+- Modal interno passa a suportar escolha secundária e entrada simples, mantendo o padrão visual do aplicativo.
+- Schema de configuração atualizado para v7 para persistir o nome do Canal do ErsatzTV junto ao número interno.
+- 82 testes automatizados aprovados.
+
 ## 3.0.3
 
 - Integração com ErsatzTV alinhada à API oficial da v26.10.0.

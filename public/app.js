@@ -8,6 +8,7 @@ let refreshInFlight = false;
 let downloadRequestInFlight = false;
 let downloadPagination = { total: 0, offset: 0, limit: 100, hasMore: false };
 let activeView = 'overview';
+let ersatzTvCatalog = { channels: [], smartCollections: [], channelsAvailable: false, smartCollectionsAvailable: false };
 const DOWNLOAD_PAGE_SIZE = 100;
 
 const $ = (selector) => document.querySelector(selector);
@@ -234,6 +235,7 @@ function showAppDialog(options = {}) {
   const inputLabel = $('#appDialogInputLabel');
   const input = $('#appDialogInput');
   const confirmButton = $('#appDialogConfirm');
+  const secondaryButton = $('#appDialogSecondary');
   const cancelButton = $('#appDialogCancel');
 
   if (!dialog || typeof dialog.showModal !== 'function') {
@@ -241,6 +243,8 @@ function showAppDialog(options = {}) {
   }
 
   const expectedText = options.expectedText == null ? null : String(options.expectedText);
+  const showInput = expectedText !== null || options.input === true;
+  const inputRequired = Boolean(options.inputRequired);
   dialog.returnValue = '';
   eyebrow.textContent = String(options.eyebrow || 'Confirmação');
   title.textContent = String(options.title || 'Confirmar ação');
@@ -251,13 +255,20 @@ function showAppDialog(options = {}) {
   confirmButton.classList.toggle('danger', Boolean(options.danger));
   cancelButton.textContent = String(options.cancelLabel || 'Cancelar');
 
-  input.value = '';
-  inputWrap.classList.toggle('hidden', expectedText === null);
-  inputLabel.textContent = String(options.inputLabel || 'Digite o texto de confirmação');
+  const secondaryLabel = String(options.secondaryLabel || '').trim();
+  secondaryButton.textContent = secondaryLabel || 'Outra opção';
+  secondaryButton.classList.toggle('hidden', !secondaryLabel);
+  secondaryButton.classList.toggle('danger', Boolean(options.secondaryDanger));
+
+  input.value = String(options.inputValue || '');
+  inputWrap.classList.toggle('hidden', !showInput);
+  inputLabel.textContent = String(options.inputLabel || 'Confirmação');
   input.placeholder = String(options.inputPlaceholder || '');
 
   const syncConfirmState = () => {
-    confirmButton.disabled = expectedText !== null && input.value !== expectedText;
+    const exactInvalid = expectedText !== null && input.value !== expectedText;
+    const requiredInvalid = inputRequired && !input.value.trim();
+    confirmButton.disabled = exactInvalid || requiredInvalid;
   };
   input.oninput = syncConfirmState;
   syncConfirmState();
@@ -265,18 +276,98 @@ function showAppDialog(options = {}) {
   return new Promise((resolve) => {
     const finish = () => {
       input.oninput = null;
+      const action = dialog.returnValue || 'cancel';
       resolve({
-        confirmed: dialog.returnValue === 'confirm',
+        action,
+        confirmed: action === 'confirm',
+        secondary: action === 'secondary',
         value: input.value
       });
     };
     dialog.addEventListener('close', finish, { once: true });
     dialog.showModal();
     window.setTimeout(() => {
-      if (expectedText !== null) input.focus();
+      if (showInput) input.focus();
       else cancelButton.focus();
     }, 0);
   });
+}
+
+async function refreshErsatzTvCatalog({ showErrors = false } = {}) {
+  try {
+    const response = await api('/api/ersatztv/catalog');
+    ersatzTvCatalog = response.catalog || ersatzTvCatalog;
+    if (window.DestinationForm) {
+      window.DestinationForm.setErsatzTvCatalog(ersatzTvCatalog);
+      window.DestinationForm.refreshCatalogControls(document);
+    }
+    return ersatzTvCatalog;
+  } catch (error) {
+    ersatzTvCatalog = { channels: [], smartCollections: [], channelsAvailable: false, smartCollectionsAvailable: false };
+    if (window.DestinationForm) {
+      window.DestinationForm.setErsatzTvCatalog(ersatzTvCatalog);
+      window.DestinationForm.refreshCatalogControls(document);
+    }
+    if (showErrors) showToast(`ErsatzTV: ${error.message}`, true);
+    return ersatzTvCatalog;
+  }
+}
+
+async function handleSmartCollectionSelection(select) {
+  const fields = select.closest('.destination-fields');
+  const libraryInput = fields && fields.querySelector('[data-field="libraryId"]');
+  const libraryId = numberOrNull(libraryInput && libraryInput.value);
+  const selectedValue = String(select.value || '');
+  if (!libraryId || !selectedValue) {
+    select.value = '';
+    return;
+  }
+
+  try {
+    if (selectedValue === '__new__') {
+      const decision = await showAppDialog({
+        eyebrow: 'ErsatzTV',
+        title: 'Nova Smart Collection',
+        message: `A coleção usará library_id:${libraryId}.`,
+        input: true,
+        inputRequired: true,
+        inputLabel: 'Nome da Smart Collection',
+        confirmLabel: 'Criar'
+      });
+      if (!decision.confirmed) return;
+      const response = await api('/api/ersatztv/smart-collections/link', {
+        method: 'POST',
+        body: JSON.stringify({ mode: 'create', libraryId, name: decision.value.trim() })
+      });
+      showToast(`Smart Collection "${response.result.name}" criada.`);
+      await refreshErsatzTvCatalog();
+      return;
+    }
+
+    const collectionId = Number(selectedValue);
+    const collection = (ersatzTvCatalog.smartCollections || []).find((item) => Number(item.id) === collectionId);
+    if (!collection) throw new Error('Smart Collection não encontrada. Atualize a página e tente novamente.');
+
+    const decision = await showAppDialog({
+      eyebrow: 'Smart Collection',
+      title: collection.name,
+      message: `Vincular library_id:${libraryId} a esta coleção?`,
+      confirmLabel: 'Agregar',
+      secondaryLabel: 'Substituir',
+      cancelLabel: 'Cancelar'
+    });
+    if (!decision.confirmed && !decision.secondary) return;
+    const mode = decision.secondary ? 'replace' : 'aggregate';
+    const response = await api('/api/ersatztv/smart-collections/link', {
+      method: 'POST',
+      body: JSON.stringify({ mode, libraryId, collectionId })
+    });
+    if (response.result.alreadyPresent) showToast('Esta Library ID já faz parte da Smart Collection.');
+    else showToast(mode === 'replace' ? 'Query da Smart Collection substituída.' : 'Library ID agregada à Smart Collection.');
+    await refreshErsatzTvCatalog();
+  } finally {
+    select.value = '';
+  }
 }
 
 function formatDate(value) {
@@ -498,6 +589,7 @@ function renderLibraries() {
     `;
     container.appendChild(row);
     window.DestinationForm.syncSubtitleControls(row);
+    window.DestinationForm.syncErsatzTvControls(row);
   });
   updateLibraryFilters();
 }
@@ -506,7 +598,10 @@ async function saveConfiguration(showMessage = true) {
   const payload = collectConfigForm();
   const result = await api('/api/config', { method: 'PUT', body: JSON.stringify(payload) });
   setConfigState(result.config);
-  if (showMessage) showToast('Configuração salva.');
+  if (showMessage) {
+    await refreshErsatzTvCatalog({ showErrors: false });
+    showToast('Configuração salva.');
+  }
   return config;
 }
 
@@ -592,7 +687,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '3.0.3'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '3.1.0'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -819,6 +914,7 @@ async function refreshAll(showErrors = false, options = {}) {
 
 async function loadInitial() {
   config = await api('/api/config');
+  await refreshErsatzTvCatalog({ showErrors: false });
   fillConfigForm();
   renderLibraries();
   updateLibraryFilters();
@@ -919,11 +1015,11 @@ async function handleLibraryAction(button) {
   }
 
   if (action === 'reset-playout') {
-    if (!playlist.channelNumber) throw new Error('Informe o Número do canal antes de resetar o Playout.');
+    if (!playlist.channelNumber) throw new Error('Selecione o Canal no ErsatzTV antes de resetar o Playout.');
     const decision = await showAppDialog({
       eyebrow: 'ErsatzTV',
       title: 'Reset Playout',
-      message: `O Playout do canal ${playlist.channelNumber} será apagado e reconstruído.`,
+      message: `O Playout de "${playlist.channelName || window.DestinationForm.channelNameFor(playlist.channelNumber, 'canal selecionado')}" será apagado e reconstruído.`,
       warning: 'O progresso atual pode ser perdido.',
       danger: true
     });
@@ -1095,6 +1191,7 @@ function bindEvents() {
       enabled: true,
       libraryId: null,
       channelNumber: null,
+      channelName: '',
       cookiesPath: '',
       maxHeight: null,
       subtitles: {
@@ -1112,6 +1209,12 @@ function bindEvents() {
         created.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     });
+  });
+
+  document.addEventListener('change', (event) => {
+    const select = event.target.closest('[data-smart-collection-select]');
+    if (!select) return;
+    handleSmartCollectionSelection(select).catch((error) => showToast(error.message, true));
   });
 
   $('#playlistList').addEventListener('change', (event) => {

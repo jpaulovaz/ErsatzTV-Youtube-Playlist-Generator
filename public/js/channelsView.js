@@ -203,7 +203,7 @@
             ${readOnlyField('Perfil', profileText)}
             ${readOnlyField('Resolução', qualityText)}
             ${readOnlyField('Library ID', playlist.libraryId || '-')}
-            ${readOnlyField('Número do canal', playlist.channelNumber || '-')}
+            ${readOnlyField('Canal ErsatzTV', playlist.channelName || global.DestinationForm.channelNameFor(playlist.channelNumber, '-'))}
             ${readOnlyField('Legendas', subtitleText)}
             ${readOnlyField('Cookies', playlist.cookiesPath ? 'Personalizado' : 'Global')}
             ${readOnlyField('Pasta', playlist.folderName || playlist.name)}
@@ -319,6 +319,7 @@
       mediaProfile: 'generic',
       libraryId: null,
       channelNumber: null,
+      channelName: '',
       maxHeight: null,
       cookiesPath: '',
       subtitles: { enabled: false, includeAuto: true, languages: ['pt-BR', 'pt', 'en', 'es'] }
@@ -421,6 +422,7 @@
         <button type="button" class="primary" data-channel-editor-save>Salvar canal</button>
       </div>`;
     global.DestinationForm.syncSubtitleControls(result);
+    global.DestinationForm.syncErsatzTvControls(result);
     syncPlaylistSelections(result);
   }
 
@@ -435,7 +437,10 @@
           if (field === checkbox) return;
           field.disabled = !checkbox.checked;
         });
-        if (checkbox.checked) global.DestinationForm.syncSubtitleControls(body);
+        if (checkbox.checked) {
+          global.DestinationForm.syncSubtitleControls(body);
+          global.DestinationForm.syncErsatzTvControls(body);
+        }
       };
       checkbox.addEventListener('change', apply);
       apply();
@@ -701,11 +706,11 @@
       if (!decision.confirmed) return;
     }
     if (action === 'reset-playout') {
-      if (!playlist || !playlist.channelNumber) throw new Error('Informe o Número do canal antes de resetar o Playout.');
+      if (!playlist || !playlist.channelNumber) throw new Error('Selecione o Canal no ErsatzTV antes de resetar o Playout.');
       const decision = await ctx.showDialog({
         eyebrow: 'ErsatzTV',
         title: 'Reset Playout',
-        message: `O Playout do canal ${playlist.channelNumber} será apagado e reconstruído.`,
+        message: `O Playout de "${playlist.channelName || global.DestinationForm.channelNameFor(playlist.channelNumber, 'canal selecionado')}" será apagado e reconstruído.`,
         warning: 'O progresso atual pode ser perdido.',
         danger: true
       });

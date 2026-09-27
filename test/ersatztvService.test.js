@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
-const { runLibraryAction, scanOnIdle } = require('../src/ersatztvService');
+const { runLibraryAction, scanOnIdle, listErsatzTvChannels, listSmartCollections, linkSmartCollection } = require('../src/ersatztvService');
 
 async function withServer(handler, callback) {
   const server = http.createServer(handler);
@@ -123,4 +123,129 @@ test('idle ErsatzTV automation performs scan only and never resets playout', asy
     assert.equal(requests, 1);
     assert.equal(Object.hasOwn(result, 'rebuild'), false);
   });
+});
+
+
+test('lists ErsatzTV channels by name while keeping channel number internal', async () => {
+  await withServer((req, res) => {
+    assert.equal(req.method, 'GET');
+    assert.equal(req.url, '/api/channels');
+    assert.equal(req.headers['x-etv-api-key'], 'catalog-key');
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify([
+      { id: 9, number: '421', name: 'JohnFlix Favoritos', fFmpegProfile: 'x', language: 'pt', streamingMode: 'x' },
+      { id: 3, number: '419', name: 'JohnFlix Terror', fFmpegProfile: 'x', language: 'pt', streamingMode: 'x' }
+    ]));
+  }, async (url) => {
+    const result = await listErsatzTvChannels({ ersatztv: { url, apiKey: 'catalog-key', apiTimeoutSeconds: 5 } });
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.items, [
+      { id: 9, number: '421', name: 'JohnFlix Favoritos' },
+      { id: 3, number: '419', name: 'JohnFlix Terror' }
+    ]);
+  });
+});
+
+test('lists Smart Collections with id, name and query', async () => {
+  await withServer((req, res) => {
+    assert.equal(req.method, 'GET');
+    assert.equal(req.url, '/api/collections/smart');
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify([
+      { id: 31, name: '420 - BASTILLE', query: 'library_id:47' },
+      { id: 30, name: '420 - TWENTY ONE PILOTS', query: 'library_id:45' }
+    ]));
+  }, async (url) => {
+    const result = await listSmartCollections({ ersatztv: { url, apiKey: '', apiTimeoutSeconds: 5 } });
+    assert.equal(result.ok, true);
+    assert.equal(result.items[0].name, '420 - BASTILLE');
+    assert.equal(result.items[0].query, 'library_id:47');
+  });
+});
+
+test('creates a Smart Collection from Library ID', async () => {
+  await withServer(async (req, res) => {
+    assert.equal(req.method, 'POST');
+    assert.equal(req.url, '/api/collections/smart/new');
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    assert.deepEqual(JSON.parse(body), { name: '420 - NOVA', query: 'library_id:47' });
+    res.writeHead(200).end();
+  }, async (url) => {
+    const result = await linkSmartCollection({ ersatztv: { url, apiKey: 'key', apiTimeoutSeconds: 5 } }, {
+      mode: 'create', libraryId: 47, name: '420 - NOVA'
+    });
+    assert.equal(result.created, true);
+    assert.equal(result.query, 'library_id:47');
+  });
+});
+
+test('aggregates Library ID into the latest Smart Collection query', async () => {
+  let requestCount = 0;
+  await withServer(async (req, res) => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      assert.equal(req.method, 'GET');
+      assert.equal(req.url, '/api/collections/smart');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify([{ id: 15, name: 'Premium', query: 'type:movie AND tag:premium' }]));
+      return;
+    }
+    assert.equal(req.method, 'PUT');
+    assert.equal(req.url, '/api/collections/smart/update');
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    assert.deepEqual(JSON.parse(body), {
+      id: 15,
+      name: 'Premium',
+      query: '(type:movie AND tag:premium) OR (library_id:47)'
+    });
+    res.writeHead(200).end();
+  }, async (url) => {
+    const result = await linkSmartCollection({ ersatztv: { url, apiKey: '', apiTimeoutSeconds: 5 } }, {
+      mode: 'aggregate', libraryId: 47, collectionId: 15
+    });
+    assert.equal(result.changed, true);
+    assert.equal(result.query, '(type:movie AND tag:premium) OR (library_id:47)');
+  });
+  assert.equal(requestCount, 2);
+});
+
+test('aggregate does not duplicate a Library ID already present in Smart Collection query', async () => {
+  let requests = 0;
+  await withServer((req, res) => {
+    requests += 1;
+    assert.equal(req.method, 'GET');
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify([{ id: 31, name: 'BASTILLE', query: '(type:episode) OR (library_id:47)' }]));
+  }, async (url) => {
+    const result = await linkSmartCollection({ ersatztv: { url, apiKey: '', apiTimeoutSeconds: 5 } }, {
+      mode: 'aggregate', libraryId: 47, collectionId: 31
+    });
+    assert.equal(result.changed, false);
+    assert.equal(result.alreadyPresent, true);
+  });
+  assert.equal(requests, 1);
+});
+
+test('replace overwrites Smart Collection query with only the selected Library ID', async () => {
+  let requestCount = 0;
+  await withServer(async (req, res) => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify([{ id: 31, name: 'BASTILLE', query: 'type:movie' }]));
+      return;
+    }
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    assert.deepEqual(JSON.parse(body), { id: 31, name: 'BASTILLE', query: 'library_id:47' });
+    res.writeHead(200).end();
+  }, async (url) => {
+    const result = await linkSmartCollection({ ersatztv: { url, apiKey: '', apiTimeoutSeconds: 5 } }, {
+      mode: 'replace', libraryId: 47, collectionId: 31
+    });
+    assert.equal(result.query, 'library_id:47');
+  });
+  assert.equal(requestCount, 2);
 });

@@ -6,6 +6,13 @@
     music_clips: 'Clipes musicais (Seriados)'
   };
 
+  let ersatzTvCatalog = {
+    channels: [],
+    smartCollections: [],
+    channelsAvailable: false,
+    smartCollectionsAvailable: false
+  };
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -13,6 +20,63 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function numberOrNull(value) {
+    if (value === '' || value === null || value === undefined) return null;
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? Math.floor(number) : null;
+  }
+
+  function setErsatzTvCatalog(value) {
+    const raw = value && typeof value === 'object' ? value : {};
+    ersatzTvCatalog = {
+      channels: Array.isArray(raw.channels) ? raw.channels : [],
+      smartCollections: Array.isArray(raw.smartCollections) ? raw.smartCollections : [],
+      channelsAvailable: Boolean(raw.channelsAvailable),
+      smartCollectionsAvailable: Boolean(raw.smartCollectionsAvailable)
+    };
+  }
+
+  function getErsatzTvCatalog() {
+    return ersatzTvCatalog;
+  }
+
+  function channelNameFor(channelNumber, fallback = '') {
+    const number = String(channelNumber || '').trim();
+    const match = ersatzTvCatalog.channels.find((channel) => String(channel.number || '').trim() === number);
+    return match && match.name ? match.name : String(fallback || '').trim();
+  }
+
+  function channelOptions(currentNumber, currentName) {
+    const selectedValue = String(currentNumber || '').trim();
+    const options = ['<option value="">Nenhum</option>'];
+    const values = new Set();
+    for (const channel of ersatzTvCatalog.channels) {
+      const value = String(channel.number || '').trim();
+      const name = String(channel.name || '').trim();
+      if (!value || !name || values.has(value)) continue;
+      values.add(value);
+      options.push(`<option value="${escapeHtml(value)}" data-name="${escapeHtml(name)}" ${value === selectedValue ? 'selected' : ''}>${escapeHtml(name)}</option>`);
+    }
+    if (selectedValue && !values.has(selectedValue)) {
+      const label = String(currentName || '').trim() || 'Canal configurado';
+      options.push(`<option value="${escapeHtml(selectedValue)}" data-name="${escapeHtml(label)}" selected>${escapeHtml(label)}</option>`);
+    }
+    return options.join('');
+  }
+
+  function smartCollectionOptions() {
+    if (!ersatzTvCatalog.smartCollectionsAvailable) {
+      return '<option value="">Indisponível</option>';
+    }
+    return [
+      '<option value="">Selecionar...</option>',
+      '<option value="__new__">Criar nova...</option>',
+      ...ersatzTvCatalog.smartCollections.map((collection) => (
+        `<option value="${Number(collection.id) || ''}">${escapeHtml(collection.name || '')}</option>`
+      ))
+    ].join('');
   }
 
   function normalizedSubtitles(value) {
@@ -61,12 +125,24 @@
     const includeUrls = options.includeUrls === true;
     const sourceUrl = String(options.sourceUrl || '').trim();
     const enabledLabel = options.enabledLabel || (mode === 'channel-playlist' ? 'Playlist ativa' : 'Biblioteca ativa');
+    const libraryId = entity && entity.libraryId || '';
+    const currentChannelNumber = entity && entity.channelNumber || '';
+    const currentChannelName = entity && entity.channelName || '';
 
     return `
       <div class="form-grid three destination-fields" data-destination-mode="${escapeHtml(mode)}">
         ${includeName ? `<label>Nome<input data-field="name" type="text" value="${escapeHtml(entity && entity.name || '')}"></label>` : ''}
-        ${includeIds ? `<label>Library ID<input data-field="libraryId" type="number" min="1" value="${entity && entity.libraryId || ''}"></label>
-        <label>Número do canal<input data-field="channelNumber" type="number" min="1" value="${entity && entity.channelNumber || ''}"></label>` : ''}
+        ${includeIds ? `<label>Library ID<input data-field="libraryId" type="number" min="1" value="${libraryId}"></label>
+        <label>Canal no ErsatzTV
+          <select data-field="channelNumber" data-current-name="${escapeHtml(currentChannelName)}">
+            ${channelOptions(currentChannelNumber, currentChannelName)}
+          </select>
+        </label>
+        <label class="wide destination-smart-collection ${libraryId ? '' : 'hidden'}" data-smart-collection-region>Smart Collection
+          <select data-smart-collection-select ${ersatzTvCatalog.smartCollectionsAvailable ? '' : 'disabled'}>
+            ${smartCollectionOptions()}
+          </select>
+        </label>` : ''}
         ${includeUrls ? `<label class="wide">Fontes, uma URL por linha<textarea data-field="urls" rows="4">${escapeHtml((entity && entity.urls || []).join('\n'))}</textarea></label>` : ''}
         ${sourceUrl ? `<label class="wide">Fonte<input type="text" value="${escapeHtml(sourceUrl)}" readonly></label>` : ''}
         <label>Resolução
@@ -86,12 +162,6 @@
       </div>`;
   }
 
-  function numberOrNull(value) {
-    if (value === '' || value === null || value === undefined) return null;
-    const number = Number(value);
-    return Number.isFinite(number) && number > 0 ? Math.floor(number) : null;
-  }
-
   function collect(container, base = {}, options = {}) {
     const result = { ...base };
     const read = (name) => container.querySelector(`[data-field="${name}"]`);
@@ -102,7 +172,13 @@
       result.urls = urls;
     }
     if (read('libraryId')) result.libraryId = numberOrNull(read('libraryId').value);
-    if (read('channelNumber')) result.channelNumber = numberOrNull(read('channelNumber').value);
+    if (read('channelNumber')) {
+      result.channelNumber = numberOrNull(read('channelNumber').value);
+      const selected = read('channelNumber').selectedOptions && read('channelNumber').selectedOptions[0];
+      result.channelName = result.channelNumber && selected
+        ? String(selected.dataset.name || selected.textContent || '').trim()
+        : '';
+    }
     if (read('cookiesPath')) result.cookiesPath = read('cookiesPath').value.trim();
     if (read('maxHeight')) result.maxHeight = numberOrNull(read('maxHeight').value);
     if (read('mediaProfile')) result.mediaProfile = read('mediaProfile').value;
@@ -136,6 +212,41 @@
     });
   }
 
+  function syncErsatzTvControls(container) {
+    container.querySelectorAll('.destination-fields').forEach((fields) => {
+      const libraryInput = fields.querySelector('[data-field="libraryId"]');
+      const smartRegion = fields.querySelector('[data-smart-collection-region]');
+      if (libraryInput && smartRegion) {
+        const apply = () => {
+          const hasLibrary = Boolean(numberOrNull(libraryInput.value));
+          smartRegion.classList.toggle('hidden', !hasLibrary);
+          const select = smartRegion.querySelector('[data-smart-collection-select]');
+          if (select) select.disabled = !hasLibrary || !ersatzTvCatalog.smartCollectionsAvailable;
+        };
+        if (!libraryInput.dataset.boundSmartCollectionToggle) {
+          libraryInput.addEventListener('input', apply);
+          libraryInput.dataset.boundSmartCollectionToggle = '1';
+        }
+        apply();
+      }
+    });
+  }
+
+  function refreshCatalogControls(root) {
+    const scope = root || document;
+    scope.querySelectorAll('[data-field="channelNumber"]').forEach((select) => {
+      const currentValue = String(select.value || '').trim();
+      const currentName = String(select.selectedOptions?.[0]?.dataset.name || select.dataset.currentName || '').trim();
+      select.innerHTML = channelOptions(currentValue, currentName);
+      select.disabled = !ersatzTvCatalog.channelsAvailable && !currentValue;
+    });
+    scope.querySelectorAll('[data-smart-collection-select]').forEach((select) => {
+      select.innerHTML = smartCollectionOptions();
+      select.value = '';
+    });
+    syncErsatzTvControls(scope);
+  }
+
   global.DestinationForm = {
     DEFAULT_LANGUAGES,
     PROFILE_LABELS,
@@ -143,6 +254,11 @@
     renderSubtitleSettings,
     renderFields,
     collect,
-    syncSubtitleControls
+    syncSubtitleControls,
+    syncErsatzTvControls,
+    setErsatzTvCatalog,
+    getErsatzTvCatalog,
+    refreshCatalogControls,
+    channelNameFor
   };
 })(window);

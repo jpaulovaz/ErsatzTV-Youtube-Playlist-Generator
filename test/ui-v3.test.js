@@ -28,9 +28,9 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.0\.3/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.0\.3/);
-  assert.match(html, /rev=channel-summary-3/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.1\.0/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.1\.0/);
+  assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
 test('saved Channels expose compact read-only summaries without moving edit controls into the accordions', () => {
@@ -94,20 +94,28 @@ test('mobile navigation stays on one horizontal row and auto-hides without cover
 });
 
 
-test('ErsatzTV actions use channel number, Reset Playout and no automatic playout refresh control', () => {
+test('ErsatzTV actions select channels by name, keep number internal and expose Smart Collections only with Library ID', () => {
   const html = read('index.html');
   const form = read('js/destinationForm.js');
   const app = read('app.js');
   const channels = read('js/channelsView.js');
 
-  assert.match(form, /Número do canal/);
+  assert.match(form, /Canal no ErsatzTV/);
   assert.match(form, /data-field="channelNumber"/);
+  assert.match(form, /data-smart-collection-select/);
+  assert.match(form, /data-smart-collection-region/);
+  assert.match(form, /Criar nova/);
+  assert.doesNotMatch(form, /Número do canal/);
   assert.doesNotMatch(form, /Playout ID/);
   assert.doesNotMatch(html, /rebuildPlayoutOnQueueIdle/);
   assert.doesNotMatch(html, /Atualizar playout ao esvaziar/);
+  assert.match(app, /\/api\/ersatztv\/catalog/);
+  assert.match(app, /\/api\/ersatztv\/smart-collections\/link/);
+  assert.match(app, /confirmLabel: 'Agregar'/);
+  assert.match(app, /secondaryLabel: 'Substituir'/);
   assert.match(app, /data-library-action="reset-playout">Reset Playout/);
   assert.match(channels, /data-channel-playlist-action="reset-playout">Reset Playout/);
-  assert.match(channels, /readOnlyField\('Número do canal'/);
+  assert.match(channels, /readOnlyField\('Canal ErsatzTV'/);
 });
 
 test('destructive confirmations use the application modal instead of browser alert confirm or prompt', () => {
@@ -117,8 +125,10 @@ test('destructive confirmations use the application modal instead of browser ale
 
   assert.match(html, /id="appDialog"/);
   assert.match(html, /id="appDialogInput"/);
+  assert.match(html, /id="appDialogSecondary"/);
   assert.match(app, /function showAppDialog\(options = \{\}\)/);
   assert.match(app, /expectedText/);
+  assert.match(app, /secondaryLabel/);
   assert.match(app, /warning: 'O progresso atual pode ser perdido\.'/);
   assert.match(channels, /ctx\.showDialog/);
   assert.doesNotMatch(app, /\b(?:alert|confirm|prompt)\s*\(/);

@@ -8,7 +8,7 @@ const { normalizeChannels, validateChannels } = require('./channelConfig');
 const ROOT_DIR = path.resolve(__dirname, '..');
 const CONFIG_DIR = path.join(ROOT_DIR, 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
-const CONFIG_VERSION = 6;
+const CONFIG_VERSION = 7;
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const DEFAULT_MAX_HEIGHT = 1080;
@@ -310,6 +310,7 @@ function normalizeConfig(raw) {
         enabled: !playlist || playlist.enabled !== false,
         libraryId: toOptionalPositiveInteger(playlist && playlist.libraryId) || legacyLibraryId,
         channelNumber: toOptionalPositiveInteger(playlist && playlist.channelNumber) || legacyChannelNumber,
+        channelName: String(playlist && playlist.channelName || '').trim(),
         cookiesPath: String(playlist && playlist.cookiesPath || '').trim(),
         maxHeight: normalizeOptionalMaxHeight(playlist && playlist.maxHeight),
         subtitles: normalizePlaylistSubtitles(playlist),

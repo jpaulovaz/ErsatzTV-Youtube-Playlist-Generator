@@ -1,6 +1,6 @@
-# Atualização para 3.0.3
+# Atualização para 3.1.0
 
-A versão 3.0.3 corrige a integração com a API do ErsatzTV e padroniza as confirmações da interface.
+A versão 3.1.0 amplia a integração com o ErsatzTV v26.10.0 sem alterar o pipeline de download.
 
 ## Antes de atualizar
 
@@ -14,7 +14,7 @@ cp -a data "data.bak-$(date +%Y%m%d-%H%M%S)"
 
 ## Aplicar o pacote update
 
-Pare o processo, extraia `ErsatzTV-YouTube-Downloader-v3.0.3-update.zip` por cima da instalação v3.0.2 e valide:
+Pare o processo, extraia `ErsatzTV-YouTube-Downloader-v3.1.0-update.zip` por cima da instalação v3.0.3 e valide:
 
 ```bash
 npm run check
@@ -25,25 +25,31 @@ Depois reinicie o processo normalmente. O pacote update não contém `config/con
 
 ## Mudança de configuração
 
-O schema passa para `configVersion: 6`. Na primeira inicialização, a configuração antiga recebe backup automático antes da normalização.
+O schema passa para `configVersion: 7`. O aplicativo preserva `Library ID` e Número do canal já configurados. Ao selecionar um Canal do ErsatzTV na nova lista por nome, também passa a persistir o nome para exibição.
 
-O campo **Playout ID** foi substituído por **Número do canal** do ErsatzTV. Os valores são identificadores diferentes, portanto a v3.0.3 **não converte automaticamente** um Playout ID antigo em Número do canal. Após atualizar, preencha o Número do canal nas Bibliotecas e playlists de Canais que usarão **Reset Playout**.
+## Canais do ErsatzTV por nome
 
-O antigo `downloads.rebuildPlayoutOnQueueIdle` é removido. O aplicativo continua podendo executar scan automático quando a fila entra em repouso, mas nunca executa Reset de Playout automaticamente.
+A interface consulta `GET /api/channels` pelo backend do aplicativo. O usuário escolhe o canal pelo nome; o `channelNumber` continua armazenado apenas como identificador interno para `POST /api/channels/{channelNumber}/playout/reset`.
 
-## Integração ErsatzTV v26.10.0
+A API Key nunca é enviada diretamente ao navegador.
 
-- Scan: `POST /api/libraries/{id}/scan`
-- Limpar lixo: `POST /api/maintenance/empty_trash`
-- Reset Playout: `POST /api/channels/{channelNumber}/playout/reset`
-- Autenticação: `X-Etv-Api-Key`
+## Smart Collections
 
-O Reset Playout é manual e protegido por confirmação própria do aplicativo.
+Quando uma Biblioteca ou playlist de Canal possui `Library ID`, aparece o campo **Smart Collection**.
 
-## Modais
+- **Criar nova**: cria uma coleção com query `library_id:<ID>`.
+- **Agregar**: relê a query atual e acrescenta `(library_id:<ID>)` com `OR`, preservando a expressão existente.
+- **Substituir**: troca a query atual por `library_id:<ID>`.
+- Se a Library ID já estiver presente, **Agregar** não duplica o filtro.
 
-Confirmações destrutivas e confirmações digitadas deixaram de usar caixas nativas do navegador. O comportamento de segurança permanece, mas agora usa o tema e os controles do aplicativo.
+O aplicativo usa as rotas oficiais da v26.10.0:
+
+- `GET /api/collections/smart`
+- `POST /api/collections/smart/new`
+- `PUT /api/collections/smart/update`
+
+A exclusão de Smart Collections continua sendo feita no ErsatzTV.
 
 ## Rollback
 
-O carregamento da v3.0.3 cria backup da configuração anterior ao migrar para schema v6. Para retornar à v3.0.2, restaure também o backup do `config.json` v5; não reutilize o schema v6 diretamente na versão anterior.
+A primeira inicialização com schema v7 cria backup automático da configuração anterior. Para retornar à v3.0.3, restaure também o backup do `config.json` v6.
