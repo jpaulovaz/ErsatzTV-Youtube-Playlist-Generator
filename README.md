@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.0.2
+# ErsatzTV YouTube Downloader 3.0.3
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.0.2 mantém os módulos **Bibliotecas** e **Canais** da v3.0.1 e aprimora a navegação móvel. A barra inferior passa a funcionar em uma única linha horizontal, com rolagem lateral e ocultação automática durante a navegação, sem alterar configuração, fila ou regras de download. Um canal pode expor Todos os uploads, Vídeos, Shorts, Transmissões finalizadas e playlists públicas. Cada playlist selecionada funciona como uma biblioteca embutida, com perfil de mídia, legendas e integração própria com o ErsatzTV.
+A versão 3.0.3 mantém a interface e os módulos **Bibliotecas** e **Canais** da v3.0.2 e corrige a integração com a API do ErsatzTV. O reset de Playout passa a usar o número do canal exigido pela API, o reset automático é removido e as confirmações destrutivas passam a usar modais próprios do aplicativo.
 
 ## Arquitetura
 
@@ -47,7 +47,7 @@ Biblioteca local do ErsatzTV
 - Painel móvel de ações rápidas para descoberta, fila, atualização e encerramento da sessão.
 - Lista de downloads convertida automaticamente em cartões no celular, sem tabela horizontal.
 - Login administrativo local com senha derivada por scrypt, sessão HttpOnly, CSRF e bloqueio de tentativas.
-- Scan da biblioteca e rebuild do playout quando a fila entra em repouso, com suporte ao header `X-Etv-Api-Key`.
+- Scan automático da biblioteca quando a fila entra em repouso, com suporte ao header `X-Etv-Api-Key`. Reset de Playout somente por ação manual confirmada.
 - Limpeza manual de órfãos.
 - Migração automática da configuração da versão 1.
 
@@ -58,7 +58,7 @@ Biblioteca local do ErsatzTV
 - `yt-dlp` atualizado.
 - `ffmpeg` e `ffprobe`.
 - Acesso de gravação à pasta definida em `paths.baseDir`.
-- ErsatzTV acessível pela rede para scan/rebuild automáticos.
+- ErsatzTV acessível pela rede para scan automático e ações manuais da API.
 - API Key do ErsatzTV quando a versão instalada exigir autenticação em `/api` (`X-Etv-Api-Key`).
 - Opcional: Deno para os desafios JavaScript atuais do YouTube.
 - Opcional: uma YouTube Data API Key.
@@ -148,7 +148,7 @@ Fontes disponíveis:
 - Transmissões finalizadas;
 - playlists públicas, listadas individualmente por nome.
 
-As fontes globais usam o perfil Genérico. Playlists selecionadas podem usar os mesmos três perfis de mídia de Bibliotecas e podem ter `Library ID`, `Playout ID`, resolução, cookies e legendas próprios. Uma playlist é tratada como unidade editorial completa, inclusive quando contém vídeos publicados por outros canais.
+As fontes globais usam o perfil Genérico. Playlists selecionadas podem usar os mesmos três perfis de mídia de Bibliotecas e podem ter `Library ID`, `Número do canal` do ErsatzTV, resolução, cookies e legendas próprios. Uma playlist é tratada como unidade editorial completa, inclusive quando contém vídeos publicados por outros canais.
 
 A identidade persistente é baseada em `channelId`, `playlistId` e `destinationId`. Renomes no YouTube atualizam o nome exibido, mas não movem automaticamente a pasta física. Itens removidos remotamente viram órfãos e só são excluídos após preview e confirmação manual.
 
@@ -182,9 +182,15 @@ Use o tipo local conforme o perfil escolhido no aplicativo:
 - **Show / vídeo completo (Filmes)**: `Movies`.
 - **Clipes musicais (Seriados)**: `Shows`.
 
-Aponte o `Library ID` do aplicativo para a biblioteca local que deve receber o scan. O `Playout ID` é opcional e serve para rebuild automático depois que a fila entra em repouso.
+Aponte o `Library ID` do aplicativo para a biblioteca local que deve receber o scan. Para **Reset Playout**, informe o **Número do canal** mostrado no ErsatzTV. Esse número não é o antigo Playout ID.
 
-Nas versões atuais do ErsatzTV que protegem as rotas `/api`, preencha também **Configurações → ErsatzTV → API Key do ErsatzTV**. O aplicativo envia essa chave como `X-Etv-Api-Key` nas ações `scan`, `empty-trash` e `rebuild-playout`.
+Na API do ErsatzTV v26.10.0, o aplicativo usa:
+
+- `POST /api/libraries/{id}/scan` para scan da biblioteca;
+- `POST /api/maintenance/empty_trash` para esvaziar a lixeira global;
+- `POST /api/channels/{channelNumber}/playout/reset` para reset manual do Playout.
+
+Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando a instalação proteger as rotas `/api`. O aplicativo envia a chave como `X-Etv-Api-Key`.
 
 ## Descoberta e fila
 
@@ -382,11 +388,10 @@ O intervalo recomendado é 360 minutos. O agendador apenas procura novidades e a
 Quando a fila fica sem item executável e existem arquivos novos:
 
 1. o aplicativo espera `idleActionDelaySeconds`;
-2. solicita scan usando `Library ID`, se configurado;
-3. solicita rebuild usando `Playout ID`, se configurado;
-4. registra o resultado no estado da biblioteca.
+2. solicita apenas o scan usando `Library ID`, quando o scan automático está habilitado;
+3. registra o resultado no estado da biblioteca.
 
-Isso evita um scan para cada vídeo individual. A ação manual **Buscar legendas ausentes** também agrupa o trabalho e executa somente um scan ao final quando algum SRT novo foi criado.
+O aplicativo não executa Reset de Playout automaticamente. **Reset Playout** é uma ação manual e destrutiva, protegida por modal de confirmação. A ação **Buscar legendas ausentes** também agrupa o trabalho e executa somente um scan ao final quando algum SRT novo foi criado.
 
 ## Remoção de bibliotecas
 

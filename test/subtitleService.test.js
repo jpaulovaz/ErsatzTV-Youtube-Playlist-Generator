@@ -31,7 +31,6 @@ function makeConfig(baseDir, extraPlaylist = {}) {
       writeThumbnails: false,
       pauseOnLowDisk: false,
       scanOnQueueIdle: false,
-      rebuildPlayoutOnQueueIdle: false,
       retryDelaysMinutes: [1]
     },
     ersatztv: {
@@ -44,7 +43,7 @@ function makeConfig(baseDir, extraPlaylist = {}) {
       urls: ['https://www.youtube.com/playlist?list=PLTESTE'],
       enabled: true,
       libraryId: 17,
-      playoutId: null,
+      channelNumber: null,
       cookiesPath: '',
       maxHeight: null,
       ...extraPlaylist

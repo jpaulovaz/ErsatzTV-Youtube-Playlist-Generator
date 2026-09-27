@@ -28,9 +28,9 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.0\.2/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.0\.2/);
-  assert.match(html, /rev=channel-summary-2/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.0\.3/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.0\.3/);
+  assert.match(html, /rev=channel-summary-3/);
 });
 
 test('saved Channels expose compact read-only summaries without moving edit controls into the accordions', () => {
@@ -91,4 +91,36 @@ test('mobile navigation stays on one horizontal row and auto-hides without cover
   assert.match(app, /else showMobileNav\(\{ scheduleHide: true \}\)/);
   assert.match(app, /window\.setTimeout\(\(\) => hideMobileNav\(\), MOBILE_NAV_IDLE_MS\)/);
   assert.match(app, /centerActiveMobileNav/);
+});
+
+
+test('ErsatzTV actions use channel number, Reset Playout and no automatic playout refresh control', () => {
+  const html = read('index.html');
+  const form = read('js/destinationForm.js');
+  const app = read('app.js');
+  const channels = read('js/channelsView.js');
+
+  assert.match(form, /Número do canal/);
+  assert.match(form, /data-field="channelNumber"/);
+  assert.doesNotMatch(form, /Playout ID/);
+  assert.doesNotMatch(html, /rebuildPlayoutOnQueueIdle/);
+  assert.doesNotMatch(html, /Atualizar playout ao esvaziar/);
+  assert.match(app, /data-library-action="reset-playout">Reset Playout/);
+  assert.match(channels, /data-channel-playlist-action="reset-playout">Reset Playout/);
+  assert.match(channels, /readOnlyField\('Número do canal'/);
+});
+
+test('destructive confirmations use the application modal instead of browser alert confirm or prompt', () => {
+  const html = read('index.html');
+  const app = read('app.js');
+  const channels = read('js/channelsView.js');
+
+  assert.match(html, /id="appDialog"/);
+  assert.match(html, /id="appDialogInput"/);
+  assert.match(app, /function showAppDialog\(options = \{\}\)/);
+  assert.match(app, /expectedText/);
+  assert.match(app, /warning: 'O progresso atual pode ser perdido\.'/);
+  assert.match(channels, /ctx\.showDialog/);
+  assert.doesNotMatch(app, /\b(?:alert|confirm|prompt)\s*\(/);
+  assert.doesNotMatch(channels, /\b(?:alert|confirm|prompt)\s*\(/);
 });

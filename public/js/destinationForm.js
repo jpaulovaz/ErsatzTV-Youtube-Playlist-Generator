@@ -66,7 +66,7 @@
       <div class="form-grid three destination-fields" data-destination-mode="${escapeHtml(mode)}">
         ${includeName ? `<label>Nome<input data-field="name" type="text" value="${escapeHtml(entity && entity.name || '')}"></label>` : ''}
         ${includeIds ? `<label>Library ID<input data-field="libraryId" type="number" min="1" value="${entity && entity.libraryId || ''}"></label>
-        <label>Playout ID<input data-field="playoutId" type="number" min="1" value="${entity && entity.playoutId || ''}"></label>` : ''}
+        <label>Número do canal<input data-field="channelNumber" type="number" min="1" value="${entity && entity.channelNumber || ''}"></label>` : ''}
         ${includeUrls ? `<label class="wide">Fontes, uma URL por linha<textarea data-field="urls" rows="4">${escapeHtml((entity && entity.urls || []).join('\n'))}</textarea></label>` : ''}
         ${sourceUrl ? `<label class="wide">Fonte<input type="text" value="${escapeHtml(sourceUrl)}" readonly></label>` : ''}
         <label>Resolução
@@ -102,7 +102,7 @@
       result.urls = urls;
     }
     if (read('libraryId')) result.libraryId = numberOrNull(read('libraryId').value);
-    if (read('playoutId')) result.playoutId = numberOrNull(read('playoutId').value);
+    if (read('channelNumber')) result.channelNumber = numberOrNull(read('channelNumber').value);
     if (read('cookiesPath')) result.cookiesPath = read('cookiesPath').value.trim();
     if (read('maxHeight')) result.maxHeight = numberOrNull(read('maxHeight').value);
     if (read('mediaProfile')) result.mediaProfile = read('mediaProfile').value;

@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.0.3
+
+- Integração com ErsatzTV alinhada à API oficial da v26.10.0.
+- A ação manual de Playout passa a usar `POST /api/channels/{channelNumber}/playout/reset`.
+- O campo **Playout ID** é substituído por **Número do canal** nas Bibliotecas e playlists de Canais.
+- O antigo valor de Playout ID não é convertido automaticamente para Número do canal, evitando reset no canal errado.
+- O reset automático de Playout ao esvaziar a fila foi removido; a automação de repouso mantém apenas o scan da biblioteca.
+- **Reset Playout** passa a exigir confirmação em modal próprio do aplicativo e informa que o progresso pode ser perdido.
+- **Limpar lixo** passa a usar `POST /api/maintenance/empty_trash`, ação global da API do ErsatzTV.
+- Confirmações nativas do navegador (`confirm`/`prompt`) foram substituídas por modais internos, incluindo confirmações digitadas para exclusões destrutivas.
+- Schema de configuração atualizado para v6.
+- 75 testes automatizados aprovados.
+
 ## 3.0.2
 
 - Navegação inferior no celular passa a usar uma única linha horizontal em formato de carrossel, sem quebra de itens.

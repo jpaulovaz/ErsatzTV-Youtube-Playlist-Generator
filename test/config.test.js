@@ -30,14 +30,15 @@ test('migrates useful v1 settings without enabling legacy cookies', () => {
     scheduler: { enabled: false, intervalMinutes: 60 }
   });
 
-  assert.equal(config.configVersion, 5);
+  assert.equal(config.configVersion, 6);
   assert.equal(config.paths.baseDir, '/srv/media/youtube');
   assert.equal(config.paths.cookiesPath, '');
   assert.equal(config.paths.ffmpegPath, '/usr/bin/ffmpeg');
   assert.equal(config.downloads.maxHeight, 720);
   assert.equal(config.downloads.concurrentDownloads, 1);
   assert.equal(config.playlists[0].libraryId, 27);
-  assert.equal(config.playlists[0].playoutId, 33);
+  assert.equal(config.playlists[0].channelNumber, null);
+  assert.equal(Object.hasOwn(config.playlists[0], 'playoutId'), false);
   assert.equal(config.scheduler.intervalMinutes, 60);
   assert.equal(config.ersatztv.apiKey, '');
 });
@@ -69,6 +70,34 @@ test('rejects unsafe base paths and duplicate library folders', () => {
   assert.throws(() => validateConfig(duplicate), /mesma pasta/);
 });
 
+
+
+test('uses ErsatzTV channelNumber explicitly and never converts a legacy Playout ID into it', () => {
+  const explicit = normalizeConfig({
+    configVersion: 6,
+    paths: { baseDir: '/srv/media/youtube' },
+    playlists: [{
+      name: 'Canal ErsatzTV',
+      urls: ['https://www.youtube.com/playlist?list=PLCHANNEL'],
+      channelNumber: 421,
+      playoutId: 999
+    }]
+  });
+
+  assert.equal(explicit.playlists[0].channelNumber, 421);
+  assert.equal(Object.hasOwn(explicit.playlists[0], 'playoutId'), false);
+
+  const legacyOnly = normalizeConfig({
+    configVersion: 5,
+    paths: { baseDir: '/srv/media/youtube' },
+    playlists: [{
+      name: 'Legado',
+      urls: ['https://www.youtube.com/playlist?list=PLLEGACY'],
+      playoutId: 33
+    }]
+  });
+  assert.equal(legacyOnly.playlists[0].channelNumber, null);
+});
 
 test('preserves the ErsatzTV API Key when explicitly configured', () => {
   const config = normalizeConfig({

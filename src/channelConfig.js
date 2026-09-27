@@ -48,7 +48,7 @@ function normalizeChannelPlaylist(rawPlaylist, allowedHeights) {
     enabled: playlist.enabled !== false,
     mediaProfile: normalizeMediaProfile(playlist.mediaProfile || MEDIA_PROFILES.GENERIC),
     libraryId: toOptionalPositiveInteger(playlist.libraryId),
-    playoutId: toOptionalPositiveInteger(playlist.playoutId),
+    channelNumber: toOptionalPositiveInteger(playlist.channelNumber),
     maxHeight: normalizeOptionalMaxHeight(playlist.maxHeight, allowedHeights),
     cookiesPath: String(playlist.cookiesPath || '').trim(),
     subtitles: normalizeSubtitles(playlist.subtitles)

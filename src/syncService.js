@@ -403,7 +403,7 @@ async function runPlaylistApiAction(config, identifier, action) {
     playlist: playlist.folderName,
     action,
     libraryId: playlist.libraryId || null,
-    playoutId: playlist.playoutId || null,
+    channelNumber: playlist.channelNumber || null,
     result
   };
 }

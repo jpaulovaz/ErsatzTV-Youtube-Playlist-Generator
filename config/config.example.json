@@ -1,5 +1,5 @@
 {
-  "configVersion": 5,
+  "configVersion": 6,
   "server": {
     "host": "0.0.0.0",
     "port": 3099
@@ -27,7 +27,6 @@
     "pauseOnLowDisk": true,
     "minFreeSpaceGb": 20,
     "scanOnQueueIdle": true,
-    "rebuildPlayoutOnQueueIdle": true,
     "idleActionDelaySeconds": 15,
     "retryDelaysMinutes": [
       1,

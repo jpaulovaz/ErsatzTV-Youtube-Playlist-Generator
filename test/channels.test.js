@@ -18,7 +18,7 @@ const { runPlaylistAction, deletePlaylistWithFiles, deleteChannelWithFiles } = r
 
 function makeConfig(root = '/srv/media') {
   return normalizeConfig({
-    configVersion: 5,
+    configVersion: 6,
     paths: {
       baseDir: path.join(root, 'libraries'),
       channelsBaseDir: path.join(root, 'channels'),
@@ -52,7 +52,7 @@ function makeConfig(root = '/srv/media') {
         enabled: true,
         mediaProfile: 'music_clips',
         libraryId: 31,
-        playoutId: 8,
+        channelNumber: 421,
         maxHeight: 1080,
         cookiesPath: '',
         subtitles: { enabled: true, includeAuto: true, languages: ['pt-BR', 'en'] }
@@ -64,7 +64,7 @@ function makeConfig(root = '/srv/media') {
         enabled: true,
         mediaProfile: 'movie',
         libraryId: 42,
-        playoutId: 11,
+        channelNumber: 419,
         maxHeight: null,
         cookiesPath: '',
         subtitles: { enabled: false, includeAuto: true, languages: ['pt-BR', 'pt', 'en', 'es'] }
@@ -77,14 +77,14 @@ function makeConfig(root = '/srv/media') {
 
 test('v3 config normalizes Channels without changing embedded playlist identity', () => {
   const config = validateConfig(makeConfig());
-  assert.equal(config.configVersion, 5);
+  assert.equal(config.configVersion, 6);
   assert.equal(config.paths.channelsBaseDir, '/srv/media/channels');
   assert.equal(config.channels.length, 1);
   assert.equal(config.channels[0].uploadsPlaylistId, 'UU_TEST_CHANNEL');
   assert.deepEqual(config.channels[0].globalSources.subtitles.languages, ['pt-BR', 'en']);
   assert.equal(config.channels[0].playlists[0].mediaProfile, 'music_clips');
   assert.equal(config.channels[0].playlists[0].libraryId, 31);
-  assert.equal(config.channels[0].playlists[1].playoutId, 11);
+  assert.equal(config.channels[0].playlists[1].channelNumber, 419);
 });
 
 test('v3 config preserves an intentionally empty library list during migration', () => {
@@ -112,10 +112,10 @@ test('channel destinations are independent and playlists keep their own ErsatzTV
   assert.equal(uploadDestination.libraryId, null);
   assert.equal(clipDestination.mediaProfile, 'music_clips');
   assert.equal(clipDestination.libraryId, 31);
-  assert.equal(clipDestination.playoutId, 8);
+  assert.equal(clipDestination.channelNumber, 421);
   assert.equal(showDestination.mediaProfile, 'movie');
   assert.equal(showDestination.libraryId, 42);
-  assert.equal(showDestination.playoutId, 11);
+  assert.equal(showDestination.channelNumber, 419);
   assert.match(clipDestination.rootPath, /Twenty One Pilots[\\/]Playlists[\\/]Official Music Videos$/);
 });
 

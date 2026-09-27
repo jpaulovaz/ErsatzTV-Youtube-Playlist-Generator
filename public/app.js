@@ -224,6 +224,61 @@ function showToast(message, error = false) {
   toastTimer = setTimeout(() => toast.classList.add('hidden'), 5500);
 }
 
+function showAppDialog(options = {}) {
+  const dialog = $('#appDialog');
+  const title = $('#appDialogTitle');
+  const message = $('#appDialogMessage');
+  const eyebrow = $('#appDialogEyebrow');
+  const warning = $('#appDialogWarning');
+  const inputWrap = $('#appDialogInputWrap');
+  const inputLabel = $('#appDialogInputLabel');
+  const input = $('#appDialogInput');
+  const confirmButton = $('#appDialogConfirm');
+  const cancelButton = $('#appDialogCancel');
+
+  if (!dialog || typeof dialog.showModal !== 'function') {
+    return Promise.reject(new Error('Este navegador não oferece suporte ao diálogo interno do aplicativo.'));
+  }
+
+  const expectedText = options.expectedText == null ? null : String(options.expectedText);
+  dialog.returnValue = '';
+  eyebrow.textContent = String(options.eyebrow || 'Confirmação');
+  title.textContent = String(options.title || 'Confirmar ação');
+  message.textContent = String(options.message || '');
+  warning.textContent = String(options.warning || '');
+  warning.classList.toggle('hidden', !options.warning);
+  confirmButton.textContent = String(options.confirmLabel || 'OK');
+  confirmButton.classList.toggle('danger', Boolean(options.danger));
+  cancelButton.textContent = String(options.cancelLabel || 'Cancelar');
+
+  input.value = '';
+  inputWrap.classList.toggle('hidden', expectedText === null);
+  inputLabel.textContent = String(options.inputLabel || 'Digite o texto de confirmação');
+  input.placeholder = String(options.inputPlaceholder || '');
+
+  const syncConfirmState = () => {
+    confirmButton.disabled = expectedText !== null && input.value !== expectedText;
+  };
+  input.oninput = syncConfirmState;
+  syncConfirmState();
+
+  return new Promise((resolve) => {
+    const finish = () => {
+      input.oninput = null;
+      resolve({
+        confirmed: dialog.returnValue === 'confirm',
+        value: input.value
+      });
+    };
+    dialog.addEventListener('close', finish, { once: true });
+    dialog.showModal();
+    window.setTimeout(() => {
+      if (expectedText !== null) input.focus();
+      else cancelButton.focus();
+    }, 0);
+  });
+}
+
 function formatDate(value) {
   if (!value) return '-';
   const date = new Date(value);
@@ -430,7 +485,7 @@ function renderLibraries() {
             <div class="library-actions">
               <button class="small" type="button" data-library-action="scan">Executar scan</button>
               <button class="small" type="button" data-library-action="empty-trash">Limpar lixo</button>
-              <button class="small" type="button" data-library-action="rebuild-playout">Atualizar playout</button>
+              <button class="small" type="button" data-library-action="reset-playout">Reset Playout</button>
               <button class="small" type="button" data-library-action="orphans-cleanup">Limpar órfãos</button>
             </div>
           </div>
@@ -537,7 +592,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '3.0.2'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '3.0.3'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -790,7 +845,13 @@ async function handleLibraryAction(button) {
   const action = button.dataset.libraryAction;
 
   if (action === 'remove-config') {
-    if (!confirm(`Remover apenas a configuração de "${name}"? Os vídeos no disco não serão apagados.`)) return;
+    const decision = await showAppDialog({
+      eyebrow: 'Biblioteca',
+      title: 'Remover configuração',
+      message: `Remover "${name}" da configuração? Os arquivos locais serão preservados.`,
+      danger: true
+    });
+    if (!decision.confirmed) return;
     config.playlists.splice(index, 1);
     await api('/api/config', { method: 'PUT', body: JSON.stringify(config) });
     config = await api('/api/config');
@@ -801,11 +862,18 @@ async function handleLibraryAction(button) {
   }
 
   if (action === 'delete-with-files') {
-    const typed = prompt(`Ação irreversível. Para excluir a biblioteca, vídeos, thumbnails e índice, digite exatamente:\n${name}`);
-    if (typed === null) return;
+    const decision = await showAppDialog({
+      eyebrow: 'Ação irreversível',
+      title: 'Excluir biblioteca e arquivos',
+      message: 'Vídeos, thumbnails, legendas, NFOs e índice local serão removidos.',
+      inputLabel: `Digite exatamente: ${name}`,
+      expectedText: name,
+      danger: true
+    });
+    if (!decision.confirmed) return;
     const result = await api(`/api/playlists/${encodeURIComponent(name)}/delete-with-files`, {
       method: 'POST',
-      body: JSON.stringify({ confirmation: typed })
+      body: JSON.stringify({ confirmation: decision.value })
     });
     config = result.result.config;
     fillConfigForm();
@@ -827,11 +895,39 @@ async function handleLibraryAction(button) {
       showToast('Nenhum item órfão encontrado.');
       return;
     }
-    if (!confirm(`Excluir ${info.count} item(ns) órfão(s), incluindo ${info.filesCount} arquivo(s) de vídeo e ${formatBytes(info.totalBytes)}?`)) return;
+    const decision = await showAppDialog({
+      eyebrow: 'Órfãos',
+      title: 'Limpar órfãos',
+      message: `Excluir ${info.count} item(ns), incluindo ${info.filesCount} arquivo(s) de vídeo e ${formatBytes(info.totalBytes)}?`,
+      danger: true
+    });
+    if (!decision.confirmed) return;
     const result = await api(`/api/playlists/${encodeURIComponent(name)}/orphans-cleanup`, { method: 'POST', body: JSON.stringify({ confirmed: true }) });
     showToast(`${result.result.videosRemoved || 0} vídeo(s) órfão(s) removido(s).`);
     await refreshAll();
     return;
+  }
+
+  if (action === 'empty-trash') {
+    const decision = await showAppDialog({
+      eyebrow: 'ErsatzTV',
+      title: 'Limpar lixo',
+      message: 'A lixeira do ErsatzTV será esvaziada. Esta ação é global.',
+      danger: true
+    });
+    if (!decision.confirmed) return;
+  }
+
+  if (action === 'reset-playout') {
+    if (!playlist.channelNumber) throw new Error('Informe o Número do canal antes de resetar o Playout.');
+    const decision = await showAppDialog({
+      eyebrow: 'ErsatzTV',
+      title: 'Reset Playout',
+      message: `O Playout do canal ${playlist.channelNumber} será apagado e reconstruído.`,
+      warning: 'O progresso atual pode ser perdido.',
+      danger: true
+    });
+    if (!decision.confirmed) return;
   }
 
   const result = await api(`/api/playlists/${encodeURIComponent(name)}/${action}`, { method: 'POST', body: '{}' });
@@ -856,7 +952,15 @@ async function handleDownloadAction(button) {
   const id = row ? row.dataset.id : button.dataset.id;
   const action = button.dataset.downloadAction || 'cancel';
   if (!id) return;
-  if ((action === 'cancel' || action === 'remove') && !confirm(`${action === 'cancel' ? 'Cancelar' : 'Remover'} este item?`)) return;
+  if (action === 'cancel' || action === 'remove') {
+    const decision = await showAppDialog({
+      eyebrow: 'Fila',
+      title: action === 'cancel' ? 'Cancelar download' : 'Remover item',
+      message: action === 'cancel' ? 'Cancelar o download deste item?' : 'Remover este item da fila?',
+      danger: action === 'remove'
+    });
+    if (!decision.confirmed) return;
+  }
   await api(`/api/downloads/${encodeURIComponent(id)}/${action}`, { method: 'POST', body: '{}' });
   showToast('Fila atualizada.');
   await refreshAll(false, { forceDownloads: $('#downloadsAccordion').open });
@@ -867,7 +971,7 @@ function openClearQueueDialog() {
   $('#clearQueueCancelCurrent').checked = true;
   const dialog = $('#clearQueueDialog');
   if (typeof dialog.showModal === 'function') dialog.showModal();
-  else if (confirm('Limpar todos os itens não concluídos da fila?')) clearQueue().catch((error) => showToast(error.message, true));
+  else showToast('Este navegador não oferece suporte ao diálogo interno da fila.', true);
 }
 
 async function clearQueue() {
@@ -990,7 +1094,7 @@ function bindEvents() {
       urls: [''],
       enabled: true,
       libraryId: null,
-      playoutId: null,
+      channelNumber: null,
       cookiesPath: '',
       maxHeight: null,
       subtitles: {
@@ -1087,6 +1191,7 @@ async function bootstrap() {
       setConfig: setConfigState,
       saveConfig: saveConfigObject,
       showToast,
+      showDialog: showAppDialog,
       formatBytes,
       formatDate,
       refresh: () => refreshAll(false, { forceDownloads: $('#downloadsAccordion').open })

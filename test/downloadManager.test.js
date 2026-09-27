@@ -36,7 +36,7 @@ function makeConfig(baseDir) {
         urls: ['https://www.youtube.com/playlist?list=PLTESTE'],
         enabled: true,
         libraryId: null,
-        playoutId: null,
+        channelNumber: null,
         maxHeight: null,
         cookiesPath: ''
       }
@@ -239,7 +239,6 @@ console.log('__YTDLP_FILE__' + target);
   config.paths.ffprobePath = ffprobe;
   config.downloads.pauseOnLowDisk = false;
   config.downloads.scanOnQueueIdle = false;
-  config.downloads.rebuildPlayoutOnQueueIdle = false;
   const playlist = { ...config.playlists[0], folderName: 'Teste' };
   const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
 

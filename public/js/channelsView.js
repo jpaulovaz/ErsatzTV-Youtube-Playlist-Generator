@@ -203,7 +203,7 @@
             ${readOnlyField('Perfil', profileText)}
             ${readOnlyField('Resolução', qualityText)}
             ${readOnlyField('Library ID', playlist.libraryId || '-')}
-            ${readOnlyField('Playout ID', playlist.playoutId || '-')}
+            ${readOnlyField('Número do canal', playlist.channelNumber || '-')}
             ${readOnlyField('Legendas', subtitleText)}
             ${readOnlyField('Cookies', playlist.cookiesPath ? 'Personalizado' : 'Global')}
             ${readOnlyField('Pasta', playlist.folderName || playlist.name)}
@@ -318,7 +318,7 @@
       enabled: true,
       mediaProfile: 'generic',
       libraryId: null,
-      playoutId: null,
+      channelNumber: null,
       maxHeight: null,
       cookiesPath: '',
       subtitles: { enabled: false, includeAuto: true, languages: ['pt-BR', 'pt', 'en', 'es'] }
@@ -365,7 +365,7 @@
                 <div class="library-actions">
                   <button class="small" type="button" data-channel-playlist-action="scan">Executar scan</button>
                   <button class="small" type="button" data-channel-playlist-action="empty-trash">Limpar lixo</button>
-                  <button class="small" type="button" data-channel-playlist-action="rebuild-playout">Atualizar playout</button>
+                  <button class="small" type="button" data-channel-playlist-action="reset-playout">Reset Playout</button>
                   <button class="small" type="button" data-channel-playlist-action="orphans-cleanup">Limpar órfãos</button>
                 </div>
               </div>
@@ -632,10 +632,18 @@
 
   async function runPlaylistAction(channelId, playlistId, action) {
     if (editingChannelId === channelId && catalog) await persistEditor({ close: false, message: '' });
+    const channel = getChannel(channelId);
+    const playlist = channel && (channel.playlists || []).find((item) => item.playlistId === playlistId);
+
     if (action === 'remove-config') {
-      const channel = getChannel(channelId);
-      const playlist = channel && (channel.playlists || []).find((item) => item.playlistId === playlistId);
-      if (!playlist || !confirm(`Remover apenas a configuração de "${playlist.name}"? Os arquivos serão preservados.`)) return;
+      if (!playlist) return;
+      const decision = await ctx.showDialog({
+        eyebrow: 'Playlist',
+        title: 'Remover configuração',
+        message: `Remover "${playlist.name}" da configuração? Os arquivos serão preservados.`,
+        danger: true
+      });
+      if (!decision.confirmed) return;
       const response = await ctx.api(`/api/channels/${encodeURIComponent(channelId)}/playlists/${encodeURIComponent(playlistId)}/remove-config`, { method: 'POST', body: '{}' });
       ctx.setConfig(response.result.config);
       render();
@@ -644,13 +652,18 @@
       return;
     }
     if (action === 'delete-with-files') {
-      const channel = getChannel(channelId);
-      const playlist = channel && (channel.playlists || []).find((item) => item.playlistId === playlistId);
       if (!playlist) return;
-      const typed = prompt(`Ação irreversível. Digite exatamente:\n${playlist.name}`);
-      if (typed === null) return;
+      const decision = await ctx.showDialog({
+        eyebrow: 'Ação irreversível',
+        title: 'Excluir playlist e arquivos',
+        message: 'Os arquivos locais desta playlist serão removidos.',
+        inputLabel: `Digite exatamente: ${playlist.name}`,
+        expectedText: playlist.name,
+        danger: true
+      });
+      if (!decision.confirmed) return;
       const response = await ctx.api(`/api/channels/${encodeURIComponent(channelId)}/playlists/${encodeURIComponent(playlistId)}/delete-with-files`, {
-        method: 'POST', body: JSON.stringify({ confirmation: typed })
+        method: 'POST', body: JSON.stringify({ confirmation: decision.value })
       });
       ctx.setConfig(response.result.config);
       render();
@@ -666,11 +679,37 @@
     if (action === 'orphans-cleanup') {
       const preview = await ctx.api(`/api/channels/${encodeURIComponent(channelId)}/playlists/${encodeURIComponent(playlistId)}/orphans-preview`, { method: 'POST', body: '{}' });
       if (!preview.result.count) return ctx.showToast('Nenhum item órfão encontrado.');
-      if (!confirm(`Excluir ${preview.result.count} item(ns) órfão(s) e ${ctx.formatBytes(preview.result.totalBytes)}?`)) return;
+      const decision = await ctx.showDialog({
+        eyebrow: 'Órfãos',
+        title: 'Limpar órfãos',
+        message: `Excluir ${preview.result.count} item(ns) e ${ctx.formatBytes(preview.result.totalBytes)}?`,
+        danger: true
+      });
+      if (!decision.confirmed) return;
       const cleaned = await ctx.api(`/api/channels/${encodeURIComponent(channelId)}/playlists/${encodeURIComponent(playlistId)}/orphans-cleanup`, { method: 'POST', body: JSON.stringify({ confirmed: true }) });
       ctx.showToast(`${cleaned.result.videosRemoved || 0} vídeo(s) órfão(s) removido(s).`);
       await ctx.refresh();
       return;
+    }
+    if (action === 'empty-trash') {
+      const decision = await ctx.showDialog({
+        eyebrow: 'ErsatzTV',
+        title: 'Limpar lixo',
+        message: 'A lixeira do ErsatzTV será esvaziada. Esta ação é global.',
+        danger: true
+      });
+      if (!decision.confirmed) return;
+    }
+    if (action === 'reset-playout') {
+      if (!playlist || !playlist.channelNumber) throw new Error('Informe o Número do canal antes de resetar o Playout.');
+      const decision = await ctx.showDialog({
+        eyebrow: 'ErsatzTV',
+        title: 'Reset Playout',
+        message: `O Playout do canal ${playlist.channelNumber} será apagado e reconstruído.`,
+        warning: 'O progresso atual pode ser perdido.',
+        danger: true
+      });
+      if (!decision.confirmed) return;
     }
     const response = await ctx.api(`/api/channels/${encodeURIComponent(channelId)}/playlists/${encodeURIComponent(playlistId)}/${encodeURIComponent(action)}`, { method: 'POST', body: '{}' });
     if (action === 'test-cookies') ctx.showToast(response.result && response.result.message || 'Cookies testados.');
@@ -685,7 +724,13 @@
     if (action === 'orphans-cleanup') {
       const preview = await ctx.api(`/api/channels/${encodeURIComponent(channelId)}/global/orphans-preview`, { method: 'POST', body: '{}' });
       if (!preview.result.count) return ctx.showToast('Nenhum item órfão encontrado nas fontes globais.');
-      if (!confirm(`Excluir ${preview.result.count} item(ns) órfão(s) das fontes globais e ${ctx.formatBytes(preview.result.totalBytes)}?`)) return;
+      const decision = await ctx.showDialog({
+        eyebrow: 'Órfãos',
+        title: 'Limpar órfãos',
+        message: `Excluir ${preview.result.count} item(ns) das fontes globais e ${ctx.formatBytes(preview.result.totalBytes)}?`,
+        danger: true
+      });
+      if (!decision.confirmed) return;
       await ctx.api(`/api/channels/${encodeURIComponent(channelId)}/global/orphans-cleanup`, { method: 'POST', body: JSON.stringify({ confirmed: true }) });
       ctx.showToast('Órfãos das fontes globais removidos.');
       await ctx.refresh();
@@ -706,7 +751,13 @@
       return;
     }
     if (action === 'remove-config') {
-      if (!confirm(`Remover apenas a configuração de "${channel.name}"? Os arquivos serão preservados.`)) return;
+      const decision = await ctx.showDialog({
+        eyebrow: 'Canal',
+        title: 'Remover configuração',
+        message: `Remover "${channel.name}" da configuração? Os arquivos serão preservados.`,
+        danger: true
+      });
+      if (!decision.confirmed) return;
       const response = await ctx.api(`/api/channels/${encodeURIComponent(channelId)}/remove-config`, { method: 'POST', body: '{}' });
       ctx.setConfig(response.result.config);
       render();
@@ -714,10 +765,17 @@
       return;
     }
     if (action === 'delete-with-files') {
-      const typed = prompt(`Ação irreversível. Para excluir o canal e todos os arquivos sob sua pasta, digite exatamente:\n${channel.name}`);
-      if (typed === null) return;
+      const decision = await ctx.showDialog({
+        eyebrow: 'Ação irreversível',
+        title: 'Excluir canal e arquivos',
+        message: 'Todos os arquivos locais dentro da pasta deste canal serão removidos.',
+        inputLabel: `Digite exatamente: ${channel.name}`,
+        expectedText: channel.name,
+        danger: true
+      });
+      if (!decision.confirmed) return;
       const response = await ctx.api(`/api/channels/${encodeURIComponent(channelId)}/delete-with-files`, {
-        method: 'POST', body: JSON.stringify({ confirmation: typed })
+        method: 'POST', body: JSON.stringify({ confirmation: decision.value })
       });
       ctx.setConfig(response.result.config);
       render();

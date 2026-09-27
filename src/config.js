@@ -8,7 +8,7 @@ const { normalizeChannels, validateChannels } = require('./channelConfig');
 const ROOT_DIR = path.resolve(__dirname, '..');
 const CONFIG_DIR = path.join(ROOT_DIR, 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
-const CONFIG_VERSION = 5;
+const CONFIG_VERSION = 6;
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const DEFAULT_MAX_HEIGHT = 1080;
@@ -46,7 +46,6 @@ const DEFAULT_CONFIG = {
     pauseOnLowDisk: true,
     minFreeSpaceGb: 20,
     scanOnQueueIdle: true,
-    rebuildPlayoutOnQueueIdle: true,
     idleActionDelaySeconds: 15,
     retryDelaysMinutes: [1, 5, 15]
   },
@@ -211,7 +210,6 @@ function buildDownloadsConfig(rawConfig) {
     pauseOnLowDisk: rawDownloads.pauseOnLowDisk !== false,
     minFreeSpaceGb: Math.max(1, Number(rawDownloads.minFreeSpaceGb) || DEFAULT_CONFIG.downloads.minFreeSpaceGb),
     scanOnQueueIdle: rawDownloads.scanOnQueueIdle !== false,
-    rebuildPlayoutOnQueueIdle: rawDownloads.rebuildPlayoutOnQueueIdle !== false,
     idleActionDelaySeconds: Math.max(3, Number(rawDownloads.idleActionDelaySeconds) || DEFAULT_CONFIG.downloads.idleActionDelaySeconds),
     retryDelaysMinutes: normalizeRetryDelays(rawDownloads.retryDelaysMinutes)
   };
@@ -250,7 +248,7 @@ function normalizeConfig(raw) {
   const rawCleanup = rawConfig.cleanup && typeof rawConfig.cleanup === 'object' ? rawConfig.cleanup : {};
 
   const legacyLibraryId = toOptionalPositiveInteger(rawErsatz.libraryId);
-  const legacyPlayoutId = toOptionalPositiveInteger(rawErsatz.playoutId);
+  const legacyChannelNumber = toOptionalPositiveInteger(rawErsatz.channelNumber);
   const normalizedBaseDir = String(rawPaths.baseDir || DEFAULT_CONFIG.paths.baseDir).trim() || DEFAULT_CONFIG.paths.baseDir;
   const defaultChannelsBaseDir = path.join(path.dirname(normalizedBaseDir), 'youtube-channels');
 
@@ -311,7 +309,7 @@ function normalizeConfig(raw) {
         urls,
         enabled: !playlist || playlist.enabled !== false,
         libraryId: toOptionalPositiveInteger(playlist && playlist.libraryId) || legacyLibraryId,
-        playoutId: toOptionalPositiveInteger(playlist && playlist.playoutId) || legacyPlayoutId,
+        channelNumber: toOptionalPositiveInteger(playlist && playlist.channelNumber) || legacyChannelNumber,
         cookiesPath: String(playlist && playlist.cookiesPath || '').trim(),
         maxHeight: normalizeOptionalMaxHeight(playlist && playlist.maxHeight),
         subtitles: normalizePlaylistSubtitles(playlist),

@@ -731,6 +731,10 @@ dialog::backdrop { background: rgba(2, 6, 15, .78); backdrop-filter: blur(5px); 
 }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 17px; }
 .modal-check { padding-top: 10px; }
+#appDialogInputWrap { display: grid; gap: 7px; margin-top: 14px; }
+#appDialogInputWrap > span { color: var(--muted); font-size: 11px; }
+#appDialogInput { width: 100%; }
+#appDialogConfirm.danger { border-color: var(--danger-border); background: var(--danger); color: white; }
 
 /* Native progress */
 progress.progress-track,

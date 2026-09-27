@@ -42,7 +42,7 @@ async function runPlaylistAction(config, channelId, playlistId, action, payload 
     if (payload.confirmed !== true) throw badRequest('Confirme a limpeza de orfaos depois de revisar o preview.');
     return downloadManager.cleanupOrphans(destination.id);
   }
-  if (['scan', 'empty-trash', 'rebuild-playout'].includes(action)) {
+  if (['scan', 'empty-trash', 'reset-playout'].includes(action)) {
     const result = await runLibraryAction(config, destination, action);
     return {
       ok: result.ok,
@@ -50,7 +50,7 @@ async function runPlaylistAction(config, channelId, playlistId, action, payload 
       playlistId: playlist.playlistId,
       action,
       libraryId: destination.libraryId,
-      playoutId: destination.playoutId,
+      channelNumber: destination.channelNumber,
       result
     };
   }

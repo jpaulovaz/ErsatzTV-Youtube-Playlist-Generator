@@ -12,7 +12,7 @@ const {
   getAllDestinations
 } = require('./destinationService');
 const logger = require('./logger');
-const { scanAndRebuild, runLibraryAction } = require('./ersatztvService');
+const { scanOnIdle, runLibraryAction } = require('./ersatztvService');
 const {
   getSubtitleSettings,
   findExistingSubtitleLanguages,
@@ -1438,10 +1438,16 @@ class DownloadManager {
           continue;
         }
 
-        if (!playlist.libraryId && !playlist.playoutId) {
+        if (!this.config.downloads.scanOnQueueIdle) {
+          libraryState.dirty = false;
+          libraryState.lastIdleActionError = null;
+          continue;
+        }
+
+        if (!playlist.libraryId) {
           if (playlist.type === DESTINATION_TYPES.LIBRARY) {
             libraryState.dirty = true;
-            libraryState.lastIdleActionError = 'Library ID e Playout ID nao configurados; os arquivos aguardam o scan automatico.';
+            libraryState.lastIdleActionError = 'Library ID nao configurado; os arquivos aguardam o scan automatico.';
             this.nextIdleActionAtMs = Date.now() + RETRY_IDLE_ACTION_MS;
           } else {
             libraryState.dirty = false;
@@ -1451,7 +1457,7 @@ class DownloadManager {
         }
 
         try {
-          const result = await scanAndRebuild(this.config, playlist);
+          const result = await scanOnIdle(this.config, playlist);
           libraryState.lastIdleActionAt = nowIso();
           libraryState.lastIdleActionResult = result;
           libraryState.lastIdleActionError = result.ok ? null : 'Uma ou mais acoes do ErsatzTV falharam.';

@@ -42,7 +42,7 @@ function getBaseUrl(config) {
   return String(config && config.ersatztv && config.ersatztv.url || '').trim().replace(/\/+$/, '');
 }
 
-async function runLibraryAction(config, playlist, action) {
+async function runLibraryAction(config, destination, action) {
   const baseUrl = getBaseUrl(config);
   const timeoutSeconds = config && config.ersatztv ? config.ersatztv.apiTimeoutSeconds : 10;
   let url;
@@ -57,57 +57,48 @@ async function runLibraryAction(config, playlist, action) {
   }
 
   if (action === 'scan') {
-    if (!playlist.libraryId) {
+    if (!destination.libraryId) {
       return { ok: false, status: 0, statusText: 'Library ID nao configurado' };
     }
-    url = `${baseUrl}/api/libraries/${playlist.libraryId}/scan`;
-    label = `scan da biblioteca ${playlist.libraryId}`;
+    url = `${baseUrl}/api/libraries/${destination.libraryId}/scan`;
+    label = `scan da biblioteca ${destination.libraryId}`;
   } else if (action === 'empty-trash') {
-    if (!playlist.libraryId) {
-      return { ok: false, status: 0, statusText: 'Library ID nao configurado' };
+    url = `${baseUrl}/api/maintenance/empty_trash`;
+    label = 'limpeza global de lixo';
+  } else if (action === 'reset-playout') {
+    if (!destination.channelNumber) {
+      return { ok: false, status: 0, statusText: 'Numero do canal do ErsatzTV nao configurado' };
     }
-    url = `${baseUrl}/api/libraries/${playlist.libraryId}/empty-trash`;
-    label = `limpeza de lixo da biblioteca ${playlist.libraryId}`;
-  } else if (action === 'rebuild-playout') {
-    if (!playlist.playoutId) {
-      return { ok: false, status: 0, statusText: 'Playout ID nao configurado' };
-    }
-    url = `${baseUrl}/api/playout/${playlist.playoutId}/rebuild`;
-    label = `rebuild do playout ${playlist.playoutId}`;
+    url = `${baseUrl}/api/channels/${destination.channelNumber}/playout/reset`;
+    label = `reset do playout do canal ${destination.channelNumber}`;
   } else {
     const error = new Error('Acao do ErsatzTV nao suportada.');
     error.statusCode = 404;
     throw error;
   }
 
-  await logger.info(`Disparando ${label} (${playlist.folderName || playlist.name})...`);
+  await logger.info(`Disparando ${label} (${destination.folderName || destination.name})...`);
   const result = await apiRequest(url, 'POST', timeoutSeconds, buildApiHeaders(config));
 
   if (result.ok) {
-    await logger.info(`Acao concluida: ${label} (${playlist.folderName || playlist.name}).`, result);
+    await logger.info(`Acao concluida: ${label} (${destination.folderName || destination.name}).`, result);
   } else {
-    await logger.warn(`Acao falhou: ${label} (${playlist.folderName || playlist.name}) HTTP ${result.status} ${result.statusText}.`);
+    await logger.warn(`Acao falhou: ${label} (${destination.folderName || destination.name}) HTTP ${result.status} ${result.statusText}.`);
   }
 
   return result;
 }
 
-async function scanAndRebuild(config, playlist) {
+async function scanOnIdle(config, destination) {
   const result = {
-    playlist: playlist.folderName || playlist.name,
+    playlist: destination.folderName || destination.name,
     scan: null,
-    rebuild: null,
     ok: true
   };
 
   if (config.downloads.scanOnQueueIdle) {
-    result.scan = await runLibraryAction(config, playlist, 'scan');
+    result.scan = await runLibraryAction(config, destination, 'scan');
     result.ok = result.ok && result.scan.ok;
-  }
-
-  if (config.downloads.rebuildPlayoutOnQueueIdle && playlist.playoutId) {
-    result.rebuild = await runLibraryAction(config, playlist, 'rebuild-playout');
-    result.ok = result.ok && result.rebuild.ok;
   }
 
   return result;
@@ -117,5 +108,5 @@ module.exports = {
   apiRequest,
   buildApiHeaders,
   runLibraryAction,
-  scanAndRebuild
+  scanOnIdle
 };
