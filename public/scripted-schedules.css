@@ -50,7 +50,7 @@ button.ghost { background: transparent; }
 .ss-mini-head { align-items: center; }
 .ss-inline-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto; gap: 8px; align-items: center; }
 .ss-playlist-row { grid-template-columns: minmax(0,1fr) 90px auto; }
-.ss-window-row { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 110px auto; }
+.ss-window-row { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 110px 145px auto; }
 .ss-order-buttons { display: flex; gap: 5px; }
 .ss-order-buttons button, .ss-inline-row > button { min-width: 34px; padding-left: 8px; padding-right: 8px; }
 .ss-advanced { border-top: 1px solid var(--line-soft); padding-top: 8px; }
@@ -126,6 +126,7 @@ button.ghost { background: transparent; }
 }
 
 /* v3.2.1 - accordions for resources/programming + local save actions */
+/* v3.3.0 - optional Pad To Nearest Minute controls */
 .ss-section-accordion,
 .ss-accordion-card {
   display: block;

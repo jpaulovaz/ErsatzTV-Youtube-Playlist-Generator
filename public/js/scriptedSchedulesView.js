@@ -15,6 +15,9 @@
   const DAY_OPTIONS = [
     ['seg', 'Seg'], ['ter', 'Ter'], ['qua', 'Qua'], ['qui', 'Qui'], ['sex', 'Sex'], ['sab', 'Sáb'], ['dom', 'Dom']
   ];
+  const LATEST_TEMPLATE_VERSION = '1.2.0';
+  const PAD_TO_NEAREST_OPTIONS = [5, 10, 15, 30];
+
   const SOURCE_TYPES = [
     ['smart_collection', 'Smart Collection'], ['collection', 'Collection'], ['multi_collection', 'Multi-Collection'],
     ['playlist', 'Playlist'], ['search', 'Search'], ['show', 'Show'], ['marathon', 'Marathon']
@@ -234,6 +237,7 @@
     if (action === 'reset-playout') { await resetPlayout(button.dataset.channel); return; }
 
     if (!state.current) return;
+    if (action === 'upgrade-template') { state.current.templateVersion = LATEST_TEMPLATE_VERSION; state.validation = null; state.deps.showToast(`Motor atualizado para ${LATEST_TEMPLATE_VERSION}. A alteração será efetivada ao salvar e publicar.`); render(); return; }
     if (action === 'add-channel') {
       state.current.channelLinks.push({ channelNumber: '', channelName: '', stateKey: `${slug(state.current.name)}_${state.current.channelLinks.length + 1}`, status: 'local' }); render(); return;
     }
@@ -251,11 +255,21 @@
     if (action === 'remove-module') { const type = button.dataset.module; state.current.modules[type] = []; state.openAccordions.delete(`module:${type}`); clearAccordionPrefix(`module-entry:${type}:`); render(); return; }
     if (action === 'add-module-entry') { const type = button.dataset.module; const index = state.current.modules[type].length; state.current.modules[type].push(defaultModuleEntry(type)); openAccordion(`module:${type}`); openAccordion(`module-entry:${type}:${index}`); render(); return; }
     if (action === 'remove-module-entry') { const type = button.dataset.module; state.current.modules[type].splice(Number(button.dataset.index), 1); clearAccordionPrefix(`module-entry:${type}:`); render(); return; }
-    if (action === 'add-window-item') { state.current.modules.windowRotations[Number(button.dataset.index)].items.push({ source: firstSource(), presentation: '', durationMinutes: '' }); render(); return; }
+    if (action === 'add-window-item') { state.current.modules.windowRotations[Number(button.dataset.index)].items.push({ source: firstSource(), presentation: '', durationMinutes: '', padToNearestMinutes: '' }); render(); return; }
     if (action === 'remove-window-item') { state.current.modules.windowRotations[Number(button.dataset.index)].items.splice(Number(button.dataset.itemIndex), 1); render(); return; }
     if (action === 'add-step') { getPath(state.current, button.dataset.path).push({ mode: 'count', source: firstSource(), count: 1, presentation: '' }); render(); return; }
     if (action === 'remove-step') { getPath(state.current, button.dataset.path).splice(Number(button.dataset.index), 1); render(); return; }
-    if (action === 'toggle-filler') { state.current.filler = state.current.filler ? null : { source: firstSource(), presentation: '' }; if (state.current.filler) openAccordion('programming:filler'); render(); return; }
+    if (action === 'toggle-filler') {
+      if (state.current.filler) {
+        const cleared = clearPadToNearestSettings();
+        state.current.filler = null;
+        if (cleared) state.deps.showToast(`Filler desativado; ${cleared} alinhamento(s) Pad To Nearest Minute também foram desativados.`);
+      } else {
+        state.current.filler = { source: firstSource(), presentation: '' };
+        openAccordion('programming:filler');
+      }
+      state.validation = null; render(); return;
+    }
   }
 
   async function publishCurrent() {
@@ -346,15 +360,15 @@
   function defaultBase(id) { return { id, label: '', priority: state.current.options.defaultFixedPriority || 100, presentation: '', ...defaultFilters() }; }
   function defaultModuleEntry(type) {
     const s = firstSource(); const p = state.current.options.defaultFixedPriority || 100; const n = (state.current.modules[type]?.length || 0) + 1;
-    if (type === 'rotation') return { source: s, presentation: '', durationMinutes: state.current.options.defaultRotationDurationMinutes || 60 };
-    if (type === 'fixedEvents') return { ...defaultBase(`fixed_${n}`), time: '10:00', source: s, count: 1, priority: p };
-    if (type === 'fixedDurationEvents') return { ...defaultBase(`duration_${n}`), time: '20:00', source: s, durationMinutes: 60, priority: p };
-    if (type === 'fixedAllEvents') return { ...defaultBase(`all_${n}`), time: '14:00', source: s, priority: p };
-    if (type === 'fixedWindowEvents') return { ...defaultBase(`window_${n}`), startTime: '06:00', endTime: '10:00', source: s, priority: p };
-    if (type === 'windowRotations') return { ...defaultBase(`window_rotation_${n}`), startTime: '12:00', endTime: '18:00', blockMinutes: 30, priority: p, items: [{ source: s, presentation: '', durationMinutes: '' }] };
-    if (type === 'sequenceEvents') return { ...defaultBase(`sequence_${n}`), time: '19:55', priority: p, atomic: false, steps: [{ mode: 'count', source: s, count: 1, presentation: '' }] };
-    if (type === 'intervalEvents') return { ...defaultBase(`interval_${n}`), startTime: '00:00', endTime: '00:00', everyMinutes: 30, source: s, mode: 'count', count: 1, durationMinutes: '', priority: p, latePolicy: 'skip', maxLatenessMinutes: 10 };
-    if (type === 'dateEvents') return { ...defaultBase(`date_${n}`), datetime: `${new Date().toISOString().slice(0, 10)} 20:00`, source: s, mode: 'count', count: 1, durationMinutes: '', priority: p, steps: [] };
+    if (type === 'rotation') return { source: s, presentation: '', durationMinutes: state.current.options.defaultRotationDurationMinutes || 60, padToNearestMinutes: '' };
+    if (type === 'fixedEvents') return { ...defaultBase(`fixed_${n}`), time: '10:00', source: s, count: 1, priority: p , padToNearestMinutes: ''};
+    if (type === 'fixedDurationEvents') return { ...defaultBase(`duration_${n}`), time: '20:00', source: s, durationMinutes: 60, priority: p , padToNearestMinutes: ''};
+    if (type === 'fixedAllEvents') return { ...defaultBase(`all_${n}`), time: '14:00', source: s, priority: p , padToNearestMinutes: ''};
+    if (type === 'fixedWindowEvents') return { ...defaultBase(`window_${n}`), startTime: '06:00', endTime: '10:00', source: s, priority: p , padToNearestMinutes: ''};
+    if (type === 'windowRotations') return { ...defaultBase(`window_rotation_${n}`), startTime: '12:00', endTime: '18:00', blockMinutes: 30, priority: p, items: [{ source: s, presentation: '', durationMinutes: '', padToNearestMinutes: '' }] };
+    if (type === 'sequenceEvents') return { ...defaultBase(`sequence_${n}`), time: '19:55', priority: p, atomic: false, steps: [{ mode: 'count', source: s, count: 1, presentation: '' }] , padToNearestMinutes: ''};
+    if (type === 'intervalEvents') return { ...defaultBase(`interval_${n}`), startTime: '00:00', endTime: '00:00', everyMinutes: 30, source: s, mode: 'count', count: 1, durationMinutes: '', priority: p, latePolicy: 'skip', maxLatenessMinutes: 10 , padToNearestMinutes: ''};
+    if (type === 'dateEvents') return { ...defaultBase(`date_${n}`), datetime: `${new Date().toISOString().slice(0, 10)} 20:00`, source: s, mode: 'count', count: 1, durationMinutes: '', priority: p, steps: [] , padToNearestMinutes: ''};
     if (type === 'offlineWindows') return { ...defaultBase(`offline_${n}`), startTime: '03:00', endTime: '05:00', priority: 1000 };
     return {};
   }
@@ -467,6 +481,7 @@
           <label>Motor<input value="${esc(p.templateVersion)}" disabled></label>
           <label>Pasta de saída<input value="${esc(state.settings?.outputRoot || '')}" disabled></label>
         </div>
+        ${p.templateVersion !== LATEST_TEMPLATE_VERSION ? `<div class="ss-callout">Este projeto usa o motor ${esc(p.templateVersion)}. O Pad To Nearest Minute está disponível no motor ${LATEST_TEMPLATE_VERSION}. <button type="button" data-ss-action="upgrade-template">Atualizar motor</button></div>` : ''}
       </section>
       <section class="card ss-section-card">
         <div class="section-heading">
@@ -665,18 +680,18 @@
         ${sourceSelect(`modules.rotation.${index}.source`, item.source)}
         ${profileSelect(`modules.rotation.${index}.presentation`, item.presentation)}
         <label>Duração (min)<input type="number" min="1" data-type="number" data-bind="modules.rotation.${index}.durationMinutes" value="${esc(item.durationMinutes ?? '')}" placeholder="${esc(state.current.options.defaultRotationDurationMinutes || 60)}"></label>
-      </div>${renderPlaybackAdvanced(`modules.rotation.${index}`, item)}`);
+      </div>${renderPadToNearest(`modules.rotation.${index}`, item)}${renderPlaybackAdvanced(`modules.rotation.${index}`, item)}`);
 
     const base = `modules.${type}.${index}`;
     let body = '';
-    if (type === 'fixedEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${sourceSelect(`${base}.source`, item.source)}<label>Quantidade<input type="number" min="1" data-type="number" data-bind="${base}.count" value="${esc(item.count || 1)}"></label>${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${renderCommonAdvanced(base, item, true)}`;
-    if (type === 'fixedDurationEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${sourceSelect(`${base}.source`, item.source)}<label>Duração (min)<input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(item.durationMinutes || 60)}"></label>${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${renderCommonAdvanced(base, item, true)}`;
-    if (type === 'fixedAllEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${sourceSelect(`${base}.source`, item.source)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div><div class="ss-callout">Depois que este bloco começar, todos os itens da Source terminam antes de outro módulo assumir.</div>${renderCommonAdvanced(base, item, true)}`;
-    if (type === 'fixedWindowEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}${sourceSelect(`${base}.source`, item.source)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${renderCommonAdvanced(base, item, true)}`;
+    if (type === 'fixedEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${sourceSelect(`${base}.source`, item.source)}<label>Quantidade<input type="number" min="1" data-type="number" data-bind="${base}.count" value="${esc(item.count || 1)}"></label>${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
+    if (type === 'fixedDurationEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${sourceSelect(`${base}.source`, item.source)}<label>Duração (min)<input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(item.durationMinutes || 60)}"></label>${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
+    if (type === 'fixedAllEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${sourceSelect(`${base}.source`, item.source)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div><div class="ss-callout">Depois que este bloco começar, todos os itens da Source terminam antes de outro módulo assumir.</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
+    if (type === 'fixedWindowEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}${sourceSelect(`${base}.source`, item.source)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
     if (type === 'windowRotations') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}<label>Bloco padrão (min)<input type="number" min="1" data-type="number" data-bind="${base}.blockMinutes" value="${esc(item.blockMinutes || 30)}"></label>${priorityInput(base, item)}</div>${renderWindowRotationItems(item, index)}${renderCommonAdvanced(base, item, false)}`;
-    if (type === 'sequenceEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}<label class="check-row"><input type="checkbox" data-bind="${base}.atomic" ${item.atomic ? 'checked' : ''}><span>Sequência atômica</span></label></div>${renderSequenceSteps(item.steps || [], `${base}.steps`)}${renderCommonAdvanced(base, item, false)}`;
-    if (type === 'intervalEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}<label>A cada (min)<input type="number" min="1" data-type="number" data-bind="${base}.everyMinutes" value="${esc(item.everyMinutes || 30)}"></label>${modeSelect(`${base}.mode`, item.mode, false)}${intervalModeFields(base, item)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}<label>Se atrasar<select data-bind="${base}.latePolicy" data-rerender="true"><option value="queue" ${item.latePolicy === 'queue' ? 'selected' : ''}>Esperar na fila</option><option value="skip" ${item.latePolicy === 'skip' ? 'selected' : ''}>Ignorar se atrasar demais</option></select></label>${item.latePolicy === 'skip' ? `<label>Atraso máximo (min)<input type="number" min="0" data-type="number" data-bind="${base}.maxLatenessMinutes" value="${esc(item.maxLatenessMinutes ?? 10)}"></label>` : ''}</div>${renderCommonAdvanced(base, item, true)}`;
-    if (type === 'dateEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}<label>Data e hora<input data-bind="${base}.datetime" value="${esc(item.datetime || '')}" placeholder="2026-12-24 20:00"></label>${modeSelect(`${base}.mode`, item.mode, true)}${dateModeFields(base, item)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${item.mode === 'sequence' ? renderSequenceSteps(item.steps || [], `${base}.steps`) : ''}${renderPlaybackAdvanced(base, item)}`;
+    if (type === 'sequenceEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}<label class="check-row"><input type="checkbox" data-bind="${base}.atomic" ${item.atomic ? 'checked' : ''}><span>Sequência atômica</span></label></div>${renderSequenceSteps(item.steps || [], `${base}.steps`)}${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, false)}`;
+    if (type === 'intervalEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}<label>A cada (min)<input type="number" min="1" data-type="number" data-bind="${base}.everyMinutes" value="${esc(item.everyMinutes || 30)}"></label>${modeSelect(`${base}.mode`, item.mode, false)}${intervalModeFields(base, item)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}<label>Se atrasar<select data-bind="${base}.latePolicy" data-rerender="true"><option value="queue" ${item.latePolicy === 'queue' ? 'selected' : ''}>Esperar na fila</option><option value="skip" ${item.latePolicy === 'skip' ? 'selected' : ''}>Ignorar se atrasar demais</option></select></label>${item.latePolicy === 'skip' ? `<label>Atraso máximo (min)<input type="number" min="0" data-type="number" data-bind="${base}.maxLatenessMinutes" value="${esc(item.maxLatenessMinutes ?? 10)}"></label>` : ''}</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
+    if (type === 'dateEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}<label>Data e hora<input data-bind="${base}.datetime" value="${esc(item.datetime || '')}" placeholder="2026-12-24 20:00"></label>${modeSelect(`${base}.mode`, item.mode, true)}${dateModeFields(base, item)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${item.mode === 'sequence' ? renderSequenceSteps(item.steps || [], `${base}.steps`) : ''}${renderPadToNearest(base, item)}${renderPlaybackAdvanced(base, item)}`;
     if (type === 'offlineWindows') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}${priorityInput(base, item)}</div>${renderDateFilters(base, item)}`;
     return moduleEntryShell(type, index, item.label || item.id || `Item ${index + 1}`, body);
   }
@@ -705,7 +720,12 @@
   }
 
   function renderWindowRotationItems(item, index) {
-    return `<div class="ss-mini-editor"><div class="ss-mini-head"><strong>Itens da rotação</strong><button type="button" data-ss-action="add-window-item" data-index="${index}">Adicionar Source</button></div>${(item.items || []).map((entry, j) => `<div class="ss-inline-row ss-window-row"><select data-bind="modules.windowRotations.${index}.items.${j}.source">${sourceOptions(entry.source)}</select><select data-bind="modules.windowRotations.${index}.items.${j}.presentation">${profileOptions(entry.presentation)}</select><input type="number" min="1" data-type="number" data-bind="modules.windowRotations.${index}.items.${j}.durationMinutes" value="${esc(entry.durationMinutes ?? '')}" placeholder="Bloco padrão"><button type="button" class="danger ghost" data-ss-action="remove-window-item" data-index="${index}" data-item-index="${j}">×</button></div>`).join('')}</div>`;
+    return `<div class="ss-mini-editor"><div class="ss-mini-head"><strong>Itens da rotação</strong><button type="button" data-ss-action="add-window-item" data-index="${index}">Adicionar Source</button></div>${(item.items || []).map((entry, j) => {
+      const base = `modules.windowRotations.${index}.items.${j}`;
+      const padEnabled = Boolean(state.current.filler && String(state.current.filler.source || '').trim()) && state.current.templateVersion === LATEST_TEMPLATE_VERSION;
+      const padValue = entry.padToNearestMinutes === null || entry.padToNearestMinutes === undefined ? '' : String(entry.padToNearestMinutes);
+      return `<div class="ss-inline-row ss-window-row"><select data-bind="${base}.source">${sourceOptions(entry.source)}</select><select data-bind="${base}.presentation">${profileOptions(entry.presentation)}</select><input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(entry.durationMinutes ?? '')}" placeholder="Bloco padrão"><select data-type="number" data-bind="${base}.padToNearestMinutes" ${padEnabled ? '' : 'disabled'} aria-label="Pad To Nearest Minute"><option value="" ${padValue === '' ? 'selected' : ''}>Pad: desativado</option>${PAD_TO_NEAREST_OPTIONS.map((minutes) => `<option value="${minutes}" ${padValue === String(minutes) ? 'selected' : ''}>Pad: ${minutes} min</option>`).join('')}</select><button type="button" class="danger ghost" data-ss-action="remove-window-item" data-index="${index}" data-item-index="${j}">×</button></div>`;
+    }).join('')}</div>`;
   }
 
   function renderSequenceSteps(steps, path) {
@@ -724,6 +744,38 @@
   }
   function renderPlaybackAdvanced(base, item) {
     return `<details class="ss-advanced"><summary>Reprodução avançada</summary><div class="ss-advanced-body form-grid three"><label>Título customizado<input data-bind="${base}.customTitle" value="${esc(item.customTitle || '')}"></label><label>Filler kind<input data-bind="${base}.fillerKind" value="${esc(item.fillerKind || '')}"></label><label>Fallback Source<select data-bind="${base}.fallback">${sourceOptions(item.fallback)}</select></label><label>Tentativas descartadas<input type="number" min="0" data-type="number" data-bind="${base}.discardAttempts" value="${esc(item.discardAttempts ?? '')}"></label><label class="check-row"><input type="checkbox" data-bind="${base}.disableWatermarks" ${item.disableWatermarks ? 'checked' : ''}><span>Desativar watermarks nativos</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.trim" ${item.trim ? 'checked' : ''}><span>Permitir trim</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.offlineTail" ${item.offlineTail ? 'checked' : ''}><span>Offline tail</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.allowOverrun" ${item.allowOverrun !== false ? 'checked' : ''}><span>Deixar o vídeo terminar</span></label></div></details>`;
+  }
+
+  function renderPadToNearest(base, item) {
+    const hasFiller = Boolean(state.current.filler && String(state.current.filler.source || '').trim());
+    const hasMotor = state.current.templateVersion === LATEST_TEMPLATE_VERSION;
+    const enabled = hasFiller && hasMotor;
+    const current = item.padToNearestMinutes === null || item.padToNearestMinutes === undefined ? '' : String(item.padToNearestMinutes);
+    const reason = !hasMotor
+      ? `Atualize o motor para ${LATEST_TEMPLATE_VERSION} para usar esta opção.`
+      : (!hasFiller ? 'Configure o Filler do projeto para liberar esta opção.' : 'Ao terminar este bloco, o Filler completa até a próxima marca do relógio escolhida.');
+    return `<details class="ss-advanced"><summary>Alinhamento após o bloco</summary><div class="ss-advanced-body form-grid two"><label>Pad To Nearest Minute<select data-type="number" data-bind="${base}.padToNearestMinutes" ${enabled ? '' : 'disabled'}><option value="" ${current === '' ? 'selected' : ''}>Desativado</option>${PAD_TO_NEAREST_OPTIONS.map((minutes) => `<option value="${minutes}" ${current === String(minutes) ? 'selected' : ''}>${minutes} ${minutes === 5 ? '(:00, :05, :10, :15...)' : minutes === 10 ? '(:00, :10, :20, :30, :40, :50)' : minutes === 15 ? '(:00, :15, :30, :45)' : '(:00, :30)'}</option>`).join('')}</select><small>${esc(reason)}</small></label></div></details>`;
+  }
+
+  function clearPadToNearestSettings() {
+    let cleared = 0;
+    const modules = state.current.modules || {};
+    for (const [type, items] of Object.entries(modules)) {
+      if (type === 'offlineWindows') continue;
+      for (const item of items || []) {
+        if (item.padToNearestMinutes !== '' && item.padToNearestMinutes !== null && item.padToNearestMinutes !== undefined) {
+          item.padToNearestMinutes = ''; cleared += 1;
+        }
+        if (type === 'windowRotations') {
+          for (const entry of item.items || []) {
+            if (entry.padToNearestMinutes !== '' && entry.padToNearestMinutes !== null && entry.padToNearestMinutes !== undefined) {
+              entry.padToNearestMinutes = ''; cleared += 1;
+            }
+          }
+        }
+      }
+    }
+    return cleared;
   }
 
   function renderFiller() {

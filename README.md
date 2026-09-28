@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.2.1
+# ErsatzTV YouTube Downloader 3.3.0
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.2.1 refina a área **Scripted Schedules** introduzida na v3.2.0: Recursos e Programação passam a usar sanfonas compactas e recebem ações de validação/publicação também no final da tela. O motor Universal v1.1.1, os dados dos projetos e o comportamento de Downloads, Bibliotecas e Canais permanecem compatíveis.
+A versão 3.3.0 amplia **Scripted Schedules** com o motor Universal v1.2.0 e o recurso opcional **Pad To Nearest Minute** por bloco/evento. O preenchimento usa o Filler do projeto e só pode ser ativado quando ele está configurado. Projetos existentes no motor v1.1.1 continuam compatíveis e podem ser atualizados manualmente para v1.2.0.
 
 ## Arquitetura
 
@@ -205,9 +205,11 @@ Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando
 
 ## Scripted Schedules
 
-A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do motor interno **Universal v1.1.1**.
+A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do motor interno **Universal v1.2.0**.
 
 O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos podem ser cadastrados grupos de Graphics, Sources, Scripted Playlists e Presentation Profiles. Em Programação, somente os módulos escolhidos aparecem na tela. Estão disponíveis Rotation, Horário + quantidade, Horário + duração, Todos os itens, Janela, Rotação em janela, Sequência, Intervalo, Data específica, Offline e Filler. Nenhum módulo é obrigatório.
+
+Nos módulos que reproduzem conteúdo, cada bloco/evento pode habilitar manualmente **Pad To Nearest Minute** com marcas de 5, 10, 15 ou 30 minutos. A opção nasce desativada, reutiliza o Filler do próprio projeto e só fica disponível quando esse Filler possui uma Source configurada. Assim, um mesmo canal pode misturar blocos com e sem alinhamento sem criar Fillers duplicados. OFFLINE_WINDOWS e o próprio Filler não exibem essa opção.
 
 A pasta de saída é configurada na própria área. O backend aceita apenas arquivos `.py` dentro dessa raiz. Ao publicar, o aplicativo valida as referências, gera o script de forma determinística, tenta executar `python3 <script> --validate-config`, cria backup do arquivo anterior, troca o arquivo de forma atômica e registra hash/histórico.
 

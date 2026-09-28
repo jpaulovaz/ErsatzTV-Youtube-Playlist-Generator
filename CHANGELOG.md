@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.3.0
+
+- Scripted Schedules ganha **Pad To Nearest Minute** opcional por bloco/evento nos módulos de conteúdo.
+- Marcas suportadas: 5, 10, 15 e 30 minutos, sempre desativadas por padrão.
+- O pós-bloco reutiliza o Filler do projeto; não exige Filler duplicado por regra de alinhamento.
+- A interface só libera a configuração quando existe Filler e o motor do projeto é Universal v1.2.0.
+- O backend e o próprio script gerado validam a mesma regra para impedir publicação inconsistente.
+- Ao desativar o Filler, alinhamentos configurados no projeto também são desativados para manter a configuração válida.
+- OFFLINE_WINDOWS e Filler continuam sem Pad To Nearest Minute.
+- Projetos existentes no Universal v1.1.1 permanecem publicáveis sem atualização silenciosa; a aba Geral oferece atualização manual para v1.2.0.
+- Universal v1.2.0 preserva prioridades e não usa o padding para atrasar um evento que já esteja aguardando ou comece antes da próxima marca.
+- 101 testes automatizados aprovados para a v3.3.0.
+
 ## 3.2.1
 
 - Recursos do builder de Scripted Schedules agora usam sanfonas por categoria e por item, deixando a edição de projetos grandes mais compacta.

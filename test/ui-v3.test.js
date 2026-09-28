@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.2\.1/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.2\.1/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.3\.0/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.3\.0/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -167,7 +167,7 @@ test('ErsatzTV settings validate the API Key through GET api version and show a 
 });
 
 
-test('Scripted Schedules is an isolated builder view with all Universal v1.1.1 modules', () => {
+test('Scripted Schedules is an isolated builder view with all Universal v1.2.0 modules', () => {
   const html = read('index.html');
   const app = read('app.js');
   const view = read('js/scriptedSchedulesView.js');
@@ -177,8 +177,8 @@ test('Scripted Schedules is an isolated builder view with all Universal v1.1.1 m
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.2\.1/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.2\.1/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.3\.0/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.3\.0/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -190,6 +190,11 @@ test('Scripted Schedules is an isolated builder view with all Universal v1.1.1 m
   assert.match(view, /Presentation Profiles/);
   assert.match(view, /Scripted Playlists/);
   assert.match(view, /Grupos de Graphics/);
+  assert.match(view, /LATEST_TEMPLATE_VERSION = '1\.2\.0'/);
+  assert.match(view, /Pad To Nearest Minute/);
+  assert.match(view, /PAD_TO_NEAREST_OPTIONS = \[5, 10, 15, 30\]/);
+  assert.match(view, /Configure o Filler do projeto para liberar esta opção/);
+  assert.match(view, /upgrade-template/);
   assert.match(css, /\.ss-editor-tabs/);
   assert.match(view, /handleAccordionToggle/);
   assert.match(view, /data-ss-accordion/);
@@ -215,4 +220,22 @@ test('Scripted Schedules resources and programming keep accordion state and expo
   assert.match(view, />Salvar e publicar<\/button>/);
   assert.match(css, /\.ss-accordion-summary/);
   assert.match(css, /\.ss-section-summary/);
+});
+
+
+test('Scripted Schedules exposes post-block padding only on content modules and not on Offline or Filler', () => {
+  const view = read('js/scriptedSchedulesView.js');
+  assert.match(view, /renderPadToNearest\(`modules\.rotation\.\$\{index\}`/);
+  for (const type of ['fixedEvents', 'fixedDurationEvents', 'fixedAllEvents', 'fixedWindowEvents', 'sequenceEvents', 'intervalEvents', 'dateEvents']) {
+    const line = view.split('\n').find((row) => row.includes(`if (type === '${type}') body =`));
+    assert.ok(line && line.includes('renderPadToNearest(base, item)'), `${type} should expose Pad To Nearest Minute`);
+  }
+  const windowRotationRenderer = view.match(/function renderWindowRotationItems\(item, index\)[\s\S]*?function renderSequenceSteps/);
+  assert.ok(windowRotationRenderer && windowRotationRenderer[0].includes('padToNearestMinutes'), 'Window Rotation items should expose Pad To Nearest Minute per item');
+  assert.ok(windowRotationRenderer && windowRotationRenderer[0].includes('Pad: desativado'), 'Window Rotation pad should default to disabled');
+  const offlineLine = view.split('\n').find((row) => row.includes("if (type === 'offlineWindows') body ="));
+  assert.ok(offlineLine && !offlineLine.includes('renderPadToNearest'), 'Offline must not expose Pad To Nearest Minute');
+  const fillerRenderer = view.match(/function renderFiller\(\)[\s\S]*?function renderEditorSaveBar/);
+  assert.ok(fillerRenderer && !fillerRenderer[0].includes('renderPadToNearest'), 'Filler itself must not expose Pad To Nearest Minute');
+  assert.match(view, /clearPadToNearestSettings/);
 });

@@ -2,7 +2,8 @@ const path = require('path');
 const { ROOT_DIR } = require('../config');
 
 const MODULE_SCHEMA_VERSION = 1;
-const TEMPLATE_VERSION = '1.1.1';
+const TEMPLATE_VERSION = '1.2.0';
+const SUPPORTED_TEMPLATE_VERSIONS = ['1.1.1', '1.2.0'];
 const DEFAULT_OUTPUT_ROOT = path.join(ROOT_DIR, 'data', 'scripted-schedules', 'published');
 const HISTORY_LIMIT = 10;
 
@@ -112,6 +113,7 @@ const MODULE_TYPES = [
 module.exports = {
   MODULE_SCHEMA_VERSION,
   TEMPLATE_VERSION,
+  SUPPORTED_TEMPLATE_VERSIONS,
   DEFAULT_OUTPUT_ROOT,
   HISTORY_LIMIT,
   MODULE_TYPES,

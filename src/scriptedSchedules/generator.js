@@ -1,9 +1,9 @@
 const fs = require('fs/promises');
 const path = require('path');
-const { TEMPLATE_VERSION } = require('./schema');
+const { TEMPLATE_VERSION, SUPPORTED_TEMPLATE_VERSIONS } = require('./schema');
 const { validateProject } = require('./validator');
 
-const TEMPLATE_PATH = path.join(__dirname, 'templates', 'universal-v1.1.1.py.tpl');
+const TEMPLATE_PATHS = Object.fromEntries(SUPPORTED_TEMPLATE_VERSIONS.map((version) => [version, path.join(__dirname, 'templates', `universal-v${version}.py.tpl`)]));
 
 function py(value, indent = 0) {
   const pad = ' '.repeat(indent);
@@ -118,13 +118,14 @@ function dateFields(input = {}) {
   });
 }
 
-function baseEvent(input = {}) {
+function baseEvent(input = {}, options = {}) {
   return compact({
     id: input.id,
     label: input.label,
     priority: input.priority !== '' && input.priority !== undefined ? Number(input.priority) : undefined,
     presentation: input.presentation,
     enabled: input.enabled === false ? false : undefined,
+    pad_to_nearest_minutes: options.includePad === false ? undefined : (input.padToNearestMinutes !== '' && input.padToNearestMinutes !== null && input.padToNearestMinutes !== undefined ? Number(input.padToNearestMinutes) : undefined),
     ...dateFields(input),
     ...playbackFields(input)
   });
@@ -148,6 +149,7 @@ function modulesToEngine(project) {
     source: item.source,
     presentation: item.presentation,
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
+    pad_to_nearest_minutes: item.padToNearestMinutes !== '' && item.padToNearestMinutes !== null && item.padToNearestMinutes !== undefined ? Number(item.padToNearestMinutes) : undefined,
     ...playbackFields(item)
   }));
   const fixedEvents = (modules.fixedEvents || []).map((item) => compact({
@@ -163,11 +165,12 @@ function modulesToEngine(project) {
     ...baseEvent(item), start_time: item.startTime, end_time: item.endTime, source: item.source
   }));
   const windowRotations = (modules.windowRotations || []).map((item) => compact({
-    ...baseEvent(item), start_time: item.startTime, end_time: item.endTime, block_minutes: Number(item.blockMinutes),
+    ...baseEvent(item, { includePad: false }), start_time: item.startTime, end_time: item.endTime, block_minutes: Number(item.blockMinutes),
     items: (item.items || []).map((entry) => compact({
       source: entry.source,
       presentation: entry.presentation,
       duration_minutes: entry.durationMinutes !== '' && entry.durationMinutes !== undefined ? Number(entry.durationMinutes) : undefined,
+      pad_to_nearest_minutes: entry.padToNearestMinutes !== '' && entry.padToNearestMinutes !== null && entry.padToNearestMinutes !== undefined ? Number(entry.padToNearestMinutes) : undefined,
       ...playbackFields(entry)
     }))
   }));
@@ -187,7 +190,7 @@ function modulesToEngine(project) {
     steps: item.mode === 'sequence' ? (item.steps || []).map(stepToEngine) : undefined
   }));
   const offlineWindows = (modules.offlineWindows || []).map((item) => compact({
-    ...baseEvent(item), start_time: item.startTime, end_time: item.endTime
+    ...baseEvent(item, { includePad: false }), start_time: item.startTime, end_time: item.endTime
   }));
   return { rotation, fixedEvents, fixedDurationEvents, fixedAllEvents, fixedWindowEvents, windowRotations, sequenceEvents, intervalEvents, dateEvents, offlineWindows };
 }
@@ -244,12 +247,12 @@ function projectToEngine(project) {
   };
 }
 
-function generatedConfig(project) {
+function generatedConfig(project, templateVersion = String(project.templateVersion || TEMPLATE_VERSION)) {
   const data = projectToEngine(project);
   return [
     '# Este bloco foi gerado automaticamente. Edite a configuracao no aplicativo.',
     `# Projeto: ${String(project.name || '').replace(/\r?\n/g, ' ')}`,
-    `# Template: ${TEMPLATE_VERSION}`,
+    `# Template: ${templateVersion}`,
     '',
     `SOURCES: dict[str, dict[str, Any]] = ${py(data.sources)}`,
     '',
@@ -290,15 +293,16 @@ async function generateScript(project) {
     error.validation = validation;
     throw error;
   }
-  if (String(project.templateVersion || TEMPLATE_VERSION) !== TEMPLATE_VERSION) {
-    const error = new Error(`Template ${project.templateVersion} nao esta disponivel nesta versao.`);
+  const templateVersion = String(project.templateVersion || TEMPLATE_VERSION);
+  if (!SUPPORTED_TEMPLATE_VERSIONS.includes(templateVersion)) {
+    const error = new Error(`Template ${templateVersion} nao esta disponivel nesta versao.`);
     error.statusCode = 400;
     throw error;
   }
-  const template = await fs.readFile(TEMPLATE_PATH, 'utf8');
+  const template = await fs.readFile(TEMPLATE_PATHS[templateVersion], 'utf8');
   const marker = '__GENERATED_CONFIG__';
   if (!template.includes(marker)) throw new Error('Template interno sem marcador de configuracao.');
-  return template.replace(marker, generatedConfig(project));
+  return template.replace(marker, generatedConfig(project, templateVersion));
 }
 
 module.exports = { generateScript, generatedConfig, projectToEngine, py };

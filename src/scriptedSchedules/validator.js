@@ -1,5 +1,5 @@
 const path = require('path');
-const { MODULE_TYPES } = require('./schema');
+const { MODULE_TYPES, TEMPLATE_VERSION, SUPPORTED_TEMPLATE_VERSIONS } = require('./schema');
 
 const TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -7,6 +7,7 @@ const DATE_TIME_RE = /^\d{4}-\d{2}-\d{2}[ T](?:[01]\d|2[0-3]):[0-5]\d$/;
 const KEY_RE = /^[A-Za-z0-9_.-]+$/;
 const SOURCE_TYPES = new Set(['smart_collection', 'collection', 'multi_collection', 'playlist', 'search', 'show', 'marathon']);
 const ORDERS = new Set(['chronological', 'shuffle']);
+const PAD_TO_NEAREST_VALUES = new Set([5, 10, 15, 30]);
 const MODULE_LABELS = {
   rotation: 'ROTATION',
   fixedEvents: 'FIXED_EVENTS',
@@ -32,6 +33,8 @@ function validateProject(project) {
 
   if (!String(project.name || '').trim()) addError('name', 'Informe o nome do projeto.');
   validateFileName(project.fileName, addError);
+  const templateVersion = String(project.templateVersion || TEMPLATE_VERSION);
+  if (!SUPPORTED_TEMPLATE_VERSIONS.includes(templateVersion)) addError('templateVersion', `Motor ${templateVersion} nao esta disponivel nesta versao.`);
 
   const groups = Array.isArray(project.graphicsGroups) ? project.graphicsGroups : [];
   const groupMap = uniqueMap(groups, 'key', 'graphicsGroups', addError);
@@ -60,8 +63,8 @@ function validateProject(project) {
     if (!Array.isArray(modules[type])) addError(`modules.${type}`, `${MODULE_LABELS[type]} precisa ser uma lista.`);
   }
 
-  validateRotation(modules.rotation || [], sourceMap, profileMap, project.options, addError);
-  validateTimedModules(modules, sourceMap, profileMap, addError);
+  validateRotation(modules.rotation || [], sourceMap, profileMap, project.options, project, addError);
+  validateTimedModules(modules, sourceMap, profileMap, project, addError);
   validateEventIds(modules, addError);
   validateFiller(project.filler, sourceMap, profileMap, addError);
   validateOptions(project.options, addError);
@@ -184,7 +187,7 @@ function validatePresentationRef(value, profileMap, pathName, addError) {
   if (key && !profileMap.has(key)) addError(pathName, `Presentation ${key} nao existe.`);
 }
 
-function validateRotation(items, sourceMap, profileMap, options, addError) {
+function validateRotation(items, sourceMap, profileMap, options, project, addError) {
   const fallback = Number(options && options.defaultRotationDurationMinutes);
   if (items.length && !(fallback > 0)) addError('options.defaultRotationDurationMinutes', 'A duracao padrao da ROTATION precisa ser maior que zero.');
   items.forEach((item, index) => {
@@ -193,31 +196,36 @@ function validateRotation(items, sourceMap, profileMap, options, addError) {
     validatePresentationRef(item.presentation, profileMap, `${base}.presentation`, addError);
     if (item.durationMinutes !== '' && item.durationMinutes !== null && item.durationMinutes !== undefined) positiveNumber(item.durationMinutes, `${base}.durationMinutes`, addError);
     validateDateFilters(item, base, addError);
+    validatePadToNearest(item, base, project, addError);
   });
 }
 
-function validateTimedModules(modules, sourceMap, profileMap, addError) {
+function validateTimedModules(modules, sourceMap, profileMap, project, addError) {
   (modules.fixedEvents || []).forEach((e, i) => {
     const base = `modules.fixedEvents[${i}]`;
     commonEvent(e, base, profileMap, addError);
     time(e.time, `${base}.time`, addError);
     requireSource(e.source, sourceMap, `${base}.source`, addError);
     positiveInt(e.count, `${base}.count`, addError);
+    validatePadToNearest(e, base, project, addError);
   });
   (modules.fixedDurationEvents || []).forEach((e, i) => {
     const base = `modules.fixedDurationEvents[${i}]`;
     commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError);
     requireSource(e.source, sourceMap, `${base}.source`, addError); positiveNumber(e.durationMinutes, `${base}.durationMinutes`, addError);
+    validatePadToNearest(e, base, project, addError);
   });
   (modules.fixedAllEvents || []).forEach((e, i) => {
     const base = `modules.fixedAllEvents[${i}]`;
     commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError);
     requireSource(e.source, sourceMap, `${base}.source`, addError);
+    validatePadToNearest(e, base, project, addError);
   });
   (modules.fixedWindowEvents || []).forEach((e, i) => {
     const base = `modules.fixedWindowEvents[${i}]`;
     commonEvent(e, base, profileMap, addError); time(e.startTime, `${base}.startTime`, addError); time(e.endTime, `${base}.endTime`, addError);
     requireSource(e.source, sourceMap, `${base}.source`, addError);
+    validatePadToNearest(e, base, project, addError);
   });
   (modules.windowRotations || []).forEach((e, i) => {
     const base = `modules.windowRotations[${i}]`;
@@ -227,24 +235,28 @@ function validateTimedModules(modules, sourceMap, profileMap, addError) {
       requireSource(item.source, sourceMap, `${base}.items[${j}].source`, addError);
       validatePresentationRef(item.presentation, profileMap, `${base}.items[${j}].presentation`, addError);
       if (item.durationMinutes !== '' && item.durationMinutes !== null && item.durationMinutes !== undefined) positiveNumber(item.durationMinutes, `${base}.items[${j}].durationMinutes`, addError);
+      validatePadToNearest(item, `${base}.items[${j}]`, project, addError);
     }
   });
   (modules.sequenceEvents || []).forEach((e, i) => {
     const base = `modules.sequenceEvents[${i}]`;
     commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError);
     validateSteps(e.steps, sourceMap, profileMap, `${base}.steps`, addError);
+    validatePadToNearest(e, base, project, addError);
   });
   (modules.intervalEvents || []).forEach((e, i) => {
     const base = `modules.intervalEvents[${i}]`;
     commonEvent(e, base, profileMap, addError); time(e.startTime, `${base}.startTime`, addError); time(e.endTime, `${base}.endTime`, addError); positiveInt(e.everyMinutes, `${base}.everyMinutes`, addError);
     validateModeEvent(e, sourceMap, profileMap, base, addError, false);
     if (!['queue', 'skip'].includes(String(e.latePolicy || 'queue'))) addError(`${base}.latePolicy`, 'late_policy deve ser queue ou skip.');
+    validatePadToNearest(e, base, project, addError);
   });
   (modules.dateEvents || []).forEach((e, i) => {
     const base = `modules.dateEvents[${i}]`;
     commonEvent(e, base, profileMap, addError);
     if (!DATE_TIME_RE.test(String(e.datetime || ''))) addError(`${base}.datetime`, 'Use data e hora no formato AAAA-MM-DD HH:MM.');
     validateModeEvent(e, sourceMap, profileMap, base, addError, true);
+    validatePadToNearest(e, base, project, addError);
   });
   (modules.offlineWindows || []).forEach((e, i) => {
     const base = `modules.offlineWindows[${i}]`;
@@ -274,6 +286,20 @@ function validateSteps(steps, sourceMap, profileMap, base, addError) {
     if (['duration', 'wait'].includes(mode)) positiveNumber(step.durationMinutes, `${p}.durationMinutes`, addError);
     if (mode === 'pad_to_next') positiveInt(step.minutes, `${p}.minutes`, addError);
   });
+}
+
+function validatePadToNearest(item, base, project, addError) {
+  const raw = item && item.padToNearestMinutes;
+  if (raw === '' || raw === null || raw === undefined) return;
+  const value = Number(raw);
+  if (!PAD_TO_NEAREST_VALUES.has(value)) {
+    addError(`${base}.padToNearestMinutes`, 'Pad To Nearest Minute deve ser 5, 10, 15 ou 30.');
+    return;
+  }
+  if (!project.filler || !String(project.filler.source || '').trim()) addError(`${base}.padToNearestMinutes`, 'Configure o Filler antes de ativar Pad To Nearest Minute.');
+  if (String(project.templateVersion || TEMPLATE_VERSION) !== TEMPLATE_VERSION) {
+    addError(`${base}.padToNearestMinutes`, `Pad To Nearest Minute requer o motor ${TEMPLATE_VERSION}.`);
+  }
 }
 
 function commonEvent(e, base, profileMap, addError) {
