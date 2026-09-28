@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.2\.0/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.2\.0/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.2\.1/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.2\.1/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -177,8 +177,8 @@ test('Scripted Schedules is an isolated builder view with all Universal v1.1.1 m
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.2\.0/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.2\.0/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.2\.1/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.2\.1/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -191,5 +191,28 @@ test('Scripted Schedules is an isolated builder view with all Universal v1.1.1 m
   assert.match(view, /Scripted Playlists/);
   assert.match(view, /Grupos de Graphics/);
   assert.match(css, /\.ss-editor-tabs/);
+  assert.match(view, /handleAccordionToggle/);
+  assert.match(view, /data-ss-accordion/);
+  assert.match(view, /renderEditorSaveBar\('Recursos'\)/);
+  assert.match(view, /renderEditorSaveBar\('Programação'\)/);
+  assert.match(css, /\.ss-section-accordion/);
+  assert.match(css, /\.ss-editor-save-bar/);
   assert.doesNotMatch(view, /\b(?:alert|confirm|prompt)\s*\(/);
+});
+
+
+test('Scripted Schedules resources and programming keep accordion state and expose bottom save actions', () => {
+  const view = read('js/scriptedSchedulesView.js');
+  const css = read('scripted-schedules.css');
+
+  assert.match(view, /openAccordions: new Set\(\)/);
+  assert.match(view, /addEventListener\('toggle', handleAccordionToggle, true\)/);
+  assert.match(view, /accordionAttrs\(`resources:\$\{kind\}`\)/);
+  assert.match(view, /accordionAttrs\(`module:\$\{type\}`\)/);
+  assert.match(view, /module-entry:\$\{type\}:\$\{index\}/);
+  assert.match(view, /renderEditorSaveBar\('Recursos'\)/);
+  assert.match(view, /renderEditorSaveBar\('Programação'\)/);
+  assert.match(view, />Salvar e publicar<\/button>/);
+  assert.match(css, /\.ss-accordion-summary/);
+  assert.match(css, /\.ss-section-summary/);
 });

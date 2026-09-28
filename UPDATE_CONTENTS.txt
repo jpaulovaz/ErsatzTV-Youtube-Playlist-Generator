@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.2.0 - pacote de atualização
+ErsatzTV YouTube Downloader 3.2.1 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.1.1.
+Extraia este ZIP sobre uma instalação v3.2.0.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,14 +9,11 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principais mudanças:
-- nova área independente Scripted Schedules;
-- vários projetos e scripts Python gerados a partir do motor Universal v1.1.1;
-- 10 módulos de programação + Filler, todos opcionais;
-- Resources, Graphics, Scripted Playlists e Presentation Profiles configurados visualmente;
-- publicação em pasta configurável com validação, escrita atômica, backup, SHA-256 e histórico;
-- Canais e Smart Collections reutilizam os catálogos já integrados do ErsatzTV;
-- primeiro vínculo do caminho do script no Playout continua manual;
-- Reset Playout permanece manual e nunca é disparado ao publicar;
-- configVersion principal permanece em 8; o módulo usa schema próprio em data/scripted-schedules.
+- sanfonas compactas na aba Recursos, por categoria e por item;
+- sanfonas na Programação para opções globais, módulos, itens e Filler;
+- estado das sanfonas preservado durante rerenders;
+- novos recursos/módulos abrem automaticamente para edição;
+- botões Validar e Salvar e publicar também no final das abas Recursos e Programação;
+- nenhuma mudança de schema, API ou motor Python.
 
 Consulte UPGRADE.md antes da atualização.

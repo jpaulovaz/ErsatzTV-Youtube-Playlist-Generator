@@ -30,6 +30,7 @@
     validation: null,
     preview: '',
     history: [],
+    openAccordions: new Set(),
     loading: false
   };
 
@@ -110,7 +111,7 @@
     try {
       const response = await state.deps.api(`/api/scripted-schedules/${encodeURIComponent(id)}`);
       state.current = clone(response.project);
-      state.tab = 'general'; state.validation = null; state.preview = ''; state.history = [];
+      state.tab = 'general'; state.validation = null; state.preview = ''; state.history = []; state.openAccordions.clear();
       await reloadCatalog(false);
     } finally { state.loading = false; render(); }
   }
@@ -120,6 +121,30 @@
     el.addEventListener('click', (event) => handleClick(event).catch((error) => state.deps.showToast(error.message, true)));
     el.addEventListener('input', handleInput);
     el.addEventListener('change', handleInput);
+    el.addEventListener('toggle', handleAccordionToggle, true);
+  }
+
+  function handleAccordionToggle(event) {
+    const details = event.target;
+    if (!details?.matches?.('details[data-ss-accordion]')) return;
+    const key = details.dataset.ssAccordion;
+    if (!key) return;
+    if (details.open) state.openAccordions.add(key);
+    else state.openAccordions.delete(key);
+  }
+
+  function accordionAttrs(key) {
+    return `data-ss-accordion="${esc(key)}"${state.openAccordions.has(key) ? ' open' : ''}`;
+  }
+
+  function openAccordion(key) {
+    state.openAccordions.add(key);
+  }
+
+  function clearAccordionPrefix(prefix) {
+    for (const key of [...state.openAccordions]) {
+      if (key.startsWith(prefix)) state.openAccordions.delete(key);
+    }
   }
 
   function handleInput(event) {
@@ -213,8 +238,8 @@
       state.current.channelLinks.push({ channelNumber: '', channelName: '', stateKey: `${slug(state.current.name)}_${state.current.channelLinks.length + 1}`, status: 'local' }); render(); return;
     }
     if (action === 'remove-channel') { state.current.channelLinks.splice(Number(button.dataset.index), 1); render(); return; }
-    if (action === 'add-resource') { addResource(button.dataset.kind); render(); return; }
-    if (action === 'remove-resource') { removeResource(button.dataset.kind, Number(button.dataset.index)); render(); return; }
+    if (action === 'add-resource') { const kind = button.dataset.kind; const index = addResource(kind); openAccordion(`resources:${kind}`); if (index >= 0) openAccordion(`resource:${kind}:${index}`); render(); return; }
+    if (action === 'remove-resource') { const kind = button.dataset.kind; removeResource(kind, Number(button.dataset.index)); clearAccordionPrefix(`resource:${kind}:`); render(); return; }
     if (action === 'add-playlist-item') { state.current.scriptedPlaylists[Number(button.dataset.index)].items.push({ source: firstSource(), count: 1 }); render(); return; }
     if (action === 'remove-playlist-item') { state.current.scriptedPlaylists[Number(button.dataset.index)].items.splice(Number(button.dataset.itemIndex), 1); render(); return; }
     if (action === 'move-playlist-item') { moveItem(state.current.scriptedPlaylists[Number(button.dataset.index)].items, Number(button.dataset.itemIndex), Number(button.dataset.delta)); render(); return; }
@@ -222,15 +247,15 @@
     if (action === 'remove-guid') { getPath(state.current, button.dataset.path).splice(Number(button.dataset.index), 1); render(); return; }
     if (action === 'add-variable') { getPath(state.current, button.dataset.path).push({ key: '', value: '' }); render(); return; }
     if (action === 'remove-variable') { getPath(state.current, button.dataset.path).splice(Number(button.dataset.index), 1); render(); return; }
-    if (action === 'add-module') { addModule(button.dataset.module || document.querySelector('#ssModulePicker')?.value); render(); return; }
-    if (action === 'remove-module') { state.current.modules[button.dataset.module] = []; render(); return; }
-    if (action === 'add-module-entry') { state.current.modules[button.dataset.module].push(defaultModuleEntry(button.dataset.module)); render(); return; }
-    if (action === 'remove-module-entry') { state.current.modules[button.dataset.module].splice(Number(button.dataset.index), 1); render(); return; }
+    if (action === 'add-module') { const type = button.dataset.module || document.querySelector('#ssModulePicker')?.value; addModule(type); openAccordion(`module:${type}`); openAccordion(`module-entry:${type}:0`); render(); return; }
+    if (action === 'remove-module') { const type = button.dataset.module; state.current.modules[type] = []; state.openAccordions.delete(`module:${type}`); clearAccordionPrefix(`module-entry:${type}:`); render(); return; }
+    if (action === 'add-module-entry') { const type = button.dataset.module; const index = state.current.modules[type].length; state.current.modules[type].push(defaultModuleEntry(type)); openAccordion(`module:${type}`); openAccordion(`module-entry:${type}:${index}`); render(); return; }
+    if (action === 'remove-module-entry') { const type = button.dataset.module; state.current.modules[type].splice(Number(button.dataset.index), 1); clearAccordionPrefix(`module-entry:${type}:`); render(); return; }
     if (action === 'add-window-item') { state.current.modules.windowRotations[Number(button.dataset.index)].items.push({ source: firstSource(), presentation: '', durationMinutes: '' }); render(); return; }
     if (action === 'remove-window-item') { state.current.modules.windowRotations[Number(button.dataset.index)].items.splice(Number(button.dataset.itemIndex), 1); render(); return; }
     if (action === 'add-step') { getPath(state.current, button.dataset.path).push({ mode: 'count', source: firstSource(), count: 1, presentation: '' }); render(); return; }
     if (action === 'remove-step') { getPath(state.current, button.dataset.path).splice(Number(button.dataset.index), 1); render(); return; }
-    if (action === 'toggle-filler') { state.current.filler = state.current.filler ? null : { source: firstSource(), presentation: '' }; render(); return; }
+    if (action === 'toggle-filler') { state.current.filler = state.current.filler ? null : { source: firstSource(), presentation: '' }; if (state.current.filler) openAccordion('programming:filler'); render(); return; }
   }
 
   async function publishCurrent() {
@@ -295,10 +320,14 @@
     const existing = new Set(items.map((x) => x.key)); while (existing.has(key)) { i += 1; key = `${prefix}_${i}`; } return key;
   }
   function addResource(kind) {
-    if (kind === 'graphics') state.current.graphicsGroups.push({ key: nextKey('GRAPHICS', state.current.graphicsGroups), label: 'Novo grupo', graphics: [], includes: [] });
-    if (kind === 'source') state.current.sources.push({ key: nextKey('SOURCE', state.current.sources), label: 'Nova Source', type: 'smart_collection', name: '', order: 'shuffle', presentation: 'none', guids: [], searches: [] });
-    if (kind === 'playlist') state.current.scriptedPlaylists.push({ key: nextKey('PLAYLIST', state.current.scriptedPlaylists), label: 'Nova Scripted Playlist', items: [{ source: firstSource(), count: 1 }] });
-    if (kind === 'profile') state.current.presentationProfiles.push({ key: nextKey('profile', state.current.presentationProfiles).toLowerCase(), label: 'Novo perfil', graphicsGroups: [], graphics: [], graphicsVariables: [], watermarks: [], preRoll: null, epgGroup: false, epgTitle: '', epgAdvance: true });
+    const map = { graphics: 'graphicsGroups', source: 'sources', playlist: 'scriptedPlaylists', profile: 'presentationProfiles' };
+    const list = state.current[map[kind]];
+    if (!list) return -1;
+    if (kind === 'graphics') list.push({ key: nextKey('GRAPHICS', list), label: 'Novo grupo', graphics: [], includes: [] });
+    if (kind === 'source') list.push({ key: nextKey('SOURCE', list), label: 'Nova Source', type: 'smart_collection', name: '', order: 'shuffle', presentation: 'none', guids: [], searches: [] });
+    if (kind === 'playlist') list.push({ key: nextKey('PLAYLIST', list), label: 'Nova Scripted Playlist', items: [{ source: firstSource(), count: 1 }] });
+    if (kind === 'profile') list.push({ key: nextKey('profile', list).toLowerCase(), label: 'Novo perfil', graphicsGroups: [], graphics: [], graphicsVariables: [], watermarks: [], preRoll: null, epgGroup: false, epgTitle: '', epgAdvance: true });
+    return list.length - 1;
   }
   function removeResource(kind, index) {
     const map = { graphics: 'graphicsGroups', source: 'sources', playlist: 'scriptedPlaylists', profile: 'presentationProfiles' };
@@ -462,7 +491,8 @@
       ${renderGraphicsGroups()}
       ${renderSources()}
       ${renderScriptedPlaylists()}
-      ${renderProfiles()}`;
+      ${renderProfiles()}
+      ${renderEditorSaveBar('Recursos')}`;
   }
 
   function renderGraphicsGroups() {
@@ -470,15 +500,18 @@
       state.current.graphicsGroups.map((group, index) => {
         const otherGroups = state.current.graphicsGroups.filter((_, i) => i !== index);
         return `
-          <article class="ss-resource-card">
-            <div class="ss-resource-head"><strong>${esc(group.label || group.key)}</strong><button class="danger ghost" type="button" data-ss-action="remove-resource" data-kind="graphics" data-index="${index}">Remover</button></div>
-            <div class="form-grid two">
-              <label>Nome amigável<input data-bind="graphicsGroups.${index}.label" value="${esc(group.label || '')}"></label>
-              <label>Chave<input data-bind="graphicsGroups.${index}.key" value="${esc(group.key)}"></label>
-              <label class="wide">Graphics Elements <small>Um caminho por linha</small><textarea rows="4" data-bind="graphicsGroups.${index}.graphics" data-type="list">${esc(listValue(group.graphics))}</textarea></label>
+          <details class="ss-resource-card ss-accordion-card" ${accordionAttrs(`resource:graphics:${index}`)}>
+            <summary class="ss-accordion-summary"><strong>${esc(group.label || group.key)}</strong><span>${esc(group.key)}</span></summary>
+            <div class="ss-accordion-body">
+              <div class="ss-accordion-actions"><button class="danger ghost" type="button" data-ss-action="remove-resource" data-kind="graphics" data-index="${index}">Remover</button></div>
+              <div class="form-grid two">
+                <label>Nome amigável<input data-bind="graphicsGroups.${index}.label" value="${esc(group.label || '')}"></label>
+                <label>Chave<input data-bind="graphicsGroups.${index}.key" value="${esc(group.key)}"></label>
+                <label class="wide">Graphics Elements <small>Um caminho por linha</small><textarea rows="4" data-bind="graphicsGroups.${index}.graphics" data-type="list">${esc(listValue(group.graphics))}</textarea></label>
+              </div>
+              ${otherGroups.length ? `<div class="ss-check-group"><span>Incluir outros grupos</span>${otherGroups.map((item) => `<label class="check-row"><input type="checkbox" value="${esc(item.key)}" data-array-toggle="graphicsGroups.${index}.includes" ${(group.includes || []).includes(item.key) ? 'checked' : ''}><span>${esc(item.label || item.key)}</span></label>`).join('')}</div>` : ''}
             </div>
-            ${otherGroups.length ? `<div class="ss-check-group"><span>Incluir outros grupos</span>${otherGroups.map((item) => `<label class="check-row"><input type="checkbox" value="${esc(item.key)}" data-array-toggle="graphicsGroups.${index}.includes" ${(group.includes || []).includes(item.key) ? 'checked' : ''}><span>${esc(item.label || item.key)}</span></label>`).join('')}</div>` : ''}
-          </article>`;
+          </details>`;
       }).join(''));
   }
 
@@ -488,18 +521,22 @@
   }
 
   function renderSourceCard(source, index) {
+    const typeLabel = SOURCE_TYPES.find(([value]) => value === source.type)?.[1] || source.type || 'Source';
     return `
-      <article class="ss-resource-card">
-        <div class="ss-resource-head"><strong>${esc(source.label || source.key)}</strong><button class="danger ghost" type="button" data-ss-action="remove-resource" data-kind="source" data-index="${index}">Remover</button></div>
-        <div class="form-grid three">
-          <label>Nome amigável<input data-bind="sources.${index}.label" value="${esc(source.label || '')}"></label>
-          <label>Chave<input data-bind="sources.${index}.key" value="${esc(source.key)}"></label>
-          <label>Tipo<select data-bind="sources.${index}.type" data-rerender="true">${SOURCE_TYPES.map(([value, label]) => `<option value="${value}" ${source.type === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
-          ${renderSourceTypeFields(source, index)}
-          ${['smart_collection', 'collection', 'multi_collection', 'search', 'show'].includes(source.type) ? `<label>Ordem<select data-bind="sources.${index}.order"><option value="chronological" ${source.order === 'chronological' ? 'selected' : ''}>Chronological</option><option value="shuffle" ${source.order === 'shuffle' ? 'selected' : ''}>Shuffle</option></select></label>` : ''}
-          <label>Presentation padrão<select data-bind="sources.${index}.presentation">${profileOptions(source.presentation, true)}</select></label>
+      <details class="ss-resource-card ss-accordion-card" ${accordionAttrs(`resource:source:${index}`)}>
+        <summary class="ss-accordion-summary"><strong>${esc(source.label || source.key)}</strong><span>${esc(typeLabel)}</span></summary>
+        <div class="ss-accordion-body">
+          <div class="ss-accordion-actions"><button class="danger ghost" type="button" data-ss-action="remove-resource" data-kind="source" data-index="${index}">Remover</button></div>
+          <div class="form-grid three">
+            <label>Nome amigável<input data-bind="sources.${index}.label" value="${esc(source.label || '')}"></label>
+            <label>Chave<input data-bind="sources.${index}.key" value="${esc(source.key)}"></label>
+            <label>Tipo<select data-bind="sources.${index}.type" data-rerender="true">${SOURCE_TYPES.map(([value, label]) => `<option value="${value}" ${source.type === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+            ${renderSourceTypeFields(source, index)}
+            ${['smart_collection', 'collection', 'multi_collection', 'search', 'show'].includes(source.type) ? `<label>Ordem<select data-bind="sources.${index}.order"><option value="chronological" ${source.order === 'chronological' ? 'selected' : ''}>Chronological</option><option value="shuffle" ${source.order === 'shuffle' ? 'selected' : ''}>Shuffle</option></select></label>` : ''}
+            <label>Presentation padrão<select data-bind="sources.${index}.presentation">${profileOptions(source.presentation, true)}</select></label>
+          </div>
         </div>
-      </article>`;
+      </details>`;
   }
 
   function renderSourceTypeFields(source, index) {
@@ -529,32 +566,38 @@
   function renderScriptedPlaylists() {
     return resourceSection('Scripted Playlists', 'Monte pequenas sequências reutilizáveis. Elas podem ser usadas como pre-roll nos perfis.', 'playlist',
       state.current.scriptedPlaylists.map((playlist, index) => `
-        <article class="ss-resource-card">
-          <div class="ss-resource-head"><strong>${esc(playlist.label || playlist.key)}</strong><button class="danger ghost" type="button" data-ss-action="remove-resource" data-kind="playlist" data-index="${index}">Remover</button></div>
-          <div class="form-grid two"><label>Nome amigável<input data-bind="scriptedPlaylists.${index}.label" value="${esc(playlist.label || '')}"></label><label>Chave<input data-bind="scriptedPlaylists.${index}.key" value="${esc(playlist.key)}"></label></div>
-          <div class="ss-mini-editor"><div class="ss-mini-head"><strong>Itens</strong><button type="button" data-ss-action="add-playlist-item" data-index="${index}">Adicionar item</button></div>
-            ${(playlist.items || []).map((item, itemIndex) => `<div class="ss-inline-row ss-playlist-row"><select data-bind="scriptedPlaylists.${index}.items.${itemIndex}.source">${sourceOptions(item.source)}</select><input type="number" min="1" data-type="number" data-bind="scriptedPlaylists.${index}.items.${itemIndex}.count" value="${esc(item.count || 1)}" aria-label="Quantidade"><div class="ss-order-buttons"><button type="button" data-ss-action="move-playlist-item" data-index="${index}" data-item-index="${itemIndex}" data-delta="-1">↑</button><button type="button" data-ss-action="move-playlist-item" data-index="${index}" data-item-index="${itemIndex}" data-delta="1">↓</button><button type="button" class="danger ghost" data-ss-action="remove-playlist-item" data-index="${index}" data-item-index="${itemIndex}">×</button></div></div>`).join('') || '<small>Adicione itens à sequência.</small>'}
+        <details class="ss-resource-card ss-accordion-card" ${accordionAttrs(`resource:playlist:${index}`)}>
+          <summary class="ss-accordion-summary"><strong>${esc(playlist.label || playlist.key)}</strong><span>${(playlist.items || []).length} item(ns)</span></summary>
+          <div class="ss-accordion-body">
+            <div class="ss-accordion-actions"><button class="danger ghost" type="button" data-ss-action="remove-resource" data-kind="playlist" data-index="${index}">Remover</button></div>
+            <div class="form-grid two"><label>Nome amigável<input data-bind="scriptedPlaylists.${index}.label" value="${esc(playlist.label || '')}"></label><label>Chave<input data-bind="scriptedPlaylists.${index}.key" value="${esc(playlist.key)}"></label></div>
+            <div class="ss-mini-editor"><div class="ss-mini-head"><strong>Itens</strong><button type="button" data-ss-action="add-playlist-item" data-index="${index}">Adicionar item</button></div>
+              ${(playlist.items || []).map((item, itemIndex) => `<div class="ss-inline-row ss-playlist-row"><select data-bind="scriptedPlaylists.${index}.items.${itemIndex}.source">${sourceOptions(item.source)}</select><input type="number" min="1" data-type="number" data-bind="scriptedPlaylists.${index}.items.${itemIndex}.count" value="${esc(item.count || 1)}" aria-label="Quantidade"><div class="ss-order-buttons"><button type="button" data-ss-action="move-playlist-item" data-index="${index}" data-item-index="${itemIndex}" data-delta="-1">↑</button><button type="button" data-ss-action="move-playlist-item" data-index="${index}" data-item-index="${itemIndex}" data-delta="1">↓</button><button type="button" class="danger ghost" data-ss-action="remove-playlist-item" data-index="${index}" data-item-index="${itemIndex}">×</button></div></div>`).join('') || '<small>Adicione itens à sequência.</small>'}
+            </div>
           </div>
-        </article>`).join(''));
+        </details>`).join(''));
   }
 
   function renderProfiles() {
     return resourceSection('Presentation Profiles', 'Combine Graphics, pre-roll, watermarks e opções de EPG para reutilizar nos módulos.', 'profile',
       state.current.presentationProfiles.map((profile, index) => `
-        <article class="ss-resource-card">
-          <div class="ss-resource-head"><strong>${esc(profile.label || profile.key)}</strong>${profile.key === 'none' ? '<span class="status-pill">Reservado</span>' : `<button class="danger ghost" type="button" data-ss-action="remove-resource" data-kind="profile" data-index="${index}">Remover</button>`}</div>
-          <div class="form-grid two">
-            <label>Nome amigável<input data-bind="presentationProfiles.${index}.label" value="${esc(profile.label || '')}"></label>
-            <label>Chave<input data-bind="presentationProfiles.${index}.key" value="${esc(profile.key)}" ${profile.key === 'none' ? 'disabled' : ''}></label>
-            <label>Pre-roll<select data-bind="presentationProfiles.${index}.preRoll">${playlistOptions(profile.preRoll)}</select></label>
-            <label class="check-row"><input type="checkbox" data-bind="presentationProfiles.${index}.epgGroup" data-rerender="true" ${profile.epgGroup ? 'checked' : ''}><span>Agrupar no EPG</span></label>
-            ${profile.epgGroup ? `<label>Título no EPG<input data-bind="presentationProfiles.${index}.epgTitle" value="${esc(profile.epgTitle || '')}"></label><label class="check-row"><input type="checkbox" data-bind="presentationProfiles.${index}.epgAdvance" ${profile.epgAdvance !== false ? 'checked' : ''}><span>Iniciar novo grupo no EPG</span></label>` : ''}
-            <label class="wide">Graphics diretos <small>Um YAML por linha</small><textarea rows="3" data-bind="presentationProfiles.${index}.graphics" data-type="list">${esc(listValue(profile.graphics))}</textarea></label>
-            <label class="wide">Watermarks nativos <small>Um nome por linha</small><textarea rows="2" data-bind="presentationProfiles.${index}.watermarks" data-type="list">${esc(listValue(profile.watermarks))}</textarea></label>
+        <details class="ss-resource-card ss-accordion-card" ${accordionAttrs(`resource:profile:${index}`)}>
+          <summary class="ss-accordion-summary"><strong>${esc(profile.label || profile.key)}</strong><span>${profile.key === 'none' ? 'Reservado' : esc(profile.key)}</span></summary>
+          <div class="ss-accordion-body">
+            <div class="ss-accordion-actions">${profile.key === 'none' ? '<span class="status-pill">Reservado</span>' : `<button class="danger ghost" type="button" data-ss-action="remove-resource" data-kind="profile" data-index="${index}">Remover</button>`}</div>
+            <div class="form-grid two">
+              <label>Nome amigável<input data-bind="presentationProfiles.${index}.label" value="${esc(profile.label || '')}"></label>
+              <label>Chave<input data-bind="presentationProfiles.${index}.key" value="${esc(profile.key)}" ${profile.key === 'none' ? 'disabled' : ''}></label>
+              <label>Pre-roll<select data-bind="presentationProfiles.${index}.preRoll">${playlistOptions(profile.preRoll)}</select></label>
+              <label class="check-row"><input type="checkbox" data-bind="presentationProfiles.${index}.epgGroup" data-rerender="true" ${profile.epgGroup ? 'checked' : ''}><span>Agrupar no EPG</span></label>
+              ${profile.epgGroup ? `<label>Título no EPG<input data-bind="presentationProfiles.${index}.epgTitle" value="${esc(profile.epgTitle || '')}"></label><label class="check-row"><input type="checkbox" data-bind="presentationProfiles.${index}.epgAdvance" ${profile.epgAdvance !== false ? 'checked' : ''}><span>Iniciar novo grupo no EPG</span></label>` : ''}
+              <label class="wide">Graphics diretos <small>Um YAML por linha</small><textarea rows="3" data-bind="presentationProfiles.${index}.graphics" data-type="list">${esc(listValue(profile.graphics))}</textarea></label>
+              <label class="wide">Watermarks nativos <small>Um nome por linha</small><textarea rows="2" data-bind="presentationProfiles.${index}.watermarks" data-type="list">${esc(listValue(profile.watermarks))}</textarea></label>
+            </div>
+            ${renderGroupChoices(profile.graphicsGroups || [], `presentationProfiles.${index}.graphicsGroups`)}
+            <details class="ss-advanced"><summary>Variáveis dos Graphics</summary>${renderPairEditor(profile.graphicsVariables || [], `presentationProfiles.${index}.graphicsVariables`)}</details>
           </div>
-          ${renderGroupChoices(profile.graphicsGroups || [], `presentationProfiles.${index}.graphicsGroups`)}
-          <details class="ss-advanced"><summary>Variáveis dos Graphics</summary>${renderPairEditor(profile.graphicsVariables || [], `presentationProfiles.${index}.graphicsVariables`)}</details>
-        </article>`).join(''));
+        </details>`).join(''));
   }
 
   function renderGroupChoices(selected, path) {
@@ -566,27 +609,33 @@
   }
 
   function resourceSection(title, subtitle, kind, content) {
+    const countMap = { graphics: state.current.graphicsGroups.length, source: state.current.sources.length, playlist: state.current.scriptedPlaylists.length, profile: state.current.presentationProfiles.length };
     return `
-      <section class="card ss-section-card">
-        <div class="section-heading"><div><h3>${esc(title)}</h3><p>${esc(subtitle)}</p></div><button type="button" data-ss-action="add-resource" data-kind="${kind}">Adicionar</button></div>
-        <div class="ss-stack">${content || '<div class="empty-state">Nenhum item cadastrado.</div>'}</div>
-      </section>`;
+      <details class="card ss-section-card ss-section-accordion" ${accordionAttrs(`resources:${kind}`)}>
+        <summary class="ss-section-summary"><div><h3>${esc(title)}</h3><p>${esc(subtitle)}</p></div><span>${countMap[kind] || 0} item(ns)</span></summary>
+        <div class="ss-section-accordion-body">
+          <div class="ss-section-actions"><button type="button" data-ss-action="add-resource" data-kind="${kind}">Adicionar</button></div>
+          <div class="ss-stack">${content || '<div class="empty-state">Nenhum item cadastrado.</div>'}</div>
+        </div>
+      </details>`;
   }
 
   function renderProgramming() {
     const active = Object.entries(MODULE_META).filter(([key]) => state.current.modules[key]?.length);
     const inactive = Object.entries(MODULE_META).filter(([key]) => !state.current.modules[key]?.length);
     return `
-      <section class="card ss-section-card">
-        <div class="section-heading"><div><span class="eyebrow">Opções globais</span><h3>Comportamento padrão</h3></div></div>
-        <div class="form-grid four">
-          <label>Duração padrão da Rotation (min)<input type="number" min="1" data-type="number" data-bind="options.defaultRotationDurationMinutes" value="${esc(state.current.options.defaultRotationDurationMinutes)}"></label>
-          <label>Prioridade padrão<input type="number" data-type="number" data-bind="options.defaultFixedPriority" value="${esc(state.current.options.defaultFixedPriority)}"></label>
-          <label>Timeout HTTP (s)<input type="number" min="1" data-type="number" data-bind="options.httpTimeoutSeconds" value="${esc(state.current.options.httpTimeoutSeconds)}"></label>
-          <label>Retenção de ocorrências (dias)<input type="number" min="1" data-type="number" data-bind="options.seenOccurrenceRetentionDays" value="${esc(state.current.options.seenOccurrenceRetentionDays)}"></label>
-          <label class="check-row wide"><input type="checkbox" data-bind="options.allowOverrun" ${state.current.options.allowOverrun !== false ? 'checked' : ''}><span>Não cortar o vídeo atual para cumprir o horário exato</span></label>
+      <details class="card ss-section-card ss-section-accordion" ${accordionAttrs('programming:options')}>
+        <summary class="ss-section-summary"><div><span class="eyebrow">Opções globais</span><h3>Comportamento padrão</h3><p>Valores usados quando um módulo não informa uma opção própria.</p></div><span>Configuração</span></summary>
+        <div class="ss-section-accordion-body">
+          <div class="form-grid four">
+            <label>Duração padrão da Rotation (min)<input type="number" min="1" data-type="number" data-bind="options.defaultRotationDurationMinutes" value="${esc(state.current.options.defaultRotationDurationMinutes)}"></label>
+            <label>Prioridade padrão<input type="number" data-type="number" data-bind="options.defaultFixedPriority" value="${esc(state.current.options.defaultFixedPriority)}"></label>
+            <label>Timeout HTTP (s)<input type="number" min="1" data-type="number" data-bind="options.httpTimeoutSeconds" value="${esc(state.current.options.httpTimeoutSeconds)}"></label>
+            <label>Retenção de ocorrências (dias)<input type="number" min="1" data-type="number" data-bind="options.seenOccurrenceRetentionDays" value="${esc(state.current.options.seenOccurrenceRetentionDays)}"></label>
+            <label class="check-row wide"><input type="checkbox" data-bind="options.allowOverrun" ${state.current.options.allowOverrun !== false ? 'checked' : ''}><span>Não cortar o vídeo atual para cumprir o horário exato</span></label>
+          </div>
         </div>
-      </section>
+      </details>
       <section class="card ss-section-card">
         <div class="section-heading">
           <div><span class="eyebrow">Módulos</span><h3>Programação</h3><p>Adicione somente os módulos que este canal precisa.</p></div>
@@ -594,19 +643,20 @@
         </div>
         <div class="ss-stack">${active.length ? active.map(([key]) => renderModule(key)).join('') : '<div class="empty-state">Nenhum módulo ativo. Adicione um módulo ou use somente o Filler.</div>'}</div>
       </section>
-      ${renderFiller()}`;
+      ${renderFiller()}
+      ${renderEditorSaveBar('Programação')}`;
   }
 
   function renderModule(type) {
     const meta = MODULE_META[type]; const items = state.current.modules[type] || [];
     return `
-      <article class="ss-module-card">
-        <div class="ss-module-head">
-          <div><span class="eyebrow">${esc(meta.label)}</span><strong>${esc(meta.hint)}</strong></div>
-          <div class="header-actions"><button type="button" data-ss-action="add-module-entry" data-module="${type}">Adicionar item</button><button type="button" class="danger ghost" data-ss-action="remove-module" data-module="${type}">Remover módulo</button></div>
+      <details class="ss-module-card ss-accordion-card" ${accordionAttrs(`module:${type}`)}>
+        <summary class="ss-accordion-summary ss-module-summary"><div><span class="eyebrow">${esc(meta.label)}</span><strong>${esc(meta.hint)}</strong></div><span>${items.length} item(ns)</span></summary>
+        <div class="ss-accordion-body">
+          <div class="ss-module-actions header-actions"><button type="button" data-ss-action="add-module-entry" data-module="${type}">Adicionar item</button><button type="button" class="danger ghost" data-ss-action="remove-module" data-module="${type}">Remover módulo</button></div>
+          <div class="ss-stack">${items.map((item, index) => renderModuleEntry(type, item, index)).join('')}</div>
         </div>
-        <div class="ss-stack">${items.map((item, index) => renderModuleEntry(type, item, index)).join('')}</div>
-      </article>`;
+      </details>`;
   }
 
   function renderModuleEntry(type, item, index) {
@@ -632,7 +682,7 @@
   }
 
   function moduleEntryShell(type, index, title, body) {
-    return `<section class="ss-event-card"><div class="ss-event-head"><strong>${esc(title)}</strong><button type="button" class="danger ghost" data-ss-action="remove-module-entry" data-module="${type}" data-index="${index}">Remover</button></div>${body}</section>`;
+    return `<details class="ss-event-card ss-accordion-card ss-nested-accordion" ${accordionAttrs(`module-entry:${type}:${index}`)}><summary class="ss-accordion-summary ss-event-summary"><strong>${esc(title)}</strong><span>Editar</span></summary><div class="ss-accordion-body"><div class="ss-accordion-actions"><button type="button" class="danger ghost" data-ss-action="remove-module-entry" data-module="${type}" data-index="${index}">Remover</button></div>${body}</div></details>`;
   }
   function commonIdFields(base, item) {
     return `<label>ID<input data-bind="${base}.id" value="${esc(item.id || '')}"></label><label>Nome opcional<input data-bind="${base}.label" value="${esc(item.label || '')}" placeholder="Ex.: Especial da noite"></label>`;
@@ -678,7 +728,11 @@
 
   function renderFiller() {
     const filler = state.current.filler;
-    return `<section class="card ss-section-card"><div class="section-heading"><div><span class="eyebrow">Filler</span><h3>Preenchimento de lacunas</h3><p>Usado quando não existe outro evento e a Rotation está vazia.</p></div><button type="button" data-ss-action="toggle-filler">${filler ? 'Desativar Filler' : 'Ativar Filler'}</button></div>${filler ? `<div class="form-grid two">${sourceSelect('filler.source', filler.source)}${profileSelect('filler.presentation', filler.presentation)}</div>${renderPlaybackAdvanced('filler', filler)}` : '<div class="empty-state">Filler desativado. Lacunas sem outros módulos ficarão sem programação.</div>'}</section>`;
+    return `<details class="card ss-section-card ss-section-accordion" ${accordionAttrs('programming:filler')}><summary class="ss-section-summary"><div><span class="eyebrow">Filler</span><h3>Preenchimento de lacunas</h3><p>Usado quando não existe outro evento e a Rotation está vazia.</p></div><span>${filler ? 'Ativo' : 'Desativado'}</span></summary><div class="ss-section-accordion-body"><div class="ss-section-actions"><button type="button" data-ss-action="toggle-filler">${filler ? 'Desativar Filler' : 'Ativar Filler'}</button></div>${filler ? `<div class="form-grid two">${sourceSelect('filler.source', filler.source)}${profileSelect('filler.presentation', filler.presentation)}</div>${renderPlaybackAdvanced('filler', filler)}` : '<div class="empty-state">Filler desativado. Lacunas sem outros módulos ficarão sem programação.</div>'}</div></details>`;
+  }
+
+  function renderEditorSaveBar(sectionLabel) {
+    return `<div class="card ss-editor-save-bar"><span>Terminou de editar ${esc(sectionLabel.toLowerCase())}? Salve sem precisar voltar ao topo.</span><div class="header-actions"><button type="button" data-ss-action="validate">Validar</button><button type="button" class="primary" data-ss-action="publish">Salvar e publicar</button></div></div>`;
   }
 
   function renderReview() {

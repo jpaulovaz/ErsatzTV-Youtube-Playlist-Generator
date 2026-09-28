@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.2.1
+
+- Recursos do builder de Scripted Schedules agora usam sanfonas por categoria e por item, deixando a edição de projetos grandes mais compacta.
+- Programação ganhou sanfonas para opções globais, módulos, itens de módulos e Filler.
+- Estado aberto/fechado das sanfonas é preservado durante rerenders da interface, inclusive em campos que alteram dinamicamente o formulário.
+- Novos itens e módulos são abertos automaticamente logo após a criação.
+- Abas Recursos e Programação agora têm ações de **Validar** e **Salvar e publicar** no final da tela, evitando voltar ao topo para concluir uma edição.
+- Nenhuma alteração de schema, gerador Python, API ou comportamento dos downloads/canais/bibliotecas.
+
 ## 3.2.0
 
 - Nova área isolada **Scripted Schedules** para criar e manter vários scripts sem editar Python manualmente.
