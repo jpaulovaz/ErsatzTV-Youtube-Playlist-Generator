@@ -1,0 +1,304 @@
+const fs = require('fs/promises');
+const path = require('path');
+const { TEMPLATE_VERSION } = require('./schema');
+const { validateProject } = require('./validator');
+
+const TEMPLATE_PATH = path.join(__dirname, 'templates', 'universal-v1.1.1.py.tpl');
+
+function py(value, indent = 0) {
+  const pad = ' '.repeat(indent);
+  const next = indent + 4;
+  if (value === null || value === undefined) return 'None';
+  if (typeof value === 'boolean') return value ? 'True' : 'False';
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new Error('Numero invalido ao gerar Python.');
+    return String(value);
+  }
+  if (typeof value === 'string') return JSON.stringify(value).replace(/\\\//g, '/');
+  if (Array.isArray(value)) {
+    if (!value.length) return '[]';
+    return `[` + value.map((item) => `\n${' '.repeat(next)}${py(item, next)}`).join(',') + `,\n${pad}]`;
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value).filter(([, v]) => v !== undefined);
+    if (!entries.length) return '{}';
+    return `{` + entries.map(([key, item]) => `\n${' '.repeat(next)}${py(String(key))}: ${py(item, next)}`).join(',') + `,\n${pad}}`;
+  }
+  throw new Error(`Tipo nao suportado na geracao Python: ${typeof value}`);
+}
+
+function cleanString(value) {
+  return String(value ?? '').trim();
+}
+
+function compact(obj) {
+  return Object.fromEntries(Object.entries(obj).filter(([, value]) => {
+    if (value === undefined || value === null || value === '') return false;
+    if (Array.isArray(value) && value.length === 0) return false;
+    return true;
+  }));
+}
+
+function arrayStrings(value) {
+  return Array.isArray(value) ? value.map(cleanString).filter(Boolean) : [];
+}
+
+function objectFromPairs(value) {
+  const result = {};
+  for (const item of Array.isArray(value) ? value : []) {
+    const key = cleanString(item && item.key);
+    if (key) result[key] = String((item && item.value) ?? '');
+  }
+  return result;
+}
+
+function groupResolver(project) {
+  const groups = new Map((project.graphicsGroups || []).map((item) => [String(item.key), item]));
+  const memo = new Map();
+  function resolve(key, stack = []) {
+    if (memo.has(key)) return memo.get(key);
+    if (stack.includes(key)) throw new Error(`Referencia circular de Graphics: ${[...stack, key].join(' -> ')}`);
+    const group = groups.get(key);
+    if (!group) return [];
+    const result = [];
+    for (const include of group.includes || []) {
+      for (const item of resolve(String(include), [...stack, key])) if (!result.includes(item)) result.push(item);
+    }
+    for (const item of group.graphics || []) {
+      const text = cleanString(item);
+      if (text && !result.includes(text)) result.push(text);
+    }
+    memo.set(key, result);
+    return result;
+  }
+  return resolve;
+}
+
+function sourceToEngine(source) {
+  const type = cleanString(source.type);
+  const common = compact({ type, order: source.order, presentation: source.presentation });
+  if (['smart_collection', 'collection', 'multi_collection'].includes(type)) return { ...common, name: cleanString(source.name) };
+  if (type === 'playlist') return { ...common, playlist: cleanString(source.playlist), playlist_group: cleanString(source.playlistGroup) };
+  if (type === 'search') return { ...common, query: String(source.query || '') };
+  if (type === 'show') return { ...common, guids: objectFromPairs((source.guids || []).map((item) => ({ key: item.provider, value: item.value }))) };
+  if (type === 'marathon') {
+    return compact({
+      ...common,
+      group_by: source.groupBy,
+      item_order: source.itemOrder,
+      guids: objectFromPairs((source.guids || []).map((item) => ({ key: item.provider, value: item.value }))),
+      searches: arrayStrings(source.searches),
+      play_all_items: Boolean(source.playAllItems),
+      shuffle_groups: Boolean(source.shuffleGroups)
+    });
+  }
+  return common;
+}
+
+function playbackFields(input = {}) {
+  return compact({
+    custom_title: input.customTitle,
+    filler_kind: input.fillerKind,
+    disable_watermarks: input.disableWatermarks === true ? true : undefined,
+    fallback: input.fallback,
+    trim: input.trim === true ? true : undefined,
+    discard_attempts: input.discardAttempts !== '' && input.discardAttempts !== undefined ? Number(input.discardAttempts) : undefined,
+    offline_tail: input.offlineTail === true ? true : undefined,
+    allow_overrun: input.allowOverrun === false ? false : undefined
+  });
+}
+
+function dateFields(input = {}) {
+  return compact({
+    days: arrayStrings(input.days),
+    start_date: input.startDate,
+    end_date: input.endDate,
+    dates: arrayStrings(input.dates),
+    exclude_dates: arrayStrings(input.excludeDates)
+  });
+}
+
+function baseEvent(input = {}) {
+  return compact({
+    id: input.id,
+    label: input.label,
+    priority: input.priority !== '' && input.priority !== undefined ? Number(input.priority) : undefined,
+    presentation: input.presentation,
+    enabled: input.enabled === false ? false : undefined,
+    ...dateFields(input),
+    ...playbackFields(input)
+  });
+}
+
+function stepToEngine(step = {}) {
+  return compact({
+    source: step.source,
+    mode: step.mode,
+    count: step.count !== '' && step.count !== undefined ? Number(step.count) : undefined,
+    duration_minutes: step.durationMinutes !== '' && step.durationMinutes !== undefined ? Number(step.durationMinutes) : undefined,
+    minutes: step.minutes !== '' && step.minutes !== undefined ? Number(step.minutes) : undefined,
+    presentation: step.presentation,
+    ...playbackFields(step)
+  });
+}
+
+function modulesToEngine(project) {
+  const modules = project.modules || {};
+  const rotation = (modules.rotation || []).map((item) => compact({
+    source: item.source,
+    presentation: item.presentation,
+    duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
+    ...playbackFields(item)
+  }));
+  const fixedEvents = (modules.fixedEvents || []).map((item) => compact({
+    ...baseEvent(item), time: item.time, source: item.source, count: Number(item.count)
+  }));
+  const fixedDurationEvents = (modules.fixedDurationEvents || []).map((item) => compact({
+    ...baseEvent(item), time: item.time, source: item.source, duration_minutes: Number(item.durationMinutes)
+  }));
+  const fixedAllEvents = (modules.fixedAllEvents || []).map((item) => compact({
+    ...baseEvent(item), time: item.time, source: item.source
+  }));
+  const fixedWindowEvents = (modules.fixedWindowEvents || []).map((item) => compact({
+    ...baseEvent(item), start_time: item.startTime, end_time: item.endTime, source: item.source
+  }));
+  const windowRotations = (modules.windowRotations || []).map((item) => compact({
+    ...baseEvent(item), start_time: item.startTime, end_time: item.endTime, block_minutes: Number(item.blockMinutes),
+    items: (item.items || []).map((entry) => compact({
+      source: entry.source,
+      presentation: entry.presentation,
+      duration_minutes: entry.durationMinutes !== '' && entry.durationMinutes !== undefined ? Number(entry.durationMinutes) : undefined,
+      ...playbackFields(entry)
+    }))
+  }));
+  const sequenceEvents = (modules.sequenceEvents || []).map((item) => compact({
+    ...baseEvent(item), time: item.time, atomic: Boolean(item.atomic), steps: (item.steps || []).map(stepToEngine)
+  }));
+  const intervalEvents = (modules.intervalEvents || []).map((item) => compact({
+    ...baseEvent(item), start_time: item.startTime, end_time: item.endTime, every_minutes: Number(item.everyMinutes),
+    source: item.source, mode: item.mode, count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
+    duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
+    late_policy: item.latePolicy || 'queue', max_lateness_minutes: item.maxLatenessMinutes !== '' && item.maxLatenessMinutes !== undefined ? Number(item.maxLatenessMinutes) : undefined
+  }));
+  const dateEvents = (modules.dateEvents || []).map((item) => compact({
+    ...baseEvent(item), datetime: item.datetime, source: item.source, mode: item.mode,
+    count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
+    duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
+    steps: item.mode === 'sequence' ? (item.steps || []).map(stepToEngine) : undefined
+  }));
+  const offlineWindows = (modules.offlineWindows || []).map((item) => compact({
+    ...baseEvent(item), start_time: item.startTime, end_time: item.endTime
+  }));
+  return { rotation, fixedEvents, fixedDurationEvents, fixedAllEvents, fixedWindowEvents, windowRotations, sequenceEvents, intervalEvents, dateEvents, offlineWindows };
+}
+
+function projectToEngine(project) {
+  const resolveGroup = groupResolver(project);
+  const sources = {};
+  for (const source of project.sources || []) sources[String(source.key)] = sourceToEngine(source);
+
+  const scriptedPlaylists = {};
+  for (const playlist of project.scriptedPlaylists || []) {
+    scriptedPlaylists[String(playlist.key)] = (playlist.items || []).map((item) => ({ source: item.source, count: Number(item.count) }));
+  }
+
+  const profiles = {};
+  for (const profile of project.presentationProfiles || []) {
+    const graphics = [];
+    for (const groupKey of profile.graphicsGroups || []) {
+      for (const item of resolveGroup(String(groupKey))) if (!graphics.includes(item)) graphics.push(item);
+    }
+    for (const item of profile.graphics || []) {
+      const text = cleanString(item);
+      if (text && !graphics.includes(text)) graphics.push(text);
+    }
+    profiles[String(profile.key)] = compact({
+      graphics,
+      graphics_variables: objectFromPairs(profile.graphicsVariables),
+      watermarks: arrayStrings(profile.watermarks),
+      pre_roll: cleanString(profile.preRoll) || null,
+      epg_group: Boolean(profile.epgGroup),
+      epg_title: profile.epgGroup ? String(profile.epgTitle || '') : undefined,
+      epg_advance: profile.epgGroup ? profile.epgAdvance !== false : undefined
+    });
+  }
+  if (!profiles.none) profiles.none = { graphics: [], watermarks: [], pre_roll: null, epg_group: false };
+
+  const modules = modulesToEngine(project);
+  const filler = project.filler ? compact({ source: project.filler.source, presentation: project.filler.presentation, ...playbackFields(project.filler) }) : null;
+  const options = project.options || {};
+
+  return {
+    sources,
+    scriptedPlaylists,
+    profiles,
+    modules,
+    filler,
+    options: {
+      defaultRotationDurationMinutes: Number(options.defaultRotationDurationMinutes) || 60,
+      defaultFixedPriority: Number.isFinite(Number(options.defaultFixedPriority)) ? Number(options.defaultFixedPriority) : 100,
+      allowOverrun: options.allowOverrun !== false,
+      httpTimeoutSeconds: Number(options.httpTimeoutSeconds) || 30,
+      seenOccurrenceRetentionDays: Number(options.seenOccurrenceRetentionDays) || 14
+    }
+  };
+}
+
+function generatedConfig(project) {
+  const data = projectToEngine(project);
+  return [
+    '# Este bloco foi gerado automaticamente. Edite a configuracao no aplicativo.',
+    `# Projeto: ${String(project.name || '').replace(/\r?\n/g, ' ')}`,
+    `# Template: ${TEMPLATE_VERSION}`,
+    '',
+    `SOURCES: dict[str, dict[str, Any]] = ${py(data.sources)}`,
+    '',
+    `SCRIPTED_PLAYLISTS: dict[str, list[dict[str, Any]]] = ${py(data.scriptedPlaylists)}`,
+    '',
+    `PRESENTATION_PROFILES: dict[str, dict[str, Any]] = ${py(data.profiles)}`,
+    '',
+    `DEFAULT_ROTATION_DURATION_MINUTES = ${py(data.options.defaultRotationDurationMinutes)}`,
+    `ROTATION: list[dict[str, Any]] = ${py(data.modules.rotation)}`,
+    '',
+    `FIXED_EVENTS: list[dict[str, Any]] = ${py(data.modules.fixedEvents)}`,
+    `FIXED_DURATION_EVENTS: list[dict[str, Any]] = ${py(data.modules.fixedDurationEvents)}`,
+    `FIXED_ALL_EVENTS: list[dict[str, Any]] = ${py(data.modules.fixedAllEvents)}`,
+    `FIXED_WINDOW_EVENTS: list[dict[str, Any]] = ${py(data.modules.fixedWindowEvents)}`,
+    `WINDOW_ROTATIONS: list[dict[str, Any]] = ${py(data.modules.windowRotations)}`,
+    `SEQUENCE_EVENTS: list[dict[str, Any]] = ${py(data.modules.sequenceEvents)}`,
+    `INTERVAL_EVENTS: list[dict[str, Any]] = ${py(data.modules.intervalEvents)}`,
+    `DATE_EVENTS: list[dict[str, Any]] = ${py(data.modules.dateEvents)}`,
+    `OFFLINE_WINDOWS: list[dict[str, Any]] = ${py(data.modules.offlineWindows)}`,
+    '',
+    `FILLER: dict[str, Any] | None = ${py(data.filler)}`,
+    '',
+    `DEFAULT_FIXED_PRIORITY = ${py(data.options.defaultFixedPriority)}`,
+    `ALLOW_OVERRUN = ${py(data.options.allowOverrun)}`,
+    `HTTP_TIMEOUT_SECONDS = ${py(data.options.httpTimeoutSeconds)}`,
+    `DEFAULT_STATE_DIR = Path(os.environ.get("ETV_SCRIPT_STATE_DIR", Path(__file__).resolve().parent))`,
+    'STATE_VERSION = 10',
+    `SEEN_OCCURRENCE_RETENTION_DAYS = ${py(data.options.seenOccurrenceRetentionDays)}`
+  ].join('\n');
+}
+
+async function generateScript(project) {
+  const validation = validateProject(project);
+  if (!validation.ok) {
+    const error = new Error('O projeto possui erros e nao pode gerar o script.');
+    error.statusCode = 400;
+    error.code = 'SCRIPTED_SCHEDULE_INVALID';
+    error.validation = validation;
+    throw error;
+  }
+  if (String(project.templateVersion || TEMPLATE_VERSION) !== TEMPLATE_VERSION) {
+    const error = new Error(`Template ${project.templateVersion} nao esta disponivel nesta versao.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  const template = await fs.readFile(TEMPLATE_PATH, 'utf8');
+  const marker = '__GENERATED_CONFIG__';
+  if (!template.includes(marker)) throw new Error('Template interno sem marcador de configuracao.');
+  return template.replace(marker, generatedConfig(project));
+}
+
+module.exports = { generateScript, generatedConfig, projectToEngine, py };

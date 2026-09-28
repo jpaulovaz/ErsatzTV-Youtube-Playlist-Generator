@@ -17,7 +17,7 @@ const ERSATZTV_VERSION_DEBOUNCE_MS = 650;
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
-const APP_VIEWS = new Set(['overview', 'downloads', 'libraries', 'channels', 'settings', 'logs']);
+const APP_VIEWS = new Set(['overview', 'downloads', 'libraries', 'channels', 'scripted-schedules', 'settings', 'logs']);
 const MOBILE_NAV_BREAKPOINT = 760;
 const MOBILE_NAV_IDLE_MS = 3600;
 const MOBILE_NAV_SCROLL_THRESHOLD = 8;
@@ -214,6 +214,7 @@ async function api(url, options = {}) {
     error.status = response.status;
     error.code = payload && payload.code;
     error.retryAfterSeconds = payload && payload.retryAfterSeconds;
+    error.payload = payload;
     throw error;
   }
   return payload;
@@ -763,7 +764,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '3.1.1'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '3.2.0'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -1386,6 +1387,9 @@ async function bootstrap() {
     });
   }
   await loadInitial();
+  if (window.ScriptedSchedulesView) {
+    await window.ScriptedSchedulesView.init({ api, showToast, showDialog: showAppDialog });
+  }
   setInterval(() => refreshAll(false), 4000);
 }
 

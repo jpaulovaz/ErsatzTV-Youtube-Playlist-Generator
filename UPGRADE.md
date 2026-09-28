@@ -1,6 +1,6 @@
-# Atualização para 3.1.1
+# Atualização para 3.2.0
 
-A versão 3.1.1 refina a integração com Smart Collections e adiciona validação automática da conexão com o ErsatzTV, sem alterar o pipeline de download.
+A versão 3.2.0 adiciona o módulo independente **Scripted Schedules**. O pipeline existente de Downloads, Bibliotecas e Canais permanece compatível com a v3.1.1.
 
 ## Antes de atualizar
 
@@ -12,43 +12,48 @@ cp config/config.json "config/config.json.bak-$(date +%Y%m%d-%H%M%S)"
 cp -a data "data.bak-$(date +%Y%m%d-%H%M%S)"
 ```
 
-## Aplicar o pacote update
+## Aplicar o pacote UPDATE
 
-Pare o processo, extraia `ErsatzTV-YouTube-Downloader-v3.1.1-update.zip` por cima da instalação **v3.1.0** e valide:
+Pare o processo, extraia `ErsatzTV-YouTube-Downloader-v3.2.0-update.zip` por cima da instalação **v3.1.1** e valide:
 
 ```bash
 npm run check
 npm test
 ```
 
-Depois reinicie o processo normalmente. O pacote update não contém `config/config.json`, `config/auth.json` nem a pasta `data`.
+Depois reinicie o processo normalmente. O pacote UPDATE não contém `config/config.json`, `config/auth.json` nem a pasta `data`.
 
-## Mudança de configuração
+## Configuração principal
 
-O schema passa para `configVersion: 8` e registra a última Smart Collection usada por `Library ID`. A configuração existente é normalizada com backup automático; `Library ID`, Canal do ErsatzTV e demais dados da v3.1.0 são preservados.
+O `configVersion` principal permanece em **8**. O novo módulo possui schema próprio (`schemaVersion: 1`) e cria seus dados somente quando utilizado, abaixo de:
 
-## Smart Collections
+```text
+data/scripted-schedules/
+```
 
-Quando uma Biblioteca ou playlist de Canal possui `Library ID`, aparece o campo **Smart Collection**.
+Nenhuma migração das Bibliotecas, Canais, Smart Collections ou fila de downloads é necessária.
 
-- **Criar nova**: cria uma coleção com query `library_id:<ID>`.
-- **Agregar**: relê a query atual e acrescenta `(library_id:<ID>)` com `OR`, preservando a expressão existente.
-- **Substituir**: troca a query atual por `library_id:<ID>`.
-- Se a Library ID já estiver presente, **Agregar** não duplica o filtro.
-- A última Smart Collection utilizada com sucesso fica armazenada por `Library ID` e aparece ao lado do seletor.
+## Primeira utilização de Scripted Schedules
 
-A exclusão de Smart Collections continua sendo feita no ErsatzTV.
+1. Abra **Scripted Schedules**.
+2. Em **Pasta de saída dos scripts**, informe um caminho absoluto gravável pelo aplicativo.
+3. Crie um projeto e configure Sources, perfis e apenas os módulos necessários.
+4. Use **Validar** e depois **Salvar e publicar**.
+5. No primeiro uso daquele arquivo, cadastre manualmente o caminho e o `state_key` no Scripted Schedule do Playout no ErsatzTV.
 
-## Validação da API Key do ErsatzTV
+O cadastro inicial continua manual porque a API pública do ErsatzTV Legacy v26.10.0 não expõe CRUD para esse campo do Playout. Depois do vínculo, publicar novamente substitui o mesmo arquivo de forma atômica e a próxima execução do script usa o conteúdo atualizado.
 
-Em **Configurações → ErsatzTV**, quando URL e API Key estão preenchidas, o aplicativo consulta `GET /api/version` pelo backend.
+## Segurança da publicação
 
-- conexão válida: mostra a versão do ErsatzTV;
-- 401/403: mostra **API Key inválida**;
-- falha de rede/timeout: mostra **ErsatzTV indisponível**.
+- cada projeto publica apenas um nome de arquivo `.py` dentro da pasta configurada;
+- `../` e caminhos por projeto são rejeitados;
+- quando `python3` estiver disponível, o script é validado com `--validate-config` antes de substituir o arquivo atual;
+- a versão anterior recebe backup;
+- o arquivo final recebe permissão executável;
+- salvar/publicar nunca executa Reset Playout automaticamente.
 
-A chave não é devolvida pela rota de validação.
+O processo do ErsatzTV precisa ter permissão para executar o script e gravar o arquivo de estado no local configurado.
 
 ## Rollback
 
-A primeira inicialização com schema v8 cria backup automático da configuração anterior. Para retornar à v3.1.0, restaure também o backup do `config.json` v7.
+Para retornar à v3.1.1, reinstale o pacote correspondente. Como o `configVersion` principal não mudou, `config/config.json` continua compatível. Os arquivos em `data/scripted-schedules/` podem permanecer no disco; a v3.1.1 simplesmente não os utiliza.

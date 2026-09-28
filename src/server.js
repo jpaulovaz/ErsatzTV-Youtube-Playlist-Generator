@@ -19,6 +19,7 @@ const { handleLibraryRoutes } = require('./routes/libraryRoutes');
 const { handleDownloadRoutes } = require('./routes/downloadRoutes');
 const { handleChannelRoutes } = require('./routes/channelRoutes');
 const { handleErsatzTvRoutes } = require('./routes/ersatztvRoutes');
+const { handleScriptedScheduleRoutes } = require('./routes/scriptedScheduleRoutes');
 const auth = require('./auth');
 const logger = require('./logger');
 
@@ -198,9 +199,9 @@ async function handleAuthApi(req, res, url) {
 async function getVersion() {
   try {
     const pkg = JSON.parse(await fs.readFile(PACKAGE_PATH, 'utf8'));
-    return pkg.version || '3.1.1';
+    return pkg.version || '3.2.0';
   } catch {
-    return '3.1.1';
+    return '3.2.0';
   }
 }
 
@@ -217,6 +218,9 @@ async function handleApi(req, res, url) {
   }
   if (url.pathname.startsWith('/api/ersatztv/')) {
     if (await handleErsatzTvRoutes(req, res, url, routeDeps)) return;
+  }
+  if (url.pathname.startsWith('/api/scripted-schedules')) {
+    if (await handleScriptedScheduleRoutes(req, res, url, routeDeps)) return;
   }
 
   if (req.method === 'GET' && url.pathname === '/api/config') {
@@ -387,7 +391,7 @@ async function startServer(config) {
   const host = config.server.host || '0.0.0.0';
   const port = Number(config.server.port) || 3099;
   await new Promise((resolve) => server.listen(port, host, resolve));
-  await logger.info(`Interface v3.1 iniciada em http://${host}:${port}`);
+  await logger.info(`Interface v3.2 iniciada em http://${host}:${port}`);
   if (auth.setupRequired) {
     await logger.warn('A interface esta bloqueada ate que config/auth.json seja criado com npm run auth:set.');
   }

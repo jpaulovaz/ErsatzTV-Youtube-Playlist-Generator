@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.2.0
+
+- Nova área isolada **Scripted Schedules** para criar e manter vários scripts sem editar Python manualmente.
+- Builder baseado no motor **Scripted Schedule Universal v1.1.1**, com a configuração visual/JSON como fonte de verdade e o `.py` como artefato gerado.
+- Suporte aos 10 módulos do motor: Rotation, Horário + quantidade, Horário + duração, Todos os itens, Janela, Rotação em janela, Sequência, Intervalo, Data específica e Offline, além de Filler opcional.
+- Todos os módulos são opcionais e podem ser combinados conforme o canal.
+- Recursos reutilizáveis para grupos de Graphics, Sources, Scripted Playlists e Presentation Profiles.
+- Smart Collections e Canais do ErsatzTV são carregados pelo nome usando as integrações existentes; Collections, Multi-Collections e Playlists continuam com identificação manual quando a API pública não permite listagem.
+- Vínculos locais de canal guardam `state_key` próprio e oferecem assistente com caminho do script e dados para o primeiro cadastro manual no Playout do ErsatzTV.
+- **Reset Playout** permanece exclusivamente manual, com modal destrutivo; salvar/publicar um script nunca executa reset automaticamente.
+- Pasta de publicação configurável, restrição contra path traversal, geração determinística, validação por Python quando disponível, escrita atômica, bit executável, SHA-256 e backup do arquivo anterior.
+- Histórico de configurações com retenção configurável e restauração que republica o script.
+- Persistência isolada em `data/scripted-schedules/`, com `schemaVersion: 1`; o `configVersion` principal permanece em 8.
+- Pacote UPDATE continua preservando `config/config.json`, `config/auth.json` e toda a pasta `data/`.
+- 95 testes automatizados aprovados.
+
 ## 3.1.1
 
 - Smart Collection usada com sucesso passa a ser lembrada por `Library ID`.

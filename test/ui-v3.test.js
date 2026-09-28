@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.1\.1/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.1\.1/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.2\.0/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.2\.0/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -164,4 +164,32 @@ test('ErsatzTV settings validate the API Key through GET api version and show a 
   assert.match(app, /scheduleErsatzTvVersionCheck/);
   assert.match(routes, /getErsatzTvVersion/);
   assert.match(service, /ersatzTvJsonRequest\(config, '\/api\/version'\)/);
+});
+
+
+test('Scripted Schedules is an isolated builder view with all Universal v1.1.1 modules', () => {
+  const html = read('index.html');
+  const app = read('app.js');
+  const view = read('js/scriptedSchedulesView.js');
+  const css = read('scripted-schedules.css');
+  const server = read('../src/server.js');
+
+  assert.match(html, /data-view="scripted-schedules"/);
+  assert.match(html, /id="view-scripted-schedules"/);
+  assert.match(html, /id="scriptedSchedulesRoot"/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.2\.0/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.2\.0/);
+  assert.match(app, /'scripted-schedules'/);
+  assert.match(app, /ScriptedSchedulesView\.init/);
+  assert.match(server, /handleScriptedScheduleRoutes/);
+
+  for (const moduleName of ['rotation', 'fixedEvents', 'fixedDurationEvents', 'fixedAllEvents', 'fixedWindowEvents', 'windowRotations', 'sequenceEvents', 'intervalEvents', 'dateEvents', 'offlineWindows']) {
+    assert.match(view, new RegExp(`${moduleName}:`));
+  }
+  assert.match(view, /toggle-filler/);
+  assert.match(view, /Presentation Profiles/);
+  assert.match(view, /Scripted Playlists/);
+  assert.match(view, /Grupos de Graphics/);
+  assert.match(css, /\.ss-editor-tabs/);
+  assert.doesNotMatch(view, /\b(?:alert|confirm|prompt)\s*\(/);
 });

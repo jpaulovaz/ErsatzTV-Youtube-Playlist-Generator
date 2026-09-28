@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.1.1
+# ErsatzTV YouTube Downloader 3.2.0
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.1.1 refina a integração com Smart Collections e a configuração do ErsatzTV: a última coleção usada fica visível ao lado do seletor e URL + API Key são validadas automaticamente por `GET /api/version`, mostrando a versão conectada. Os recursos da 3.1.0 permanecem: Canais do ErsatzTV são selecionados pelo **nome** e Bibliotecas com `Library ID` podem criar ou vincular **Smart Collections** sem editar queries manualmente.
+A versão 3.2.0 adiciona a área independente **Scripted Schedules**, capaz de montar, validar e publicar scripts Python baseados no motor Universal v1.1.1 por uma interface visual. Downloads, Bibliotecas e Canais mantêm o comportamento da v3.1.1, inclusive seleção de Canais por nome, Smart Collections por `Library ID` e validação da conexão com o ErsatzTV.
 
 ## Arquitetura
 
@@ -51,6 +51,8 @@ Biblioteca local do ErsatzTV
 - Seleção de Canal do ErsatzTV por nome, carregada automaticamente por `GET /api/channels`; o número do canal fica interno.
 - Integração com Smart Collections: criar nova, agregar `library_id` a uma query existente ou substituir a query.
 - Validação automática da API Key do ErsatzTV por `GET /api/version`, com exibição compacta da versão conectada em Configurações.
+- Nova área **Scripted Schedules** com vários projetos independentes, 10 tipos de módulo de programação, Filler opcional e geração de Python sem edição manual de código.
+- Publicação atômica dos scripts em pasta configurável, com validação, SHA-256, backup e histórico para restauração.
 - Limpeza manual de órfãos.
 - Migração automática da configuração da versão 1.
 
@@ -64,6 +66,7 @@ Biblioteca local do ErsatzTV
 - ErsatzTV acessível pela rede para scan automático e ações manuais da API.
 - API Key do ErsatzTV quando a versão instalada exigir autenticação em `/api` (`X-Etv-Api-Key`).
 - Opcional: Deno para os desafios JavaScript atuais do YouTube.
+- Para usar **Scripted Schedules**: Python 3 recomendado no host do aplicativo para validar o arquivo gerado; o processo do ErsatzTV precisa conseguir executar o script e gravar seu arquivo de estado.
 - Opcional: uma YouTube Data API Key.
 - Opcional: `cookies.txt` em formato Netscape para vídeos que exigem sessão.
 
@@ -199,6 +202,20 @@ Na API do ErsatzTV v26.10.0, o aplicativo usa:
 Com `Library ID` preenchida, o formulário libera **Smart Collection**. É possível criar uma nova coleção com `library_id:<ID>`, agregar esse filtro à query atual ou substituir a query existente. A opção de exclusão de Smart Collection permanece fora do aplicativo. A última Smart Collection utilizada com sucesso fica armazenada por `Library ID` e aparece ao lado do seletor.
 
 Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando a instalação proteger as rotas `/api`. Com URL e chave preenchidas, a tela consulta `GET /api/version` automaticamente e mostra a versão conectada ou um estado curto de falha. O aplicativo envia a chave como `X-Etv-Api-Key`.
+
+## Scripted Schedules
+
+A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do motor interno **Universal v1.1.1**.
+
+O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos podem ser cadastrados grupos de Graphics, Sources, Scripted Playlists e Presentation Profiles. Em Programação, somente os módulos escolhidos aparecem na tela. Estão disponíveis Rotation, Horário + quantidade, Horário + duração, Todos os itens, Janela, Rotação em janela, Sequência, Intervalo, Data específica, Offline e Filler. Nenhum módulo é obrigatório.
+
+A pasta de saída é configurada na própria área. O backend aceita apenas arquivos `.py` dentro dessa raiz. Ao publicar, o aplicativo valida as referências, gera o script de forma determinística, tenta executar `python3 <script> --validate-config`, cria backup do arquivo anterior, troca o arquivo de forma atômica e registra hash/histórico.
+
+Smart Collections e Canais são carregados pelo nome quando a API do ErsatzTV está disponível. Cada vínculo de canal possui um `state_key` próprio. O primeiro cadastro do caminho do Scripted Schedule no Playout continua manual, porque a API pública da v26.10.0 não expõe esse cadastro. Depois do primeiro vínculo, novas publicações mantêm o mesmo arquivo atualizado.
+
+**Reset Playout** é uma ação separada e destrutiva. Publicar um script nunca dispara reset automaticamente.
+
+Os dados do builder ficam em `data/scripted-schedules/` e não alteram o `configVersion` principal da aplicação.
 
 ## Descoberta e fila
 
@@ -415,6 +432,7 @@ config/config.json                  configuração ativa
 config/auth.json                    credencial derivada e parâmetros de sessão
 data/download-state.json            fila, histórico e índice por videoId
 data/app.log                        log operacional
+data/scripted-schedules/             projetos, histórico e metadados do gerador de Scripted Schedules
 .youtube-downloader-work/           arquivos temporários dentro da pasta base
 ```
 
