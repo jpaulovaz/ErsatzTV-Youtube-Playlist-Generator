@@ -1,18 +1,17 @@
-# Atualização para 3.4.6
+# Atualização para 3.4.7
 
-A versão 3.4.6 é uma limpeza de interface do **Scripted Schedules** sobre a v3.4.5.
+A versão 3.4.7 corrige a forma como caminhos de **Graphics Elements** são enviados ao ErsatzTV.
 
 ## O que muda
 
-- O perfil interno **Nenhum / none** não aparece mais dentro de Presentation Profiles.
-- **Nenhum** continua disponível nos seletores quando você quiser usar o conteúdo sem Presentation Profile.
-- O perfil interno é criado automaticamente pelo gerador e permanece sempre vazio.
-- Novos projetos passam a guardar somente os Presentation Profiles realmente criados pelo usuário.
-- Projetos antigos com o `none` padrão são ajustados automaticamente ao carregar.
-- Se um projeto antigo tiver conteúdo configurado dentro de `none`, esse conteúdo é preservado em um perfil visível chamado **Perfil antigo** em vez de ser apagado.
+- Caminhos como `/image/watermark.yml` passam a ser normalizados como `image/watermark.yml`.
+- O mesmo vale para Graphics cadastrados em grupos e diretamente em Presentation Profiles.
+- Barras `\` também são normalizadas para `/`.
+- A Ajuda passa a mostrar o formato esperado de forma curta.
 
 ## Compatibilidade
 
+- Projetos existentes não precisam ser editados manualmente. Ao abrir, os caminhos já são corrigidos em memória e ficam persistidos no próximo salvamento.
 - `configVersion` permanece **8**.
 - O schema de armazenamento de Scripted Schedules permanece **1**.
 - O motor permanece **Universal v1.3.0**.
@@ -24,15 +23,15 @@ A versão 3.4.6 é uma limpeza de interface do **Scripted Schedules** sobre a v3
 
 1. Pare o serviço da aplicação.
 2. Faça backup da instalação atual.
-3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.6-update.zip` sobre a instalação v3.4.5.
+3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.7-update.zip` sobre a instalação v3.4.6.
 4. Inicie novamente o serviço.
-5. Abra **Programação -> Scripted Schedules -> Recursos** e confira Presentation Profiles.
+5. Reabra o Scripted Schedule e publique o `.py` novamente.
 
 Não é necessária migração manual de configuração ou de projetos.
 
 ## Gate esperado
 
-- upgrade esperado: **v3.4.5 -> v3.4.6**;
+- upgrade esperado: **v3.4.6 -> v3.4.7**;
 - `npm run check`: aprovado;
 - suíte automatizada: aprovada;
 - UPDATE não deve conter `config/config.json`, `config/auth.json` nem `data/`.

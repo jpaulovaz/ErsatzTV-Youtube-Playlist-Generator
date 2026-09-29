@@ -12,6 +12,25 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function normalizeGraphicsElementPath(value) {
+  const text = String(value ?? '').trim().replace(/\\/g, '/');
+  return text.replace(/^\/+/, '');
+}
+
+function normalizeGraphicsPaths(project) {
+  const normalizeList = (value) => (Array.isArray(value) ? value : [])
+    .map(normalizeGraphicsElementPath)
+    .filter(Boolean);
+
+  for (const group of project.graphicsGroups || []) {
+    if (group && typeof group === 'object') group.graphics = normalizeList(group.graphics);
+  }
+  for (const profile of project.presentationProfiles || []) {
+    if (profile && typeof profile === 'object') profile.graphics = normalizeList(profile.graphics);
+  }
+  return project;
+}
+
 function slugKey(value, fallback = 'ITEM') {
   const normalized = String(value || '')
     .normalize('NFKD')
@@ -180,7 +199,7 @@ function hydrateProject(project) {
     modules: { ...base.modules, ...(project.modules && typeof project.modules === 'object' ? project.modules : {}) },
     options: { ...base.options, ...(project.options && typeof project.options === 'object' ? project.options : {}) }
   };
-  return normalizePresentationProfiles(hydrated);
+  return normalizeGraphicsPaths(normalizePresentationProfiles(hydrated));
 }
 
 function defaultSettings() {
@@ -221,6 +240,8 @@ module.exports = {
   HISTORY_LIMIT,
   RESERVED_PRESENTATION_KEY,
   MODULE_TYPES,
+  normalizeGraphicsElementPath,
+  normalizeGraphicsPaths,
   defaultProject,
   reservedPresentationProfile,
   isCanonicalReservedPresentationProfile,

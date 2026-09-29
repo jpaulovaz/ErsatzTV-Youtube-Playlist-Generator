@@ -48,7 +48,7 @@
     stateKey: 'Chave usada pelo script para lembrar rotação, saldos e eventos pendentes. Use uma diferente em cada Playout. Exemplo: filmes_420.',
     friendlyName: 'Nome fácil de reconhecer na tela. Pode ter espaços e não precisa ser igual à chave interna.',
     key: 'Nome interno usado pelo script para encontrar este item. Deve ser único e, de preferência, não mudar depois. Exemplo: MOVIES_PRIME.',
-    graphicsElements: 'Arquivos YAML de Graphics Elements que fazem parte deste grupo, um por linha. Exemplo: image/icon.yml.',
+    graphicsElements: 'Arquivos YAML de Graphics Elements que fazem parte deste grupo, um por linha. Use image/icon.yml; se colocar / no início, o aplicativo corrige automaticamente.',
     includeGraphicsGroups: 'Use quando este grupo também deve ligar outros grupos já cadastrados. Exemplo: MUSIC_GRAPHICS pode incluir COMMON_GRAPHICS.',
     sourceType: 'Escolha de onde o ErsatzTV vai buscar o conteúdo: Smart Collection, Collection, Playlist, Search, Show ou Marathon.',
     sourceOrder: 'Escolha a ordem dos itens. Chronological segue a ordem natural; Shuffle embaralha.',
@@ -71,7 +71,7 @@
     epgGroup: 'Junta o conteúdo deste bloco em uma única entrada no EPG, em vez de mostrar cada item separado.',
     epgTitle: 'Título que aparece no EPG quando o agrupamento está ligado. Exemplo: Sessão Prime.',
     epgAdvance: 'Quando ligado, começa um novo grupo no EPG. Desligado, continua o grupo que já estiver aberto.',
-    directGraphics: 'Graphics Elements que este perfil liga diretamente, sem precisar criar um grupo. Informe um YAML por linha.',
+    directGraphics: 'Graphics Elements que este perfil liga diretamente. Use um YAML por linha, como image/icon.yml; se colocar / no início, o aplicativo corrige automaticamente.',
     nativeWatermarks: 'Watermarks cadastrados no ErsatzTV. Eles são diferentes dos arquivos YAML de Graphics Elements.',
     graphicsGroupSelection: 'Escolha quais Grupos de Graphics serão ligados enquanto este perfil estiver ativo.',
     graphicsVariables: 'Valores personalizados enviados aos Graphics Elements. A chave precisa ter o mesmo nome usado no seu YAML. Não existe uma lista fixa: cada YAML pode criar as próprias variáveis.',
@@ -229,6 +229,9 @@
   }
   function listValue(value) { return Array.isArray(value) ? value.join('\n') : ''; }
   function parseList(value) { return String(value || '').split(/[\n,]/).map((x) => x.trim()).filter(Boolean); }
+  function normalizeGraphicsElementPath(value) { return String(value || '').trim().replace(/\\/g, '/').replace(/^\/+/, ''); }
+  function normalizeGraphicsList(value) { return (Array.isArray(value) ? value : []).map(normalizeGraphicsElementPath).filter(Boolean); }
+  function isGraphicsListPath(path) { return /^graphicsGroups\.\d+\.graphics$/.test(path) || /^presentationProfiles\.\d+\.graphics$/.test(path); }
   function slug(value) {
     return String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
       .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_') || 'schedule';
@@ -365,8 +368,13 @@
       let value;
       if (target.type === 'checkbox') value = target.checked;
       else if (target.dataset.type === 'number') value = target.value === '' ? '' : Number(target.value);
-      else if (target.dataset.type === 'list') value = parseList(target.value);
-      else value = target.value;
+      else if (target.dataset.type === 'list') {
+        value = parseList(target.value);
+        if (event.type === 'change' && isGraphicsListPath(path)) {
+          value = normalizeGraphicsList(value);
+          target.value = listValue(value);
+        }
+      } else value = target.value;
       setPath(state.current, path, value);
       state.validation = null;
       if (target.dataset.rerender === 'true') render();

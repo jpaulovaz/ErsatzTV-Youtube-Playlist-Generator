@@ -1,6 +1,6 @@
 const fs = require('fs/promises');
 const path = require('path');
-const { TEMPLATE_VERSION, SUPPORTED_TEMPLATE_VERSIONS } = require('./schema');
+const { TEMPLATE_VERSION, SUPPORTED_TEMPLATE_VERSIONS, normalizeGraphicsElementPath } = require('./schema');
 const { validateProject } = require('./validator');
 
 const TEMPLATE_PATHS = Object.fromEntries(SUPPORTED_TEMPLATE_VERSIONS.map((version) => [version, path.join(__dirname, 'templates', `universal-v${version}.py.tpl`)]));
@@ -65,7 +65,7 @@ function groupResolver(project) {
       for (const item of resolve(String(include), [...stack, key])) if (!result.includes(item)) result.push(item);
     }
     for (const item of group.graphics || []) {
-      const text = cleanString(item);
+      const text = normalizeGraphicsElementPath(item);
       if (text && !result.includes(text)) result.push(text);
     }
     memo.set(key, result);
@@ -277,7 +277,7 @@ function projectToEngine(project) {
       for (const item of resolveGroup(String(groupKey))) if (!graphics.includes(item)) graphics.push(item);
     }
     for (const item of profile.graphics || []) {
-      const text = cleanString(item);
+      const text = normalizeGraphicsElementPath(item);
       if (text && !graphics.includes(text)) graphics.push(text);
     }
     profiles[String(profile.key)] = compact({

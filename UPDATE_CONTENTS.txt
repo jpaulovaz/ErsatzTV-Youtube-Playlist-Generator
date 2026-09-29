@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.4.6 - pacote de atualização
+ErsatzTV YouTube Downloader 3.4.7 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.4.5.
+Extraia este ZIP sobre uma instalação v3.4.6.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -8,14 +8,14 @@ Preservado deliberadamente (não incluído):
 - data/
 - arquivos de mídia das bibliotecas e canais
 
-Principais mudanças:
-- o perfil interno none deixa de aparecer como Presentation Profile editável;
-- Nenhum continua disponível nos seletores de Presentation;
-- o gerador mantém o perfil interno automaticamente vazio e imutável;
-- projetos antigos com none padrão são normalizados automaticamente;
-- eventual configuração antiga feita dentro de none é preservada em um perfil visível, sem perda silenciosa;
-- contadores e Ajuda passam a considerar somente os perfis reais do usuário.
+Principal correção:
+- caminhos de Graphics Elements passam a ser normalizados ao carregar/salvar o projeto e novamente na geração do script;
+- /image/watermark.yml passa a ser enviado como image/watermark.yml;
+- o mesmo tratamento vale para Grupos de Graphics e Graphics diretos dos Presentation Profiles;
+- barras invertidas também são convertidas para /;
+- a Ajuda mostra o formato relativo esperado pelo ErsatzTV.
 
+Projetos existentes não precisam ser alterados manualmente.
 Universal permanece v1.3.0. configVersion e schema dos projetos não mudam.
 Pad, Filler e regras de programação não mudam.
 Projetos Universal v1.1.1/v1.2.0 continuam sem atualização silenciosa.

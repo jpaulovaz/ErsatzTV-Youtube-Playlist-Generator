@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.4.7
+
+- Corrige Graphics Elements que não apareciam quando o caminho havia sido salvo com `/` no início, como `/image/watermark.yml`.
+- O aplicativo passa a normalizar automaticamente caminhos de Graphics de grupos e de Presentation Profiles para o formato relativo usado pelo ErsatzTV, como `image/watermark.yml`. A normalização ocorre ao carregar/salvar o projeto e também na geração do script como proteção extra.
+- Barras invertidas também são convertidas para `/`, evitando diferenças de formato entre ambientes.
+- A Ajuda contextual e a área Ajuda deixam explícito que o caminho do Graphics Element não deve começar com `/`.
+- Projetos já existentes não precisam ser editados manualmente: ao abrir, os caminhos já são normalizados em memória e, no próximo salvamento, ficam gravados no formato correto.
+- Nenhuma alteração em `configVersion`, schema de projetos, Universal v1.3.0, módulos, Pad, Filler, Canais, Bibliotecas, fila ou downloads.
+
 ## 3.4.6
 
 - O Presentation Profile interno `none` deixa de aparecer na lista de perfis. Para o usuário, **Nenhum** continua disponível somente nos seletores de Presentation.

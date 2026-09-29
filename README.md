@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.6
+# ErsatzTV YouTube Downloader 3.4.7
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.6 simplifica **Presentation Profiles**: o perfil interno `none` deixa de aparecer como um cartão editável e passa a ser tratado somente pelo aplicativo. Para o usuário, **Nenhum** continua disponível nos seletores quando não for necessário aplicar um Presentation Profile. O motor continua Universal v1.3.0 e a programação permanece inalterada.
+A versão 3.4.7 corrige **Graphics Elements** quando o caminho foi informado com `/` no início. O aplicativo agora normaliza automaticamente esses caminhos para o formato relativo esperado pelo ErsatzTV, como `image/watermark.yml`, ao carregar/salvar o projeto e também ao gerar o script. O motor continua Universal v1.3.0 e a programação permanece inalterada.
 
 ## Arquitetura
 
@@ -210,7 +210,7 @@ A área **Scripted Schedules** é independente do downloader. Cada projeto repre
 
 O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas. O valor **Nenhum** nos seletores de Presentation é interno e sempre vazio; ele não aparece como perfil editável. Projetos antigos que tinham o antigo `none` vazio são limpos automaticamente ao carregar.
 
-Módulos disponíveis na v3.4.6:
+Módulos disponíveis na v3.4.7:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -245,7 +245,7 @@ Smart Collections e Canais são carregados pelo nome quando a API do ErsatzTV es
 
 **Reset Playout** é uma ação separada e destrutiva. Publicar um script nunca dispara reset automaticamente.
 
-A opção lateral **Ajuda** possui explicações simples de Recursos, todos os módulos, combinações sugeridas, publicação e termos técnicos. Os `?` contextuais continuam disponíveis diretamente ao lado dos campos. Em **Variáveis dos Graphics**, a Ajuda deixa claro que não existe uma lista fixa: a chave deve ser a mesma usada pelo YAML/Scriban. Dados que o ErsatzTV já fornece ao Graphics, como `MediaItem_Title`, `MediaItem_Artist`, `MediaItem_Path` e `MediaItem_Duration`, são usados diretamente no YAML e não precisam ser cadastrados como variáveis personalizadas.
+A opção lateral **Ajuda** possui explicações simples de Recursos, todos os módulos, combinações sugeridas, publicação e termos técnicos. Os `?` contextuais continuam disponíveis diretamente ao lado dos campos. Em **Variáveis dos Graphics**, a Ajuda deixa claro que não existe uma lista fixa: a chave deve ser a mesma usada pelo YAML/Scriban. Dados que o ErsatzTV já fornece ao Graphics, como `MediaItem_Title`, `MediaItem_Artist`, `MediaItem_Path` e `MediaItem_Duration`, são usados diretamente no YAML e não precisam ser cadastrados como variáveis personalizadas. Para os próprios Graphics Elements, use caminhos relativos como `image/watermark.yml`; se um projeto antigo tiver salvo `/image/watermark.yml`, o aplicativo remove a barra inicial automaticamente.
 
 Os dados do builder ficam em `data/scripted-schedules/` e não alteram o `configVersion` principal da aplicação.
 

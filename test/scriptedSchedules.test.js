@@ -67,6 +67,32 @@ test('Scripted Schedule golden music project generates a valid Universal v1.3.0 
 });
 
 
+test('saved Scripted Schedule data normalizes Graphics Element paths before use', () => {
+  const project = musicProject();
+  project.graphicsGroups[0].graphics = [' /image/icon.yml ', '\\image\\watermark.yml'];
+  project.presentationProfiles[0].graphics = ['/text/direct.yml', 'motion/overlay.yml'];
+
+  const hydrated = hydrateProject(project);
+
+  assert.deepEqual(hydrated.graphicsGroups[0].graphics, ['image/icon.yml', 'image/watermark.yml']);
+  assert.deepEqual(hydrated.presentationProfiles[0].graphics, ['text/direct.yml', 'motion/overlay.yml']);
+});
+
+test('Graphics Element paths are normalized to ErsatzTV relative identifiers', async () => {
+  const project = musicProject();
+  project.graphicsGroups[0].graphics = ['/image/icon.yml', '\\image\\watermark.yml'];
+  project.presentationProfiles[0].graphics = ['/text/direct.yml', 'motion/overlay.yml'];
+  const script = await generateScript(project);
+
+  assert.match(script, /"image\/icon\.yml"/);
+  assert.match(script, /"image\/watermark\.yml"/);
+  assert.match(script, /"text\/direct\.yml"/);
+  assert.match(script, /"motion\/overlay\.yml"/);
+  assert.doesNotMatch(script, /"\/image\//);
+  assert.doesNotMatch(script, /"\/text\//);
+  assert.doesNotMatch(script, /\\\\image/);
+});
+
 test('existing Universal v1.1.1 projects remain publishable without silent motor upgrade', async () => {
   const project = musicProject();
   project.templateVersion = '1.1.1';
