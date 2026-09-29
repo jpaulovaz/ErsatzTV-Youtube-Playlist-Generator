@@ -51,11 +51,11 @@ async function validateWithPython(script) {
   }
 }
 
-test('Scripted Schedule golden music project generates a valid Universal v1.3.0 script', async () => {
+test('Scripted Schedule golden music project generates a valid Universal v1.3.1 script', async () => {
   const project = musicProject();
   assert.deepEqual(validateProject(project).errors, []);
   const script = await generateScript(project);
-  assert.match(script, /SCRIPT_VERSION = "1\.3\.0"/);
+  assert.match(script, /SCRIPT_VERSION = "1\.3\.1"/);
   assert.match(script, /DEFAULT_ROTATION_DURATION_MINUTES = 60/);
   assert.match(script, /"duration_minutes": 30/);
   assert.match(script, /"420 - CONCERTS"/);
@@ -145,6 +145,183 @@ test('Graphics Element paths are normalized to ErsatzTV relative identifiers', a
   assert.doesNotMatch(script, /\\\\image/);
 });
 
+test('Universal v1.3.1 serializes closest-start timing and Trim forces no overrun', async () => {
+  const project = musicProject();
+  project.modules.fixedEvents[0].startPolicy = 'closest';
+  project.modules.fixedEvents[0].maxEarlyMinutes = 40;
+  project.modules.fixedEvents[0].trim = true;
+  project.modules.fixedEvents[0].allowOverrun = true;
+
+  const engine = projectToEngine(project);
+  assert.equal(engine.modules.fixedEvents[0].start_policy, 'closest');
+  assert.equal(engine.modules.fixedEvents[0].max_early_minutes, 40);
+  assert.equal(engine.modules.fixedEvents[0].trim, true);
+  assert.equal(engine.modules.fixedEvents[0].allow_overrun, false);
+
+  const script = await generateScript(project);
+  assert.match(script, /SCRIPT_VERSION = "1\.3\.1"/);
+  assert.match(script, /"start_policy": "closest"/);
+  assert.match(script, /"max_early_minutes": 40/);
+  assert.match(script, /STATE_VERSION = 12/);
+  const output = await validateWithPython(script);
+  assert.match(output, /configuracao valida/);
+});
+
+test('Universal v1.3.1 starts a fixed event early when that is closer than finishing the next movie late', async () => {
+  const project = musicProject();
+  project.modules.rotation = [];
+  project.modules.countRotation = [{ source: 'TOP', order: 'shuffle', presentation: 'music', count: 1 }];
+  project.modules.fixedEvents = [{
+    id: 'movie_22', label: 'Filme das 22h', time: '22:00', source: 'CONCERTS', order: 'shuffle',
+    count: 1, priority: 100, presentation: 'common', days: [], startPolicy: 'closest', maxEarlyMinutes: 40
+  }];
+  project.presentationProfiles.find((item) => item.key === 'music').preRoll = 'PRE';
+  project.scriptedPlaylists = [{ key: 'PRE', label: 'Pre-roll', items: [{ source: 'FILLER', order: 'shuffle', count: 1 }] }];
+  project.filler = null;
+
+  const script = await generateScript(project);
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'scripted-closest-runtime-'));
+  const scheduleFile = path.join(dir, 'schedule.py');
+  const probeFile = path.join(dir, 'probe.py');
+  await fsp.writeFile(scheduleFile, script, 'utf8');
+  await fsp.writeFile(probeFile, `
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("schedule", sys.argv[1])
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+class Presentation:
+    def set(self, presentation, token):
+        pass
+class Api:
+    def __init__(self): self.calls = []
+    def peek_next(self, content):
+        self.calls.append(["peek_next", content])
+        if content.startswith("TOP"):
+            return {"content": content, "milliseconds": 6222000}
+        if content.startswith("FILLER"):
+            return {"content": content, "milliseconds": 250000}
+        return {"content": content, "milliseconds": 600000}
+    def add_count(self, content, count, options=None):
+        self.calls.append(["add_count", content, count])
+        return {"currentTime": "2026-09-30T23:09:10+00:00", "finishTime": "2026-10-01T02:00:00+00:00", "isDone": False}
+api = Api()
+state = m.default_state()
+ctx = {"currentTime": "2026-09-30T21:21:18+00:00", "finishTime": "2026-10-01T02:00:00+00:00", "isDone": False}
+result = m.run_count_rotation(api, Presentation(), ctx, state)
+winner = m.choose_task(state)
+print(json.dumps({
+  "unchanged": result["currentTime"] == ctx["currentTime"],
+  "add_count": [c for c in api.calls if c[0] == "add_count"],
+  "task_count": len(state["tasks"]),
+  "winner": winner["label"] if winner else None,
+  "target": winner["target"] if winner else None,
+  "peek_calls": [c for c in api.calls if c[0] == "peek_next"]
+}))
+`, 'utf8');
+  try {
+    const result = JSON.parse(execFileSync('python3', [probeFile, scheduleFile], { encoding: 'utf8' }).trim().split('\n').pop());
+    assert.equal(result.unchanged, true);
+    assert.deepEqual(result.add_count, []);
+    assert.equal(result.task_count, 1);
+    assert.equal(result.winner, 'Filme das 22h');
+    assert.equal(result.target, '2026-09-30T22:00:00+00:00');
+    assert.equal(result.peek_calls.length, 2); // filme + pre-roll
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Universal v1.3.1 lets the current item finish late when lateness is closer than starting the event early', async () => {
+  const project = musicProject();
+  project.modules.rotation = [];
+  project.modules.countRotation = [{ source: 'TOP', order: 'shuffle', presentation: 'music', count: 1 }];
+  project.modules.fixedEvents = [{
+    id: 'event_22', label: 'Evento 22h', time: '22:00', source: 'CONCERTS', order: 'shuffle',
+    count: 1, priority: 100, presentation: 'common', days: [], startPolicy: 'closest', maxEarlyMinutes: 40
+  }];
+  project.presentationProfiles.find((item) => item.key === 'music').preRoll = null;
+  project.filler = null;
+
+  const script = await generateScript(project);
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'scripted-closest-late-runtime-'));
+  const scheduleFile = path.join(dir, 'schedule.py');
+  const probeFile = path.join(dir, 'probe.py');
+  await fsp.writeFile(scheduleFile, script, 'utf8');
+  await fsp.writeFile(probeFile, `
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("schedule", sys.argv[1])
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+class Presentation:
+    def set(self, presentation, token): pass
+class Api:
+    def __init__(self): self.calls = []
+    def peek_next(self, content):
+        self.calls.append(["peek_next", content])
+        return {"content": content, "milliseconds": 900000}
+    def add_count(self, content, count, options=None):
+        self.calls.append(["add_count", content, count])
+        return {"currentTime": "2026-09-30T22:05:00+00:00", "finishTime": "2026-10-01T02:00:00+00:00", "isDone": False}
+api = Api()
+state = m.default_state()
+ctx = {"currentTime": "2026-09-30T21:50:00+00:00", "finishTime": "2026-10-01T02:00:00+00:00", "isDone": False}
+result = m.run_count_rotation(api, Presentation(), ctx, state)
+print(json.dumps({"time": result["currentTime"], "calls": api.calls, "tasks": len(state["tasks"])}))
+`, 'utf8');
+  try {
+    const result = JSON.parse(execFileSync('python3', [probeFile, scheduleFile], { encoding: 'utf8' }).trim().split('\n').pop());
+    assert.equal(result.time, '2026-09-30T22:05:00+00:00');
+    assert.ok(result.calls.some((call) => call[0] === 'add_count'));
+    assert.equal(result.tasks, 1); // ocorrência das 22h entrou na fila depois do item
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Universal v1.3.1 respects the maximum early-start limit even when starting early would be closer', async () => {
+  const project = musicProject();
+  project.modules.rotation = [];
+  project.modules.countRotation = [{ source: 'TOP', order: 'shuffle', presentation: 'music', count: 1 }];
+  project.modules.fixedEvents = [{
+    id: 'event_22', label: 'Evento 22h', time: '22:00', source: 'CONCERTS', order: 'shuffle',
+    count: 1, priority: 100, presentation: 'common', days: [], startPolicy: 'closest', maxEarlyMinutes: 40
+  }];
+  project.presentationProfiles.find((item) => item.key === 'music').preRoll = null;
+  project.filler = null;
+  const script = await generateScript(project);
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'scripted-closest-cap-runtime-'));
+  const scheduleFile = path.join(dir, 'schedule.py');
+  const probeFile = path.join(dir, 'probe.py');
+  await fsp.writeFile(scheduleFile, script, 'utf8');
+  await fsp.writeFile(probeFile, `
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("schedule", sys.argv[1])
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+class Presentation:
+    def set(self, presentation, token): pass
+class Api:
+    def __init__(self): self.calls = []
+    def peek_next(self, content): return {"content": content, "milliseconds": 10800000}
+    def add_count(self, content, count, options=None):
+        self.calls.append(["add_count", content, count])
+        return {"currentTime": "2026-10-01T00:00:00+00:00", "finishTime": "2026-10-01T02:00:00+00:00", "isDone": False}
+api = Api()
+state = m.default_state()
+ctx = {"currentTime": "2026-09-30T21:00:00+00:00", "finishTime": "2026-10-01T02:00:00+00:00", "isDone": False}
+result = m.run_count_rotation(api, Presentation(), ctx, state)
+print(json.dumps({"time": result["currentTime"], "calls": api.calls, "tasks": len(state["tasks"])}))
+`, 'utf8');
+  try {
+    const result = JSON.parse(execFileSync('python3', [probeFile, scheduleFile], { encoding: 'utf8' }).trim().split('\n').pop());
+    assert.equal(result.time, '2026-10-01T00:00:00+00:00');
+    assert.ok(result.calls.some((call) => call[0] === 'add_count'));
+    assert.equal(result.tasks, 1);
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('existing Universal v1.1.1 projects remain publishable without silent motor upgrade', async () => {
   const project = musicProject();
   project.templateVersion = '1.1.1';
@@ -183,6 +360,7 @@ test('Pad To Nearest Minute requires Filler, accepts only 5 10 15 30 and require
 
 test('Universal v1.3.0 serializes item Pad only for module modes that can align individual items', async () => {
   const project = musicProject();
+  project.templateVersion = '1.3.0';
   project.modules.rotation[0].padToNearestMinutes = 5; // configuração antiga: deve ser ignorada no motor atual
   project.modules.countRotation = [{ source: 'TOP', presentation: 'music', count: 2, padToNearestMinutes: 5 }];
   project.modules.weightedRotation = [{ source: 'BASTILLE', presentation: 'music', weight: 1, avoidRepeat: true, padToNearestMinutes: 10 }];
@@ -242,6 +420,7 @@ test('Universal v1.3.0 serializes item Pad only for module modes that can align 
 
 test('Universal v1.3.0 item Pad uses ErsatzTV pad_to_next, yields to a scheduled event and does nothing on an exact mark', async () => {
   const project = musicProject();
+  project.templateVersion = '1.3.0';
   project.modules.fixedEvents = [
     { id: 'next_event', time: '10:10', source: 'CONCERTS', count: 1, priority: 100, presentation: 'common', days: [] }
   ];
@@ -462,6 +641,7 @@ test('all modules are optional and an intentional gap is warning, not an error',
 
 test('Universal v1.3.0 validates every new programming module together', async () => {
   const project = musicProject();
+  project.templateVersion = '1.3.0';
   project.modules.countRotation = [{ source: 'TOP', count: 3, presentation: 'music', padToNearestMinutes: 5 }];
   project.modules.weightedRotation = [
     { source: 'TOP', weight: 3, avoidRepeat: true, presentation: 'music' },

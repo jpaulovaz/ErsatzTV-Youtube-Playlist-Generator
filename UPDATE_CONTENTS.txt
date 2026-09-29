@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.4.8 - pacote de atualização
+ErsatzTV YouTube Downloader 3.4.9 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.4.7.
+Extraia este ZIP sobre uma instalação v3.4.8.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,14 +9,15 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principal alteração:
-- a ordem de reprodução deixa de ser cadastrada na Source e passa a ser definida em cada uso na programação;
-- Smart Collection, Collection, Multi Collection, Search e Show oferecem Chronological ou Shuffle no módulo, Filler, Scripted Playlist ou Fallback em que forem usados;
-- a mesma Source pode usar ordens diferentes em blocos diferentes;
-- o gerador cria automaticamente variantes internas Source + ordem para o ErsatzTV;
-- Marathon mantém suas opções próprias de ordem/agrupamento;
-- Random e Shuffle In Order não são oferecidos porque não são suportados pela API Scripted utilizada.
+- adiciona Universal v1.3.1;
+- eventos com horário marcado podem usar a política "Usar o horário mais próximo";
+- o motor consulta a duração do próximo item e escolhe entre adiantar ou atrasar pelo menor desvio;
+- o adiantamento máximo vem com 40 minutos e é editável;
+- itens que ainda cabem antes do evento são adicionados um por vez para que o motor reavalie a fronteira;
+- Trim e "Deixar o vídeo terminar" passam a ser mutuamente exclusivos;
+- Pad interrompido por evento marcado não pode ultrapassar essa fronteira.
 
-O antigo source.order não é preservado como fallback: usos antigos sem ordem própria assumem Shuffle. Revise a programação de homologação antes de republicar os scripts.
+Projetos antigos não recebem upgrade silencioso de motor. Para usar a nova política, atualize o projeto para Universal v1.3.1 e publique novamente o .py.
 
-Universal permanece v1.3.0. configVersion e schema dos projetos não mudam.
+configVersion permanece 8 e o schema de Scripted Schedules permanece 1.
 Consulte UPGRADE.md antes da atualização.

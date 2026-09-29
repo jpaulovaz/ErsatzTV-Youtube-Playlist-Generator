@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.4.9
+
+- Adiciona o motor **Universal v1.3.1** com política configurável para eventos com horário marcado.
+- **Usar o horário mais próximo** consulta `peek_next` antes de iniciar o próximo item. Se o item cruzaria o horário do evento, compara o adiantamento com o atraso e escolhe o menor desvio.
+- O limite **Pode adiantar até (min)** vem com 40 minutos e pode ser alterado pelo usuário. Se adiantar excederia esse limite, o conteúdo segue e o evento aguarda.
+- Quando o próximo item cabe antes do evento, o motor adiciona somente esse item e reavalia a fronteira depois, evitando perder o controle dentro de uma operação longa do ErsatzTV.
+- A estimativa inclui pre-roll quando a Scripted Playlist pode ser medida com segurança; em cenários que não podem ser estimados com fidelidade, o motor preserva o comportamento anterior em vez de adivinhar.
+- A decisão é aplicada às programações de fundo e às tarefas não atômicas que podem alcançar um evento futuro de prioridade maior. Blocos atômicos continuam sem preempção.
+- **Trim** e **Deixar o vídeo terminar** tornam-se mutuamente exclusivos na interface, no gerador e no runtime; Trim força `allow_overrun=false`.
+- Pad To Nearest limitado por um evento marcado força `allow_overrun=false` no Filler para não empurrar o evento além da fronteira.
+- `STATE_VERSION` do Universal v1.3.1 passa para 12. Universal v1.1.1, v1.2.0 e v1.3.0 permanecem disponíveis sem alteração e sem upgrade silencioso.
+- `configVersion` permanece 8 e o schema de armazenamento de Scripted Schedules permanece 1.
+
 ## 3.4.8
 
 - A ordem de reprodução deixa de pertencer ao cadastro da Source e passa a ser definida em cada uso da Source na Programação, Filler, Scripted Playlists e Fallbacks.

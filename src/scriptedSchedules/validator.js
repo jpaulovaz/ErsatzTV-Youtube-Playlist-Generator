@@ -231,6 +231,23 @@ function validateRotation(items, sourceMap, profileMap, options, project, addErr
   });
 }
 
+
+function validateStartTiming(item, base, project, addError) {
+  const templateVersion = String(project.templateVersion || TEMPLATE_VERSION);
+  const hasExplicit = item && (item.startPolicy !== undefined || item.maxEarlyMinutes !== undefined);
+  if (!templateAtLeast(templateVersion, '1.3.1')) {
+    if (hasExplicit) addError(`${base}.startPolicy`, 'Horário mais próximo requer o motor 1.3.1.');
+    return;
+  }
+  const policy = String(item?.startPolicy || 'closest').trim().toLowerCase();
+  if (!['wait', 'closest'].includes(policy)) addError(`${base}.startPolicy`, 'Escolha Esperar terminar ou Usar o horário mais próximo.');
+  if (policy === 'closest') {
+    const raw = item?.maxEarlyMinutes;
+    const value = raw === '' || raw === undefined || raw === null ? 40 : Number(raw);
+    if (!Number.isFinite(value) || value < 0) addError(`${base}.maxEarlyMinutes`, 'Informe zero ou mais minutos para o adiantamento máximo.');
+  }
+}
+
 function validateTimedModules(modules, sourceMap, profileMap, project, addError) {
   const itemPadEngine = templateAtLeast(String(project.templateVersion || TEMPLATE_VERSION), '1.3.0');
   (modules.countRotation || []).forEach((e, i) => {
@@ -267,15 +284,15 @@ function validateTimedModules(modules, sourceMap, profileMap, project, addError)
     validatePlayback(e, sourceMap, base, addError);
   });
   (modules.fixedEvents || []).forEach((e, i) => {
-    const base = `modules.fixedEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError);
+    const base = `modules.fixedEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError); validateStartTiming(e, base, project, addError);
     requireSource(e.source, sourceMap, `${base}.source`, addError); validateSourceOrder(e, sourceMap, base, addError); positiveInt(e.count, `${base}.count`, addError); validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
   });
   (modules.fixedDurationEvents || []).forEach((e, i) => {
-    const base = `modules.fixedDurationEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError);
+    const base = `modules.fixedDurationEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError); validateStartTiming(e, base, project, addError);
     requireSource(e.source, sourceMap, `${base}.source`, addError); validateSourceOrder(e, sourceMap, base, addError); positiveNumber(e.durationMinutes, `${base}.durationMinutes`, addError); if (!itemPadEngine) validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
   });
   (modules.fixedAllEvents || []).forEach((e, i) => {
-    const base = `modules.fixedAllEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError);
+    const base = `modules.fixedAllEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError); validateStartTiming(e, base, project, addError);
     requireSource(e.source, sourceMap, `${base}.source`, addError); validateSourceOrder(e, sourceMap, base, addError); if (!itemPadEngine) validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
   });
   (modules.fixedWindowEvents || []).forEach((e, i) => {
@@ -294,16 +311,16 @@ function validateTimedModules(modules, sourceMap, profileMap, project, addError)
     }
   });
   (modules.sequenceEvents || []).forEach((e, i) => {
-    const base = `modules.sequenceEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError);
+    const base = `modules.sequenceEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError); validateStartTiming(e, base, project, addError);
     validateSteps(e.steps, sourceMap, profileMap, `${base}.steps`, addError); if (!itemPadEngine || sequenceSupportsItemPad(e.steps)) validatePadToNearest(e, base, project, addError);
   });
   (modules.intervalEvents || []).forEach((e, i) => {
-    const base = `modules.intervalEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.startTime, `${base}.startTime`, addError); time(e.endTime, `${base}.endTime`, addError); positiveInt(e.everyMinutes, `${base}.everyMinutes`, addError);
+    const base = `modules.intervalEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.startTime, `${base}.startTime`, addError); time(e.endTime, `${base}.endTime`, addError); positiveInt(e.everyMinutes, `${base}.everyMinutes`, addError); validateStartTiming(e, base, project, addError);
     validateModeEvent(e, sourceMap, profileMap, base, addError, false); if (!['queue', 'skip'].includes(String(e.latePolicy || 'queue'))) addError(`${base}.latePolicy`, 'late_policy deve ser queue ou skip.');
     if (!itemPadEngine || modeSupportsItemPad(e.mode)) validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
   });
   (modules.choiceEvents || []).forEach((e, i) => {
-    const base = `modules.choiceEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError);
+    const base = `modules.choiceEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError); validateStartTiming(e, base, project, addError);
     const mode = String(e.mode || 'count'); if (!['count', 'duration', 'all'].includes(mode)) addError(`${base}.mode`, 'Modo deve ser count, duration ou all.');
     if (mode === 'count') positiveInt(e.count, `${base}.count`, addError); if (mode === 'duration') positiveNumber(e.durationMinutes, `${base}.durationMinutes`, addError);
     if (!['weighted', 'round_robin'].includes(String(e.selection || 'weighted'))) addError(`${base}.selection`, 'Selecao deve ser weighted ou round_robin.');
@@ -312,7 +329,7 @@ function validateTimedModules(modules, sourceMap, profileMap, project, addError)
     if (!itemPadEngine || modeSupportsItemPad(e.mode)) validatePadToNearest(e, base, project, addError);
   });
   (modules.clockTemplates || []).forEach((e, i) => {
-    const base = `modules.clockTemplates[${i}]`; commonEvent(e, base, profileMap, addError); time(e.startTime, `${base}.startTime`, addError); time(e.endTime, `${base}.endTime`, addError); positiveInt(e.cycleMinutes, `${base}.cycleMinutes`, addError);
+    const base = `modules.clockTemplates[${i}]`; commonEvent(e, base, profileMap, addError); time(e.startTime, `${base}.startTime`, addError); time(e.endTime, `${base}.endTime`, addError); positiveInt(e.cycleMinutes, `${base}.cycleMinutes`, addError); validateStartTiming(e, base, project, addError);
     if (!Array.isArray(e.slots) || !e.slots.length) addError(`${base}.slots`, 'Adicione pelo menos uma posicao ao relogio.');
     (e.slots || []).forEach((slot, j) => { const p = `${base}.slots[${j}]`; const offset = Number(slot.offsetMinutes); if (!Number.isInteger(offset) || offset < 0 || offset >= Number(e.cycleMinutes || 0)) addError(`${p}.offsetMinutes`, 'A posicao precisa estar dentro do ciclo.'); requireSource(slot.source, sourceMap, `${p}.source`, addError); validateSourceOrder(slot, sourceMap, p, addError); validatePresentationRef(slot.presentation, profileMap, `${p}.presentation`, addError); const mode = String(slot.mode || 'count'); if (!['count','duration','all'].includes(mode)) addError(`${p}.mode`, 'Modo invalido.'); if (mode === 'count') positiveInt(slot.count, `${p}.count`, addError); if (mode === 'duration') positiveNumber(slot.durationMinutes, `${p}.durationMinutes`, addError); if (!itemPadEngine || modeSupportsItemPad(mode)) validatePadToNearest(slot, p, project, addError); validatePlayback(slot, sourceMap, p, addError); });
   });
@@ -324,7 +341,7 @@ function validateTimedModules(modules, sourceMap, profileMap, project, addError)
     requireSource(e.source, sourceMap, `${base}.source`, addError); validateSourceOrder(e, sourceMap, base, addError); if (!itemPadEngine) validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
   });
   (modules.dateEvents || []).forEach((e, i) => {
-    const base = `modules.dateEvents[${i}]`; commonEvent(e, base, profileMap, addError); if (!DATE_TIME_RE.test(String(e.datetime || ''))) addError(`${base}.datetime`, 'Use data e hora no formato AAAA-MM-DD HH:MM.');
+    const base = `modules.dateEvents[${i}]`; commonEvent(e, base, profileMap, addError); if (!DATE_TIME_RE.test(String(e.datetime || ''))) addError(`${base}.datetime`, 'Use data e hora no formato AAAA-MM-DD HH:MM.'); validateStartTiming(e, base, project, addError);
     validateModeEvent(e, sourceMap, profileMap, base, addError, true); if (!itemPadEngine || modeSupportsItemPad(e.mode, e.steps)) validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
   });
   (modules.offlineWindows || []).forEach((e, i) => { const base = `modules.offlineWindows[${i}]`; commonEvent(e, base, profileMap, addError); time(e.startTime, `${base}.startTime`, addError); time(e.endTime, `${base}.endTime`, addError); });

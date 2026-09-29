@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.8
+# ErsatzTV YouTube Downloader 3.4.9
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.8 move a **ordem de reprodução** das Sources para o ponto em que cada Source é usada na programação. A mesma Smart Collection, Collection, Multi Collection, Search ou Show pode ser usada como **Chronological** em um bloco e **Shuffle** em outro. O gerador cria internamente as variantes necessárias para o ErsatzTV; o usuário continua cadastrando apenas uma Source. O motor permanece Universal v1.3.0.
+A versão 3.4.9 adiciona ao motor **Universal v1.3.1** uma política de início para eventos com horário marcado. Quando o próximo conteúdo ultrapassaria o horário do evento, o motor pode comparar o adiantamento com o atraso e escolher o menor desvio, respeitando um limite configurável de adiantamento que vem com **40 minutos**. A mesma versão também impede a combinação contraditória entre **Trim** e **Deixar o vídeo terminar**.
 
 ## Arquitetura
 
@@ -206,13 +206,13 @@ Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando
 
 ## Scripted Schedules
 
-A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir de um motor Universal versionado. **Novos projetos usam Universal v1.3.0**; projetos antigos em v1.1.1/v1.2.0 não são atualizados silenciosamente.
+A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir de um motor Universal versionado. **Novos projetos usam Universal v1.3.1**. Projetos já salvos continuam na versão de motor escolhida até o usuário usar a opção de atualização; v1.1.1, v1.2.0 e v1.3.0 permanecem disponíveis.
 
 O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas. O valor **Nenhum** nos seletores de Presentation é interno e sempre vazio; ele não aparece como perfil editável. Projetos antigos que tinham o antigo `none` vazio são limpos automaticamente ao carregar.
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.4.8:
+Módulos disponíveis na v3.4.9:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -236,6 +236,10 @@ Módulos disponíveis na v3.4.8:
 O **Filler** permanece separado dos módulos e é opcional. O **Tipo de Filler** pode ser escolhido entre Post-roll, Pre-roll, Mid-roll e Nenhum. **Post-roll** é o padrão e a opção recomendada para preencher lacunas e para o Pad; projetos antigos sem essa escolha salva continuam sendo tratados como Post-roll. Programações de fundo como rotações, Bloco contínuo e Inserções após X itens são alternativas de programação-base; o validador avisa quando várias bases são configuradas ao mesmo tempo. Eventos fixos podem ser colocados por cima da base usando prioridade e horários.
 
 Os filtros de dias e datas também suportam **recorrência avançada**, incluindo primeira/segunda/terceira/quarta/última ocorrência de um dia da semana no mês e repetição a cada N dias.
+
+Os eventos com horário marcado compatíveis com o Universal v1.3.1 têm a opção **Se o conteúdo passar do horário**. Em **Usar o horário mais próximo**, o motor consulta a duração do próximo item antes de iniciá-lo. Se esse item ultrapassaria o evento, compara quanto o evento teria de ser adiantado com quanto ele ficaria atrasado; o menor desvio vence, desde que o adiantamento não ultrapasse **Pode adiantar até**, cujo valor inicial é 40 minutos. Em **Esperar o conteúdo terminar**, o comportamento continua permitindo que o item em andamento termine antes de liberar o evento. Quando o próximo item ainda cabe antes do evento, o motor toca apenas esse item e reavalia a fronteira depois. O Universal também considera um pre-roll simples na estimativa quando a Scripted Playlist do pre-roll pode ser medida com segurança.
+
+**Trim** e **Deixar o vídeo terminar** passam a ser mutuamente exclusivos. Se Trim estiver ligado, o gerador e o motor forçam `allow_overrun=false`, evitando pedir ao ErsatzTV ao mesmo tempo para cortar e para deixar ultrapassar o limite.
 
 **Pad To Nearest Minute** pode ser habilitado nos módulos que o motor consegue executar **item por item**. Depois de cada item, o Filler completa até a próxima marca de 5, 10, 15 ou 30 minutos. Exemplo: filme termina 10:07 -> Filler até 10:15 -> próximo filme. Se existir um evento marcado para 10:10, o Pad termina em 10:10; as regras normais de prioridade do projeto continuam valendo.
 

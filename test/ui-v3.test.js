@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.8/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.8/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.9/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.9/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -167,7 +167,7 @@ test('ErsatzTV settings validate the API Key through GET api version and show a 
 });
 
 
-test('Scripted Schedules is an isolated builder view with Universal v1.3.0 modules', () => {
+test('Scripted Schedules is an isolated builder view with Universal v1.3.1 modules', () => {
   const html = read('index.html');
   const app = read('app.js');
   const view = read('js/scriptedSchedulesView.js');
@@ -177,8 +177,8 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.0 modul
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.4\.8/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.8/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.4\.9/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.9/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -190,7 +190,7 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.0 modul
   assert.match(view, /Presentation Profiles/);
   assert.match(view, /Scripted Playlists/);
   assert.match(view, /Grupos de Graphics/);
-  assert.match(view, /LATEST_TEMPLATE_VERSION = '1\.3\.0'/);
+  assert.match(view, /LATEST_TEMPLATE_VERSION = '1\.3\.1'/);
   assert.match(view, /Pad To Nearest Minute/);
   assert.match(view, /PAD_TO_NEAREST_OPTIONS = \[5, 10, 15, 30\]/);
   assert.match(view, /Configure o Filler do projeto para liberar esta opção/);
@@ -303,8 +303,22 @@ test('module picker and Help explain item Pad compatibility in simple language',
   assert.match(help, /Pad To Nearest não aparece aqui: todos os itens são enviados de uma vez/);
   assert.match(help, /Pad To Nearest não aparece aqui, porque esse período é montado de uma vez/);
   assert.match(help, /usa o Filler depois de cada item até a próxima marca/);
-  assert.match(help, /Um evento com horário marcado continua entrando no horário dele/);
+  assert.match(help, /Se houver um evento marcado antes da próxima marca, o Filler respeita essa fronteira/);
 })
+
+test('timed modules expose closest-start policy with 40 minute default and Trim/overrun stay mutually exclusive', () => {
+  const view = read('js/scriptedSchedulesView.js');
+  const help = read('js/helpView.js');
+  assert.match(view, /function defaultStartTiming\(\) \{ return \{ startPolicy: 'closest', maxEarlyMinutes: 40 \}; \}/);
+  assert.match(view, /Usar o horário mais próximo/);
+  assert.match(view, /Pode adiantar até \(min\)/);
+  assert.match(view, /path\.endsWith\('\.trim'\)/);
+  assert.match(view, /\.allowOverrun`, false/);
+  assert.match(view, /path\.endsWith\('\.allowOverrun'\)/);
+  assert.match(view, /\.trim`, false/);
+  assert.match(help, /Horário mais próximo/);
+  assert.match(help, /40 minutos/);
+});
 
 test('sidebar navigation always returns each section to its home state', () => {
   const app = read('app.js');
@@ -329,7 +343,7 @@ test('Scripted Schedules Help stays inside the Programacao sidebar group and is 
   assert.match(programacaoGroup, /data-view="help"/);
   assert.doesNotMatch(sistemaGroup, /data-view="help"/);
   assert.match(html, /id="view-help"/);
-  assert.match(html, /helpView\.js\?v=3\.4\.8/);
+  assert.match(html, /helpView\.js\?v=3\.4\.9/);
   assert.match(help, /Programação · Scripted Schedules/);
   assert.match(help, /Assuntos da ajuda de Scripted Schedules/);
   for (const tab of ['Começando', 'Recursos', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));
