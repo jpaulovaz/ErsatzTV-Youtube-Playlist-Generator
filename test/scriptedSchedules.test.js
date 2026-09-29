@@ -504,13 +504,24 @@ test('projects cannot publish or validate the same output filename', async () =>
   }
 });
 
-test('global Filler is always serialized as ErsatzTV postroll filler for EPG grouping', async () => {
+test('global Filler defaults to postroll and preserves an explicit supported filler kind', async () => {
   const project = musicProject();
-  project.filler = { source: 'FILLER', presentation: 'common', fillerKind: 'midroll' };
-  const script = await generateScript(project);
-  const fillerBlock = script.match(/FILLER: dict\[str, Any\] \| None = \{[\s\S]*?\n\}/)?.[0] || '';
-  assert.match(fillerBlock, /"filler_kind": "postroll"/);
-  assert.doesNotMatch(fillerBlock, /"filler_kind": "midroll"/);
-  const output = await validateWithPython(script);
+  project.filler = { source: 'FILLER', presentation: 'common' };
+  const defaultScript = await generateScript(project);
+  const defaultBlock = defaultScript.match(/FILLER: dict\[str, Any\] \| None = \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(defaultBlock, /"filler_kind": "postroll"/);
+
+  project.filler.fillerKind = 'midroll';
+  const midrollScript = await generateScript(project);
+  const midrollBlock = midrollScript.match(/FILLER: dict\[str, Any\] \| None = \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(midrollBlock, /"filler_kind": "midroll"/);
+  assert.doesNotMatch(midrollBlock, /"filler_kind": "postroll"/);
+
+  project.filler.fillerKind = 'none';
+  const noneScript = await generateScript(project);
+  const noneBlock = noneScript.match(/FILLER: dict\[str, Any\] \| None = \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(noneBlock, /"filler_kind": "none"/);
+
+  const output = await validateWithPython(midrollScript);
   assert.match(output, /configuracao valida/);
 });

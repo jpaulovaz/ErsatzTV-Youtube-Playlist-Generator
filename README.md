@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.4
+# ErsatzTV YouTube Downloader 3.4.5
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.4 melhora o fluxo de configuração do **Scripted Schedules**, marca automaticamente o Filler geral como filler no ErsatzTV para não criar uma entrada própria no EPG e corrige o espaçamento dos cards de ajuda no seletor de módulos. O motor continua Universal v1.3.0 e o comportamento do Pad por item da v3.4.3 é preservado.
+A versão 3.4.5 refina a interface de **Scripted Schedules**: devolve a escolha do Tipo de Filler em um seletor simples, reduz textos redundantes e deixa a Ajuda mais natural. Também esclarece como funcionam as Variáveis dos Graphics. O motor continua Universal v1.3.0 e o comportamento do Pad por item permanece inalterado.
 
 ## Arquitetura
 
@@ -210,7 +210,7 @@ A área **Scripted Schedules** é independente do downloader. Cada projeto repre
 
 O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas.
 
-Módulos disponíveis na v3.4.4:
+Módulos disponíveis na v3.4.5:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -231,7 +231,7 @@ Módulos disponíveis na v3.4.4:
 - **Evento em data específica**.
 - **Janela offline**.
 
-O **Filler** permanece separado dos módulos e é opcional. Quando configurado como Filler geral, o gerador o envia ao ErsatzTV com `filler_kind=postroll`, para que o conteúdo de preenchimento não crie uma entrada própria no EPG. Programações de fundo como rotações, Bloco contínuo e Inserções após X itens são alternativas de programação-base; o validador avisa quando várias bases são configuradas ao mesmo tempo. Eventos fixos podem ser colocados por cima da base usando prioridade e horários.
+O **Filler** permanece separado dos módulos e é opcional. O **Tipo de Filler** pode ser escolhido entre Post-roll, Pre-roll, Mid-roll e Nenhum. **Post-roll** é o padrão e a opção recomendada para preencher lacunas e para o Pad; projetos antigos sem essa escolha salva continuam sendo tratados como Post-roll. Programações de fundo como rotações, Bloco contínuo e Inserções após X itens são alternativas de programação-base; o validador avisa quando várias bases são configuradas ao mesmo tempo. Eventos fixos podem ser colocados por cima da base usando prioridade e horários.
 
 Os filtros de dias e datas também suportam **recorrência avançada**, incluindo primeira/segunda/terceira/quarta/última ocorrência de um dia da semana no mês e repetição a cada N dias.
 
@@ -245,7 +245,7 @@ Smart Collections e Canais são carregados pelo nome quando a API do ErsatzTV es
 
 **Reset Playout** é uma ação separada e destrutiva. Publicar um script nunca dispara reset automaticamente.
 
-A opção lateral **Ajuda** possui explicações simples de Recursos, todos os módulos, combinações sugeridas, publicação e termos técnicos. Os `?` contextuais continuam disponíveis diretamente ao lado dos campos.
+A opção lateral **Ajuda** possui explicações simples de Recursos, todos os módulos, combinações sugeridas, publicação e termos técnicos. Os `?` contextuais continuam disponíveis diretamente ao lado dos campos. Em **Variáveis dos Graphics**, a Ajuda deixa claro que não existe uma lista fixa: a chave deve ser a mesma usada pelo YAML/Scriban. Dados que o ErsatzTV já fornece ao Graphics, como `MediaItem_Title`, `MediaItem_Artist`, `MediaItem_Path` e `MediaItem_Duration`, são usados diretamente no YAML e não precisam ser cadastrados como variáveis personalizadas.
 
 Os dados do builder ficam em `data/scripted-schedules/` e não alteram o `configVersion` principal da aplicação.
 

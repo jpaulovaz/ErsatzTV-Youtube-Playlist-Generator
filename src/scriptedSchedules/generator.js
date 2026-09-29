@@ -95,6 +95,11 @@ function sourceToEngine(source) {
   return common;
 }
 
+function normalizeFillerKind(value, fallback = undefined) {
+  const normalized = cleanString(value).toLowerCase();
+  return ['none', 'preroll', 'midroll', 'postroll'].includes(normalized) ? normalized : fallback;
+}
+
 function playbackFields(input = {}) {
   return compact({
     custom_title: input.customTitle,
@@ -287,7 +292,7 @@ function projectToEngine(project) {
   if (!profiles.none) profiles.none = { graphics: [], watermarks: [], pre_roll: null, epg_group: false };
 
   const modules = modulesToEngine(project);
-  const filler = project.filler ? compact({ source: project.filler.source, presentation: project.filler.presentation, ...playbackFields(project.filler), filler_kind: 'postroll' }) : null;
+  const filler = project.filler ? compact({ source: project.filler.source, presentation: project.filler.presentation, ...playbackFields(project.filler), filler_kind: normalizeFillerKind(project.filler.fillerKind, 'postroll') }) : null;
   const options = project.options || {};
 
   return {

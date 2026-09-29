@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.4/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.4/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.5/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.5/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -177,8 +177,8 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.0 modul
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.4\.4/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.4/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.4\.5/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.5/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -234,12 +234,12 @@ test('Scripted Schedules exposes discreet contextual help for configuration fiel
   assert.match(view, /data-ss-help=/);
   assert.match(view, /showHelpPopover/);
   assert.match(view, /hideHelpPopover/);
-  assert.match(view, /Filler kind/);
-  assert.match(view, /Marca este conteúdo como filler/);
+  assert.match(view, /Tipo de Filler/);
+  assert.match(view, /Diz ao ErsatzTV como este conteúdo deve ser tratado no EPG/);
   assert.match(view, /Fallback Source/);
-  assert.match(view, /Isso é diferente do Filler geral do projeto/);
+  assert.match(view, /É diferente do Filler geral do projeto/);
   assert.match(view, /Pad To Nearest Minute/);
-  assert.match(view, /se um filme terminar 10:07, o Filler completa até 10:15/);
+  assert.match(view, /um filme que termina 10:07 recebe Filler até 10:15/);
   assert.match(view, /labelTitle\('Nome do projeto', 'projectName'\)/);
   assert.match(view, /labelTitle\('Smart Collection', 'smartCollection'\)/);
   assert.match(view, /labelTitle\('Prioridade', 'priority'\)/);
@@ -300,8 +300,8 @@ test('module picker and Help explain item Pad compatibility in simple language',
   assert.match(view, /Em cada posição, o Pad aparece quando o modo for Quantidade/);
   assert.match(view, /meta\.pad === 'none' \|\| meta\.padNote/);
   assert.match(help, /Com Pad: filme → Filler até a marca → filme → Filler → filme → Filler/);
-  assert.match(help, /Pad To Nearest não se aplica aqui: o ErsatzTV recebe todos os itens de uma vez/);
-  assert.match(help, /Pad To Nearest não se aplica aqui, porque o ErsatzTV monta esse período de uma vez/);
+  assert.match(help, /Pad To Nearest não aparece aqui: todos os itens são enviados de uma vez/);
+  assert.match(help, /Pad To Nearest não aparece aqui, porque esse período é montado de uma vez/);
   assert.match(help, /usa o Filler depois de cada item até a próxima marca/);
   assert.match(help, /Um evento com horário marcado continua entrando no horário dele/);
 })
@@ -329,7 +329,7 @@ test('Scripted Schedules Help stays inside the Programacao sidebar group and is 
   assert.match(programacaoGroup, /data-view="help"/);
   assert.doesNotMatch(sistemaGroup, /data-view="help"/);
   assert.match(html, /id="view-help"/);
-  assert.match(html, /helpView\.js\?v=3\.4\.4/);
+  assert.match(html, /helpView\.js\?v=3\.4\.5/);
   assert.match(help, /Programação · Scripted Schedules/);
   assert.match(help, /Assuntos da ajuda de Scripted Schedules/);
   for (const tab of ['Começando', 'Recursos', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));
@@ -382,14 +382,41 @@ test('Scripted Schedules follows a fluent resource order and configures Filler b
   assert.ok(programming.indexOf('${renderFiller()}') < programming.indexOf('>Módulos<'), 'Filler should be configured before programming modules');
 
   assert.match(help, /A tela segue a ordem mais comum/);
-  assert.match(help, /Quando usado como Filler do projeto, o conteúdo é marcado como Filler no ErsatzTV/);
+  assert.match(help, /Post-roll é o mais indicado para preencher lacunas/);
   assert.match(css, /\.ss-module-picker-description \.ss-callout \+ \.ss-callout \{ margin-top: 12px; \}/);
 });
 
-test('global Filler hides manual filler kind because EPG filler marking is automatic', () => {
+test('global Filler exposes a compact filler type picklist with postroll as the recommended default', () => {
   const view = read('js/scriptedSchedulesView.js');
   const fillerRenderer = view.match(/function renderFiller\(\)[\s\S]*?function renderEditorSaveBar/)?.[0] || '';
-  assert.match(fillerRenderer, /hideFillerKind: true/);
-  assert.match(fillerRenderer, /marcado automaticamente como Filler no ErsatzTV/);
-  assert.doesNotMatch(fillerRenderer, /data-bind=\\"filler\.fillerKind\\"/);
+  assert.match(view, /const FILLER_KIND_OPTIONS = \[/);
+  for (const value of ['postroll', 'preroll', 'midroll', 'none']) assert.match(view, new RegExp(`'${value}'`));
+  assert.match(fillerRenderer, /renderFillerKindSelect\('filler\.fillerKind'/);
+  assert.match(fillerRenderer, /defaultValue: 'postroll'/);
+  assert.match(fillerRenderer, /recommendPostroll: true/);
+  assert.doesNotMatch(fillerRenderer, /<strong>EPG:<\/strong>/);
+});
+
+test('Scripted Schedules removes redundant chips and uses more natural linking copy', () => {
+  const view = read('js/scriptedSchedulesView.js');
+  const settings = view.match(/function renderSettingsCard\(\)[\s\S]*?function renderProjectCard/)?.[0] || '';
+  const programming = view.match(/function renderProgramming\(\)[\s\S]*?function renderModulePickerModal/)?.[0] || '';
+  const fillerRenderer = view.match(/function renderFiller\(\)[\s\S]*?function renderEditorSaveBar/)?.[0] || '';
+  const publish = view.match(/function renderPublish\(\)[\s\S]*?function renderLinksAssistant/)?.[0] || '';
+  assert.doesNotMatch(settings, /O aplicativo só publica arquivos \.py dentro desta pasta/);
+  assert.doesNotMatch(programming, /<strong>Programação-base:<\/strong>/);
+  assert.doesNotMatch(fillerRenderer, /<strong>EPG:<\/strong>/);
+  assert.match(view, /Aqui você escolhe o canal que usa este script\. Na primeira vez, cadastre o caminho do script no Playout do ErsatzTV\./);
+  assert.match(publish, /Na primeira vez, cadastre este caminho no Scripted Schedule do Playout no ErsatzTV\. Depois, é só salvar por aqui/);
+});
+
+test('Graphics variable help explains custom keys and built-in media data without inventing a fixed list', () => {
+  const view = read('js/scriptedSchedulesView.js');
+  const help = read('js/helpView.js');
+  assert.match(view, /Não existe uma lista fixa: cada YAML pode criar as próprias variáveis/);
+  assert.match(view, /se o YAML usa \{\{ promo_text \}\}, a chave aqui é promo_text/);
+  assert.match(help, /Variáveis dos Graphics/);
+  assert.match(help, /Não existe uma lista fixa/);
+  for (const name of ['MediaItem_Title', 'MediaItem_Artist', 'MediaItem_Path', 'MediaItem_Duration']) assert.match(help, new RegExp(name));
+  assert.match(help, /não precisam ser cadastrados aqui/);
 });

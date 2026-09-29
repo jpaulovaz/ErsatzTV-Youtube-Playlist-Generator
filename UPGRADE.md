@@ -1,24 +1,25 @@
-# Atualização para 3.4.4
+# Atualização para 3.4.5
 
-A versão 3.4.4 é uma atualização de organização e comportamento do **Scripted Schedules** sobre a v3.4.3.
+A versão 3.4.5 é uma atualização de interface e clareza do **Scripted Schedules** sobre a v3.4.4.
 
 ## O que muda
 
-- A aba **Recursos** passa a seguir uma ordem mais fluida: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**.
-- O **Pre-roll** do Presentation Profile fica em uma área opcional. Se a Scripted Playlist ainda não existir, ela pode ser criada depois e selecionada ao voltar ao perfil.
-- Na aba **Programação**, o **Filler** aparece antes dos módulos, porque ele é uma dependência do Pad To Nearest Minute.
-- O Filler geral passa a ser enviado ao ErsatzTV automaticamente como `filler_kind=postroll`, evitando uma entrada própria de Filler no EPG. O campo técnico de Filler kind deixa de aparecer na configuração do Filler geral.
-- O modal **Adicionar módulo** ganha espaço entre os cards **Combina bem com** e **Pad To Nearest Minute**.
-- A Ajuda acompanha a nova ordem e explica o comportamento do Filler no EPG em linguagem simples.
-- A explicação contextual do Pad foi alinhada ao comportamento por item da v3.4.3.
+- O **Filler geral** volta a mostrar **Tipo de Filler**, agora como um seletor simples com Post-roll, Pre-roll, Mid-roll e Nenhum.
+- **Post-roll** continua sendo o padrão e aparece como recomendado para preencher lacunas e para o Pad.
+- Projetos antigos que não possuem `fillerKind` salvo continuam sendo tratados como Post-roll.
+- O campo deixa de aceitar texto livre; somente valores suportados podem ser escolhidos.
+- Foram removidos textos redundantes da pasta de saída, do Filler e da área de Programação.
+- As orientações de vínculo/publicação com o Playout foram reescritas de forma mais natural.
+- A Ajuda de **Variáveis dos Graphics** agora explica que as chaves são definidas pelo YAML/Scriban e mostra exemplos de dados que o ErsatzTV já fornece diretamente ao Graphics.
 
 ## Compatibilidade
 
 - `configVersion` permanece **8**.
 - O schema de armazenamento de Scripted Schedules permanece **1**.
 - O motor permanece **Universal v1.3.0**.
-- Não existe migração de projeto. A ordem das seções é somente de interface.
-- Um `fillerKind` antigo salvo no Filler geral não precisa ser removido: o gerador passa a usar `postroll` automaticamente para esse papel.
+- O comportamento do **Pad To Nearest Minute por item** não muda.
+- Não existe migração obrigatória de projeto.
+- Um Filler geral antigo sem `fillerKind` continua sendo gerado como Post-roll.
 - Projetos v1.1.1/v1.2.0 continuam sem atualização silenciosa.
 - `config/config.json`, `config/auth.json` e `data/` devem ser preservados durante o UPDATE.
 
@@ -26,16 +27,16 @@ A versão 3.4.4 é uma atualização de organização e comportamento do **Scrip
 
 1. Pare o serviço da aplicação.
 2. Faça backup da instalação atual.
-3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.4-update.zip` sobre a instalação v3.4.3.
+3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.5-update.zip` sobre a instalação v3.4.4.
 4. Inicie novamente o serviço.
-5. Abra **Programação -> Scripted Schedules** e confira Recursos/Programação.
-6. Nos projetos que usam Filler, publique novamente o script para que o `filler_kind=postroll` passe a fazer parte do arquivo gerado.
+5. Abra **Programação -> Scripted Schedules** e confira o Filler e a Ajuda.
+6. Só republique um projeto se quiser mudar o Tipo de Filler que já estava sendo tratado como Post-roll.
 
 Não é necessária migração manual de configuração ou de projetos.
 
 ## Gate esperado
 
-- upgrade esperado: **v3.4.3 -> v3.4.4**;
+- upgrade esperado: **v3.4.4 -> v3.4.5**;
 - `npm run check`: aprovado;
 - suíte automatizada: aprovada;
 - UPDATE não deve conter `config/config.json`, `config/auth.json` nem `data/`.

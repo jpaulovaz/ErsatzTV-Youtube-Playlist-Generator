@@ -25,6 +25,12 @@
   ];
   const LATEST_TEMPLATE_VERSION = '1.3.0';
   const PAD_TO_NEAREST_OPTIONS = [5, 10, 15, 30];
+  const FILLER_KIND_OPTIONS = [
+    ['postroll', 'Post-roll', 'Depois do conteúdo. É a opção recomendada para preencher lacunas e para o Pad.'],
+    ['preroll', 'Pre-roll', 'Antes do próximo conteúdo. Útil para vinhetas ou chamadas que pertencem ao que vai começar.'],
+    ['midroll', 'Mid-roll', 'Como uma interrupção no meio do conteúdo. Use quando esse for realmente o papel do filler.'],
+    ['none', 'Nenhum', 'Não marca como filler. O conteúdo pode aparecer como uma entrada própria no EPG.']
+  ];
 
   const SOURCE_TYPES = [
     ['smart_collection', 'Smart Collection'], ['collection', 'Collection'], ['multi_collection', 'Multi-Collection'],
@@ -32,111 +38,112 @@
   ];
 
   const HELP_TEXT = {
-    settingsOutputRoot: 'Pasta do servidor onde os arquivos .py gerados serão gravados. Exemplo: /srv/ersatztv/scripts. O ErsatzTV também precisa conseguir acessar esse caminho.',
-    historyLimit: 'Quantidade de versões anteriores que o aplicativo guarda para restauração. Exemplo: 10 mantém as 10 publicações mais recentes.',
-    projectName: 'Nome usado somente para identificar este projeto no aplicativo. Exemplo: JohnFlix Filmes.',
-    fileName: 'Nome do arquivo Python que será gerado. Depois de vincular o arquivo no ErsatzTV, evite mudar esse nome sem atualizar o Playout. Exemplo: johnflix-filmes.py.',
-    templateVersion: 'Versão do motor Universal usada para gerar o script. Projetos antigos não são atualizados silenciosamente.',
-    outputRootReadOnly: 'Pasta onde este projeto será publicado. Ela é definida na tela principal de Scripted Schedules.',
-    channel: 'Canal do ErsatzTV associado localmente a este projeto. O número do canal é usado internamente pelo aplicativo.',
-    stateKey: 'Nome exclusivo do arquivo de estado usado pelo script para lembrar rotação, saldos e eventos pendentes. Use uma chave diferente para cada Playout. Exemplo: filmes_420.',
-    friendlyName: 'Nome fácil de ler mostrado na interface. Ele pode ter espaços e não precisa ser igual à chave interna.',
-    key: 'Identificador interno usado pelo script para referenciar este item. Deve ser único e estável. Exemplo: MOVIES_PRIME.',
-    graphicsElements: 'Caminhos dos arquivos YAML de Graphics Elements que fazem parte deste grupo, um por linha. Exemplo: image/icon.yml.',
-    includeGraphicsGroups: 'Permite montar um grupo usando outros grupos já cadastrados. Exemplo: MUSIC_GRAPHICS pode incluir COMMON_GRAPHICS.',
-    sourceType: 'Define de onde o ErsatzTV buscará o conteúdo: Smart Collection, Collection, Playlist, Search, Show, Marathon etc.',
-    sourceOrder: 'Ordem entregue pelo ErsatzTV. Chronological segue a ordem natural; Shuffle embaralha os itens.',
-    sourcePresentation: 'Perfil visual usado por padrão quando esta Source toca. Os Presentation Profiles ficam acima nesta tela; um módulo também pode escolher outro perfil.',
-    smartCollection: 'Smart Collection do ErsatzTV usada como fonte de conteúdo. Quando o catálogo está disponível, escolha pelo nome.',
-    ersatzName: 'Nome exato da Collection ou Multi-Collection existente no ErsatzTV.',
-    playlist: 'Nome da Playlist existente no ErsatzTV.',
-    playlistGroup: 'Grupo ao qual a Playlist pertence no ErsatzTV. Ele ajuda o Scripted Schedule a localizar a playlist correta.',
-    searchQuery: 'Busca que o ErsatzTV executará para encontrar mídia. Exemplo: type:movie AND tag:"comedia".',
-    marathonGroupBy: 'Critério usado para separar o conteúdo em grupos de maratona, como show, temporada, artista, álbum ou diretor.',
-    marathonItemOrder: 'Ordem dos itens dentro de cada grupo da maratona: cronológica ou embaralhada.',
-    marathonPlayAll: 'Quando ativo, toca todos os itens do grupo atual antes de passar ao próximo grupo.',
-    marathonShuffleGroups: 'Quando ativo, embaralha a ordem dos grupos da maratona. Os itens dentro de cada grupo continuam seguindo a ordem escolhida acima.',
-    marathonSearches: 'Buscas usadas para formar a maratona, uma por linha. Exemplo: type:music_video.',
-    guidProvider: 'Nome do provedor do identificador. Exemplo: tmdb, tvdb ou outro GUID reconhecido pelo ErsatzTV.',
-    guidValue: 'Valor do identificador no provedor escolhido. Exemplo: 12345.',
-    playlistItemSource: 'Source que será usada neste passo da Scripted Playlist.',
-    playlistItemCount: 'Quantidade de itens dessa Source colocados na Scripted Playlist. Exemplo: 2 toca dois itens antes de seguir para o próximo passo.',
-    preRoll: 'Scripted Playlist executada antes dos itens que usam este perfil. É opcional: se ainda não criou a playlist, deixe vazio e volte depois.',
-    epgGroup: 'Agrupa o conteúdo deste bloco como um programa no EPG, em vez de deixar cada item aparecer separadamente.',
-    epgTitle: 'Título mostrado no EPG quando o agrupamento está ativo. Exemplo: Sessão Prime.',
-    epgAdvance: 'Quando ativo, inicia um novo grupo no EPG. Desativado continua o grupo EPG que já estiver aberto.',
-    directGraphics: 'Graphics Elements aplicados diretamente por este perfil, sem precisar criar um grupo. Informe um YAML por linha.',
-    nativeWatermarks: 'Watermarks nativos cadastrados no ErsatzTV. Eles são diferentes dos arquivos YAML de Graphics Elements.',
-    graphicsGroupSelection: 'Grupos de Graphics que serão ligados quando este perfil estiver ativo.',
-    graphicsVariableKey: 'Nome de uma variável esperada por um Graphics Element. Exemplo: artist_name.',
-    graphicsVariableValue: 'Valor enviado para a variável do Graphics Element. Exemplo: Bastille.',
-    defaultRotationDuration: 'Duração usada pela ROTATION quando um bloco não informa sua própria duração. Exemplo: 60 significa uma hora.',
-    defaultPriority: 'Prioridade usada quando um evento não informa outra. Número maior tem preferência quando dois módulos disputam o mesmo horário.',
-    httpTimeout: 'Tempo máximo que o script espera por uma resposta da API do ErsatzTV antes de considerar a chamada com falha.',
-    occurrenceRetention: 'Por quantos dias o script lembra ocorrências já processadas. Isso evita repetir eventos antigos depois de rebuilds ou reinícios.',
-    allowOverrunGlobal: 'Quando ativo, o vídeo atual pode terminar mesmo que ultrapasse o horário planejado. Evita cortar vídeos no meio.',
-    modulePicker: 'Escolha qual tipo de módulo deseja adicionar à programação. Você só precisa adicionar os módulos que o canal realmente usa.',
-    source: 'Source que fornece o conteúdo deste bloco. Ela deve existir na aba Recursos.',
-    presentation: 'Perfil visual usado neste bloco. Se ficar no padrão, será usada a Presentation configurada na Source.',
-    duration: 'Tempo nominal deste bloco em minutos. Com a regra de não cortar vídeo, o último item pode terminar depois desse tempo.',
-    id: 'Identificador único deste evento dentro do projeto. O script usa esse ID para reconhecer a ocorrência e manter seu estado.',
-    optionalName: 'Nome apenas para facilitar a leitura na interface e nos logs. Não muda a lógica do evento.',
-    time: 'Horário em que este evento deve começar. Se um vídeo anterior ainda estiver tocando e cortes não forem permitidos, ele começa assim que esse vídeo terminar.',
-    quantity: 'Quantidade de itens da Source que serão tocados neste evento.',
-    priority: 'Define qual evento tem preferência. Número maior vence. Em empate, quem já está ativo continua.',
-    startTime: 'Horário em que esta janela ou regra passa a valer.',
-    endTime: 'Horário em que esta janela ou regra deixa de valer. A janela pode atravessar a meia-noite quando o fim for menor que o início.',
-    blockMinutes: 'Duração padrão de cada bloco da rotação em janela. Um item pode informar sua própria duração para substituir este valor.',
-    atomic: 'Quando ativo, a sequência inteira termina antes de outro módulo assumir. Use quando os passos precisam ficar juntos.',
-    everyMinutes: 'Intervalo entre as ocorrências. Exemplo: 30 executa o evento a cada 30 minutos dentro da janela.',
-    mode: 'Define como o conteúdo será adicionado: por quantidade, por duração, todos os itens ou, quando disponível, uma sequência.',
-    latePolicy: 'O que fazer se o horário já passou: esperar na fila ou ignorar a ocorrência quando o atraso ultrapassar o limite.',
-    maxLateness: 'Atraso máximo permitido para uma ocorrência configurada como “ignorar se atrasar demais”. Exemplo: 10 aceita até 10 minutos de atraso.',
-    dateTime: 'Data e hora exatas de um evento único. Exemplo: 2026-12-24 20:00.',
-    eventEnabled: 'Liga ou desliga este evento sem precisar apagá-lo da configuração.',
-    days: 'Dias da semana em que este evento pode acontecer. Se nenhum dia for marcado, a regra não limita por dia da semana.',
-    startDate: 'Primeiro dia em que esta regra pode acontecer. Deixe vazio para não limitar o início do período.',
-    endDate: 'Último dia em que esta regra pode acontecer. Deixe vazio para não limitar o fim do período.',
-    onlyDates: 'Lista de datas específicas permitidas, uma por linha. Quando preenchida, o evento só ocorre nessas datas.',
-    excludeDates: 'Datas que devem ser ignoradas mesmo que as outras regras permitam o evento, uma por linha.',
-    customTitle: 'Substitui o título usado no EPG para o conteúdo adicionado por este bloco. Deixe vazio para usar o título normal.',
-    fillerKind: 'Marca este conteúdo como filler para o ErsatzTV, o que influencia o agrupamento no EPG. Se você não usa fillerKind na sua programação, deixe vazio.',
-    fallback: 'Source de reserva usada pelo próprio ErsatzTV para completar o tempo que sobrar numa operação de duração/pad. Ele escolhe um item dessa Source, repete se necessário e pode recortar para caber exatamente. Isso é diferente do Filler geral do projeto.',
-    discardAttempts: 'Usado quando Trim está desligado. Define quantos itens o ErsatzTV pode descartar enquanto procura um que caiba no tempo restante. Exemplo: 3 permite tentar até três alternativas antes de desistir.',
-    disableWatermarks: 'Desliga os watermarks nativos do ErsatzTV somente para o conteúdo deste bloco. Não desliga Graphics Elements YAML.',
-    trim: 'Permite ao ErsatzTV cortar um item para caber exatamente no tempo disponível. Deixe desligado quando não quiser cortar vídeos.',
-    offlineTail: 'Depois de colocar tudo que couber, deixa o tempo restante sem programação em vez de preenchê-lo.',
-    allowOverrun: 'Permite que o último vídeo termine mesmo ultrapassando o limite do bloco. É a opção indicada quando você não quer cortes.',
-    padToNearest: 'Nos módulos compatíveis, depois de cada item usa o Filler geral até a próxima marca escolhida. Exemplo: com 15, se um filme terminar 10:07, o Filler completa até 10:15 antes do próximo filme. Um evento com horário marcado continua entrando no horário dele.',
-    sequenceStepMode: 'O que este passo faz: toca uma quantidade, toca por duração, toca todos, preenche até a próxima marca ou espera offline.',
-    sequenceStepSource: 'Source usada apenas neste passo da sequência.',
-    sequenceStepCount: 'Quantidade de itens tocados neste passo antes de seguir para o próximo.',
-    sequenceStepDuration: 'Tempo deste passo em minutos.',
-    sequenceStepMark: 'Marca de relógio usada pelo passo “Até próxima marca”. Exemplo: 30 leva 10:07 até 10:30 usando a Source escolhida.',
-    sequenceStepPresentation: 'Presentation usada somente neste passo da sequência.',
-    recurrenceType: 'Permite repetir a regra de formas mais específicas. Exemplo: primeira segunda-feira do mês ou a cada 14 dias. Deixe em “Sem recorrência extra” para usar apenas os dias e datas normais.',
-    recurrenceOrdinal: 'Escolhe qual ocorrência do dia da semana no mês. Exemplo: 1ª segunda-feira ou última sexta-feira.',
-    recurrenceWeekday: 'Dia da semana usado pela recorrência mensal.',
-    recurrenceEveryDays: 'Repete a regra a cada N dias a partir da data-base. Exemplo: 14 cria uma programação quinzenal.',
-    recurrenceAnchorDate: 'Data usada como ponto de partida para a repetição “a cada N dias”.',
-    weight: 'Peso usado para definir a frequência relativa desta Source. Exemplo: peso 60 e peso 20 fazem a primeira aparecer aproximadamente três vezes mais.',
-    avoidRepeat: 'Evita escolher a mesma Source duas vezes seguidas quando houver outra opção disponível.',
-    everyItems: 'Quantidade de itens principais tocados antes da inserção. Exemplo: 4 significa “depois de quatro músicas, faça a pausa”.',
-    breakSource: 'Source que entra na pausa automática. Exemplo: STATION_IDS ou PROMOS.',
-    breakCount: 'Quantidade de itens da Source de inserção. Exemplo: 1 toca uma vinheta e depois volta ao conteúdo principal.',
-    breakPresentation: 'Presentation usada somente durante a inserção.',
-    lookAhead: 'Quanto tempo antes do próximo evento o módulo começa a tentar encaixar conteúdo. Exemplo: 45 procura algo que caiba quando faltarem até 45 minutos.',
+    settingsOutputRoot: 'Pasta onde os arquivos .py serão salvos. Exemplo: /srv/ersatztv/scripts. O ErsatzTV precisa conseguir acessar esse mesmo caminho.',
+    historyLimit: 'Quantas versões antigas você quer guardar para poder voltar atrás. Exemplo: 10 mantém as 10 publicações mais recentes.',
+    projectName: 'Nome que você verá no aplicativo. Pode ser algo simples, como JohnFlix Filmes.',
+    fileName: 'Nome do arquivo Python gerado. Depois de cadastrar esse arquivo no ErsatzTV, evite trocar o nome sem atualizar o Playout. Exemplo: johnflix-filmes.py.',
+    templateVersion: 'Versão do motor usada por este projeto. Projetos antigos só mudam de versão quando você pedir.',
+    outputRootReadOnly: 'Pasta onde este projeto será publicado. Ela é definida na tela inicial de Scripted Schedules.',
+    channel: 'Canal do ErsatzTV que vai usar este script. O aplicativo guarda o número do canal para fazer o vínculo.',
+    stateKey: 'Chave usada pelo script para lembrar rotação, saldos e eventos pendentes. Use uma diferente em cada Playout. Exemplo: filmes_420.',
+    friendlyName: 'Nome fácil de reconhecer na tela. Pode ter espaços e não precisa ser igual à chave interna.',
+    key: 'Nome interno usado pelo script para encontrar este item. Deve ser único e, de preferência, não mudar depois. Exemplo: MOVIES_PRIME.',
+    graphicsElements: 'Arquivos YAML de Graphics Elements que fazem parte deste grupo, um por linha. Exemplo: image/icon.yml.',
+    includeGraphicsGroups: 'Use quando este grupo também deve ligar outros grupos já cadastrados. Exemplo: MUSIC_GRAPHICS pode incluir COMMON_GRAPHICS.',
+    sourceType: 'Escolha de onde o ErsatzTV vai buscar o conteúdo: Smart Collection, Collection, Playlist, Search, Show ou Marathon.',
+    sourceOrder: 'Escolha a ordem dos itens. Chronological segue a ordem natural; Shuffle embaralha.',
+    sourcePresentation: 'Presentation usada por padrão quando esta Source toca. Um módulo pode escolher outro perfil quando precisar.',
+    smartCollection: 'Smart Collection do ErsatzTV usada como fonte. Quando o catálogo estiver disponível, basta escolher pelo nome.',
+    ersatzName: 'Nome exato da Collection ou Multi-Collection no ErsatzTV.',
+    playlist: 'Nome da Playlist no ErsatzTV.',
+    playlistGroup: 'Grupo da Playlist no ErsatzTV. Ele ajuda o Scripted Schedule a encontrar a playlist certa.',
+    searchQuery: 'Busca usada pelo ErsatzTV para encontrar mídia. Exemplo: type:movie AND tag:"comedia".',
+    marathonGroupBy: 'Escolha como separar a maratona em grupos: show, temporada, artista, álbum ou diretor.',
+    marathonItemOrder: 'Ordem dos itens dentro de cada grupo: cronológica ou embaralhada.',
+    marathonPlayAll: 'Quando ligado, termina todos os itens do grupo atual antes de passar para o próximo.',
+    marathonShuffleGroups: 'Embaralha a ordem dos grupos. A ordem dos itens dentro de cada grupo continua sendo a escolhida acima.',
+    marathonSearches: 'Buscas usadas para montar a maratona, uma por linha. Exemplo: type:music_video.',
+    guidProvider: 'Provedor do identificador. Exemplos comuns: tmdb e tvdb.',
+    guidValue: 'Número ou texto do identificador nesse provedor. Exemplo: 12345.',
+    playlistItemSource: 'Source usada neste passo da Scripted Playlist.',
+    playlistItemCount: 'Quantos itens dessa Source entram antes de passar para o próximo passo. Exemplo: 2 toca dois itens.',
+    preRoll: 'Scripted Playlist que toca antes dos itens deste perfil. É opcional; se ela ainda não existir, deixe vazio e volte depois.',
+    epgGroup: 'Junta o conteúdo deste bloco em uma única entrada no EPG, em vez de mostrar cada item separado.',
+    epgTitle: 'Título que aparece no EPG quando o agrupamento está ligado. Exemplo: Sessão Prime.',
+    epgAdvance: 'Quando ligado, começa um novo grupo no EPG. Desligado, continua o grupo que já estiver aberto.',
+    directGraphics: 'Graphics Elements que este perfil liga diretamente, sem precisar criar um grupo. Informe um YAML por linha.',
+    nativeWatermarks: 'Watermarks cadastrados no ErsatzTV. Eles são diferentes dos arquivos YAML de Graphics Elements.',
+    graphicsGroupSelection: 'Escolha quais Grupos de Graphics serão ligados enquanto este perfil estiver ativo.',
+    graphicsVariables: 'Valores personalizados enviados aos Graphics Elements. A chave precisa ter o mesmo nome usado no seu YAML. Não existe uma lista fixa: cada YAML pode criar as próprias variáveis.',
+    graphicsVariableKey: 'Nome da variável usada no YAML. Exemplo: se o YAML usa {{ promo_text }}, a chave aqui é promo_text.',
+    graphicsVariableValue: 'Valor que será colocado nessa variável. Exemplo: Hoje às 20h.',
+    defaultRotationDuration: 'Tempo usado pela Rotação por tempo quando um item não informa a própria duração. Exemplo: 60 significa uma hora.',
+    defaultPriority: 'Prioridade usada quando um evento não informa outra. Número maior tem preferência quando dois eventos disputam o mesmo momento.',
+    httpTimeout: 'Quanto tempo o script espera uma resposta do ErsatzTV antes de considerar que a chamada falhou.',
+    occurrenceRetention: 'Por quantos dias o script lembra eventos já processados. Isso evita repetir eventos antigos depois de um rebuild ou reinício.',
+    allowOverrunGlobal: 'Deixa o vídeo atual terminar mesmo que passe do horário planejado. Use quando você prefere não cortar vídeos.',
+    modulePicker: 'Escolha o tipo de programação que quer adicionar. Você só precisa dos módulos que realmente usa.',
+    source: 'Source que fornece o conteúdo deste bloco. Ela precisa existir em Recursos.',
+    presentation: 'Perfil visual usado neste bloco. Se ficar no padrão, vale a Presentation escolhida na Source.',
+    duration: 'Tempo planejado para este bloco. Se o vídeo não puder ser cortado, o último item pode passar um pouco desse tempo.',
+    id: 'Nome único deste evento dentro do projeto. O script usa esse ID para reconhecer a ocorrência e lembrar seu estado.',
+    optionalName: 'Nome só para facilitar a leitura na tela e nos logs. Não muda o funcionamento do evento.',
+    time: 'Horário em que este evento deve começar. Se um vídeo anterior estiver terminando e não puder ser cortado, o evento entra assim que ele acabar.',
+    quantity: 'Quantidade de itens que serão tocados neste evento.',
+    priority: 'Define qual evento tem preferência. Número maior vence; em empate, o que já está ativo continua.',
+    startTime: 'Horário a partir do qual esta regra vale.',
+    endTime: 'Horário em que esta regra deixa de valer. Se o fim for menor que o início, a faixa atravessa a meia-noite.',
+    blockMinutes: 'Tempo padrão de cada etapa da rotação nesta faixa. Um item pode usar outro valor.',
+    atomic: 'Mantém a sequência inteira junta antes de deixar outro módulo assumir. Use quando os passos não podem ser separados.',
+    everyMinutes: 'De quanto em quanto tempo o evento se repete. Exemplo: 30 significa a cada 30 minutos.',
+    mode: 'Escolha como o conteúdo será tocado: por quantidade, por duração, todos os itens ou, quando disponível, uma sequência.',
+    latePolicy: 'O que fazer quando o horário já passou: deixar o evento esperando ou ignorá-lo se o atraso ficar grande demais.',
+    maxLateness: 'Quanto atraso ainda é aceitável antes de ignorar o evento. Exemplo: 10 aceita até 10 minutos.',
+    dateTime: 'Data e hora exatas de um evento que acontece uma vez. Exemplo: 24/12/2026 às 20:00.',
+    eventEnabled: 'Liga ou desliga este evento sem precisar apagá-lo.',
+    days: 'Dias da semana em que este evento pode acontecer. Sem dias marcados, não há limite por dia da semana.',
+    startDate: 'Primeiro dia em que esta regra pode acontecer. Deixe vazio se não quiser limitar o início.',
+    endDate: 'Último dia em que esta regra pode acontecer. Deixe vazio se não quiser limitar o fim.',
+    onlyDates: 'Se preencher esta lista, o evento só acontece nessas datas. Use uma data por linha.',
+    excludeDates: 'Datas que devem ser ignoradas mesmo quando as outras regras permitirem o evento. Use uma por linha.',
+    customTitle: 'Troca o título mostrado no EPG para este conteúdo. Deixe vazio para usar o título normal.',
+    fillerKind: 'Diz ao ErsatzTV como este conteúdo deve ser tratado no EPG. Post-roll é a escolha mais comum para preencher lacunas e para o Pad.',
+    fallback: 'Source de reserva que o ErsatzTV pode usar para completar o tempo restante em operações de duração ou pad. É diferente do Filler geral do projeto.',
+    discardAttempts: 'Quando Trim está desligado, diz quantos itens o ErsatzTV pode pular procurando um que caiba no tempo restante. Exemplo: 3 permite tentar três alternativas.',
+    disableWatermarks: 'Desliga os watermarks do ErsatzTV só para este conteúdo. Não desliga os Graphics Elements em YAML.',
+    trim: 'Permite cortar um item para ele caber exatamente no tempo disponível. Deixe desligado se você não quer cortes.',
+    offlineTail: 'Depois de tocar tudo que couber, deixa o restante do tempo sem programação.',
+    allowOverrun: 'Deixa o último vídeo terminar mesmo que passe do limite do bloco. Use quando você prefere não cortar vídeos.',
+    padToNearest: 'Depois de cada item, usa o Filler até a próxima marca escolhida. Exemplo: com 15, um filme que termina 10:07 recebe Filler até 10:15. Um evento com horário marcado continua entrando no horário dele.',
+    sequenceStepMode: 'Escolha o que este passo faz: quantidade, duração, todos os itens, preencher até a próxima marca ou esperar offline.',
+    sequenceStepSource: 'Source usada só neste passo.',
+    sequenceStepCount: 'Quantos itens este passo toca antes de seguir.',
+    sequenceStepDuration: 'Quanto tempo este passo deve durar.',
+    sequenceStepMark: 'Marca de relógio usada em “Até próxima marca”. Exemplo: 30 leva 10:07 até 10:30 usando a Source escolhida.',
+    sequenceStepPresentation: 'Presentation usada só neste passo.',
+    recurrenceType: 'Use para regras como primeira segunda-feira do mês ou a cada 14 dias. Se não precisar, deixe em “Sem recorrência extra”.',
+    recurrenceOrdinal: 'Escolha qual ocorrência do dia no mês. Exemplo: 1ª segunda-feira ou última sexta-feira.',
+    recurrenceWeekday: 'Dia da semana usado nessa recorrência mensal.',
+    recurrenceEveryDays: 'Repete a regra a cada N dias. Exemplo: 14 cria uma programação quinzenal.',
+    recurrenceAnchorDate: 'Data usada como ponto de partida para a repetição a cada N dias.',
+    weight: 'Controla a frequência relativa desta Source. Exemplo: peso 60 contra 20 faz a primeira aparecer cerca de três vezes mais.',
+    avoidRepeat: 'Evita escolher a mesma Source duas vezes seguidas quando houver outra disponível.',
+    everyItems: 'Quantos itens principais tocam antes da inserção. Exemplo: 4 significa “depois de quatro músicas, faça a pausa”.',
+    breakSource: 'Source que toca na inserção. Exemplo: STATION_IDS ou PROMOS.',
+    breakCount: 'Quantos itens da Source de inserção tocam antes de voltar ao conteúdo principal.',
+    breakPresentation: 'Presentation usada só durante a inserção.',
+    lookAhead: 'Quanto tempo antes do próximo evento este módulo começa a procurar algo que caiba. Exemplo: 45 olha os próximos 45 minutos.',
     fitDiscard: 'Quantos itens podem ser pulados enquanto o ErsatzTV procura um que caiba no tempo restante.',
-    fitFiller: 'Se sobrar um pequeno espaço, usa o Filler geral para completar até o próximo evento. Exige Filler configurado.',
-    selection: 'Como escolher uma Source: “Por peso” respeita os pesos; “Em rodízio” passa por cada opção em sequência previsível.',
-    choiceWeight: 'Peso desta opção quando a escolha estiver configurada como “Por peso”.',
-    cycleMinutes: 'Tamanho do relógio que se repete. Exemplo: 60 cria um ciclo de uma hora.',
-    offsetMinutes: 'Posição dentro do ciclo. Em um relógio de 60 min, offset 15 significa :15 de cada ciclo.',
+    fitFiller: 'Usa o Filler geral para completar um pequeno espaço antes do próximo evento. O Filler precisa estar configurado.',
+    selection: 'Escolha como selecionar uma Source. “Por peso” segue as proporções; “Em rodízio” passa pelas opções em ordem.',
+    choiceWeight: 'Peso desta opção quando a escolha estiver usando “Por peso”.',
+    cycleMinutes: 'Tamanho do ciclo que se repete. Exemplo: 60 cria um relógio de uma hora.',
+    offsetMinutes: 'Posição dentro do ciclo. Num ciclo de 60 minutos, 15 significa :15.',
     startDatetime: 'Data e hora em que a programação especial começa.',
-    endDatetime: 'Data e hora em que a programação especial termina e a grade normal volta.',
-    moduleDescription: 'Resumo rápido do módulo. A área Ajuda possui exemplos maiores e sugestões de combinações.',
-    fillerSource: 'Source usada como preenchimento geral quando não há outro conteúdo ativo. Ela também é usada pelo Pad To Nearest Minute e é marcada automaticamente como Filler no EPG.',
-    fillerPresentation: 'Presentation aplicada ao Filler geral enquanto ele estiver preenchendo uma lacuna.'
+    endDatetime: 'Data e hora em que a programação especial termina e a programação normal volta.',
+    moduleDescription: 'Resumo rápido do módulo. A Ajuda tem exemplos e combinações quando você quiser ver mais detalhes.',
+    fillerSource: 'Source usada para preencher lacunas. Ela também é usada pelo Pad To Nearest Minute.',
+    fillerPresentation: 'Presentation usada enquanto o Filler estiver tocando.'
   };
 
   const state = {
@@ -464,7 +471,7 @@
         state.current.filler = null;
         if (cleared) state.deps.showToast(`Filler desativado; ${cleared} alinhamento(s) Pad To Nearest Minute também foram desativados.`);
       } else {
-        state.current.filler = { source: firstSource(), presentation: '' };
+        state.current.filler = { source: firstSource(), presentation: '', fillerKind: 'postroll' };
         openAccordion('programming:filler');
       }
       state.validation = null; render(); return;
@@ -627,7 +634,6 @@
             <input type="number" min="1" max="50" data-ss-settings="historyLimit" value="${esc(settings.historyLimit || 10)}">
           </label>
           <button type="button" data-ss-action="save-settings">Salvar pasta</button>
-          <small>O aplicativo só publica arquivos .py dentro desta pasta. O processo do ErsatzTV também precisa ter acesso ao caminho.</small>
         </div>
       </details>`;
   }
@@ -699,7 +705,7 @@
       </section>
       <section class="card ss-section-card">
         <div class="section-heading">
-          <div><span class="eyebrow">ErsatzTV</span><h3>Vínculos com canais</h3><p>O vínculo aqui é local. O primeiro cadastro do caminho do script no Playout continua sendo feito no ErsatzTV.</p></div>
+          <div><span class="eyebrow">ErsatzTV</span><h3>Vínculos com canais</h3><p>Aqui você escolhe o canal que usa este script. Na primeira vez, cadastre o caminho do script no Playout do ErsatzTV.</p></div>
           <div class="header-actions"><button type="button" data-ss-action="refresh-catalog">Atualizar catálogo</button><button type="button" data-ss-action="add-channel">Adicionar canal</button></div>
         </div>
         <div class="ss-stack">${p.channelLinks.length ? p.channelLinks.map(renderChannelLink).join('') : '<div class="empty-state">Nenhum canal vinculado.</div>'}</div>
@@ -823,7 +829,7 @@
               <label class="wide">${labelTitle('Watermarks nativos', 'nativeWatermarks', '<small>Um nome por linha</small>')}<textarea rows="2" data-bind="presentationProfiles.${index}.watermarks" data-type="list">${esc(listValue(profile.watermarks))}</textarea></label>
             </div>
             ${renderGroupChoices(profile.graphicsGroups || [], `presentationProfiles.${index}.graphicsGroups`)}
-            <details class="ss-advanced"><summary><span>Variáveis dos Graphics${help('graphicsVariableKey')}</span></summary>${renderPairEditor(profile.graphicsVariables || [], `presentationProfiles.${index}.graphicsVariables`)}</details>
+            <details class="ss-advanced"><summary><span>Variáveis dos Graphics${help('graphicsVariables')}</span></summary>${renderPairEditor(profile.graphicsVariables || [], `presentationProfiles.${index}.graphicsVariables`)}</details>
             <details class="ss-advanced"><summary><span>Pre-roll opcional${help('preRoll')}</span></summary><div class="ss-advanced-body form-grid two"><label>${labelTitle('Scripted Playlist', 'preRoll')}<select data-bind="presentationProfiles.${index}.preRoll">${playlistOptions(profile.preRoll)}</select>${state.current.scriptedPlaylists.length ? '' : '<small>Se precisar de pre-roll, crie a Scripted Playlist depois e volte aqui para selecioná-la.</small>'}</label></div></details>
           </div>
         </details>`).join(''));
@@ -871,7 +877,6 @@
           <div><span class="eyebrow">Módulos</span><h3>Programação</h3><p>Adicione somente os módulos que este canal precisa.</p></div>
           ${inactive.length ? `<div class="ss-add-module"><button type="button" class="primary" data-ss-action="open-module-picker">Adicionar módulo</button></div>` : ''}
         </div>
-        <div class="ss-callout"><strong>Programação-base:</strong> normalmente escolha uma entre Rotação por tempo, Rotação por quantidade, Rotação por peso, Bloco contínuo ou Inserções após X itens. Eventos fixos podem entrar por cima dela.</div>
         <div class="ss-stack">${active.length ? active.map(([key]) => renderModule(key)).join('') : '<div class="empty-state">Nenhum módulo ativo. Adicione um módulo ou use somente o Filler.</div>'}</div>
       </section>
       ${renderEditorSaveBar('Programação')}
@@ -998,8 +1003,21 @@
         : '';
     return `<details class="ss-advanced"><summary><span>Dias e datas${help('days')}</span></summary><div class="ss-advanced-body"><label class="check-row"><input type="checkbox" data-bind="${base}.enabled" ${item.enabled !== false ? 'checked' : ''}><span>Evento ativo${help('eventEnabled')}</span></label><div class="ss-day-filter-title">Dias da semana${help('days')}</div><div class="ss-day-picker">${DAY_OPTIONS.map(([value, label]) => `<label title="${esc(HELP_TEXT.days)}"><input type="checkbox" value="${value}" data-array-toggle="${base}.days" ${days.includes(value) ? 'checked' : ''}><span>${label}</span></label>`).join('')}</div><div class="form-grid two"><label>${labelTitle('Data inicial', 'startDate')}<input type="date" data-bind="${base}.startDate" value="${esc(item.startDate || '')}"></label><label>${labelTitle('Data final', 'endDate')}<input type="date" data-bind="${base}.endDate" value="${esc(item.endDate || '')}"></label><label>${labelTitle('Somente estas datas', 'onlyDates', '<small>Uma por linha</small>')}<textarea rows="2" data-type="list" data-bind="${base}.dates">${esc(listValue(item.dates))}</textarea></label><label>${labelTitle('Excluir estas datas', 'excludeDates', '<small>Uma por linha</small>')}<textarea rows="2" data-type="list" data-bind="${base}.excludeDates">${esc(listValue(item.excludeDates))}</textarea></label><label>${labelTitle('Recorrência avançada', 'recurrenceType')}<select data-bind="${base}.recurrenceType" data-rerender="true"><option value="none" ${recurrence === 'none' ? 'selected' : ''}>Sem recorrência extra</option><option value="monthly_nth_weekday" ${recurrence === 'monthly_nth_weekday' ? 'selected' : ''}>Uma semana do mês</option><option value="every_n_days" ${recurrence === 'every_n_days' ? 'selected' : ''}>A cada N dias</option></select></label>${recurrenceFields}</div></div></details>`;
   }
+  function fillerKindInfo(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return FILLER_KIND_OPTIONS.find(([key]) => key === normalized) || null;
+  }
+
+  function renderFillerKindSelect(path, value, { defaultValue = 'none', rerender = true, recommendPostroll = false } = {}) {
+    const current = String(value || defaultValue || 'none').trim().toLowerCase();
+    const known = FILLER_KIND_OPTIONS.some(([key]) => key === current);
+    const description = fillerKindInfo(current)?.[2] || 'Escolha como o ErsatzTV deve tratar este conteúdo no EPG.';
+    const unknown = current && !known ? `<option value="${esc(current)}" selected>Valor atual: ${esc(current)}</option>` : '';
+    return `<label>${labelTitle('Tipo de Filler', 'fillerKind')}<select data-bind="${esc(path)}" ${rerender ? 'data-rerender="true"' : ''}>${unknown}${FILLER_KIND_OPTIONS.map(([key, label]) => `<option value="${key}" ${current === key ? 'selected' : ''}>${esc(label)}${recommendPostroll && key === 'postroll' ? ' (recomendado)' : ''}</option>`).join('')}</select><small>${esc(description)}</small></label>`;
+  }
+
   function renderPlaybackAdvanced(base, item, options = {}) {
-    const fillerKindField = options.hideFillerKind ? '' : `<label>${labelTitle('Filler kind', 'fillerKind')}<input data-bind="${base}.fillerKind" value="${esc(item.fillerKind || '')}"></label>`;
+    const fillerKindField = options.hideFillerKind ? '' : renderFillerKindSelect(`${base}.fillerKind`, item.fillerKind, { defaultValue: 'none' });
     return `<details class="ss-advanced"><summary><span>Reprodução avançada${help('fallback')}</span></summary><div class="ss-advanced-body form-grid three"><label>${labelTitle('Título customizado', 'customTitle')}<input data-bind="${base}.customTitle" value="${esc(item.customTitle || '')}"></label>${fillerKindField}<label>${labelTitle('Fallback Source', 'fallback')}<select data-bind="${base}.fallback">${sourceOptions(item.fallback)}</select></label><label>${labelTitle('Tentativas descartadas', 'discardAttempts')}<input type="number" min="0" data-type="number" data-bind="${base}.discardAttempts" value="${esc(item.discardAttempts ?? '')}"></label><label class="check-row"><input type="checkbox" data-bind="${base}.disableWatermarks" ${item.disableWatermarks ? 'checked' : ''}><span>Desativar watermarks nativos${help('disableWatermarks')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.trim" ${item.trim ? 'checked' : ''}><span>Permitir trim${help('trim')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.offlineTail" ${item.offlineTail ? 'checked' : ''}><span>Offline tail${help('offlineTail')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.allowOverrun" ${item.allowOverrun !== false ? 'checked' : ''}><span>Deixar o vídeo terminar${help('allowOverrun')}</span></label></div></details>`;
   }
 
@@ -1049,7 +1067,7 @@
 
   function renderFiller() {
     const filler = state.current.filler;
-    return `<details class="card ss-section-card ss-section-accordion" ${accordionAttrs('programming:filler')}><summary class="ss-section-summary"><div><span class="eyebrow">Filler</span><h3>Preenchimento de lacunas</h3><p>Última camada de preenchimento quando nenhum outro conteúdo de programação está ativo.</p></div><span>${filler ? 'Ativo' : 'Desativado'}</span></summary><div class="ss-section-accordion-body"><div class="ss-section-actions"><button type="button" data-ss-action="toggle-filler">${filler ? 'Desativar Filler' : 'Ativar Filler'}</button></div>${filler ? `<div class="form-grid two">${sourceSelect('filler.source', filler.source, 'fillerSource')}${profileSelect('filler.presentation', filler.presentation, 'fillerPresentation')}</div><div class="ss-callout"><strong>EPG:</strong> o conteúdo usado aqui é marcado automaticamente como Filler no ErsatzTV e não cria uma entrada própria no guia.</div>${renderPlaybackAdvanced('filler', filler, { hideFillerKind: true })}` : '<div class="empty-state">Filler desativado. Lacunas sem outros módulos ficarão sem programação.</div>'}</div></details>`;
+    return `<details class="card ss-section-card ss-section-accordion" ${accordionAttrs('programming:filler')}><summary class="ss-section-summary"><div><span class="eyebrow">Filler</span><h3>Preenchimento de lacunas</h3><p>Última camada de preenchimento quando nenhum outro conteúdo de programação está ativo.</p></div><span>${filler ? 'Ativo' : 'Desativado'}</span></summary><div class="ss-section-accordion-body"><div class="ss-section-actions"><button type="button" data-ss-action="toggle-filler">${filler ? 'Desativar Filler' : 'Ativar Filler'}</button></div>${filler ? `<div class="form-grid three">${sourceSelect('filler.source', filler.source, 'fillerSource')}${profileSelect('filler.presentation', filler.presentation, 'fillerPresentation')}${renderFillerKindSelect('filler.fillerKind', filler.fillerKind, { defaultValue: 'postroll', recommendPostroll: true })}</div>${renderPlaybackAdvanced('filler', filler, { hideFillerKind: true })}` : '<div class="empty-state">Filler desativado. Lacunas sem outros módulos ficarão sem programação.</div>'}</div></details>`;
   }
 
   function renderEditorSaveBar(sectionLabel) {
@@ -1095,7 +1113,7 @@
           <span><strong>SHA-256</strong>${p.publishedHash ? `<code>${esc(p.publishedHash.slice(0, 16))}…</code>` : '-'}</span>
         </div>
         ${pathChanged ? `<div class="ss-callout warning"><strong>O caminho mudou.</strong> O arquivo já publicado continua em <code>${esc(p.publishedPath)}</code>. Depois de publicar com o novo nome/caminho, atualize também o Scripted Schedule no ErsatzTV.</div>` : ''}
-        <div class="ss-callout">O primeiro cadastro deste caminho no Scripted Schedule do Playout continua sendo feito manualmente no ErsatzTV. Depois disso, salvar novamente mantém o mesmo arquivo atualizado.</div>
+        <div class="ss-callout">Na primeira vez, cadastre este caminho no Scripted Schedule do Playout no ErsatzTV. Depois, é só salvar por aqui para manter o mesmo arquivo atualizado.</div>
       </section>
       ${renderLinksAssistant(computedPath)}
       <section class="card ss-section-card">

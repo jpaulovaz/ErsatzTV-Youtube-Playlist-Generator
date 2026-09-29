@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.4.5
+
+- O **Filler geral** volta a permitir a escolha do **Tipo de Filler**, agora em um picklist compacto em vez de campo de texto livre. As opções são **Post-roll**, **Pre-roll**, **Mid-roll** e **Nenhum**.
+- **Post-roll** continua sendo o padrão e aparece como recomendado para preencher lacunas e para o Pad. Projetos antigos que ainda não possuem `fillerKind` salvo continuam sendo tratados como Post-roll.
+- O gerador passa a respeitar a escolha feita no Filler geral e aceita somente os quatro valores suportados pelo Scripted Schedule usado pelo projeto.
+- Campos avançados de **Tipo de Filler** também usam o mesmo seletor controlado, evitando digitação de valores inválidos.
+- Foram removidos textos redundantes da interface: a observação abaixo da pasta de saída, o chip de EPG no Filler e o chip **Programação-base** da aba Programação.
+- Textos contextuais de Scripted Schedules foram revisados para soar mais naturais e diretos, inclusive as orientações de vínculo/publicação com o Playout.
+- A Ajuda de **Variáveis dos Graphics** foi ampliada sem inventar uma lista fixa: as chaves são definidas pelo próprio YAML/Scriban. A Ajuda também diferencia essas variáveis personalizadas dos dados que o ErsatzTV já fornece ao Graphics, como `MediaItem_Title`, `MediaItem_Artist`, `MediaItem_Path` e `MediaItem_Duration`.
+- Nenhuma alteração em `configVersion`, schema de projetos, Universal v1.3.0, Pad por item, Canais, Bibliotecas, fila ou downloads.
+
 ## 3.4.4
 
 - A ordem de **Recursos** foi revisada para reduzir idas e voltas: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. Presentation Profiles ficam logo após Graphics, permitindo que uma nova Source já escolha sua Presentation padrão.

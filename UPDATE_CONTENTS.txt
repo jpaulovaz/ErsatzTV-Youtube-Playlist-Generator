@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.4.4 - pacote de atualização
+ErsatzTV YouTube Downloader 3.4.5 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.4.3.
+Extraia este ZIP sobre uma instalação v3.4.4.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,15 +9,16 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principais mudanças:
-- Recursos passam a seguir a ordem Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists;
-- Pre-roll fica em uma área opcional do Presentation Profile;
-- Filler passa a aparecer antes dos módulos de Programação, pois é usado pelo Pad To Nearest Minute;
-- Filler geral é enviado ao ErsatzTV automaticamente com filler_kind=postroll para não criar entrada própria no EPG;
-- o campo técnico Filler kind não aparece na configuração do Filler geral;
-- o modal Adicionar módulo ganha espaço entre os cards Combina bem com e Pad To Nearest Minute;
-- Ajuda e textos contextuais foram alinhados ao novo fluxo e ao Pad por item.
+- Filler geral volta a permitir a escolha do Tipo de Filler em um seletor compacto;
+- Post-roll continua sendo padrão/recomendado e também o fallback de projetos antigos;
+- opções aceitas: Post-roll, Pre-roll, Mid-roll e Nenhum;
+- campos avançados de Tipo de Filler deixam de aceitar texto livre;
+- textos e chips redundantes foram removidos da interface de Scripted Schedules;
+- orientações de vínculo/publicação foram reescritas de forma mais natural;
+- Ajuda de Variáveis dos Graphics explica chaves personalizadas e os dados de mídia já fornecidos pelo ErsatzTV.
 
 Universal permanece v1.3.0. configVersion e schema dos projetos não mudam.
+O Pad To Nearest Minute por item não muda.
 Projetos Universal v1.1.1/v1.2.0 continuam sem atualização silenciosa.
 
 Consulte UPGRADE.md antes da atualização.
