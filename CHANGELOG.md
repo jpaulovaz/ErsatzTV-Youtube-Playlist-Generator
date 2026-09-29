@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.4.1
+
+- A opção **Ajuda** de Scripted Schedules deixa de aparecer em **Sistema** e passa a ficar junto de **Scripted Schedules** no grupo lateral **Programação**, deixando claro que o conteúdo é específico do Builder.
+- A própria tela de Ajuda passa a se identificar como **Programação · Scripted Schedules**, evitando a aparência de manual geral do aplicativo.
+- O modal **Adicionar módulo** foi reorganizado: a coluna esquerda agora mostra somente os nomes dos módulos; resumo, funcionamento e combinações ficam exclusivamente no painel direito após a seleção.
+- A lista de módulos ganhou largura previsível, quebra de nomes longos, rolagem apenas vertical e proteção contra overflow horizontal; o painel de detalhes ocupa o espaço restante.
+- Nenhuma alteração em schema, Universal v1.3.0, gerador Python, API, fila, downloads, Canais ou Bibliotecas.
+- Testes de regressão cobrem o agrupamento da Ajuda e a estrutura compacta do modal de módulos; suíte completa aprovada em **108/108 testes**.
+
 ## 3.4.0
 
 - **Scripted Schedules** passa a usar o motor **Universal v1.3.0** em novos projetos e em upgrades manuais. Projetos existentes em v1.1.1/v1.2.0 continuam na versão já salva até o usuário escolher atualizar o motor.

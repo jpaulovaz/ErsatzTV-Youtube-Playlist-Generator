@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.4.0
+ErsatzTV YouTube Downloader 3.4.1
 
-Arquivos alterados em relacao a v3.3.1:
+Arquivos alterados em relacao a v3.4.0:
 
 M	CHANGELOG.md
 M	MODIFIED_FILES.txt
@@ -10,17 +10,9 @@ M	UPGRADE.md
 M	package.json
 M	public/app.js
 M	public/index.html
-M	public/js/channelsView.js
-A	public/js/helpView.js
+M	public/js/helpView.js
 M	public/js/scriptedSchedulesView.js
 M	public/login.html
 M	public/scripted-schedules.css
-M	public/styles.css
-M	src/scriptedSchedules/generator.js
-M	src/scriptedSchedules/schema.js
-M	src/scriptedSchedules/store.js
-A	src/scriptedSchedules/templates/universal-v1.3.0.py.tpl
-M	src/scriptedSchedules/validator.js
 M	src/server.js
-M	test/scriptedSchedules.test.js
 M	test/ui-v3.test.js

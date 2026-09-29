@@ -1,40 +1,37 @@
-# Atualização para 3.4.0
+# Atualização para 3.4.1
 
-A versão 3.4.0 é uma evolução funcional de **Scripted Schedules** sobre a v3.3.1. Ela adiciona novos módulos, o motor Universal v1.3.0, recorrência avançada, a área Ajuda e uma regra consistente para o menu lateral sempre retornar ao início da seção escolhida.
+A versão 3.4.1 é uma correção de interface sobre a **v3.4.0**. Não altera schema, motor Universal, gerador Python nem contratos de execução do Scripted Schedule.
 
 ## O que muda
 
-- Novos projetos de Scripted Schedule usam **Universal v1.3.0**.
-- O Builder passa a oferecer **18 tipos de módulo**, incluindo Rotação por quantidade/peso, Bloco contínuo, Inserções após X itens, Encaixar até o próximo evento, Escolha entre fontes, Relógio de programação e Programação especial temporária.
-- Dias/datas aceitam recorrência mensal por posição do dia da semana e repetição a cada N dias.
-- **Adicionar módulo** abre um modal com descrição curta e combinação sugerida.
-- Nova seção lateral **Ajuda**, com linguagem simples, exemplos e glossário.
-- Clicar novamente em qualquer item do menu lateral volta à tela inicial daquela seção.
-- O validador mostra aviso quando várias programações-base podem competir entre si.
+- **Ajuda** passa a ficar no grupo lateral **Programação**, imediatamente junto de Scripted Schedules, em vez de aparecer como tópico de Sistema.
+- A tela deixa explícito que se trata da **Ajuda de Scripted Schedules**.
+- O modal **Adicionar módulo** mostra somente os nomes na coluna esquerda.
+- Descrição, funcionamento e combinações ficam no painel direito após a seleção.
+- A lista foi ajustada para evitar overflow horizontal e melhorar a leitura de nomes longos.
 
-## Compatibilidade de projetos Scripted Schedule
+## Compatibilidade
 
-Projetos existentes **não são atualizados silenciosamente**. Um projeto salvo com Universal v1.1.1 ou v1.2.0 continua usando esse motor e pode ser publicado normalmente enquanto utilizar apenas recursos suportados por ele.
+- `configVersion` permanece **8**.
+- O schema de armazenamento de Scripted Schedules permanece **1**.
+- O motor mais recente permanece **Universal v1.3.0**.
+- Projetos salvos em v1.1.1/v1.2.0 continuam sem atualização silenciosa.
+- `config/config.json`, `config/auth.json` e `data/` devem ser preservados durante o UPDATE.
 
-Para usar os novos módulos da v3.4.0, abra o projeto e use **Atualizar motor** na aba Geral. A alteração para v1.3.0 só é efetivada quando o projeto for salvo/publicado.
+## Atualização recomendada
 
-O `state_key`, Sources, Graphics, Scripted Playlists, Presentation Profiles, Filler e módulos antigos são preservados.
+1. Pare o serviço da aplicação.
+2. Faça backup da instalação atual.
+3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.1-update.zip` sobre a instalação v3.4.0.
+4. Inicie novamente o serviço.
+5. Abra **Programação → Scripted Schedules** e confirme que **Ajuda** aparece no mesmo grupo lateral.
+6. Em um projeto, abra **Programação → Adicionar módulo** e confirme que a lista esquerda contém somente os nomes.
 
-## Atualização
+Não é necessária migração manual de configuração ou de projetos.
 
-1. Pare o processo atual.
-2. Faça um backup da instalação, principalmente `config/` e `data/`.
-3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.0-update.zip` sobre a instalação v3.3.1.
-4. Inicie novamente.
-5. Abra **Scripted Schedules** e valide os projetos que pretende atualizar para o motor v1.3.0.
+## Gate esperado
 
-O pacote UPDATE **não inclui** `config/config.json`, `config/auth.json` nem o conteúdo de `data/`. Projetos em `data/scripted-schedules/` são preservados.
-
-## Compatibilidade técnica
-
-- `configVersion`: permanece **8**.
-- schema do armazenamento de Scripted Schedules: permanece **1**.
-- motores suportados: Universal **v1.1.1**, **v1.2.0** e **v1.3.0**.
-- motor padrão para novos projetos: Universal **v1.3.0**.
-- upgrade esperado: **v3.3.1 -> v3.4.0**.
-- salvar/publicar continua sem executar Reset Playout automaticamente.
+- upgrade esperado: **v3.4.0 -> v3.4.1**;
+- `npm run check`: aprovado;
+- suíte automatizada: aprovada;
+- UPDATE não deve conter `config/config.json`, `config/auth.json` nem `data/`.

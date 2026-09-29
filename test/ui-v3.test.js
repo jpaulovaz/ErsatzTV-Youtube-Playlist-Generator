@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.0/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.0/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.1/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.1/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -177,8 +177,8 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.0 modul
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.4\.0/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.0/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.4\.1/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.1/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -281,12 +281,18 @@ test('sidebar navigation always returns each section to its home state', () => {
   assert.match(schedules, /async function home\(\)[\s\S]*state\.current = null/);
 });
 
-test('Help is a separate sidebar area with beginner tabs, practical module examples and combinations', () => {
+test('Scripted Schedules Help stays inside the Programacao sidebar group and is clearly scoped', () => {
   const html = read('index.html');
   const help = read('js/helpView.js');
-  assert.match(html, /data-view="help"/);
+  const programacaoGroup = html.match(/<div class="nav-group">\s*<span class="nav-label">Programação<\/span>[\s\S]*?<\/div>/)?.[0] || '';
+  const sistemaGroup = html.match(/<div class="nav-group">\s*<span class="nav-label">Sistema<\/span>[\s\S]*?<\/div>/)?.[0] || '';
+  assert.match(programacaoGroup, /data-view="scripted-schedules"/);
+  assert.match(programacaoGroup, /data-view="help"/);
+  assert.doesNotMatch(sistemaGroup, /data-view="help"/);
   assert.match(html, /id="view-help"/);
-  assert.match(html, /helpView\.js\?v=3\.4\.0/);
+  assert.match(html, /helpView\.js\?v=3\.4\.1/);
+  assert.match(help, /Programação · Scripted Schedules/);
+  assert.match(help, /Assuntos da ajuda de Scripted Schedules/);
   for (const tab of ['Começando', 'Recursos', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));
   for (const name of ['Rotação por quantidade', 'Rotação por peso', 'Bloco contínuo por horário', 'Inserções após X itens', 'Encaixar até o próximo evento', 'Escolha entre fontes', 'Relógio de programação', 'Programação especial temporária']) assert.match(help, new RegExp(name));
   assert.match(help, /Combina bem com/);
@@ -294,14 +300,24 @@ test('Help is a separate sidebar area with beginner tabs, practical module examp
   assert.match(help, /Fallback Source/);
 });
 
-test('module selection uses a descriptive modal instead of an inline picklist', () => {
+test('module selection modal keeps only module names in the left list and details on the right', () => {
   const view = read('js/scriptedSchedulesView.js');
   const css = read('scripted-schedules.css');
   assert.match(view, /data-ss-action="open-module-picker"/);
   assert.match(view, /function renderModulePickerModal/);
   assert.match(view, /data-ss-action="select-module"/);
+  assert.match(view, /aria-label="Tipos de módulo"/);
+  assert.ok(view.includes('<strong>${esc(item.label)}</strong></button>'));
+  const pickerListTemplate = view.match(/<div class=\"ss-module-picker-list\"[\s\S]*?<\/div>/)?.[0] || '';
+  assert.doesNotMatch(pickerListTemplate, /item\.hint/);
+  assert.match(view, /ss-module-picker-description/);
+  assert.ok(view.includes('${esc(meta.hint)}'));
   assert.match(view, /Combina bem com/);
+  assert.match(view, /Ajuda de Scripted Schedules/);
   assert.doesNotMatch(view, /id="ssModulePicker"/);
   assert.match(css, /\.ss-module-modal-backdrop/);
+  assert.match(css, /grid-template-columns: minmax\(250px, 330px\) minmax\(0, 1fr\)/);
+  assert.match(css, /\.ss-module-picker-list[\s\S]*overflow-x: hidden/);
+  assert.match(css, /\.ss-module-picker-item[\s\S]*white-space: normal/);
   assert.match(css, /\.ss-module-picker-description/);
 });

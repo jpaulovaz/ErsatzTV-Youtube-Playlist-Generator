@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.0
+# ErsatzTV YouTube Downloader 3.4.1
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.0 amplia **Scripted Schedules** com o motor **Universal v1.3.0**, 18 tipos de módulo, recorrência avançada, novos modelos de programação-base e uma área de **Ajuda** escrita para leigos. O seletor de módulos passa a ser um modal explicativo e o menu lateral sempre retorna ao início da seção escolhida.
+A versão 3.4.1 é uma correção visual e de organização sobre a v3.4.0. **Ajuda** agora fica junto de **Scripted Schedules** no grupo **Programação**, e o modal **Adicionar módulo** usa uma lista compacta somente com os nomes à esquerda, deixando explicações e combinações no painel direito. O motor **Universal v1.3.0**, os 18 tipos de módulo e os contratos de programação da v3.4.0 permanecem inalterados.
 
 ## Arquitetura
 
@@ -208,9 +208,9 @@ Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando
 
 A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir de um motor Universal versionado. **Novos projetos usam Universal v1.3.0**; projetos antigos em v1.1.1/v1.2.0 não são atualizados silenciosamente.
 
-O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos podem ser cadastrados grupos de Graphics, Sources, Scripted Playlists e Presentation Profiles. Em Programação, somente os módulos escolhidos aparecem. O botão **Adicionar módulo** abre um modal com nome amigável, descrição curta e sugestão de combinação.
+O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos podem ser cadastrados grupos de Graphics, Sources, Scripted Playlists e Presentation Profiles. Em Programação, somente os módulos escolhidos aparecem. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas.
 
-Módulos disponíveis na v3.4.0:
+Módulos disponíveis na v3.4.1:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.

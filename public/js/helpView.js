@@ -95,7 +95,7 @@
 
   function render() {
     const el = root(); if (!el) return;
-    el.innerHTML = `<div class="page-header"><div><span class="page-kicker">Manual simples</span><h2>Ajuda</h2><p>Explicações sem linguagem técnica para montar e manter sua programação.</p></div></div><nav class="help-tabs" aria-label="Assuntos da ajuda">${TABS.map(([key, label]) => `<button type="button" class="${tab === key ? 'active' : ''}" data-help-tab="${key}">${label}</button>`).join('')}</nav><div class="help-body">${content()}</div>`;
+    el.innerHTML = `<div class="page-header"><div><span class="page-kicker">Programação · Scripted Schedules</span><h2>Ajuda</h2><p>Explicações sem linguagem técnica para montar e manter seus Scripted Schedules.</p></div></div><nav class="help-tabs" aria-label="Assuntos da ajuda de Scripted Schedules">${TABS.map(([key, label]) => `<button type="button" class="${tab === key ? 'active' : ''}" data-help-tab="${key}">${label}</button>`).join('')}</nav><div class="help-body">${content()}</div>`;
   }
 
   function init() {
