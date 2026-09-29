@@ -1,6 +1,12 @@
 const fs = require('fs/promises');
 const path = require('path');
-const { TEMPLATE_VERSION, SUPPORTED_TEMPLATE_VERSIONS, normalizeGraphicsElementPath } = require('./schema');
+const {
+  TEMPLATE_VERSION,
+  SUPPORTED_TEMPLATE_VERSIONS,
+  normalizeGraphicsElementPath,
+  sourceSupportsPlaybackOrder,
+  normalizePlaybackOrder
+} = require('./schema');
 const { validateProject } = require('./validator');
 
 const TEMPLATE_PATHS = Object.fromEntries(SUPPORTED_TEMPLATE_VERSIONS.map((version) => [version, path.join(__dirname, 'templates', `universal-v${version}.py.tpl`)]));
@@ -74,9 +80,13 @@ function groupResolver(project) {
   return resolve;
 }
 
-function sourceToEngine(source) {
+function sourceToEngine(source, order = undefined) {
   const type = cleanString(source.type);
-  const common = compact({ type, order: source.order, presentation: source.presentation });
+  const common = compact({
+    type,
+    order: sourceSupportsPlaybackOrder(source) ? normalizePlaybackOrder(order) : undefined,
+    presentation: source.presentation
+  });
   if (['smart_collection', 'collection', 'multi_collection'].includes(type)) return { ...common, name: cleanString(source.name) };
   if (type === 'playlist') return { ...common, playlist: cleanString(source.playlist), playlist_group: cleanString(source.playlistGroup) };
   if (type === 'search') return { ...common, query: String(source.query || '') };
@@ -100,12 +110,12 @@ function normalizeFillerKind(value, fallback = undefined) {
   return ['none', 'preroll', 'midroll', 'postroll'].includes(normalized) ? normalized : fallback;
 }
 
-function playbackFields(input = {}) {
+function playbackFields(input = {}, resolveSource = (key) => key) {
   return compact({
     custom_title: input.customTitle,
     filler_kind: input.fillerKind,
     disable_watermarks: input.disableWatermarks === true ? true : undefined,
-    fallback: input.fallback,
+    fallback: input.fallback ? resolveSource(input.fallback, input.fallbackOrder) : undefined,
     trim: input.trim === true ? true : undefined,
     discard_attempts: input.discardAttempts !== '' && input.discardAttempts !== undefined ? Number(input.discardAttempts) : undefined,
     offline_tail: input.offlineTail === true ? true : undefined,
@@ -128,7 +138,7 @@ function dateFields(input = {}) {
   });
 }
 
-function baseEvent(input = {}, options = {}) {
+function baseEvent(input = {}, options = {}, resolveSource = (key) => key) {
   return compact({
     id: input.id,
     label: input.label,
@@ -137,7 +147,7 @@ function baseEvent(input = {}, options = {}) {
     enabled: input.enabled === false ? false : undefined,
     pad_to_nearest_minutes: options.includePad === false ? undefined : (input.padToNearestMinutes !== '' && input.padToNearestMinutes !== null && input.padToNearestMinutes !== undefined ? Number(input.padToNearestMinutes) : undefined),
     ...dateFields(input),
-    ...playbackFields(input)
+    ...playbackFields(input, resolveSource)
   });
 }
 
@@ -164,109 +174,151 @@ function modeSupportsItemPad(mode, steps = []) {
   return false;
 }
 
-function stepToEngine(step = {}) {
+function stepToEngine(step = {}, resolveSource = (key) => key) {
   return compact({
-    source: step.source,
+    source: step.source ? resolveSource(step.source, step.order) : undefined,
     mode: step.mode,
     count: step.count !== '' && step.count !== undefined ? Number(step.count) : undefined,
     duration_minutes: step.durationMinutes !== '' && step.durationMinutes !== undefined ? Number(step.durationMinutes) : undefined,
     minutes: step.minutes !== '' && step.minutes !== undefined ? Number(step.minutes) : undefined,
     presentation: step.presentation,
-    ...playbackFields(step)
+    ...playbackFields(step, resolveSource)
   });
 }
 
-function modulesToEngine(project) {
+function modulesToEngine(project, resolveSource) {
   const modules = project.modules || {};
   const itemPadEngine = versionAtLeast(project.templateVersion || TEMPLATE_VERSION, '1.3.0');
   const rotation = (modules.rotation || []).map((item) => compact({
-    source: item.source, presentation: item.presentation,
+    source: resolveSource(item.source, item.order), presentation: item.presentation,
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
     pad_to_nearest_minutes: !itemPadEngine && item.padToNearestMinutes !== '' && item.padToNearestMinutes !== null && item.padToNearestMinutes !== undefined ? Number(item.padToNearestMinutes) : undefined,
-    ...playbackFields(item)
+    ...playbackFields(item, resolveSource)
   }));
   const countRotation = (modules.countRotation || []).map((item) => compact({
-    source: item.source, presentation: item.presentation, count: Number(item.count),
+    source: resolveSource(item.source, item.order), presentation: item.presentation, count: Number(item.count),
     pad_to_nearest_minutes: item.padToNearestMinutes !== '' && item.padToNearestMinutes !== null && item.padToNearestMinutes !== undefined ? Number(item.padToNearestMinutes) : undefined,
-    ...playbackFields(item)
+    ...playbackFields(item, resolveSource)
   }));
   const weightedRotation = (modules.weightedRotation || []).map((item) => compact({
-    source: item.source, presentation: item.presentation, weight: Number(item.weight), avoid_repeat: item.avoidRepeat === true ? true : undefined,
+    source: resolveSource(item.source, item.order), presentation: item.presentation, weight: Number(item.weight), avoid_repeat: item.avoidRepeat === true ? true : undefined,
     pad_to_nearest_minutes: item.padToNearestMinutes !== '' && item.padToNearestMinutes !== null && item.padToNearestMinutes !== undefined ? Number(item.padToNearestMinutes) : undefined,
-    ...playbackFields(item)
+    ...playbackFields(item, resolveSource)
   }));
   const continuousBlocks = (modules.continuousBlocks || []).map((item) => compact({
-    ...baseEvent(item, { includePad: false }), start_time: item.startTime, source: item.source
+    ...baseEvent(item, { includePad: false }, resolveSource), start_time: item.startTime, source: resolveSource(item.source, item.order)
   }));
   const contentBreaks = (modules.contentBreaks || []).map((item) => compact({
-    ...baseEvent(item), source: item.source, every_items: Number(item.everyItems), break_source: item.breakSource,
+    ...baseEvent(item, {}, resolveSource), source: resolveSource(item.source, item.order), every_items: Number(item.everyItems), break_source: resolveSource(item.breakSource, item.breakOrder),
     break_count: Number(item.breakCount), break_presentation: item.breakPresentation,
-    ...playbackFields(item), break_playback: playbackFields(item.breakPlayback || {})
+    ...playbackFields(item, resolveSource), break_playback: playbackFields(item.breakPlayback || {}, resolveSource)
   }));
   const fitToWindow = (modules.fitToWindow || []).map((item) => compact({
-    ...baseEvent(item, { includePad: false }), start_time: item.startTime, end_time: item.endTime, source: item.source,
+    ...baseEvent(item, { includePad: false }, resolveSource), start_time: item.startTime, end_time: item.endTime, source: resolveSource(item.source, item.order),
     look_ahead_minutes: Number(item.lookAheadMinutes), discard_attempts: Number(item.discardAttempts || 0),
     use_filler_remainder: item.useFillerRemainder !== false
   }));
-  const fixedEvents = (modules.fixedEvents || []).map((item) => compact({ ...baseEvent(item), time: item.time, source: item.source, count: Number(item.count) }));
-  const fixedDurationEvents = (modules.fixedDurationEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine }), time: item.time, source: item.source, duration_minutes: Number(item.durationMinutes) }));
-  const fixedAllEvents = (modules.fixedAllEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine }), time: item.time, source: item.source }));
-  const fixedWindowEvents = (modules.fixedWindowEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine }), start_time: item.startTime, end_time: item.endTime, source: item.source }));
+  const fixedEvents = (modules.fixedEvents || []).map((item) => compact({ ...baseEvent(item, {}, resolveSource), time: item.time, source: resolveSource(item.source, item.order), count: Number(item.count) }));
+  const fixedDurationEvents = (modules.fixedDurationEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine }, resolveSource), time: item.time, source: resolveSource(item.source, item.order), duration_minutes: Number(item.durationMinutes) }));
+  const fixedAllEvents = (modules.fixedAllEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine }, resolveSource), time: item.time, source: resolveSource(item.source, item.order) }));
+  const fixedWindowEvents = (modules.fixedWindowEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine }, resolveSource), start_time: item.startTime, end_time: item.endTime, source: resolveSource(item.source, item.order) }));
   const windowRotations = (modules.windowRotations || []).map((item) => compact({
-    ...baseEvent(item, { includePad: false }), start_time: item.startTime, end_time: item.endTime, block_minutes: Number(item.blockMinutes),
+    ...baseEvent(item, { includePad: false }, resolveSource), start_time: item.startTime, end_time: item.endTime, block_minutes: Number(item.blockMinutes),
     items: (item.items || []).map((entry) => compact({
-      source: entry.source, presentation: entry.presentation,
+      source: resolveSource(entry.source, entry.order), presentation: entry.presentation,
       duration_minutes: entry.durationMinutes !== '' && entry.durationMinutes !== undefined ? Number(entry.durationMinutes) : undefined,
       pad_to_nearest_minutes: !itemPadEngine && entry.padToNearestMinutes !== '' && entry.padToNearestMinutes !== null && entry.padToNearestMinutes !== undefined ? Number(entry.padToNearestMinutes) : undefined,
-      ...playbackFields(entry)
+      ...playbackFields(entry, resolveSource)
     }))
   }));
-  const sequenceEvents = (modules.sequenceEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine || sequenceSupportsItemPad(item.steps) }), time: item.time, atomic: Boolean(item.atomic), steps: (item.steps || []).map(stepToEngine) }));
+  const sequenceEvents = (modules.sequenceEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine || sequenceSupportsItemPad(item.steps) }, resolveSource), time: item.time, atomic: Boolean(item.atomic), steps: (item.steps || []).map((step) => stepToEngine(step, resolveSource)) }));
   const intervalEvents = (modules.intervalEvents || []).map((item) => compact({
-    ...baseEvent(item, { includePad: !itemPadEngine || modeSupportsItemPad(item.mode) }), start_time: item.startTime, end_time: item.endTime, every_minutes: Number(item.everyMinutes),
-    source: item.source, mode: item.mode, count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
+    ...baseEvent(item, { includePad: !itemPadEngine || modeSupportsItemPad(item.mode) }, resolveSource), start_time: item.startTime, end_time: item.endTime, every_minutes: Number(item.everyMinutes),
+    source: item.source ? resolveSource(item.source, item.order) : undefined, mode: item.mode, count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
     late_policy: item.latePolicy || 'queue', max_lateness_minutes: item.maxLatenessMinutes !== '' && item.maxLatenessMinutes !== undefined ? Number(item.maxLatenessMinutes) : undefined
   }));
   const choiceEvents = (modules.choiceEvents || []).map((item) => compact({
-    ...baseEvent(item, { includePad: !itemPadEngine || modeSupportsItemPad(item.mode) }), time: item.time, mode: item.mode, count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
+    ...baseEvent(item, { includePad: !itemPadEngine || modeSupportsItemPad(item.mode) }, resolveSource), time: item.time, mode: item.mode, count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
     selection: item.selection || 'weighted', choices: (item.choices || []).map((choice) => compact({
-      source: choice.source, presentation: choice.presentation, weight: Number(choice.weight || 1), ...playbackFields(choice)
+      source: resolveSource(choice.source, choice.order), presentation: choice.presentation, weight: Number(choice.weight || 1), ...playbackFields(choice, resolveSource)
     }))
   }));
   const clockTemplates = (modules.clockTemplates || []).map((item) => compact({
-    ...baseEvent(item, { includePad: false }), start_time: item.startTime, end_time: item.endTime, cycle_minutes: Number(item.cycleMinutes),
+    ...baseEvent(item, { includePad: false }, resolveSource), start_time: item.startTime, end_time: item.endTime, cycle_minutes: Number(item.cycleMinutes),
     slots: (item.slots || []).map((slot) => compact({
-      offset_minutes: Number(slot.offsetMinutes), mode: slot.mode || 'count', source: slot.source,
+      offset_minutes: Number(slot.offsetMinutes), mode: slot.mode || 'count', source: resolveSource(slot.source, slot.order),
       count: slot.count !== '' && slot.count !== undefined ? Number(slot.count) : undefined,
       duration_minutes: slot.durationMinutes !== '' && slot.durationMinutes !== undefined ? Number(slot.durationMinutes) : undefined,
       presentation: slot.presentation, priority: slot.priority !== '' && slot.priority !== undefined ? Number(slot.priority) : undefined,
       pad_to_nearest_minutes: (!itemPadEngine || modeSupportsItemPad(slot.mode)) && slot.padToNearestMinutes !== '' && slot.padToNearestMinutes !== undefined ? Number(slot.padToNearestMinutes) : undefined,
-      ...playbackFields(slot)
+      ...playbackFields(slot, resolveSource)
     }))
   }));
   const temporaryOverrides = (modules.temporaryOverrides || []).map((item) => compact({
-    ...baseEvent(item, { includePad: !itemPadEngine }), start_datetime: item.startDatetime, end_datetime: item.endDatetime, source: item.source
+    ...baseEvent(item, { includePad: !itemPadEngine }, resolveSource), start_datetime: item.startDatetime, end_datetime: item.endDatetime, source: resolveSource(item.source, item.order)
   }));
   const dateEvents = (modules.dateEvents || []).map((item) => compact({
-    ...baseEvent(item, { includePad: !itemPadEngine || modeSupportsItemPad(item.mode, item.steps) }), datetime: item.datetime, source: item.source, mode: item.mode,
+    ...baseEvent(item, { includePad: !itemPadEngine || modeSupportsItemPad(item.mode, item.steps) }, resolveSource), datetime: item.datetime, source: item.source ? resolveSource(item.source, item.order) : undefined, mode: item.mode,
     count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
-    steps: item.mode === 'sequence' ? (item.steps || []).map(stepToEngine) : undefined
+    steps: item.mode === 'sequence' ? (item.steps || []).map((step) => stepToEngine(step, resolveSource)) : undefined
   }));
-  const offlineWindows = (modules.offlineWindows || []).map((item) => compact({ ...baseEvent(item, { includePad: false }), start_time: item.startTime, end_time: item.endTime }));
+  const offlineWindows = (modules.offlineWindows || []).map((item) => compact({ ...baseEvent(item, { includePad: false }, resolveSource), start_time: item.startTime, end_time: item.endTime }));
   return { rotation, countRotation, weightedRotation, continuousBlocks, contentBreaks, fitToWindow, fixedEvents, fixedDurationEvents, fixedAllEvents, fixedWindowEvents, windowRotations, sequenceEvents, intervalEvents, choiceEvents, clockTemplates, temporaryOverrides, dateEvents, offlineWindows };
+}
+
+function createSourceCompiler(project) {
+  const logicalSources = new Map((project.sources || []).map((source) => [cleanString(source.key), source]));
+  const reservedKeys = new Set(logicalSources.keys());
+  const engineSources = {};
+  const variants = new Map();
+
+  function variantKey(sourceKey, order) {
+    const id = `${sourceKey}\u0000${order}`;
+    if (variants.has(id)) return variants.get(id);
+    const suffix = order === 'chronological' ? 'CHRONOLOGICAL' : 'SHUFFLE';
+    const base = `${sourceKey}__${suffix}`;
+    let candidate = base;
+    let counter = 2;
+    while (reservedKeys.has(candidate) || Object.prototype.hasOwnProperty.call(engineSources, candidate)) {
+      candidate = `${base}_${counter}`;
+      counter += 1;
+    }
+    variants.set(id, candidate);
+    reservedKeys.add(candidate);
+    return candidate;
+  }
+
+  function resolve(sourceKey, order = 'shuffle') {
+    const key = cleanString(sourceKey);
+    if (!key) return key;
+    const source = logicalSources.get(key);
+    if (!source) return key;
+    if (sourceSupportsPlaybackOrder(source)) {
+      const normalizedOrder = normalizePlaybackOrder(order);
+      const keyForEngine = variantKey(key, normalizedOrder);
+      if (!Object.prototype.hasOwnProperty.call(engineSources, keyForEngine)) {
+        engineSources[keyForEngine] = sourceToEngine(source, normalizedOrder);
+      }
+      return keyForEngine;
+    }
+    if (!Object.prototype.hasOwnProperty.call(engineSources, key)) engineSources[key] = sourceToEngine(source);
+    return key;
+  }
+
+  return { sources: engineSources, resolve };
 }
 
 function projectToEngine(project) {
   const resolveGroup = groupResolver(project);
-  const sources = {};
-  for (const source of project.sources || []) sources[String(source.key)] = sourceToEngine(source);
+  const sourceCompiler = createSourceCompiler(project);
+  const resolveSource = sourceCompiler.resolve;
 
   const scriptedPlaylists = {};
   for (const playlist of project.scriptedPlaylists || []) {
-    scriptedPlaylists[String(playlist.key)] = (playlist.items || []).map((item) => ({ source: item.source, count: Number(item.count) }));
+    scriptedPlaylists[String(playlist.key)] = (playlist.items || []).map((item) => ({ source: resolveSource(item.source, item.order), count: Number(item.count) }));
   }
 
   const profiles = {};
@@ -292,12 +344,12 @@ function projectToEngine(project) {
   }
   profiles.none = { graphics: [], graphics_variables: {}, watermarks: [], pre_roll: null, epg_group: false };
 
-  const modules = modulesToEngine(project);
-  const filler = project.filler ? compact({ source: project.filler.source, presentation: project.filler.presentation, ...playbackFields(project.filler), filler_kind: normalizeFillerKind(project.filler.fillerKind, 'postroll') }) : null;
+  const modules = modulesToEngine(project, resolveSource);
+  const filler = project.filler ? compact({ source: resolveSource(project.filler.source, project.filler.order), presentation: project.filler.presentation, ...playbackFields(project.filler, resolveSource), filler_kind: normalizeFillerKind(project.filler.fillerKind, 'postroll') }) : null;
   const options = project.options || {};
 
   return {
-    sources,
+    sources: sourceCompiler.sources,
     scriptedPlaylists,
     profiles,
     modules,

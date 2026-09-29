@@ -7,7 +7,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { defaultProject, hydrateProject } = require('../src/scriptedSchedules/schema');
 const { validateProject } = require('../src/scriptedSchedules/validator');
-const { generateScript } = require('../src/scriptedSchedules/generator');
+const { generateScript, projectToEngine } = require('../src/scriptedSchedules/generator');
 const { safePublishedPath, publishScript } = require('../src/scriptedSchedules/publisher');
 const store = require('../src/scriptedSchedules/store');
 const service = require('../src/scriptedSchedules/service');
@@ -19,24 +19,24 @@ function musicProject() {
     { key: 'MUSIC_GRAPHICS', label: 'Music', graphics: ['text/youtube_credits_music_proxima.yml', 'text/youtube_credits_music_atual.yml'], includes: ['COMMON_GRAPHICS'] }
   ];
   project.sources = [
-    { key: 'TOP', label: 'Twenty One Pilots', type: 'smart_collection', name: '420 - TWENTY ONE PILOTS', order: 'shuffle', presentation: 'music' },
-    { key: 'BASTILLE', label: 'Bastille', type: 'smart_collection', name: '420 - BASTILLE', order: 'shuffle', presentation: 'music' },
-    { key: 'CONCERTS', label: 'Concerts', type: 'smart_collection', name: '420 - CONCERTS', order: 'shuffle', presentation: 'common' },
-    { key: 'FILLER', label: 'Filler', type: 'smart_collection', name: '000 - FALLBACK FILLER', order: 'shuffle', presentation: 'common' }
+    { key: 'TOP', label: 'Twenty One Pilots', type: 'smart_collection', name: '420 - TWENTY ONE PILOTS', presentation: 'music' },
+    { key: 'BASTILLE', label: 'Bastille', type: 'smart_collection', name: '420 - BASTILLE', presentation: 'music' },
+    { key: 'CONCERTS', label: 'Concerts', type: 'smart_collection', name: '420 - CONCERTS', presentation: 'common' },
+    { key: 'FILLER', label: 'Filler', type: 'smart_collection', name: '000 - FALLBACK FILLER', presentation: 'common' }
   ];
   project.presentationProfiles = [
     { key: 'common', label: 'Comum', graphicsGroups: ['COMMON_GRAPHICS'], graphics: [], graphicsVariables: [], watermarks: [], preRoll: null, epgGroup: false, epgTitle: '', epgAdvance: true },
     { key: 'music', label: 'Música', graphicsGroups: ['MUSIC_GRAPHICS'], graphics: [], graphicsVariables: [], watermarks: [], preRoll: null, epgGroup: false, epgTitle: '', epgAdvance: true }
   ];
   project.modules.rotation = [
-    { source: 'TOP', presentation: 'music', durationMinutes: 60 },
-    { source: 'BASTILLE', presentation: 'music', durationMinutes: 30 }
+    { source: 'TOP', order: 'shuffle', presentation: 'music', durationMinutes: 60 },
+    { source: 'BASTILLE', order: 'shuffle', presentation: 'music', durationMinutes: 30 }
   ];
   project.modules.fixedEvents = [
-    { id: 'concert_10', time: '10:00', source: 'CONCERTS', count: 1, priority: 100, presentation: 'common', days: [] },
-    { id: 'concert_18', time: '18:00', source: 'CONCERTS', count: 1, priority: 100, presentation: 'common', days: [] }
+    { id: 'concert_10', time: '10:00', source: 'CONCERTS', order: 'shuffle', count: 1, priority: 100, presentation: 'common', days: [] },
+    { id: 'concert_18', time: '18:00', source: 'CONCERTS', order: 'shuffle', count: 1, priority: 100, presentation: 'common', days: [] }
   ];
-  project.filler = { source: 'FILLER', presentation: 'common' };
+  project.filler = { source: 'FILLER', order: 'shuffle', presentation: 'common' };
   return project;
 }
 
@@ -64,6 +64,58 @@ test('Scripted Schedule golden music project generates a valid Universal v1.3.0 
   assert.match(output, /configuracao valida/);
   assert.match(output, /ROTATION=2/);
   assert.match(output, /FIXED_EVENTS=2/);
+});
+
+test('playback order is defined per programming use and the compiler derives independent ErsatzTV Sources', async () => {
+  const project = musicProject();
+  project.sources[0].order = 'chronological';
+  project.modules.rotation = [
+    { source: 'TOP', order: 'chronological', presentation: 'music', durationMinutes: 60 },
+    { source: 'TOP', order: 'shuffle', presentation: 'music', durationMinutes: 60 }
+  ];
+
+  const hydrated = hydrateProject(project);
+  assert.equal(Object.prototype.hasOwnProperty.call(hydrated.sources[0], 'order'), false);
+
+  const engine = projectToEngine(hydrated);
+  assert.equal(engine.sources.TOP, undefined);
+  assert.equal(engine.sources.TOP__CHRONOLOGICAL.order, 'chronological');
+  assert.equal(engine.sources.TOP__SHUFFLE.order, 'shuffle');
+  assert.equal(engine.sources.TOP__CHRONOLOGICAL.name, '420 - TWENTY ONE PILOTS');
+  assert.equal(engine.sources.TOP__SHUFFLE.name, '420 - TWENTY ONE PILOTS');
+  assert.equal(engine.modules.rotation[0].source, 'TOP__CHRONOLOGICAL');
+  assert.equal(engine.modules.rotation[1].source, 'TOP__SHUFFLE');
+
+  const script = await generateScript(hydrated);
+  assert.match(script, /TOP__CHRONOLOGICAL/);
+  assert.match(script, /TOP__SHUFFLE/);
+  const output = await validateWithPython(script);
+  assert.match(output, /configuracao valida/);
+});
+
+test('Scripted Playlist, Filler and Fallback compile their own playback order variants', () => {
+  const project = musicProject();
+  project.scriptedPlaylists = [{ key: 'PRE', label: 'Pre', items: [{ source: 'TOP', order: 'chronological', count: 1 }] }];
+  project.modules.fixedEvents[0].fallback = 'TOP';
+  project.modules.fixedEvents[0].fallbackOrder = 'chronological';
+  project.filler = { source: 'FILLER', order: 'chronological', presentation: 'common', fallback: 'BASTILLE', fallbackOrder: 'chronological' };
+
+  const engine = projectToEngine(hydrateProject(project));
+  assert.equal(engine.scriptedPlaylists.PRE[0].source, 'TOP__CHRONOLOGICAL');
+  assert.equal(engine.modules.fixedEvents[0].fallback, 'TOP__CHRONOLOGICAL');
+  assert.equal(engine.filler.source, 'FILLER__CHRONOLOGICAL');
+  assert.equal(engine.filler.fallback, 'BASTILLE__CHRONOLOGICAL');
+  assert.equal(engine.sources.TOP__CHRONOLOGICAL.order, 'chronological');
+  assert.equal(engine.sources.FILLER__CHRONOLOGICAL.order, 'chronological');
+  assert.equal(engine.sources.BASTILLE__CHRONOLOGICAL.order, 'chronological');
+});
+
+test('programming order validation accepts only Chronological and Shuffle for orderable Sources', () => {
+  const project = musicProject();
+  project.modules.rotation[0].order = 'random';
+  const validation = validateProject(project);
+  assert.equal(validation.ok, false);
+  assert.ok(validation.errors.some((item) => item.path === 'modules.rotation[0].order'));
 });
 
 
@@ -231,8 +283,8 @@ print(json.dumps({"cutoff": cutoff, "native": native, "exact": api.calls}))
   try {
     const output = execFileSync('python3', [probeFile, scheduleFile], { encoding: 'utf8' }).trim().split('\n').pop();
     const result = JSON.parse(output);
-    assert.deepEqual(result.cutoff, [['pad_until_exact', 'FILLER', '2026-09-28T10:10:00+00:00']]);
-    assert.deepEqual(result.native, [['pad_to_next', 'FILLER', 15]]);
+    assert.deepEqual(result.cutoff, [['pad_until_exact', 'FILLER__SHUFFLE', '2026-09-28T10:10:00+00:00']]);
+    assert.deepEqual(result.native, [['pad_to_next', 'FILLER__SHUFFLE', 15]]);
     assert.deepEqual(result.exact, []);
   } finally {
     await fsp.rm(dir, { recursive: true, force: true });
@@ -296,11 +348,11 @@ print(json.dumps(api.calls))
     const output = execFileSync('python3', [probeFile, scheduleFile], { encoding: 'utf8' }).trim().split('\n').pop();
     assert.deepEqual(JSON.parse(output), [
       ['add_count', 'CONCERTS', 1],
-      ['pad_to_next', 'FILLER', 15],
+      ['pad_to_next', 'FILLER__SHUFFLE', 15],
       ['add_count', 'CONCERTS', 1],
-      ['pad_to_next', 'FILLER', 15],
+      ['pad_to_next', 'FILLER__SHUFFLE', 15],
       ['add_count', 'CONCERTS', 1],
-      ['pad_to_next', 'FILLER', 15]
+      ['pad_to_next', 'FILLER__SHUFFLE', 15]
     ]);
   } finally {
     await fsp.rm(dir, { recursive: true, force: true });
@@ -479,14 +531,15 @@ print(json.dumps({"continuous": active[1]["source"] if active else None, "fit_ta
 `, 'utf8');
   try {
     const output = JSON.parse(execFileSync('python3', [probeFile, scheduleFile], { encoding: 'utf8' }));
-    assert.equal(output.continuous, 'BASTILLE');
+    assert.equal(output.continuous, 'BASTILLE__SHUFFLE');
     assert.equal(output.fit_target, '2026-09-28T20:00:00+00:00');
   } finally { await fsp.rm(dir, { recursive: true, force: true }); }
 });
 
 test('generator safely quotes queries and paths instead of producing free Python code', async () => {
   const project = musicProject();
-  project.sources.push({ key: 'SEARCH', label: 'Busca', type: 'search', query: 'title:"x" AND tag:"__import__(\\"os\\")"', order: 'shuffle', presentation: 'none' });
+  project.sources.push({ key: 'SEARCH', label: 'Busca', type: 'search', query: 'title:"x" AND tag:"__import__(\\"os\\")"', presentation: 'none' });
+  project.modules.fixedEvents.push({ id: 'search_probe', time: '22:00', source: 'SEARCH', order: 'shuffle', count: 1, priority: 10, presentation: 'none', days: [] });
   const script = await generateScript(project);
   assert.match(script, /__import__/);
   await validateWithPython(script);

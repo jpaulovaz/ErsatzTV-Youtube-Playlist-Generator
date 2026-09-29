@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.4.7 - pacote de atualização
+ErsatzTV YouTube Downloader 3.4.8 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.4.6.
+Extraia este ZIP sobre uma instalação v3.4.7.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -8,16 +8,15 @@ Preservado deliberadamente (não incluído):
 - data/
 - arquivos de mídia das bibliotecas e canais
 
-Principal correção:
-- caminhos de Graphics Elements passam a ser normalizados ao carregar/salvar o projeto e novamente na geração do script;
-- /image/watermark.yml passa a ser enviado como image/watermark.yml;
-- o mesmo tratamento vale para Grupos de Graphics e Graphics diretos dos Presentation Profiles;
-- barras invertidas também são convertidas para /;
-- a Ajuda mostra o formato relativo esperado pelo ErsatzTV.
+Principal alteração:
+- a ordem de reprodução deixa de ser cadastrada na Source e passa a ser definida em cada uso na programação;
+- Smart Collection, Collection, Multi Collection, Search e Show oferecem Chronological ou Shuffle no módulo, Filler, Scripted Playlist ou Fallback em que forem usados;
+- a mesma Source pode usar ordens diferentes em blocos diferentes;
+- o gerador cria automaticamente variantes internas Source + ordem para o ErsatzTV;
+- Marathon mantém suas opções próprias de ordem/agrupamento;
+- Random e Shuffle In Order não são oferecidos porque não são suportados pela API Scripted utilizada.
 
-Projetos existentes não precisam ser alterados manualmente.
+O antigo source.order não é preservado como fallback: usos antigos sem ordem própria assumem Shuffle. Revise a programação de homologação antes de republicar os scripts.
+
 Universal permanece v1.3.0. configVersion e schema dos projetos não mudam.
-Pad, Filler e regras de programação não mudam.
-Projetos Universal v1.1.1/v1.2.0 continuam sem atualização silenciosa.
-
 Consulte UPGRADE.md antes da atualização.

@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.7
+# ErsatzTV YouTube Downloader 3.4.8
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.7 corrige **Graphics Elements** quando o caminho foi informado com `/` no início. O aplicativo agora normaliza automaticamente esses caminhos para o formato relativo esperado pelo ErsatzTV, como `image/watermark.yml`, ao carregar/salvar o projeto e também ao gerar o script. O motor continua Universal v1.3.0 e a programação permanece inalterada.
+A versão 3.4.8 move a **ordem de reprodução** das Sources para o ponto em que cada Source é usada na programação. A mesma Smart Collection, Collection, Multi Collection, Search ou Show pode ser usada como **Chronological** em um bloco e **Shuffle** em outro. O gerador cria internamente as variantes necessárias para o ErsatzTV; o usuário continua cadastrando apenas uma Source. O motor permanece Universal v1.3.0.
 
 ## Arquitetura
 
@@ -210,7 +210,9 @@ A área **Scripted Schedules** é independente do downloader. Cada projeto repre
 
 O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas. O valor **Nenhum** nos seletores de Presentation é interno e sempre vazio; ele não aparece como perfil editável. Projetos antigos que tinham o antigo `none` vazio são limpos automaticamente ao carregar.
 
-Módulos disponíveis na v3.4.7:
+A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
+
+Módulos disponíveis na v3.4.8:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.

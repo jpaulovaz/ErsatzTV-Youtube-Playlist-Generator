@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.4.8
+
+- A ordem de reprodução deixa de pertencer ao cadastro da Source e passa a ser definida em cada uso da Source na Programação, Filler, Scripted Playlists e Fallbacks.
+- Smart Collection, Collection, Multi Collection, Search e Show oferecem **Chronological** ou **Shuffle** diretamente no bloco em que são usados. A mesma Source pode usar ordens diferentes em momentos diferentes sem precisar ser duplicada na interface.
+- O gerador compila cada combinação Source + ordem em uma Source interna independente para o ErsatzTV, por exemplo `MOVIES__CHRONOLOGICAL` e `MOVIES__SHUFFLE`, somente quando aquela variante é realmente necessária.
+- O campo genérico de ordem é removido do cadastro das Sources. Marathon continua com suas opções próprias de ordem/agrupamento, pois é um tipo de Source separado.
+- Projetos de homologação que ainda tenham `source.order` antigo não preservam essa configuração como regra de reprodução: o campo é descartado e usos sem ordem explícita passam a **Shuffle**. Isso evita manter uma segunda arquitetura obsoleta em paralelo.
+- A interface e a Ajuda explicam que a Source define **qual conteúdo** será usado e a Programação define **como ele será percorrido**.
+- Random e Shuffle In Order continuam fora da interface porque não são modos suportados pela API de Scripted Schedule usada pelo projeto.
+- Universal permanece v1.3.0; `configVersion` e o schema de armazenamento de Scripted Schedules não mudam.
+
 ## 3.4.7
 
 - Corrige Graphics Elements que não apareciam quando o caminho havia sido salvo com `/` no início, como `/image/watermark.yml`.

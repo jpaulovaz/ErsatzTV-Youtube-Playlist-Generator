@@ -1,5 +1,14 @@
 const path = require('path');
-const { MODULE_TYPES, TEMPLATE_VERSION, SUPPORTED_TEMPLATE_VERSIONS, RESERVED_PRESENTATION_KEY, reservedPresentationProfile, isCanonicalReservedPresentationProfile } = require('./schema');
+const {
+  MODULE_TYPES,
+  TEMPLATE_VERSION,
+  SUPPORTED_TEMPLATE_VERSIONS,
+  RESERVED_PRESENTATION_KEY,
+  PLAYBACK_ORDERS,
+  sourceSupportsPlaybackOrder,
+  reservedPresentationProfile,
+  isCanonicalReservedPresentationProfile
+} = require('./schema');
 
 const TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -156,10 +165,6 @@ function validateSources(sources, addError) {
     const base = `sources[${index}]`;
     const type = String(source && source.type || '').trim();
     if (!SOURCE_TYPES.has(type)) addError(`${base}.type`, `Tipo de Source invalido: ${type || '(vazio)'}.`);
-    const order = String(source && source.order || 'chronological');
-    if (['smart_collection', 'collection', 'multi_collection', 'search', 'show'].includes(type) && !ORDERS.has(order)) {
-      addError(`${base}.order`, 'Order deve ser chronological ou shuffle.');
-    }
     if (['smart_collection', 'collection', 'multi_collection'].includes(type) && !String(source.name || '').trim()) addError(`${base}.name`, 'Informe o nome no ErsatzTV.');
     if (type === 'playlist') {
       if (!String(source.playlist || '').trim()) addError(`${base}.playlist`, 'Informe a Playlist.');
@@ -185,6 +190,7 @@ function validateScriptedPlaylists(playlists, sourceMap, addError) {
     if (!Array.isArray(playlist.items) || playlist.items.length === 0) addError(`${base}.items`, 'Adicione pelo menos um item.');
     for (const [itemIndex, item] of (playlist.items || []).entries()) {
       requireSource(item.source, sourceMap, `${base}.items[${itemIndex}].source`, addError);
+      validateSourceOrder(item, sourceMap, `${base}.items[${itemIndex}]`, addError);
       positiveInt(item.count, `${base}.items[${itemIndex}].count`, addError);
     }
   });
@@ -217,6 +223,7 @@ function validateRotation(items, sourceMap, profileMap, options, project, addErr
   items.forEach((item, index) => {
     const base = `modules.rotation[${index}]`;
     requireSource(item.source, sourceMap, `${base}.source`, addError);
+    validateSourceOrder(item, sourceMap, base, addError);
     validatePresentationRef(item.presentation, profileMap, `${base}.presentation`, addError);
     if (item.durationMinutes !== '' && item.durationMinutes !== null && item.durationMinutes !== undefined) positiveNumber(item.durationMinutes, `${base}.durationMinutes`, addError);
     if (!itemPadEngine) validatePadToNearest(item, base, project, addError);
@@ -228,54 +235,59 @@ function validateTimedModules(modules, sourceMap, profileMap, project, addError)
   const itemPadEngine = templateAtLeast(String(project.templateVersion || TEMPLATE_VERSION), '1.3.0');
   (modules.countRotation || []).forEach((e, i) => {
     const base = `modules.countRotation[${i}]`;
-    requireSource(e.source, sourceMap, `${base}.source`, addError); validatePresentationRef(e.presentation, profileMap, `${base}.presentation`, addError);
+    requireSource(e.source, sourceMap, `${base}.source`, addError); validateSourceOrder(e, sourceMap, base, addError); validatePresentationRef(e.presentation, profileMap, `${base}.presentation`, addError);
     positiveInt(e.count, `${base}.count`, addError); validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
   });
   (modules.weightedRotation || []).forEach((e, i) => {
     const base = `modules.weightedRotation[${i}]`;
-    requireSource(e.source, sourceMap, `${base}.source`, addError); validatePresentationRef(e.presentation, profileMap, `${base}.presentation`, addError);
+    requireSource(e.source, sourceMap, `${base}.source`, addError); validateSourceOrder(e, sourceMap, base, addError); validatePresentationRef(e.presentation, profileMap, `${base}.presentation`, addError);
     positiveNumber(e.weight, `${base}.weight`, addError); validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
   });
   (modules.continuousBlocks || []).forEach((e, i) => {
     const base = `modules.continuousBlocks[${i}]`;
     commonEvent(e, base, profileMap, addError); time(e.startTime, `${base}.startTime`, addError); requireSource(e.source, sourceMap, `${base}.source`, addError);
+    validateSourceOrder(e, sourceMap, base, addError);
     validatePlayback(e, sourceMap, base, addError);
   });
   (modules.contentBreaks || []).forEach((e, i) => {
     const base = `modules.contentBreaks[${i}]`;
     commonEvent(e, base, profileMap, addError); requireSource(e.source, sourceMap, `${base}.source`, addError); positiveInt(e.everyItems, `${base}.everyItems`, addError);
+    validateSourceOrder(e, sourceMap, base, addError);
     requireSource(e.breakSource, sourceMap, `${base}.breakSource`, addError); positiveInt(e.breakCount, `${base}.breakCount`, addError);
-    validatePresentationRef(e.breakPresentation, profileMap, `${base}.breakPresentation`, addError); validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
+    validateSourceOrder(e, sourceMap, base, addError, 'breakSource', 'breakOrder');
+    validatePresentationRef(e.breakPresentation, profileMap, `${base}.breakPresentation`, addError); validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError); validatePlayback(e.breakPlayback, sourceMap, `${base}.breakPlayback`, addError);
   });
   (modules.fitToWindow || []).forEach((e, i) => {
     const base = `modules.fitToWindow[${i}]`;
     commonEvent(e, base, profileMap, addError); time(e.startTime, `${base}.startTime`, addError); time(e.endTime, `${base}.endTime`, addError);
     requireSource(e.source, sourceMap, `${base}.source`, addError); positiveInt(e.lookAheadMinutes, `${base}.lookAheadMinutes`, addError);
+    validateSourceOrder(e, sourceMap, base, addError);
     if (!Number.isInteger(Number(e.discardAttempts || 0)) || Number(e.discardAttempts || 0) < 0) addError(`${base}.discardAttempts`, 'Tentativas descartadas precisa ser zero ou um inteiro positivo.');
     if (e.useFillerRemainder !== false && (!project.filler || !String(project.filler.source || '').trim())) addError(`${base}.useFillerRemainder`, 'Configure o Filler ou desative o preenchimento do restante.');
     validatePlayback(e, sourceMap, base, addError);
   });
   (modules.fixedEvents || []).forEach((e, i) => {
     const base = `modules.fixedEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError);
-    requireSource(e.source, sourceMap, `${base}.source`, addError); positiveInt(e.count, `${base}.count`, addError); validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
+    requireSource(e.source, sourceMap, `${base}.source`, addError); validateSourceOrder(e, sourceMap, base, addError); positiveInt(e.count, `${base}.count`, addError); validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
   });
   (modules.fixedDurationEvents || []).forEach((e, i) => {
     const base = `modules.fixedDurationEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError);
-    requireSource(e.source, sourceMap, `${base}.source`, addError); positiveNumber(e.durationMinutes, `${base}.durationMinutes`, addError); if (!itemPadEngine) validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
+    requireSource(e.source, sourceMap, `${base}.source`, addError); validateSourceOrder(e, sourceMap, base, addError); positiveNumber(e.durationMinutes, `${base}.durationMinutes`, addError); if (!itemPadEngine) validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
   });
   (modules.fixedAllEvents || []).forEach((e, i) => {
     const base = `modules.fixedAllEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.time, `${base}.time`, addError);
-    requireSource(e.source, sourceMap, `${base}.source`, addError); if (!itemPadEngine) validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
+    requireSource(e.source, sourceMap, `${base}.source`, addError); validateSourceOrder(e, sourceMap, base, addError); if (!itemPadEngine) validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
   });
   (modules.fixedWindowEvents || []).forEach((e, i) => {
     const base = `modules.fixedWindowEvents[${i}]`; commonEvent(e, base, profileMap, addError); time(e.startTime, `${base}.startTime`, addError); time(e.endTime, `${base}.endTime`, addError);
-    requireSource(e.source, sourceMap, `${base}.source`, addError); if (!itemPadEngine) validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
+    requireSource(e.source, sourceMap, `${base}.source`, addError); validateSourceOrder(e, sourceMap, base, addError); if (!itemPadEngine) validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
   });
   (modules.windowRotations || []).forEach((e, i) => {
     const base = `modules.windowRotations[${i}]`; commonEvent(e, base, profileMap, addError); time(e.startTime, `${base}.startTime`, addError); time(e.endTime, `${base}.endTime`, addError); positiveNumber(e.blockMinutes, `${base}.blockMinutes`, addError);
     if (!Array.isArray(e.items) || !e.items.length) addError(`${base}.items`, 'Adicione pelo menos uma Source na rotacao da janela.');
     for (const [j, item] of (e.items || []).entries()) {
       requireSource(item.source, sourceMap, `${base}.items[${j}].source`, addError); validatePresentationRef(item.presentation, profileMap, `${base}.items[${j}].presentation`, addError);
+      validateSourceOrder(item, sourceMap, `${base}.items[${j}]`, addError);
       if (item.durationMinutes !== '' && item.durationMinutes !== null && item.durationMinutes !== undefined) positiveNumber(item.durationMinutes, `${base}.items[${j}].durationMinutes`, addError);
       if (!itemPadEngine) validatePadToNearest(item, `${base}.items[${j}]`, project, addError);
       validatePlayback(item, sourceMap, `${base}.items[${j}]`, addError);
@@ -296,20 +308,20 @@ function validateTimedModules(modules, sourceMap, profileMap, project, addError)
     if (mode === 'count') positiveInt(e.count, `${base}.count`, addError); if (mode === 'duration') positiveNumber(e.durationMinutes, `${base}.durationMinutes`, addError);
     if (!['weighted', 'round_robin'].includes(String(e.selection || 'weighted'))) addError(`${base}.selection`, 'Selecao deve ser weighted ou round_robin.');
     if (!Array.isArray(e.choices) || !e.choices.length) addError(`${base}.choices`, 'Adicione pelo menos uma Source para escolha.');
-    (e.choices || []).forEach((choice, j) => { requireSource(choice.source, sourceMap, `${base}.choices[${j}].source`, addError); validatePresentationRef(choice.presentation, profileMap, `${base}.choices[${j}].presentation`, addError); positiveNumber(choice.weight || 1, `${base}.choices[${j}].weight`, addError); validatePlayback(choice, sourceMap, `${base}.choices[${j}]`, addError); });
+    (e.choices || []).forEach((choice, j) => { requireSource(choice.source, sourceMap, `${base}.choices[${j}].source`, addError); validateSourceOrder(choice, sourceMap, `${base}.choices[${j}]`, addError); validatePresentationRef(choice.presentation, profileMap, `${base}.choices[${j}].presentation`, addError); positiveNumber(choice.weight || 1, `${base}.choices[${j}].weight`, addError); validatePlayback(choice, sourceMap, `${base}.choices[${j}]`, addError); });
     if (!itemPadEngine || modeSupportsItemPad(e.mode)) validatePadToNearest(e, base, project, addError);
   });
   (modules.clockTemplates || []).forEach((e, i) => {
     const base = `modules.clockTemplates[${i}]`; commonEvent(e, base, profileMap, addError); time(e.startTime, `${base}.startTime`, addError); time(e.endTime, `${base}.endTime`, addError); positiveInt(e.cycleMinutes, `${base}.cycleMinutes`, addError);
     if (!Array.isArray(e.slots) || !e.slots.length) addError(`${base}.slots`, 'Adicione pelo menos uma posicao ao relogio.');
-    (e.slots || []).forEach((slot, j) => { const p = `${base}.slots[${j}]`; const offset = Number(slot.offsetMinutes); if (!Number.isInteger(offset) || offset < 0 || offset >= Number(e.cycleMinutes || 0)) addError(`${p}.offsetMinutes`, 'A posicao precisa estar dentro do ciclo.'); requireSource(slot.source, sourceMap, `${p}.source`, addError); validatePresentationRef(slot.presentation, profileMap, `${p}.presentation`, addError); const mode = String(slot.mode || 'count'); if (!['count','duration','all'].includes(mode)) addError(`${p}.mode`, 'Modo invalido.'); if (mode === 'count') positiveInt(slot.count, `${p}.count`, addError); if (mode === 'duration') positiveNumber(slot.durationMinutes, `${p}.durationMinutes`, addError); if (!itemPadEngine || modeSupportsItemPad(mode)) validatePadToNearest(slot, p, project, addError); validatePlayback(slot, sourceMap, p, addError); });
+    (e.slots || []).forEach((slot, j) => { const p = `${base}.slots[${j}]`; const offset = Number(slot.offsetMinutes); if (!Number.isInteger(offset) || offset < 0 || offset >= Number(e.cycleMinutes || 0)) addError(`${p}.offsetMinutes`, 'A posicao precisa estar dentro do ciclo.'); requireSource(slot.source, sourceMap, `${p}.source`, addError); validateSourceOrder(slot, sourceMap, p, addError); validatePresentationRef(slot.presentation, profileMap, `${p}.presentation`, addError); const mode = String(slot.mode || 'count'); if (!['count','duration','all'].includes(mode)) addError(`${p}.mode`, 'Modo invalido.'); if (mode === 'count') positiveInt(slot.count, `${p}.count`, addError); if (mode === 'duration') positiveNumber(slot.durationMinutes, `${p}.durationMinutes`, addError); if (!itemPadEngine || modeSupportsItemPad(mode)) validatePadToNearest(slot, p, project, addError); validatePlayback(slot, sourceMap, p, addError); });
   });
   (modules.temporaryOverrides || []).forEach((e, i) => {
     const base = `modules.temporaryOverrides[${i}]`; commonEvent(e, base, profileMap, addError);
     if (!DATE_TIME_RE.test(String(e.startDatetime || ''))) addError(`${base}.startDatetime`, 'Use AAAA-MM-DD HH:MM.');
     if (!DATE_TIME_RE.test(String(e.endDatetime || ''))) addError(`${base}.endDatetime`, 'Use AAAA-MM-DD HH:MM.');
     if (DATE_TIME_RE.test(String(e.startDatetime || '')) && DATE_TIME_RE.test(String(e.endDatetime || '')) && String(e.endDatetime) <= String(e.startDatetime)) addError(`${base}.endDatetime`, 'O fim precisa ser posterior ao inicio.');
-    requireSource(e.source, sourceMap, `${base}.source`, addError); if (!itemPadEngine) validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
+    requireSource(e.source, sourceMap, `${base}.source`, addError); validateSourceOrder(e, sourceMap, base, addError); if (!itemPadEngine) validatePadToNearest(e, base, project, addError); validatePlayback(e, sourceMap, base, addError);
   });
   (modules.dateEvents || []).forEach((e, i) => {
     const base = `modules.dateEvents[${i}]`; commonEvent(e, base, profileMap, addError); if (!DATE_TIME_RE.test(String(e.datetime || ''))) addError(`${base}.datetime`, 'Use data e hora no formato AAAA-MM-DD HH:MM.');
@@ -336,6 +348,7 @@ function validateModeEvent(e, sourceMap, profileMap, base, addError, allowSequen
   if (!allowed.includes(mode)) return addError(`${base}.mode`, `Modo invalido: ${mode}.`);
   if (mode === 'sequence') return validateSteps(e.steps, sourceMap, profileMap, `${base}.steps`, addError);
   requireSource(e.source, sourceMap, `${base}.source`, addError);
+  validateSourceOrder(e, sourceMap, base, addError);
   if (mode === 'count') positiveInt(e.count, `${base}.count`, addError);
   if (mode === 'duration') positiveNumber(e.durationMinutes, `${base}.durationMinutes`, addError);
 }
@@ -346,7 +359,10 @@ function validateSteps(steps, sourceMap, profileMap, base, addError) {
     const p = `${base}[${i}]`;
     const mode = String(step.mode || 'count');
     if (!['count', 'duration', 'all', 'pad_to_next', 'wait'].includes(mode)) addError(`${p}.mode`, `Modo invalido: ${mode}.`);
-    if (mode !== 'wait') requireSource(step.source, sourceMap, `${p}.source`, addError);
+    if (mode !== 'wait') {
+      requireSource(step.source, sourceMap, `${p}.source`, addError);
+      validateSourceOrder(step, sourceMap, p, addError);
+    }
     validatePresentationRef(step.presentation, profileMap, `${p}.presentation`, addError);
     if (mode === 'count') positiveInt(step.count, `${p}.count`, addError);
     if (['duration', 'wait'].includes(mode)) positiveNumber(step.durationMinutes, `${p}.durationMinutes`, addError);
@@ -364,7 +380,10 @@ function validatePadToNearest(item, base, project, addError) {
 }
 
 function validatePlayback(item, sourceMap, base, addError) {
-  if (item && item.fallback) requireSource(item.fallback, sourceMap, `${base}.fallback`, addError);
+  if (item && item.fallback) {
+    requireSource(item.fallback, sourceMap, `${base}.fallback`, addError);
+    validateSourceOrder(item, sourceMap, base, addError, 'fallback', 'fallbackOrder');
+  }
   if (item && item.discardAttempts !== '' && item.discardAttempts !== undefined && item.discardAttempts !== null) {
     const value = Number(item.discardAttempts); if (!Number.isInteger(value) || value < 0) addError(`${base}.discardAttempts`, 'Informe zero ou um numero inteiro positivo.');
   }
@@ -418,7 +437,9 @@ function validateEventIds(modules, addError) {
 function validateFiller(filler, sourceMap, profileMap, addError) {
   if (!filler) return;
   requireSource(filler.source, sourceMap, 'filler.source', addError);
+  validateSourceOrder(filler, sourceMap, 'filler', addError);
   validatePresentationRef(filler.presentation, profileMap, 'filler.presentation', addError);
+  validatePlayback(filler, sourceMap, 'filler', addError);
 }
 
 function validateOptions(options = {}, addError) {
@@ -447,6 +468,15 @@ function validateChannelLinks(links, addError) {
 function requireSource(value, sourceMap, pathName, addError) {
   const key = String(value || '').trim();
   if (!key || !sourceMap.has(key)) addError(pathName, `Source ${key || '(vazia)'} nao existe.`);
+}
+
+function validateSourceOrder(target, sourceMap, base, addError, sourceField = 'source', orderField = 'order') {
+  if (!target || typeof target !== 'object') return;
+  const key = String(target[sourceField] || '').trim();
+  const source = sourceMap.get(key);
+  if (!source || !sourceSupportsPlaybackOrder(source)) return;
+  const order = String(target[orderField] || 'shuffle').trim().toLowerCase();
+  if (!PLAYBACK_ORDERS.has(order)) addError(`${base}.${orderField}`, 'Ordem deve ser Chronological ou Shuffle.');
 }
 
 function positiveNumber(value, pathName, addError) {
