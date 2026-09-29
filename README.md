@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.2
+# ErsatzTV YouTube Downloader 3.4.3
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.2 é uma correção de clareza sobre a v3.4.1. O Builder agora deixa explícito, no modal de módulos e na Ajuda, onde **Pad To Nearest Minute** se aplica e onde não se aplica. O motor **Universal v1.3.0**, os 18 tipos de módulo e os contratos de programação permanecem inalterados.
+A versão 3.4.3 corrige o comportamento de **Pad To Nearest Minute** no motor Universal v1.3.0: quando o módulo é compatível, o alinhamento acontece **depois de cada item**, usando o Filler até a próxima marca. Eventos com horário marcado continuam entrando no horário configurado. A compatibilidade foi ajustada conforme as operações disponíveis no Scripted Schedule do ErsatzTV Legacy v26.10.0.
 
 ## Arquitetura
 
@@ -210,7 +210,7 @@ A área **Scripted Schedules** é independente do downloader. Cada projeto repre
 
 O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos podem ser cadastrados grupos de Graphics, Sources, Scripted Playlists e Presentation Profiles. Em Programação, somente os módulos escolhidos aparecem. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas.
 
-Módulos disponíveis na v3.4.2:
+Módulos disponíveis na v3.4.3:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -235,9 +235,9 @@ O **Filler** permanece separado dos módulos e é opcional. Programações de fu
 
 Os filtros de dias e datas também suportam **recorrência avançada**, incluindo primeira/segunda/terceira/quarta/última ocorrência de um dia da semana no mês e repetição a cada N dias.
 
-Nos módulos em que existe um término natural, cada bloco/evento pode habilitar manualmente **Pad To Nearest Minute** com marcas de 5, 10, 15 ou 30 minutos. A opção nasce desativada, reutiliza o Filler do próprio projeto e só fica disponível quando esse Filler possui uma Source configurada. Assim, um mesmo canal pode misturar blocos com e sem alinhamento sem criar Fillers duplicados.
+**Pad To Nearest Minute** pode ser habilitado nos módulos que o motor consegue executar **item por item**. Depois de cada item, o Filler completa até a próxima marca de 5, 10, 15 ou 30 minutos. Exemplo: filme termina 10:07 -> Filler até 10:15 -> próximo filme. Se existir um evento marcado para 10:10, o Pad termina em 10:10; as regras normais de prioridade do projeto continuam valendo.
 
-O Pad **não se aplica** a **Bloco contínuo por horário** (não termina sozinho), **Encaixar até o próximo evento** (já trabalha até o próximo horário) e **Janela offline** (foi criada para ficar sem programação). O Filler também não recebe Pad, porque ele é justamente o conteúdo usado pelo alinhamento. Em **Faixa de horário · rotação**, o Pad aparece em cada etapa da rotação; em **Relógio de programação**, em cada posição. O Pad é aplicado ao término do bloco configurado: se um evento foi configurado para tocar 3 itens, ele entra depois do terceiro, não entre os três. **Horário fixo · todos os itens é compatível**: primeiro todos os itens terminam e somente depois o Filler completa até a marca escolhida; esse módulo continua podendo atravessar o horário de outro evento enquanto termina todos os itens.
+A API de Scripted Schedule do ErsatzTV Legacy v26.10.0 oferece controle item a item para operações de **Quantidade**. Já **Duração**, **Todos os itens** e preenchimentos de **faixa de horário** são operações inteiras; não existe um ponto seguro para inserir Filler entre os itens sem mudar o significado dessas funções. Por isso o campo de Pad não aparece nesses casos. Em módulos com modo variável, ele aparece somente em **Quantidade**; em Sequência, somente quando os passos de conteúdo não usam Duração nem Todos os itens. O Filler não recebe Pad porque ele próprio é o conteúdo usado pelo alinhamento.
 
 A pasta de saída é configurada na própria área. O backend aceita apenas arquivos `.py` dentro dessa raiz. Ao publicar, o aplicativo valida as referências, gera o script de forma determinística, tenta executar `python3 <script> --validate-config`, cria backup do arquivo anterior, troca o arquivo de forma atômica e registra hash/histórico.
 

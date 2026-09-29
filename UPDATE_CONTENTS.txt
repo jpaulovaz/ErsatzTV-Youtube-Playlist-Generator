@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.4.2 - pacote de atualização
+ErsatzTV YouTube Downloader 3.4.3 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.4.1.
+Extraia este ZIP sobre uma instalação v3.4.2.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,12 +9,15 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principais mudanças:
-- modal Adicionar módulo informa onde Pad To Nearest Minute não se aplica;
-- Ajuda dos módulos mostra as mesmas regras em linguagem simples;
-- Horário fixo · todos os itens deixa claro que o Pad ocorre depois de todos os itens;
-- Faixa de horário · rotação e Relógio de programação indicam onde o Pad fica nas etapas/posições internas.
-- a Ajuda deixa claro que o Pad atua ao fim do bloco configurado; se o bloco tocar 3 itens, entra depois do terceiro.
+- Pad To Nearest Minute passa a atuar entre os itens nos módulos compatíveis;
+- exemplo: item -> Filler até a próxima marca -> item -> Filler;
+- o Pad nunca é usado para segurar a programação além de um horário programado;
+- módulos executados pelo ErsatzTV como Duração, Todos os itens ou faixa inteira não mostram Pad por item;
+- modos variáveis mostram Pad apenas quando existe execução segura item a item;
+- modal Adicionar módulo e Ajuda explicam a compatibilidade em linguagem simples;
+- comportamento confirmado contra a API de Scripted Schedule incluída no ErsatzTV Legacy v26.10.0.
 
-Sem alteração de schema ou do motor Universal v1.3.0.
+Universal permanece v1.3.0. configVersion e schema dos projetos não mudam.
+Projetos Universal v1.1.1/v1.2.0 continuam sem atualização silenciosa e mantêm o comportamento histórico do próprio motor.
 
 Consulte UPGRADE.md antes da atualização.

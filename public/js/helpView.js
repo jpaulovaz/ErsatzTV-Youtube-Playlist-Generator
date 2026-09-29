@@ -9,23 +9,23 @@
   ];
 
   const MODULES = [
-    ['Rotação por tempo', 'Toca uma Source por alguns minutos e depois passa para a próxima.', '60 min de músicas A → 30 min de músicas B → volta para A.', 'Eventos fixos e Filler.'],
-    ['Rotação por quantidade', 'Troca de Source depois de tocar uma quantidade de itens.', '3 clipes de A → 2 clipes de B → repete.', 'Eventos fixos e Filler. Normalmente substitui, e não soma, outra rotação de fundo.'],
-    ['Rotação por peso', 'Escolhe as Sources pela proporção que você indicar. A ordem não fica presa.', 'Peso 60 para músicas novas e 20 para clássicas faz as novas aparecerem mais vezes.', 'Eventos fixos e Filler. Use esta opção como programação-base quando quiser variedade por proporção.'],
+    ['Rotação por tempo', 'Toca uma Source por alguns minutos e depois passa para a próxima.', '60 min de músicas A → 30 min de músicas B → volta para A.', 'Eventos fixos e Filler.', 'Pad To Nearest não se aplica aqui, porque este bloco é montado por tempo.'],
+    ['Rotação por quantidade', 'Troca de Source depois de tocar uma quantidade de itens.', '3 clipes de A → 2 clipes de B → repete.', 'Eventos fixos e Filler. Normalmente substitui, e não soma, outra rotação de fundo.', 'Pad To Nearest pode entrar depois de cada item.'],
+    ['Rotação por peso', 'Escolhe as Sources pela proporção que você indicar. A ordem não fica presa.', 'Peso 60 para músicas novas e 20 para clássicas faz as novas aparecerem mais vezes.', 'Eventos fixos e Filler. Use esta opção como programação-base quando quiser variedade por proporção.', 'Pad To Nearest pode entrar depois de cada item.'],
     ['Bloco contínuo por horário', 'A partir de um horário, uma Source fica tocando sem tempo para acabar. Um evento fixo pode entrar no meio; depois o bloco volta.', '06:00 desenhos; 12:00 séries; 18:00 filmes. Um jornal às 22:00 entra e, ao terminar, volta aos filmes.', 'Horários fixos. É a melhor opção para criar a programação-base do dia.', 'Pad To Nearest não se aplica aqui, porque este bloco não termina sozinho.'],
-    ['Inserções após X itens', 'Depois de uma quantidade de itens principais, toca uma pequena inserção e volta.', '4 músicas → 1 vinheta → 4 músicas → 1 vinheta.', 'Eventos fixos e Filler. Este módulo já faz a alternância principal + inserção sozinho.'],
+    ['Inserções após X itens', 'Depois de uma quantidade de itens principais, toca uma pequena inserção e volta.', '4 músicas → 1 vinheta → 4 músicas → 1 vinheta.', 'Eventos fixos e Filler. Este módulo já faz a alternância principal + inserção sozinho.', 'Pad To Nearest pode entrar depois de cada item tocado.'],
     ['Encaixar até o próximo evento', 'Quando falta pouco tempo para um evento, tenta escolher um item que caiba nesse espaço.', 'São 19:38 e o filme começa às 20:00. O módulo tenta achar algo curto para usar esses 22 minutos.', 'Eventos fixos e Filler.', 'Pad To Nearest não se aplica aqui, porque este módulo já trabalha até o próximo evento.'],
-    ['Horário fixo · quantidade', 'Em um horário marcado, toca uma quantidade de itens.', '10:00 → tocar 1 concerto.', 'Bloco contínuo, rotações e Pad To Nearest.'],
-    ['Horário fixo · duração', 'Em um horário marcado, toca por um tempo. Se uma prioridade maior interromper, guarda o tempo que faltou.', '20:00 → música por 90 minutos.', 'Eventos de prioridade maior.'],
-    ['Horário fixo · todos os itens', 'Em um horário marcado, toca tudo daquela Source. Depois que começa, termina antes de liberar outro módulo.', '14:00 → tocar todos os episódios de uma coleção especial.', 'Maratonas e especiais.', 'Pad To Nearest funciona. Ele só começa depois que todos os itens terminarem.'],
-    ['Faixa de horário · fonte única', 'Usa uma Source somente entre dois horários.', '06:00–10:00 → programação da manhã.', 'Programação por turnos.'],
-    ['Faixa de horário · rotação', 'Faz uma rotação própria somente dentro de uma faixa de horário.', '12:00–18:00 → alternar três Sources a cada 30 minutos.', 'Grades de manhã/tarde/noite.', 'Pad To Nearest fica disponível em cada etapa da rotação.'],
-    ['Sequência programada', 'Executa vários passos na ordem que você montar.', 'Vinheta → programa → promo → preencher até :30.', 'Programas com abertura, intervalo e encerramento.'],
-    ['Repetição por intervalo', 'Repete um evento a cada X minutos.', 'Tocar uma vinheta a cada 30 minutos.', 'Station IDs, promos e chamadas.'],
-    ['Escolha entre fontes', 'No horário marcado, escolhe uma das Sources disponíveis.', '20:00 → escolher entre três coleções de filmes.', 'Sessões variadas e programação menos previsível.'],
-    ['Relógio de programação', 'Repete posições dentro de um ciclo.', 'Num ciclo de 60 min: :00 conteúdo, :15 vinheta, :30 conteúdo, :55 promo.', 'Canais com estrutura de rádio/TV.', 'Pad To Nearest fica disponível em cada posição do relógio.'],
-    ['Programação especial temporária', 'Uma Source assume entre uma data/hora de início e fim. Depois a grade normal volta sozinha.', '24/12 18:00 até 26/12 06:00 → Especial de Natal.', 'Datas comemorativas e eventos.'],
-    ['Evento em data específica', 'Executa uma vez numa data e hora exatas.', '31/12/2026 23:30 → Especial de Ano Novo.', 'Estreias e eventos únicos.'],
+    ['Horário fixo · quantidade', 'Em um horário marcado, toca uma quantidade de itens.', '10:00 → tocar 3 filmes.', 'Bloco contínuo, rotações e Pad To Nearest.', 'Com Pad: filme → Filler até a marca → filme → Filler → filme → Filler.'],
+    ['Horário fixo · duração', 'Em um horário marcado, toca por um tempo. Se uma prioridade maior interromper, guarda o tempo que faltou.', '20:00 → música por 90 minutos.', 'Eventos de prioridade maior.', 'Pad To Nearest não se aplica aqui, porque o ErsatzTV monta esse período de uma vez.'],
+    ['Horário fixo · todos os itens', 'Em um horário marcado, toca tudo daquela Source. Depois que começa, termina antes de liberar outro módulo.', '14:00 → tocar todos os episódios de uma coleção especial.', 'Maratonas e especiais.', 'Pad To Nearest não se aplica aqui: o ErsatzTV recebe todos os itens de uma vez, então não existe uma pausa segura entre eles.'],
+    ['Faixa de horário · fonte única', 'Usa uma Source somente entre dois horários.', '06:00–10:00 → programação da manhã.', 'Programação por turnos.', 'Pad To Nearest não se aplica aqui, porque a faixa inteira é preenchida de uma vez.'],
+    ['Faixa de horário · rotação', 'Faz uma rotação própria somente dentro de uma faixa de horário.', '12:00–18:00 → alternar três Sources a cada 30 minutos.', 'Grades de manhã/tarde/noite.', 'Pad To Nearest não se aplica aqui, porque cada etapa é definida por duração.'],
+    ['Sequência programada', 'Executa vários passos na ordem que você montar.', 'Vinheta → programa → promo → preencher até :30.', 'Programas com abertura, intervalo e encerramento.', 'Pad To Nearest aparece quando os passos de conteúdo usam Quantidade.'],
+    ['Repetição por intervalo', 'Repete um evento a cada X minutos.', 'Tocar uma vinheta a cada 30 minutos.', 'Station IDs, promos e chamadas.', 'Pad To Nearest aparece no modo Quantidade.'],
+    ['Escolha entre fontes', 'No horário marcado, escolhe uma das Sources disponíveis.', '20:00 → escolher entre três coleções de filmes.', 'Sessões variadas e programação menos previsível.', 'Pad To Nearest aparece no modo Quantidade.'],
+    ['Relógio de programação', 'Repete posições dentro de um ciclo.', 'Num ciclo de 60 min: :00 conteúdo, :15 vinheta, :30 conteúdo, :55 promo.', 'Canais com estrutura de rádio/TV.', 'Pad To Nearest aparece nas posições configuradas como Quantidade.'],
+    ['Programação especial temporária', 'Uma Source assume entre uma data/hora de início e fim. Depois a grade normal volta sozinha.', '24/12 18:00 até 26/12 06:00 → Especial de Natal.', 'Datas comemorativas e eventos.', 'Pad To Nearest não se aplica aqui, porque o período inteiro é preenchido como uma faixa de duração.'],
+    ['Evento em data específica', 'Executa uma vez numa data e hora exatas.', '31/12/2026 23:30 → Especial de Ano Novo.', 'Estreias e eventos únicos.', 'Pad To Nearest aparece em Quantidade; em Sequência, somente quando os passos de conteúdo usam Quantidade.'],
     ['Janela offline', 'Deixa uma faixa sem programação.', 'Domingo 03:00–05:00 → manutenção.', 'Manutenção. Não combine com Filler dentro da mesma janela.', 'Pad To Nearest não se aplica aqui, porque esta faixa foi criada para ficar sem programação.']
   ];
 
@@ -55,7 +55,7 @@
 
   function renderCombinations() {
     return `<div class="help-module-grid">
-      <article class="card help-module-card"><h3>Canal de filmes</h3><p><strong>Bloco contínuo</strong> como base + <strong>Horário fixo</strong> para sessões especiais + <strong>Pad To Nearest</strong> + <strong>Filler</strong>.</p></article>
+      <article class="card help-module-card"><h3>Canal de filmes</h3><p><strong>Bloco contínuo</strong> como base + <strong>Horário fixo · quantidade</strong> para sessões especiais + <strong>Pad To Nearest</strong> + <strong>Filler</strong>.</p></article>
       <article class="card help-module-card"><h3>Canal de música</h3><p>Use <strong>Rotação por tempo, quantidade ou peso</strong> para alternar Sources. Se preferir uma regra como “4 músicas + 1 vinheta”, use <strong>Inserções após X itens</strong> como programação-base. Filler é opcional se o fundo já cobre 24 horas.</p></article>
       <article class="card help-module-card"><h3>Canal com grade por turnos</h3><p><strong>Blocos contínuos</strong> às 06:00, 12:00 e 18:00. Eventos fixos entram por cima e depois a programação-base volta.</p></article>
       <article class="card help-module-card"><h3>Canal estilo TV/Rádio</h3><p><strong>Relógio de programação</strong> para posições previsíveis + <strong>Repetição por intervalo</strong> para promos + eventos fixos para programas principais.</p></article>
@@ -73,7 +73,7 @@
       ['Source', 'Uma fonte de conteúdo. Pode ser uma Smart Collection, Collection, Playlist, Search, Show ou Marathon.'],
       ['Presentation', 'Um pacote de aparência: Graphics, watermark, pre-roll e opções de EPG.'],
       ['Priority', 'Quem tem o número maior tem preferência quando duas programações disputam o mesmo momento.'],
-      ['Pad To Nearest Minute', 'Depois que um bloco compatível termina, usa o Filler até a próxima marca de 5, 10, 15 ou 30 minutos. Se o bloco tocar 3 itens, o Pad entra depois do terceiro, não entre eles. A opção só aparece onde esse alinhamento faz sentido.'],
+      ['Pad To Nearest Minute', 'Em módulos compatíveis, usa o Filler depois de cada item até a próxima marca de 5, 10, 15 ou 30 minutos. Exemplo: filme termina 10:07 → Filler até 10:15 → próximo filme. Um evento com horário marcado continua entrando no horário dele.'],
       ['Fallback Source', 'Source de reserva usada pelo próprio ErsatzTV dentro de operações de duração/pad. Não é o Filler geral do projeto.'],
       ['Filler kind', 'Uma marca enviada ao ErsatzTV para tratar aquele conteúdo como filler no EPG. Se você não precisa disso, deixe vazio.'],
       ['Trim', 'Permite cortar um item para ele caber exatamente. Deixe desligado se você não quer cortes.'],

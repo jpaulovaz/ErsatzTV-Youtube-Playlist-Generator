@@ -104,37 +104,70 @@ test('Pad To Nearest Minute requires Filler, accepts only 5 10 15 30 and require
   assert.ok(result.errors.some((item) => /motor 1\.2\.0/.test(item.message)));
 });
 
-test('Pad To Nearest Minute is generated for content modules and absent from Offline and Filler', async () => {
+test('Universal v1.3.0 serializes item Pad only for module modes that can align individual items', async () => {
   const project = musicProject();
-  project.modules.rotation[0].padToNearestMinutes = 5;
+  project.modules.rotation[0].padToNearestMinutes = 5; // configuração antiga: deve ser ignorada no motor atual
+  project.modules.countRotation = [{ source: 'TOP', presentation: 'music', count: 2, padToNearestMinutes: 5 }];
+  project.modules.weightedRotation = [{ source: 'BASTILLE', presentation: 'music', weight: 1, avoidRepeat: true, padToNearestMinutes: 10 }];
+  project.modules.contentBreaks = [{ id: 'break_pad', source: 'TOP', everyItems: 2, breakSource: 'CONCERTS', breakCount: 1, breakPresentation: 'common', priority: 40, presentation: 'music', padToNearestMinutes: 15 }];
   project.modules.fixedEvents[0].padToNearestMinutes = 10;
   project.modules.fixedDurationEvents = [{ id: 'duration_pad', time: '20:00', source: 'TOP', durationMinutes: 60, priority: 120, presentation: 'music', padToNearestMinutes: 15 }];
   project.modules.fixedAllEvents = [{ id: 'all_pad', time: '14:00', source: 'CONCERTS', priority: 80, presentation: 'common', padToNearestMinutes: 30 }];
   project.modules.fixedWindowEvents = [{ id: 'window_pad', startTime: '06:00', endTime: '09:00', source: 'BASTILLE', priority: 30, presentation: 'music', padToNearestMinutes: 5 }];
   project.modules.windowRotations = [{ id: 'window_rotation_pad', startTime: '12:00', endTime: '16:00', blockMinutes: 30, priority: 40, items: [{ source: 'TOP', presentation: 'music', durationMinutes: 30, padToNearestMinutes: 10 }] }];
-  project.modules.sequenceEvents = [{ id: 'sequence_pad', time: '19:55', priority: 150, atomic: false, presentation: 'common', padToNearestMinutes: 15, steps: [{ mode: 'count', source: 'CONCERTS', count: 1, presentation: 'common' }] }];
-  project.modules.intervalEvents = [{ id: 'interval_pad', startTime: '00:00', endTime: '00:00', everyMinutes: 30, source: 'CONCERTS', mode: 'count', count: 1, priority: 180, presentation: 'common', latePolicy: 'skip', maxLatenessMinutes: 10, padToNearestMinutes: 30 }];
-  project.modules.dateEvents = [{ id: 'date_pad', datetime: '2026-12-24 20:00', source: 'CONCERTS', mode: 'all', priority: 500, presentation: 'common', padToNearestMinutes: 5 }];
+  project.modules.sequenceEvents = [
+    { id: 'sequence_count_pad', time: '19:55', priority: 150, atomic: false, presentation: 'common', padToNearestMinutes: 15, steps: [{ mode: 'count', source: 'CONCERTS', count: 2, presentation: 'common' }] },
+    { id: 'sequence_mixed_no_pad', time: '21:00', priority: 151, atomic: false, presentation: 'common', padToNearestMinutes: 30, steps: [{ mode: 'count', source: 'CONCERTS', count: 1, presentation: 'common' }, { mode: 'duration', source: 'TOP', durationMinutes: 10, presentation: 'music' }] }
+  ];
+  project.modules.intervalEvents = [
+    { id: 'interval_count_pad', startTime: '00:00', endTime: '00:00', everyMinutes: 30, source: 'CONCERTS', mode: 'count', count: 2, priority: 180, presentation: 'common', latePolicy: 'skip', maxLatenessMinutes: 10, padToNearestMinutes: 30 },
+    { id: 'interval_duration_no_pad', startTime: '01:00', endTime: '02:00', everyMinutes: 30, source: 'TOP', mode: 'duration', durationMinutes: 10, priority: 181, presentation: 'music', latePolicy: 'queue', padToNearestMinutes: 5 }
+  ];
+  project.modules.choiceEvents = [
+    { id: 'choice_count_pad', time: '22:00', mode: 'count', count: 2, selection: 'weighted', choices: [{ source: 'TOP', presentation: 'music', weight: 1 }], priority: 190, presentation: 'music', padToNearestMinutes: 5 },
+    { id: 'choice_all_no_pad', time: '23:00', mode: 'all', selection: 'weighted', choices: [{ source: 'CONCERTS', presentation: 'common', weight: 1 }], priority: 191, presentation: 'common', padToNearestMinutes: 10 }
+  ];
+  project.modules.clockTemplates = [{ id: 'clock_pad', startTime: '00:00', endTime: '00:00', cycleMinutes: 60, priority: 50, slots: [
+    { offsetMinutes: 0, mode: 'count', source: 'TOP', count: 2, presentation: 'music', padToNearestMinutes: 10 },
+    { offsetMinutes: 30, mode: 'duration', source: 'BASTILLE', durationMinutes: 20, presentation: 'music', padToNearestMinutes: 15 }
+  ] }];
+  project.modules.temporaryOverrides = [{ id: 'override_no_pad', startDatetime: '2026-12-24 18:00', endDatetime: '2026-12-24 23:00', source: 'CONCERTS', priority: 500, presentation: 'common', padToNearestMinutes: 15 }];
+  project.modules.dateEvents = [
+    { id: 'date_count_pad', datetime: '2026-12-24 20:00', source: 'CONCERTS', mode: 'count', count: 2, priority: 500, presentation: 'common', padToNearestMinutes: 30 },
+    { id: 'date_all_no_pad', datetime: '2026-12-25 20:00', source: 'CONCERTS', mode: 'all', priority: 500, presentation: 'common', padToNearestMinutes: 5 }
+  ];
   project.modules.offlineWindows = [{ id: 'offline_1', startTime: '03:00', endTime: '05:00', priority: 1000, days: ['dom'], padToNearestMinutes: 30 }];
 
   const result = validateProject(project);
   assert.equal(result.ok, true, JSON.stringify(result.errors));
   const script = await generateScript(project);
-  assert.match(script, /"pad_to_nearest_minutes": 5/);
-  assert.match(script, /"pad_to_nearest_minutes": 10/);
-  assert.match(script, /"pad_to_nearest_minutes": 15/);
-  assert.match(script, /"pad_to_nearest_minutes": 30/);
-  assert.match(script, /def apply_post_pad\(/);
-  assert.match(script, /Pad To Nearest Minute/);
-  assert.doesNotMatch(script, /OFFLINE_WINDOWS:[\s\S]{0,500}"pad_to_nearest_minutes"/);
+  const configBlock = (name) => {
+    const marker = `${name}: list[dict[str, Any]] =`;
+    const start = script.indexOf(marker);
+    if (start < 0) return '';
+    const tail = script.slice(start);
+    const next = tail.slice(name.length + 1).search(/\n[A-Z][A-Z_]+(?:\[[^\n]+\])?\s*[:=]/);
+    return next < 0 ? tail : tail.slice(0, marker.length + next);
+  };
+
+  for (const name of ['COUNT_ROTATION', 'WEIGHTED_ROTATION', 'CONTENT_BREAKS', 'FIXED_EVENTS', 'SEQUENCE_EVENTS', 'INTERVAL_EVENTS', 'CHOICE_EVENTS', 'CLOCK_TEMPLATES', 'DATE_EVENTS']) {
+    assert.match(configBlock(name), /pad_to_nearest_minutes/, `${name} should keep at least one item-compatible Pad`);
+  }
+  for (const name of ['ROTATION', 'FIXED_DURATION_EVENTS', 'FIXED_ALL_EVENTS', 'FIXED_WINDOW_EVENTS', 'WINDOW_ROTATIONS', 'TEMPORARY_OVERRIDES', 'OFFLINE_WINDOWS']) {
+    assert.doesNotMatch(configBlock(name), /pad_to_nearest_minutes/, `${name} must not serialize item Pad in v1.3.0`);
+  }
+  assert.match(script, /def apply_item_pad\(/);
+  assert.match(script, /ALINHAMENTO ENTRE ITENS/);
+  assert.doesNotMatch(script, /def apply_post_pad\(/);
   const output = await validateWithPython(script);
   assert.match(output, /configuracao valida/);
-});
+})
 
-
-test('Universal v1.3.0 post padding uses ErsatzTV pad_to_next and does nothing on an exact mark', async () => {
+test('Universal v1.3.0 item Pad uses ErsatzTV pad_to_next, yields to a scheduled event and does nothing on an exact mark', async () => {
   const project = musicProject();
-  project.modules.fixedEvents[0].padToNearestMinutes = 15;
+  project.modules.fixedEvents = [
+    { id: 'next_event', time: '10:10', source: 'CONCERTS', count: 1, priority: 100, presentation: 'common', days: [] }
+  ];
   const script = await generateScript(project);
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'scripted-pad-runtime-'));
   const scheduleFile = path.join(dir, 'schedule.py');
@@ -153,31 +186,35 @@ class Api:
         self.calls = []
     def pad_to_next(self, content, minutes, options=None):
         self.calls.append(["pad_to_next", content, minutes])
-        return {"currentTime": "2026-09-28T10:15:00+00:00", "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
+        return {"currentTime": "2026-09-28T10:30:00+00:00", "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
     def pad_until_exact(self, content, when, options=None):
         self.calls.append(["pad_until_exact", content, when.isoformat()])
         return {"currentTime": when.isoformat(), "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
 api = Api()
 ctx = {"currentTime": "2026-09-28T10:07:00+00:00", "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
-m.apply_post_pad(api, Presentation(), ctx, {"tasks": []}, 15, "probe")
-first = list(api.calls)
+m.apply_item_pad(api, Presentation(), ctx, {"tasks": []}, 15, "probe")
+cutoff = list(api.calls)
 api.calls.clear()
-ctx = {"currentTime": "2026-09-28T10:15:00+00:00", "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
-m.apply_post_pad(api, Presentation(), ctx, {"tasks": []}, 15, "probe")
-print(json.dumps({"first": first, "exact": api.calls}))
+ctx = {"currentTime": "2026-09-28T10:16:00+00:00", "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
+m.apply_item_pad(api, Presentation(), ctx, {"tasks": []}, 15, "probe")
+native = list(api.calls)
+api.calls.clear()
+ctx = {"currentTime": "2026-09-28T10:30:00+00:00", "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
+m.apply_item_pad(api, Presentation(), ctx, {"tasks": []}, 15, "probe")
+print(json.dumps({"cutoff": cutoff, "native": native, "exact": api.calls}))
 `, 'utf8');
   try {
     const output = execFileSync('python3', [probeFile, scheduleFile], { encoding: 'utf8' }).trim().split('\n').pop();
     const result = JSON.parse(output);
-    assert.deepEqual(result.first, [['pad_to_next', 'FILLER', 15]]);
+    assert.deepEqual(result.cutoff, [['pad_until_exact', 'FILLER', '2026-09-28T10:10:00+00:00']]);
+    assert.deepEqual(result.native, [['pad_to_next', 'FILLER', 15]]);
     assert.deepEqual(result.exact, []);
   } finally {
     await fsp.rm(dir, { recursive: true, force: true });
   }
-});
+})
 
-
-test('Horário fixo quantidade applies Pad To Nearest only after the configured item count finishes', async () => {
+test('Horário fixo quantidade applies Pad To Nearest after every item, including the last one', async () => {
   const project = musicProject();
   project.modules.fixedEvents = [];
   const script = await generateScript(project);
@@ -198,8 +235,13 @@ class Api:
         self.calls = []
         self.item_times = [
             "2026-09-28T10:07:00+00:00",
-            "2026-09-28T10:14:00+00:00",
-            "2026-09-28T10:21:00+00:00",
+            "2026-09-28T10:22:00+00:00",
+            "2026-09-28T10:37:00+00:00",
+        ]
+        self.pad_times = [
+            "2026-09-28T10:15:00+00:00",
+            "2026-09-28T10:30:00+00:00",
+            "2026-09-28T10:45:00+00:00",
         ]
     def add_count(self, content, count, options=None):
         self.calls.append(["add_count", content, count])
@@ -207,7 +249,8 @@ class Api:
         return {"currentTime": current, "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
     def pad_to_next(self, content, minutes, options=None):
         self.calls.append(["pad_to_next", content, minutes])
-        return {"currentTime": "2026-09-28T10:30:00+00:00", "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
+        current = self.pad_times.pop(0)
+        return {"currentTime": current, "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
     def pad_until_exact(self, content, when, options=None):
         self.calls.append(["pad_until_exact", content, when.isoformat()])
         return {"currentTime": when.isoformat(), "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
@@ -228,20 +271,27 @@ print(json.dumps(api.calls))
     const output = execFileSync('python3', [probeFile, scheduleFile], { encoding: 'utf8' }).trim().split('\n').pop();
     assert.deepEqual(JSON.parse(output), [
       ['add_count', 'CONCERTS', 1],
+      ['pad_to_next', 'FILLER', 15],
       ['add_count', 'CONCERTS', 1],
+      ['pad_to_next', 'FILLER', 15],
       ['add_count', 'CONCERTS', 1],
       ['pad_to_next', 'FILLER', 15]
     ]);
   } finally {
     await fsp.rm(dir, { recursive: true, force: true });
   }
-});
+})
 
-test('Horário fixo todos os itens applies Pad To Nearest only after add_all finishes', async () => {
+test('Horário fixo todos os itens does not expose or execute item Pad because ErsatzTV add_all is atomic', async () => {
   const project = musicProject();
   project.modules.fixedEvents = [];
   project.modules.fixedAllEvents = [{ id: 'all_pad', time: '14:00', source: 'CONCERTS', priority: 80, presentation: 'common', padToNearestMinutes: 15 }];
+  const validation = validateProject(project);
+  assert.equal(validation.ok, true, JSON.stringify(validation.errors));
   const script = await generateScript(project);
+  const configLine = script.split('\n').find((line) => line.startsWith('FIXED_ALL_EVENTS:')) || '';
+  assert.doesNotMatch(configLine, /pad_to_nearest_minutes/);
+
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'scripted-all-pad-runtime-'));
   const scheduleFile = path.join(dir, 'schedule.py');
   const probeFile = path.join(dir, 'probe.py');
@@ -255,17 +305,10 @@ class Presentation:
     def set(self, presentation, token):
         pass
 class Api:
-    def __init__(self):
-        self.calls = []
+    def __init__(self): self.calls = []
     def add_all(self, content, options=None):
         self.calls.append(["add_all", content])
-        return {"currentTime": "2026-09-28T10:07:00+00:00", "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
-    def pad_to_next(self, content, minutes, options=None):
-        self.calls.append(["pad_to_next", content, minutes])
-        return {"currentTime": "2026-09-28T10:15:00+00:00", "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
-    def pad_until_exact(self, content, when, options=None):
-        self.calls.append(["pad_until_exact", content, when.isoformat()])
-        return {"currentTime": when.isoformat(), "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
+        return {"currentTime": "2026-09-28T10:40:00+00:00", "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
 api = Api()
 task = {
     "task_id": "all-pad-probe", "module": "FIXED_ALL_EVENTS", "label": "Especial",
@@ -279,10 +322,28 @@ print(json.dumps(api.calls))
 `, 'utf8');
   try {
     const output = execFileSync('python3', [probeFile, scheduleFile], { encoding: 'utf8' }).trim().split('\n').pop();
-    assert.deepEqual(JSON.parse(output), [['add_all', 'CONCERTS'], ['pad_to_next', 'FILLER', 15]]);
+    assert.deepEqual(JSON.parse(output), [['add_all', 'CONCERTS']]);
   } finally {
     await fsp.rm(dir, { recursive: true, force: true });
   }
+})
+
+test('Universal v1.2.0 keeps its historical post-block Pad behavior without silent conversion', async () => {
+  const project = musicProject();
+  project.templateVersion = '1.2.0';
+  project.modules.rotation[0].padToNearestMinutes = 5;
+  project.modules.fixedAllEvents = [{ id: 'legacy_all_pad', time: '14:00', source: 'CONCERTS', priority: 80, presentation: 'common', padToNearestMinutes: 15 }];
+  const validation = validateProject(project);
+  assert.equal(validation.ok, true, JSON.stringify(validation.errors));
+  const script = await generateScript(project);
+  const rotationBlock = script.slice(script.indexOf('ROTATION: list[dict[str, Any]] ='), script.indexOf('COUNT_ROTATION: list[dict[str, Any]] ='));
+  const allBlock = script.slice(script.indexOf('FIXED_ALL_EVENTS: list[dict[str, Any]] ='), script.indexOf('FIXED_WINDOW_EVENTS: list[dict[str, Any]] ='));
+  assert.match(rotationBlock, /pad_to_nearest_minutes/);
+  assert.match(allBlock, /pad_to_nearest_minutes/);
+  assert.match(script, /ALINHAMENTO POS-BLOCO/);
+  assert.match(script, /def apply_post_pad\(/);
+  const output = await validateWithPython(script);
+  assert.match(output, /configuracao valida/);
 });
 
 test('all ten scheduling modules can coexist and validate through the Python engine', async () => {

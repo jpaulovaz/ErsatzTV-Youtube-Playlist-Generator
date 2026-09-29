@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.2/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.2/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.3/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.3/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -177,8 +177,8 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.0 modul
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.4\.2/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.2/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.4\.3/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.3/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -239,7 +239,7 @@ test('Scripted Schedules exposes discreet contextual help for configuration fiel
   assert.match(view, /Fallback Source/);
   assert.match(view, /Isso é diferente do Filler geral do projeto/);
   assert.match(view, /Pad To Nearest Minute/);
-  assert.match(view, /se terminar 10:07, preenche até 10:15/);
+  assert.match(view, /se um item terminar 10:07, preenche até 10:15/);
   assert.match(view, /labelTitle\('Nome do projeto', 'projectName'\)/);
   assert.match(view, /labelTitle\('Smart Collection', 'smartCollection'\)/);
   assert.match(view, /labelTitle\('Prioridade', 'priority'\)/);
@@ -249,53 +249,62 @@ test('Scripted Schedules exposes discreet contextual help for configuration fiel
   assert.match(css, /width: 14px/);
 });
 
-test('Scripted Schedules exposes Pad To Nearest on every compatible module and hides it where it does not apply', () => {
+test('Scripted Schedules exposes item Pad only on item-compatible modules and modes', () => {
   const view = read('js/scriptedSchedulesView.js');
-  for (const type of ['rotation', 'countRotation', 'weightedRotation', 'contentBreaks', 'fixedEvents', 'fixedDurationEvents', 'fixedAllEvents', 'fixedWindowEvents', 'sequenceEvents', 'intervalEvents', 'choiceEvents', 'temporaryOverrides', 'dateEvents']) {
+  for (const type of ['countRotation', 'weightedRotation', 'contentBreaks', 'fixedEvents']) {
     assert.match(view, new RegExp(`${type}: \\{[^\\n]+pad: 'direct'`));
   }
-  for (const type of ['windowRotations', 'clockTemplates']) {
-    assert.match(view, new RegExp(`${type}: \\{[^\\n]+pad: 'nested'`));
+  for (const type of ['sequenceEvents', 'intervalEvents', 'choiceEvents', 'clockTemplates', 'dateEvents']) {
+    assert.match(view, new RegExp(`${type}: \\{[^\\n]+pad: 'conditional'`));
   }
-  for (const type of ['continuousBlocks', 'fitToWindow', 'offlineWindows']) {
+  for (const type of ['rotation', 'continuousBlocks', 'fitToWindow', 'fixedDurationEvents', 'fixedAllEvents', 'fixedWindowEvents', 'windowRotations', 'temporaryOverrides', 'offlineWindows']) {
     assert.match(view, new RegExp(`${type}: \\{[^\\n]+pad: 'none'`));
   }
 
-  assert.match(view, /renderPadToNearest\(`modules\.rotation\.\$\{index\}`/);
+  const rotationRenderer = view.match(/if \(type === 'rotation'\)[\s\S]*?if \(type === 'countRotation'\)/)?.[0] || '';
+  assert.doesNotMatch(rotationRenderer, /renderPadToNearest/);
   assert.match(view, /renderPadToNearest\(`modules\.countRotation\.\$\{index\}`/);
   assert.match(view, /renderPadToNearest\(`modules\.weightedRotation\.\$\{index\}`/);
-  for (const type of ['contentBreaks', 'fixedEvents', 'fixedDurationEvents', 'fixedAllEvents', 'fixedWindowEvents', 'sequenceEvents', 'intervalEvents', 'choiceEvents', 'temporaryOverrides', 'dateEvents']) {
+  for (const type of ['contentBreaks', 'fixedEvents']) {
     const line = view.split('\n').find((row) => row.includes(`if (type === '${type}') body =`));
-    assert.ok(line && line.includes('renderPadToNearest(base, item)'), `${type} should expose Pad To Nearest Minute`);
+    assert.ok(line && line.includes('renderPadToNearest(base, item)'), `${type} should expose item Pad`);
   }
-  for (const type of ['continuousBlocks', 'fitToWindow', 'offlineWindows']) {
+  for (const type of ['continuousBlocks', 'fitToWindow', 'fixedDurationEvents', 'fixedAllEvents', 'fixedWindowEvents', 'windowRotations', 'temporaryOverrides', 'offlineWindows']) {
     const line = view.split('\n').find((row) => row.includes(`if (type === '${type}') body =`));
-    assert.ok(line && !line.includes('renderPadToNearest'), `${type} must not expose Pad To Nearest Minute`);
+    assert.ok(line && !line.includes('renderPadToNearest'), `${type} must not expose item Pad`);
   }
-  const windowRotationRenderer = view.match(/function renderWindowRotationItems\(item, index\)[\s\S]*?function renderSequenceSteps/);
-  assert.ok(windowRotationRenderer && windowRotationRenderer[0].includes('padToNearestMinutes'), 'Window Rotation items should expose Pad To Nearest Minute per item');
-  const clockRenderer = view.match(/function renderClockSlots\(slots, path\)[\s\S]*?function renderPadToNearest/);
-  assert.ok(clockRenderer && clockRenderer[0].includes('renderPadToNearest(base, slot)'), 'Clock positions should expose Pad To Nearest Minute per position');
-  const fillerRenderer = view.match(/function renderFiller\(\)[\s\S]*?function renderEditorSaveBar/);
-  assert.ok(fillerRenderer && !fillerRenderer[0].includes('renderPadToNearest'), 'Filler itself must not expose Pad To Nearest Minute');
+  const sequenceLine = view.split('\n').find((row) => row.includes("if (type === 'sequenceEvents') body =")) || '';
+  assert.match(sequenceLine, /sequenceSupportsItemPad\(item\.steps\) \? renderPadToNearest/);
+  const intervalLine = view.split('\n').find((row) => row.includes("if (type === 'intervalEvents') body =")) || '';
+  const choiceLine = view.split('\n').find((row) => row.includes("if (type === 'choiceEvents') body =")) || '';
+  const dateLine = view.split('\n').find((row) => row.includes("if (type === 'dateEvents') body =")) || '';
+  assert.match(intervalLine, /item\.mode === 'count' \? renderPadToNearest/);
+  assert.match(choiceLine, /item\.mode === 'count' \? renderPadToNearest/);
+  assert.match(dateLine, /modeSupportsItemPad\(item\.mode, item\.steps\) \? renderPadToNearest/);
+  const windowRotationRenderer = view.match(/function renderWindowRotationItems\(item, index\)[\s\S]*?function renderSequenceSteps/)?.[0] || '';
+  assert.doesNotMatch(windowRotationRenderer, /padToNearestMinutes/);
+  const clockRenderer = view.match(/function renderClockSlots\(slots, path\)[\s\S]*?function renderPadToNearest/)?.[0] || '';
+  assert.match(clockRenderer, /slot\.mode === 'count' \? renderPadToNearest\(base, slot\)/);
+  const fillerRenderer = view.match(/function renderFiller\(\)[\s\S]*?function renderEditorSaveBar/)?.[0] || '';
+  assert.doesNotMatch(fillerRenderer, /renderPadToNearest/);
   assert.match(view, /clearPadToNearestSettings/);
-});
+})
 
-test('module picker and Help explain Pad exceptions in simple language', () => {
+test('module picker and Help explain item Pad compatibility in simple language', () => {
   const view = read('js/scriptedSchedulesView.js');
   const help = read('js/helpView.js');
-  assert.match(view, /Não se aplica aqui, porque este bloco não termina sozinho/);
-  assert.match(view, /Não se aplica aqui, porque este módulo já trabalha até o próximo evento/);
-  assert.match(view, /Não se aplica aqui, porque esta janela existe para deixar o canal sem programação/);
-  assert.match(view, /Disponível\. O Pad só começa depois que todos os itens terminarem/);
-  assert.match(view, /Disponível em cada etapa da rotação/);
-  assert.match(view, /Disponível em cada posição do relógio/);
+  assert.match(view, /Disponível\. Se tocar 3 itens: item → Pad → item → Pad → item → Pad/);
+  assert.match(view, /Não se aplica aqui: o ErsatzTV recebe “todos os itens” de uma vez/);
+  assert.match(view, /Não se aplica aqui: este módulo entrega um período inteiro ao ErsatzTV/);
+  assert.match(view, /Disponível quando o modo for Quantidade/);
+  assert.match(view, /Em cada posição, o Pad aparece quando o modo for Quantidade/);
   assert.match(view, /meta\.pad === 'none' \|\| meta\.padNote/);
-  assert.match(help, /Pad To Nearest não se aplica aqui, porque este bloco não termina sozinho/);
-  assert.match(help, /Pad To Nearest não se aplica aqui, porque este módulo já trabalha até o próximo evento/);
-  assert.match(help, /Pad To Nearest funciona\. Ele só começa depois que todos os itens terminarem/);
-  assert.match(help, /Pad To Nearest não se aplica aqui, porque esta faixa foi criada para ficar sem programação/);
-});
+  assert.match(help, /Com Pad: filme → Filler até a marca → filme → Filler → filme → Filler/);
+  assert.match(help, /Pad To Nearest não se aplica aqui: o ErsatzTV recebe todos os itens de uma vez/);
+  assert.match(help, /Pad To Nearest não se aplica aqui, porque o ErsatzTV monta esse período de uma vez/);
+  assert.match(help, /usa o Filler depois de cada item até a próxima marca/);
+  assert.match(help, /Um evento com horário marcado continua entrando no horário dele/);
+})
 
 test('sidebar navigation always returns each section to its home state', () => {
   const app = read('app.js');
@@ -320,7 +329,7 @@ test('Scripted Schedules Help stays inside the Programacao sidebar group and is 
   assert.match(programacaoGroup, /data-view="help"/);
   assert.doesNotMatch(sistemaGroup, /data-view="help"/);
   assert.match(html, /id="view-help"/);
-  assert.match(html, /helpView\.js\?v=3\.4\.2/);
+  assert.match(html, /helpView\.js\?v=3\.4\.3/);
   assert.match(help, /Programação · Scripted Schedules/);
   assert.match(help, /Assuntos da ajuda de Scripted Schedules/);
   for (const tab of ['Começando', 'Recursos', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));

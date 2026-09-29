@@ -136,6 +136,29 @@ function baseEvent(input = {}, options = {}) {
   });
 }
 
+
+function sequenceSupportsItemPad(steps = []) {
+  const modes = (steps || []).map((step) => String(step?.mode || 'count'));
+  return modes.includes('count') && modes.every((mode) => !['duration', 'all'].includes(mode));
+}
+
+function versionAtLeast(value, minimum) {
+  const a = String(value || '0').split('.').map((n) => Number(n) || 0);
+  const b = String(minimum || '0').split('.').map((n) => Number(n) || 0);
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    if ((a[i] || 0) > (b[i] || 0)) return true;
+    if ((a[i] || 0) < (b[i] || 0)) return false;
+  }
+  return true;
+}
+
+function modeSupportsItemPad(mode, steps = []) {
+  const normalized = String(mode || 'count');
+  if (normalized === 'count') return true;
+  if (normalized === 'sequence') return sequenceSupportsItemPad(steps);
+  return false;
+}
+
 function stepToEngine(step = {}) {
   return compact({
     source: step.source,
@@ -150,10 +173,11 @@ function stepToEngine(step = {}) {
 
 function modulesToEngine(project) {
   const modules = project.modules || {};
+  const itemPadEngine = versionAtLeast(project.templateVersion || TEMPLATE_VERSION, '1.3.0');
   const rotation = (modules.rotation || []).map((item) => compact({
     source: item.source, presentation: item.presentation,
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
-    pad_to_nearest_minutes: item.padToNearestMinutes !== '' && item.padToNearestMinutes !== null && item.padToNearestMinutes !== undefined ? Number(item.padToNearestMinutes) : undefined,
+    pad_to_nearest_minutes: !itemPadEngine && item.padToNearestMinutes !== '' && item.padToNearestMinutes !== null && item.padToNearestMinutes !== undefined ? Number(item.padToNearestMinutes) : undefined,
     ...playbackFields(item)
   }));
   const countRotation = (modules.countRotation || []).map((item) => compact({
@@ -180,27 +204,27 @@ function modulesToEngine(project) {
     use_filler_remainder: item.useFillerRemainder !== false
   }));
   const fixedEvents = (modules.fixedEvents || []).map((item) => compact({ ...baseEvent(item), time: item.time, source: item.source, count: Number(item.count) }));
-  const fixedDurationEvents = (modules.fixedDurationEvents || []).map((item) => compact({ ...baseEvent(item), time: item.time, source: item.source, duration_minutes: Number(item.durationMinutes) }));
-  const fixedAllEvents = (modules.fixedAllEvents || []).map((item) => compact({ ...baseEvent(item), time: item.time, source: item.source }));
-  const fixedWindowEvents = (modules.fixedWindowEvents || []).map((item) => compact({ ...baseEvent(item), start_time: item.startTime, end_time: item.endTime, source: item.source }));
+  const fixedDurationEvents = (modules.fixedDurationEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine }), time: item.time, source: item.source, duration_minutes: Number(item.durationMinutes) }));
+  const fixedAllEvents = (modules.fixedAllEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine }), time: item.time, source: item.source }));
+  const fixedWindowEvents = (modules.fixedWindowEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine }), start_time: item.startTime, end_time: item.endTime, source: item.source }));
   const windowRotations = (modules.windowRotations || []).map((item) => compact({
     ...baseEvent(item, { includePad: false }), start_time: item.startTime, end_time: item.endTime, block_minutes: Number(item.blockMinutes),
     items: (item.items || []).map((entry) => compact({
       source: entry.source, presentation: entry.presentation,
       duration_minutes: entry.durationMinutes !== '' && entry.durationMinutes !== undefined ? Number(entry.durationMinutes) : undefined,
-      pad_to_nearest_minutes: entry.padToNearestMinutes !== '' && entry.padToNearestMinutes !== null && entry.padToNearestMinutes !== undefined ? Number(entry.padToNearestMinutes) : undefined,
+      pad_to_nearest_minutes: !itemPadEngine && entry.padToNearestMinutes !== '' && entry.padToNearestMinutes !== null && entry.padToNearestMinutes !== undefined ? Number(entry.padToNearestMinutes) : undefined,
       ...playbackFields(entry)
     }))
   }));
-  const sequenceEvents = (modules.sequenceEvents || []).map((item) => compact({ ...baseEvent(item), time: item.time, atomic: Boolean(item.atomic), steps: (item.steps || []).map(stepToEngine) }));
+  const sequenceEvents = (modules.sequenceEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine || sequenceSupportsItemPad(item.steps) }), time: item.time, atomic: Boolean(item.atomic), steps: (item.steps || []).map(stepToEngine) }));
   const intervalEvents = (modules.intervalEvents || []).map((item) => compact({
-    ...baseEvent(item), start_time: item.startTime, end_time: item.endTime, every_minutes: Number(item.everyMinutes),
+    ...baseEvent(item, { includePad: !itemPadEngine || modeSupportsItemPad(item.mode) }), start_time: item.startTime, end_time: item.endTime, every_minutes: Number(item.everyMinutes),
     source: item.source, mode: item.mode, count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
     late_policy: item.latePolicy || 'queue', max_lateness_minutes: item.maxLatenessMinutes !== '' && item.maxLatenessMinutes !== undefined ? Number(item.maxLatenessMinutes) : undefined
   }));
   const choiceEvents = (modules.choiceEvents || []).map((item) => compact({
-    ...baseEvent(item), time: item.time, mode: item.mode, count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
+    ...baseEvent(item, { includePad: !itemPadEngine || modeSupportsItemPad(item.mode) }), time: item.time, mode: item.mode, count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
     selection: item.selection || 'weighted', choices: (item.choices || []).map((choice) => compact({
       source: choice.source, presentation: choice.presentation, weight: Number(choice.weight || 1), ...playbackFields(choice)
@@ -213,15 +237,15 @@ function modulesToEngine(project) {
       count: slot.count !== '' && slot.count !== undefined ? Number(slot.count) : undefined,
       duration_minutes: slot.durationMinutes !== '' && slot.durationMinutes !== undefined ? Number(slot.durationMinutes) : undefined,
       presentation: slot.presentation, priority: slot.priority !== '' && slot.priority !== undefined ? Number(slot.priority) : undefined,
-      pad_to_nearest_minutes: slot.padToNearestMinutes !== '' && slot.padToNearestMinutes !== undefined ? Number(slot.padToNearestMinutes) : undefined,
+      pad_to_nearest_minutes: (!itemPadEngine || modeSupportsItemPad(slot.mode)) && slot.padToNearestMinutes !== '' && slot.padToNearestMinutes !== undefined ? Number(slot.padToNearestMinutes) : undefined,
       ...playbackFields(slot)
     }))
   }));
   const temporaryOverrides = (modules.temporaryOverrides || []).map((item) => compact({
-    ...baseEvent(item), start_datetime: item.startDatetime, end_datetime: item.endDatetime, source: item.source
+    ...baseEvent(item, { includePad: !itemPadEngine }), start_datetime: item.startDatetime, end_datetime: item.endDatetime, source: item.source
   }));
   const dateEvents = (modules.dateEvents || []).map((item) => compact({
-    ...baseEvent(item), datetime: item.datetime, source: item.source, mode: item.mode,
+    ...baseEvent(item, { includePad: !itemPadEngine || modeSupportsItemPad(item.mode, item.steps) }), datetime: item.datetime, source: item.source, mode: item.mode,
     count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
     steps: item.mode === 'sequence' ? (item.steps || []).map(stepToEngine) : undefined

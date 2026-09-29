@@ -340,7 +340,7 @@ def validate_source_definition(key: str, source: dict[str, Any]) -> None:
 PAD_TO_NEAREST_VALUES = {5, 10, 15, 30}
 
 
-def validate_post_pad(config: dict[str, Any], label: str) -> None:
+def validate_item_pad(config: dict[str, Any], label: str) -> None:
     value = config.get("pad_to_nearest_minutes")
     if value is None:
         return
@@ -350,6 +350,23 @@ def validate_post_pad(config: dict[str, Any], label: str) -> None:
     if FILLER is None:
         raise ValueError(f"{label}: Pad To Nearest Minute exige FILLER configurado")
 
+
+
+
+def sequence_supports_item_pad(steps: Any) -> bool:
+    if not isinstance(steps, list) or not steps:
+        return False
+    modes = [str(step.get("mode", "count")).strip().lower() for step in steps if isinstance(step, dict)]
+    return "count" in modes and all(mode not in {"duration", "all"} for mode in modes)
+
+
+def mode_supports_item_pad(mode: Any, steps: Any = None) -> bool:
+    normalized = str(mode or "count").strip().lower()
+    if normalized == "count":
+        return True
+    if normalized == "sequence":
+        return sequence_supports_item_pad(steps)
+    return False
 
 def validate_common_event(event: dict[str, Any], label: str) -> None:
     if not isinstance(event, dict):
@@ -463,7 +480,6 @@ def validate_config() -> None:
         resolve_presentation(item, source)
         if item.get("duration_minutes") is not None and float(item["duration_minutes"]) <= 0:
             raise ValueError(f"ROTATION[{index}].duration_minutes precisa ser > 0")
-        validate_post_pad(item, f"ROTATION[{index}]")
 
     module_lists = {
         "COUNT_ROTATION": COUNT_ROTATION,
@@ -495,7 +511,7 @@ def validate_config() -> None:
         resolve_presentation(item, source)
         if int(item.get("count", 0)) <= 0:
             raise ValueError(f"{label}.count precisa ser > 0")
-        validate_post_pad(item, label)
+        validate_item_pad(item, label)
 
     for index, item in enumerate(WEIGHTED_ROTATION):
         label = f"WEIGHTED_ROTATION[{index}]"
@@ -504,7 +520,7 @@ def validate_config() -> None:
         resolve_presentation(item, source)
         if float(item.get("weight", 0)) <= 0:
             raise ValueError(f"{label}.weight precisa ser > 0")
-        validate_post_pad(item, label)
+        validate_item_pad(item, label)
 
     for index, event in enumerate(CONTINUOUS_BLOCKS):
         label = f"CONTINUOUS_BLOCKS[{index}]"
@@ -525,7 +541,7 @@ def validate_config() -> None:
         resolve_presentation({"presentation": event.get("break_presentation")}, break_source)
         if int(event.get("every_items", 0)) <= 0 or int(event.get("break_count", 0)) <= 0:
             raise ValueError(f"{label}: every_items e break_count precisam ser > 0")
-        validate_post_pad(event, label)
+        validate_item_pad(event, label)
 
     for index, event in enumerate(FIT_TO_WINDOW):
         label = f"FIT_TO_WINDOW[{index}]"
@@ -544,25 +560,22 @@ def validate_config() -> None:
 
     for index, event in enumerate(FIXED_EVENTS):
         validate_common_event(event, f"FIXED_EVENTS[{index}]")
-        validate_post_pad(event, f"FIXED_EVENTS[{index}]")
+        validate_item_pad(event, f"FIXED_EVENTS[{index}]")
         parse_hhmm(str(event.get("time", "")))
         validate_mode_payload(event, f"FIXED_EVENTS[{index}]", "count")
 
     for index, event in enumerate(FIXED_DURATION_EVENTS):
         validate_common_event(event, f"FIXED_DURATION_EVENTS[{index}]")
-        validate_post_pad(event, f"FIXED_DURATION_EVENTS[{index}]")
         parse_hhmm(str(event.get("time", "")))
         validate_mode_payload(event, f"FIXED_DURATION_EVENTS[{index}]", "duration")
 
     for index, event in enumerate(FIXED_ALL_EVENTS):
         validate_common_event(event, f"FIXED_ALL_EVENTS[{index}]")
-        validate_post_pad(event, f"FIXED_ALL_EVENTS[{index}]")
         parse_hhmm(str(event.get("time", "")))
         validate_mode_payload(event, f"FIXED_ALL_EVENTS[{index}]", "all")
 
     for index, event in enumerate(FIXED_WINDOW_EVENTS):
         validate_common_event(event, f"FIXED_WINDOW_EVENTS[{index}]")
-        validate_post_pad(event, f"FIXED_WINDOW_EVENTS[{index}]")
         parse_hhmm(str(event.get("start_time", "")))
         parse_hhmm(str(event.get("end_time", "")))
         source = str(event.get("source", "")).strip()
@@ -582,19 +595,20 @@ def validate_config() -> None:
             source = str(item.get("source", "")).strip()
             validate_source_key(source, f"WINDOW_ROTATIONS[{index}].items[{item_index}]")
             resolve_presentation(item, source)
-            validate_post_pad(item, f"WINDOW_ROTATIONS[{index}].items[{item_index}]")
             if item.get("duration_minutes") is not None and float(item["duration_minutes"]) <= 0:
                 raise ValueError(f"WINDOW_ROTATIONS[{index}].items[{item_index}].duration_minutes precisa ser > 0")
 
     for index, event in enumerate(SEQUENCE_EVENTS):
         validate_common_event(event, f"SEQUENCE_EVENTS[{index}]")
-        validate_post_pad(event, f"SEQUENCE_EVENTS[{index}]")
+        if sequence_supports_item_pad(event.get("steps")):
+            validate_item_pad(event, f"SEQUENCE_EVENTS[{index}]")
         parse_hhmm(str(event.get("time", "")))
         validate_sequence_steps(event.get("steps"), f"SEQUENCE_EVENTS[{index}]")
 
     for index, event in enumerate(INTERVAL_EVENTS):
         validate_common_event(event, f"INTERVAL_EVENTS[{index}]")
-        validate_post_pad(event, f"INTERVAL_EVENTS[{index}]")
+        if mode_supports_item_pad(event.get("mode")):
+            validate_item_pad(event, f"INTERVAL_EVENTS[{index}]")
         parse_hhmm(str(event.get("start_time", "")))
         parse_hhmm(str(event.get("end_time", "")))
         if int(event.get("every_minutes", 0)) <= 0:
@@ -609,9 +623,10 @@ def validate_config() -> None:
     for index, event in enumerate(CHOICE_EVENTS):
         label = f"CHOICE_EVENTS[{index}]"
         validate_common_event(event, label)
-        validate_post_pad(event, label)
-        parse_hhmm(str(event.get("time", "")))
         mode = str(event.get("mode", "count")).strip().lower()
+        if mode_supports_item_pad(mode):
+            validate_item_pad(event, label)
+        parse_hhmm(str(event.get("time", "")))
         if mode not in {"count", "duration", "all"}:
             raise ValueError(f"{label}.mode invalido")
         if mode == "count" and int(event.get("count", 0)) <= 0:
@@ -648,7 +663,8 @@ def validate_config() -> None:
             if offset < 0 or offset >= cycle:
                 raise ValueError(f"{slot_label}.offset_minutes fora do ciclo")
             validate_mode_payload(slot, slot_label)
-            validate_post_pad(slot, slot_label)
+            if mode_supports_item_pad(slot.get("mode")):
+                validate_item_pad(slot, slot_label)
 
     for index, event in enumerate(TEMPORARY_OVERRIDES):
         label = f"TEMPORARY_OVERRIDES[{index}]"
@@ -660,11 +676,11 @@ def validate_config() -> None:
         source = str(event.get("source", "")).strip()
         validate_source_key(source, label)
         resolve_presentation(event, source)
-        validate_post_pad(event, label)
 
     for index, event in enumerate(DATE_EVENTS):
         validate_common_event(event, f"DATE_EVENTS[{index}]")
-        validate_post_pad(event, f"DATE_EVENTS[{index}]")
+        if mode_supports_item_pad(event.get("mode"), event.get("steps")):
+            validate_item_pad(event, f"DATE_EVENTS[{index}]")
         if not str(event.get("datetime", "")).strip():
             raise ValueError(f"DATE_EVENTS[{index}].datetime obrigatorio")
         # timezone e aplicado somente quando o contexto do build estiver disponivel
@@ -1466,7 +1482,7 @@ def next_occurrence_after(
 
 
 # =============================================================================
-# ALINHAMENTO POS-BLOCO
+# ALINHAMENTO ENTRE ITENS
 # =============================================================================
 
 
@@ -1483,7 +1499,7 @@ def next_clock_mark(current: datetime, minutes: int) -> datetime:
     return base + timedelta(minutes=delta)
 
 
-def apply_post_pad(
+def apply_item_pad(
     api: EtvApi,
     presentation: PresentationController,
     context: dict[str, Any],
@@ -1633,8 +1649,8 @@ def run_count_task(
     ensure_advanced(before, after, context, f"{task['module']} {task['label']}")
     task["remaining_count"] = max(0, int(task["remaining_count"]) - 1)
     enqueue_occurrences_between(state, before, after)
+    context = apply_item_pad(api, presentation, context, state, task.get("pad_to_nearest_minutes"), f"{task['task_id']}:item-pad", str(task["task_id"]))
     if int(task["remaining_count"]) <= 0:
-        context = apply_post_pad(api, presentation, context, state, task.get("pad_to_nearest_minutes"), f"{task['task_id']}:post-pad", str(task["task_id"]))
         finish_task(state, task)
     return context
 
@@ -1650,7 +1666,6 @@ def run_duration_task(
     finish = parse_dt(str(context["finishTime"]))
     remaining = max(0.0, float(task.get("remaining_seconds", 0.0)))
     if remaining <= 0.5:
-        context = apply_post_pad(api, presentation, context, state, task.get("pad_to_nearest_minutes"), f"{task['task_id']}:post-pad", str(task["task_id"]))
         finish_task(state, task)
         return context
 
@@ -1677,7 +1692,6 @@ def run_duration_task(
     task["remaining_seconds"] = max(0.0, remaining - elapsed)
     enqueue_occurrences_between(state, before, after)
     if float(task["remaining_seconds"]) <= 0.5:
-        context = apply_post_pad(api, presentation, context, state, task.get("pad_to_nearest_minutes"), f"{task['task_id']}:post-pad", str(task["task_id"]))
         finish_task(state, task)
     return context
 
@@ -1697,7 +1711,6 @@ def run_all_task(
     after = parse_dt(str(context["currentTime"]))
     ensure_advanced(before, after, context, f"{task['module']} {task['label']}")
     enqueue_occurrences_between(state, before, after)
-    context = apply_post_pad(api, presentation, context, state, task.get("pad_to_nearest_minutes"), f"{task['task_id']}:post-pad", str(task["task_id"]))
     finish_task(state, task)
     return context
 
@@ -1713,7 +1726,6 @@ def run_window_task(
     finish = parse_dt(str(context["finishTime"]))
     window_end = parse_dt(str(task["window_end"]))
     if current >= window_end:
-        context = apply_post_pad(api, presentation, context, state, task.get("pad_to_nearest_minutes"), f"{task['task_id']}:post-pad", str(task["task_id"]))
         finish_task(state, task)
         return context
 
@@ -1734,7 +1746,6 @@ def run_window_task(
     ensure_advanced(before, after, context, f"{task['module']} {task['label']}")
     enqueue_occurrences_between(state, before, after)
     if after >= window_end:
-        context = apply_post_pad(api, presentation, context, state, task.get("pad_to_nearest_minutes"), f"{task['task_id']}:post-pad", str(task["task_id"]))
         finish_task(state, task)
     return context
 
@@ -1782,20 +1793,6 @@ def run_window_rotation_task(
 
     remaining_after = max(0.0, remaining - elapsed)
     if remaining_after <= 0.5:
-        # O Pad To Nearest Minute pertence a ESTE item da rotacao, nao a janela inteira.
-        # Eventos com prioridade menor nao tomam o lugar desta rotacao durante o preenchimento.
-        context = apply_post_pad(
-            api,
-            presentation,
-            context,
-            state,
-            item.get("pad_to_nearest_minutes"),
-            f"{task['task_id']}:rotation:{index}:post-pad",
-            str(task["task_id"]),
-            priority_greater_than=int(task.get("priority", DEFAULT_FIXED_PRIORITY)),
-            maximum_end=window_end,
-        )
-        after = parse_dt(str(context["currentTime"]))
         task["rotation_index"] = (index + 1) % len(items)
         task["block_remaining_seconds"] = None
     else:
@@ -1822,7 +1819,6 @@ def run_sequence_task(
     index = int(task.get("step_index", 0))
     steps = task["steps"]
     if index >= len(steps):
-        context = apply_post_pad(api, presentation, context, state, task.get("pad_to_nearest_minutes"), f"{task['task_id']}:post-pad", str(task["task_id"]))
         finish_task(state, task)
         return context
 
@@ -1878,6 +1874,8 @@ def run_sequence_task(
     ensure_advanced(before, after, context, f"SEQUENCE {task['label']} step {index+1}")
     elapsed = max(0.0, (after - before).total_seconds())
     enqueue_occurrences_between(state, before, after)
+    if mode == "count":
+        context = apply_item_pad(api, presentation, context, state, task.get("pad_to_nearest_minutes"), f"{task['task_id']}:step:{index}:item-pad", str(task["task_id"]))
 
     if mode == "count":
         if int(task["step_remaining_count"]) <= 0:
@@ -1890,7 +1888,6 @@ def run_sequence_task(
         _advance_sequence_step(task)
 
     if int(task.get("step_index", 0)) >= len(steps):
-        context = apply_post_pad(api, presentation, context, state, task.get("pad_to_nearest_minutes"), f"{task['task_id']}:post-pad", str(task["task_id"]))
         finish_task(state, task)
     return context
 
@@ -2012,7 +2009,6 @@ def run_rotation(
     else:
         remaining_after = max(0.0, remaining - elapsed)
         if remaining_after <= 0.5:
-            context = apply_post_pad(api, presentation, context, state, item.get("pad_to_nearest_minutes"), f"rotation:{index}:{source}:post-pad")
             advance_rotation(state)
         else:
             state["rotation_remaining_seconds"] = remaining_after
@@ -2119,8 +2115,8 @@ def run_count_rotation(
     ensure_advanced(current, after, context, f"COUNT_ROTATION {source}")
     enqueue_occurrences_between(state, current, after)
     remaining -= 1
+    context = apply_item_pad(api, presentation, context, state, item.get("pad_to_nearest_minutes"), f"count-rotation:{index}:{source}:item-pad")
     if remaining <= 0:
-        context = apply_post_pad(api, presentation, context, state, item.get("pad_to_nearest_minutes"), f"count-rotation:{index}:{source}:post-pad")
         advance_count_rotation(state)
     else:
         state["count_rotation_remaining"] = remaining
@@ -2158,7 +2154,7 @@ def run_weighted_rotation(
     enqueue_occurrences_between(state, current, after)
     state["weighted_rotation_last_index"] = index
     state["weighted_rotation_counter"] = int(state.get("weighted_rotation_counter", 0)) + 1
-    return apply_post_pad(api, presentation, context, state, item.get("pad_to_nearest_minutes"), f"weighted-rotation:{index}:{source}:post-pad")
+    return apply_item_pad(api, presentation, context, state, item.get("pad_to_nearest_minutes"), f"weighted-rotation:{index}:{source}:item-pad")
 
 
 def content_break_active_entries(current: datetime) -> list[tuple[int, dict[str, Any]]]:
@@ -2210,6 +2206,7 @@ def run_content_breaks(
     after = parse_dt(str(context["currentTime"]))
     ensure_advanced(before, after, context, f"CONTENT_BREAKS {phase} {source}")
     enqueue_occurrences_between(state, before, after)
+    context = apply_item_pad(api, presentation, context, state, event.get("pad_to_nearest_minutes"), f"content-break:{config_index}:{phase}:item-pad")
     remaining -= 1
 
     if remaining > 0:
@@ -2222,7 +2219,6 @@ def run_content_breaks(
         state["content_break_remaining"] = None
         return context
 
-    context = apply_post_pad(api, presentation, context, state, event.get("pad_to_nearest_minutes"), f"content-break:{config_index}:post-pad")
     next_position = (position + 1) % len(entries)
     state["content_break_index"] = entries[next_position][0]
     state["content_break_phase"] = "main"

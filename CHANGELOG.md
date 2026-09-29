@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.4.3
+
+- **Pad To Nearest Minute** passa a significar alinhamento **entre os itens**, e não depois do bloco inteiro. Exemplo: 3 filmes com Pad de 15 minutos executam filme -> Filler até a próxima marca -> filme -> Filler -> filme -> Filler.
+- O Pad não ultrapassa um horário programado: se outro evento começa antes da próxima marca, o Filler para nesse horário. As regras existentes de prioridade entre tarefas permanecem inalteradas.
+- A API de Scripted Schedule incluída no ErsatzTV Legacy v26.10.0 foi usada como referência. Operações de **Quantidade** podem ser executadas item a item; operações nativas de **Duração**, **Todos os itens** e preenchimento de **faixa** são enviadas como uma única operação e, por segurança, não oferecem Pad por item.
+- **Horário fixo · todos os itens** deixa de mostrar Pad To Nearest. A mesma regra vale para módulos baseados em duração/faixa.
+- Módulos com modo variável mostram Pad somente em **Quantidade**. Em Sequência, o Pad fica disponível quando os passos de conteúdo não usam Duração nem Todos os itens.
+- O modal Adicionar módulo e a Ajuda foram atualizados com explicações curtas e simples sobre onde o Pad está disponível.
+- Nenhuma alteração em configVersion, schema de projetos, Canais, Bibliotecas, fila ou downloads.
+
 ## 3.4.2
 
 - A compatibilidade de **Pad To Nearest Minute** foi revisada nos 18 módulos do Scripted Schedules.
