@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.4.5 - pacote de atualização
+ErsatzTV YouTube Downloader 3.4.6 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.4.4.
+Extraia este ZIP sobre uma instalação v3.4.5.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,16 +9,15 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principais mudanças:
-- Filler geral volta a permitir a escolha do Tipo de Filler em um seletor compacto;
-- Post-roll continua sendo padrão/recomendado e também o fallback de projetos antigos;
-- opções aceitas: Post-roll, Pre-roll, Mid-roll e Nenhum;
-- campos avançados de Tipo de Filler deixam de aceitar texto livre;
-- textos e chips redundantes foram removidos da interface de Scripted Schedules;
-- orientações de vínculo/publicação foram reescritas de forma mais natural;
-- Ajuda de Variáveis dos Graphics explica chaves personalizadas e os dados de mídia já fornecidos pelo ErsatzTV.
+- o perfil interno none deixa de aparecer como Presentation Profile editável;
+- Nenhum continua disponível nos seletores de Presentation;
+- o gerador mantém o perfil interno automaticamente vazio e imutável;
+- projetos antigos com none padrão são normalizados automaticamente;
+- eventual configuração antiga feita dentro de none é preservada em um perfil visível, sem perda silenciosa;
+- contadores e Ajuda passam a considerar somente os perfis reais do usuário.
 
 Universal permanece v1.3.0. configVersion e schema dos projetos não mudam.
-O Pad To Nearest Minute por item não muda.
+Pad, Filler e regras de programação não mudam.
 Projetos Universal v1.1.1/v1.2.0 continuam sem atualização silenciosa.
 
 Consulte UPGRADE.md antes da atualização.

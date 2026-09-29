@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.5
+# ErsatzTV YouTube Downloader 3.4.6
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.5 refina a interface de **Scripted Schedules**: devolve a escolha do Tipo de Filler em um seletor simples, reduz textos redundantes e deixa a Ajuda mais natural. Também esclarece como funcionam as Variáveis dos Graphics. O motor continua Universal v1.3.0 e o comportamento do Pad por item permanece inalterado.
+A versão 3.4.6 simplifica **Presentation Profiles**: o perfil interno `none` deixa de aparecer como um cartão editável e passa a ser tratado somente pelo aplicativo. Para o usuário, **Nenhum** continua disponível nos seletores quando não for necessário aplicar um Presentation Profile. O motor continua Universal v1.3.0 e a programação permanece inalterada.
 
 ## Arquitetura
 
@@ -208,9 +208,9 @@ Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando
 
 A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir de um motor Universal versionado. **Novos projetos usam Universal v1.3.0**; projetos antigos em v1.1.1/v1.2.0 não são atualizados silenciosamente.
 
-O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas.
+O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas. O valor **Nenhum** nos seletores de Presentation é interno e sempre vazio; ele não aparece como perfil editável. Projetos antigos que tinham o antigo `none` vazio são limpos automaticamente ao carregar.
 
-Módulos disponíveis na v3.4.5:
+Módulos disponíveis na v3.4.6:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.

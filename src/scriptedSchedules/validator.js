@@ -1,5 +1,5 @@
 const path = require('path');
-const { MODULE_TYPES, TEMPLATE_VERSION, SUPPORTED_TEMPLATE_VERSIONS } = require('./schema');
+const { MODULE_TYPES, TEMPLATE_VERSION, SUPPORTED_TEMPLATE_VERSIONS, RESERVED_PRESENTATION_KEY, reservedPresentationProfile, isCanonicalReservedPresentationProfile } = require('./schema');
 
 const TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -58,9 +58,19 @@ function validateProject(project) {
   validateScriptedPlaylists(playlists, sourceMap, addError);
 
   const profiles = Array.isArray(project.presentationProfiles) ? project.presentationProfiles : [];
-  const profileMap = uniqueMap(profiles, 'key', 'presentationProfiles', addError);
-  if (!profileMap.has('none')) addError('presentationProfiles', 'O perfil reservado "none" precisa existir.');
-  validateProfiles(profiles, groupMap, playlistMap, addError);
+  const visibleProfiles = [];
+  for (const [index, profile] of profiles.entries()) {
+    if (String(profile && profile.key || '').trim().toLowerCase() === RESERVED_PRESENTATION_KEY) {
+      if (!isCanonicalReservedPresentationProfile(profile)) {
+        addError(`presentationProfiles[${index}].key`, 'A chave none é interna. Use outra chave para este Presentation Profile.');
+      }
+      continue;
+    }
+    visibleProfiles.push(profile);
+  }
+  const profileMap = uniqueMap(visibleProfiles, 'key', 'presentationProfiles', addError);
+  profileMap.set(RESERVED_PRESENTATION_KEY, reservedPresentationProfile());
+  validateProfiles(visibleProfiles, groupMap, playlistMap, addError);
 
   for (const [index, source] of sources.entries()) {
     validatePresentationRef(source.presentation, profileMap, `sources[${index}].presentation`, addError);

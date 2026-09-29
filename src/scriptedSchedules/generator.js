@@ -271,6 +271,7 @@ function projectToEngine(project) {
 
   const profiles = {};
   for (const profile of project.presentationProfiles || []) {
+    if (String(profile && profile.key || '').trim().toLowerCase() === 'none') continue;
     const graphics = [];
     for (const groupKey of profile.graphicsGroups || []) {
       for (const item of resolveGroup(String(groupKey))) if (!graphics.includes(item)) graphics.push(item);
@@ -289,7 +290,7 @@ function projectToEngine(project) {
       epg_advance: profile.epgGroup ? profile.epgAdvance !== false : undefined
     });
   }
-  if (!profiles.none) profiles.none = { graphics: [], watermarks: [], pre_roll: null, epg_group: false };
+  profiles.none = { graphics: [], graphics_variables: {}, watermarks: [], pre_roll: null, epg_group: false };
 
   const modules = modulesToEngine(project);
   const filler = project.filler ? compact({ source: project.filler.source, presentation: project.filler.presentation, ...playbackFields(project.filler), filler_kind: normalizeFillerKind(project.filler.fillerKind, 'postroll') }) : null;

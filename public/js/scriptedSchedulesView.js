@@ -237,9 +237,13 @@
     const options = state.current?.sources || [];
     return `${includeBlank ? '<option value="">Selecione...</option>' : ''}${options.map((item) => `<option value="${esc(item.key)}" ${String(item.key) === String(selected) ? 'selected' : ''}>${esc(item.key)}${item.name ? ` — ${esc(item.name)}` : ''}</option>`).join('')}`;
   }
+  function visibleProfiles() {
+    return (state.current?.presentationProfiles || []).filter((item) => String(item?.key || '').trim().toLowerCase() !== 'none');
+  }
   function profileOptions(selected = '', includeBlank = true) {
-    const options = state.current?.presentationProfiles || [];
-    return `${includeBlank ? '<option value="">Padrão da Source</option>' : ''}${options.map((item) => `<option value="${esc(item.key)}" ${String(item.key) === String(selected) ? 'selected' : ''}>${esc(item.label || item.key)}</option>`).join('')}`;
+    const options = visibleProfiles();
+    const noneSelected = String(selected || '').trim().toLowerCase() === 'none';
+    return `${includeBlank ? '<option value="">Padrão da Source</option>' : ''}<option value="none" ${noneSelected ? 'selected' : ''}>Nenhum</option>${options.map((item) => `<option value="${esc(item.key)}" ${String(item.key) === String(selected) ? 'selected' : ''}>${esc(item.label || item.key)}</option>`).join('')}`;
   }
   function playlistOptions(selected = '') {
     return `<option value="">Sem pre-roll</option>${(state.current?.scriptedPlaylists || []).map((item) => `<option value="${esc(item.key)}" ${String(item.key) === String(selected) ? 'selected' : ''}>${esc(item.key)}</option>`).join('')}`;
@@ -534,7 +538,6 @@
   }
 
   function firstSource() { return state.current?.sources?.[0]?.key || ''; }
-  function firstProfile() { return state.current?.presentationProfiles?.[0]?.key || 'none'; }
   function nextKey(prefix, items) {
     let i = items.length + 1; let key = `${prefix}_${i}`;
     const existing = new Set(items.map((x) => x.key)); while (existing.has(key)) { i += 1; key = `${prefix}_${i}`; } return key;
@@ -551,7 +554,6 @@
   }
   function removeResource(kind, index) {
     const map = { graphics: 'graphicsGroups', source: 'sources', playlist: 'scriptedPlaylists', profile: 'presentationProfiles' };
-    if (kind === 'profile' && state.current.presentationProfiles[index]?.key === 'none') return state.deps.showToast('O perfil none é reservado e não pode ser removido.', true);
     state.current[map[kind]].splice(index, 1);
   }
   function moveItem(items, index, delta) {
@@ -814,15 +816,18 @@
   }
 
   function renderProfiles() {
+    const profiles = (state.current.presentationProfiles || [])
+      .map((profile, index) => ({ profile, index }))
+      .filter(({ profile }) => String(profile?.key || '').trim().toLowerCase() !== 'none');
     return resourceSection('Presentation Profiles', 'Combine Graphics, pre-roll, watermarks e opções de EPG para reutilizar nos módulos.', 'profile',
-      state.current.presentationProfiles.map((profile, index) => `
+      profiles.map(({ profile, index }) => `
         <details class="ss-resource-card ss-accordion-card" ${accordionAttrs(`resource:profile:${index}`)}>
-          <summary class="ss-accordion-summary"><strong>${esc(profile.label || profile.key)}</strong><span>${profile.key === 'none' ? 'Reservado' : esc(profile.key)}</span></summary>
+          <summary class="ss-accordion-summary"><strong>${esc(profile.label || profile.key)}</strong><span>${esc(profile.key)}</span></summary>
           <div class="ss-accordion-body">
-            <div class="ss-accordion-actions">${profile.key === 'none' ? '<span class="status-pill">Reservado</span>' : `<button class="danger ghost" type="button" data-ss-action="remove-resource" data-kind="profile" data-index="${index}">Remover</button>`}</div>
+            <div class="ss-accordion-actions"><button class="danger ghost" type="button" data-ss-action="remove-resource" data-kind="profile" data-index="${index}">Remover</button></div>
             <div class="form-grid two">
               <label>${labelTitle('Nome amigável', 'friendlyName')}<input data-bind="presentationProfiles.${index}.label" value="${esc(profile.label || '')}"></label>
-              <label>${labelTitle('Chave', 'key')}<input data-bind="presentationProfiles.${index}.key" value="${esc(profile.key)}" ${profile.key === 'none' ? 'disabled' : ''}></label>
+              <label>${labelTitle('Chave', 'key')}<input data-bind="presentationProfiles.${index}.key" value="${esc(profile.key)}"></label>
               <label class="check-row"><input type="checkbox" data-bind="presentationProfiles.${index}.epgGroup" data-rerender="true" ${profile.epgGroup ? 'checked' : ''}><span>Agrupar no EPG${help('epgGroup')}</span></label>
               ${profile.epgGroup ? `<label>${labelTitle('Título no EPG', 'epgTitle')}<input data-bind="presentationProfiles.${index}.epgTitle" value="${esc(profile.epgTitle || '')}"></label><label class="check-row"><input type="checkbox" data-bind="presentationProfiles.${index}.epgAdvance" ${profile.epgAdvance !== false ? 'checked' : ''}><span>Iniciar novo grupo no EPG${help('epgAdvance')}</span></label>` : ''}
               <label class="wide">${labelTitle('Graphics diretos', 'directGraphics', '<small>Um YAML por linha</small>')}<textarea rows="3" data-bind="presentationProfiles.${index}.graphics" data-type="list">${esc(listValue(profile.graphics))}</textarea></label>
@@ -844,7 +849,7 @@
   }
 
   function resourceSection(title, subtitle, kind, content) {
-    const countMap = { graphics: state.current.graphicsGroups.length, source: state.current.sources.length, playlist: state.current.scriptedPlaylists.length, profile: state.current.presentationProfiles.length };
+    const countMap = { graphics: state.current.graphicsGroups.length, source: state.current.sources.length, playlist: state.current.scriptedPlaylists.length, profile: visibleProfiles().length };
     return `
       <details class="card ss-section-card ss-section-accordion" ${accordionAttrs(`resources:${kind}`)}>
         <summary class="ss-section-summary"><div><h3>${esc(title)}</h3><p>${esc(subtitle)}</p></div><span>${countMap[kind] || 0} item(ns)</span></summary>
@@ -1084,7 +1089,7 @@
           <div><span>Sources</span><strong>${state.current.sources.length}</strong></div>
           <div><span>Graphics</span><strong>${state.current.graphicsGroups.length}</strong></div>
           <div><span>Playlists</span><strong>${state.current.scriptedPlaylists.length}</strong></div>
-          <div><span>Profiles</span><strong>${state.current.presentationProfiles.length}</strong></div>
+          <div><span>Profiles</span><strong>${visibleProfiles().length}</strong></div>
           <div><span>Módulos</span><strong>${counts.length}</strong></div>
           <div><span>Canais</span><strong>${state.current.channelLinks.length}</strong></div>
         </div>

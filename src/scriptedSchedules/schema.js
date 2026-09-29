@@ -6,6 +6,7 @@ const TEMPLATE_VERSION = '1.3.0';
 const SUPPORTED_TEMPLATE_VERSIONS = ['1.1.1', '1.2.0', '1.3.0'];
 const DEFAULT_OUTPUT_ROOT = path.join(ROOT_DIR, 'data', 'scripted-schedules', 'published');
 const HISTORY_LIMIT = 10;
+const RESERVED_PRESENTATION_KEY = 'none';
 
 function nowIso() {
   return new Date().toISOString();
@@ -51,20 +52,7 @@ function defaultProject(id, options = {}) {
     graphicsGroups: [],
     sources: [],
     scriptedPlaylists: [],
-    presentationProfiles: [
-      {
-        key: 'none',
-        label: 'Nenhum',
-        graphicsGroups: [],
-        graphics: [],
-        graphicsVariables: [],
-        watermarks: [],
-        preRoll: null,
-        epgGroup: false,
-        epgTitle: '',
-        epgAdvance: true
-      }
-    ],
+    presentationProfiles: [],
     modules: {
       rotation: [],
       countRotation: [],
@@ -96,13 +84,92 @@ function defaultProject(id, options = {}) {
   };
 }
 
+function reservedPresentationProfile() {
+  return {
+    key: RESERVED_PRESENTATION_KEY,
+    label: 'Nenhum',
+    graphicsGroups: [],
+    graphics: [],
+    graphicsVariables: [],
+    watermarks: [],
+    preRoll: null,
+    epgGroup: false,
+    epgTitle: '',
+    epgAdvance: true
+  };
+}
+
+function isCanonicalReservedPresentationProfile(profile) {
+  if (!profile || String(profile.key || '').trim().toLowerCase() !== RESERVED_PRESENTATION_KEY) return false;
+  const listEmpty = (value) => !Array.isArray(value) || value.length === 0;
+  return listEmpty(profile.graphicsGroups)
+    && listEmpty(profile.graphics)
+    && listEmpty(profile.graphicsVariables)
+    && listEmpty(profile.watermarks)
+    && !String(profile.preRoll || '').trim()
+    && profile.epgGroup !== true
+    && !String(profile.epgTitle || '').trim();
+}
+
+function nextLegacyProfileKey(profiles) {
+  const keys = new Set((profiles || []).map((profile) => String(profile && profile.key || '').trim().toLowerCase()));
+  let key = 'legacy_none';
+  let index = 2;
+  while (keys.has(key)) {
+    key = `legacy_none_${index}`;
+    index += 1;
+  }
+  return key;
+}
+
+function rewritePresentationReferences(value, fromKey, toKey) {
+  if (Array.isArray(value)) {
+    for (const item of value) rewritePresentationReferences(item, fromKey, toKey);
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+  for (const [key, current] of Object.entries(value)) {
+    if ((key === 'presentation' || key === 'breakPresentation') && String(current || '').trim() === fromKey) {
+      value[key] = toKey;
+      continue;
+    }
+    rewritePresentationReferences(current, fromKey, toKey);
+  }
+}
+
+function normalizePresentationProfiles(project) {
+  const input = Array.isArray(project.presentationProfiles) ? project.presentationProfiles : [];
+  const visible = input.filter((profile) => String(profile && profile.key || '').trim().toLowerCase() !== RESERVED_PRESENTATION_KEY);
+  const reserved = [...input].reverse().find((profile) => String(profile && profile.key || '').trim().toLowerCase() === RESERVED_PRESENTATION_KEY);
+
+  if (reserved && !isCanonicalReservedPresentationProfile(reserved)) {
+    const legacyKey = nextLegacyProfileKey(visible);
+    visible.unshift({
+      ...reserved,
+      key: legacyKey,
+      label: String(reserved.label || '').trim() && String(reserved.label || '').trim() !== 'Nenhum'
+        ? String(reserved.label).trim()
+        : 'Perfil antigo'
+    });
+    for (const source of project.sources || []) {
+      const current = String(source && source.presentation || '').trim();
+      if (!current || current === RESERVED_PRESENTATION_KEY) source.presentation = legacyKey;
+    }
+    rewritePresentationReferences(project.modules, RESERVED_PRESENTATION_KEY, legacyKey);
+    rewritePresentationReferences(project.filler, RESERVED_PRESENTATION_KEY, legacyKey);
+  }
+
+  project.presentationProfiles = visible;
+  return project;
+}
+
 function hydrateProject(project) {
   if (!project || typeof project !== 'object') return project;
   const base = defaultProject(String(project.id || 'unknown'), {
     name: project.name,
     fileName: project.fileName
   });
-  return {
+  const hydrated = {
     ...base,
     ...project,
     channelLinks: Array.isArray(project.channelLinks) ? project.channelLinks : [],
@@ -113,6 +180,7 @@ function hydrateProject(project) {
     modules: { ...base.modules, ...(project.modules && typeof project.modules === 'object' ? project.modules : {}) },
     options: { ...base.options, ...(project.options && typeof project.options === 'object' ? project.options : {}) }
   };
+  return normalizePresentationProfiles(hydrated);
 }
 
 function defaultSettings() {
@@ -151,8 +219,12 @@ module.exports = {
   SUPPORTED_TEMPLATE_VERSIONS,
   DEFAULT_OUTPUT_ROOT,
   HISTORY_LIMIT,
+  RESERVED_PRESENTATION_KEY,
   MODULE_TYPES,
   defaultProject,
+  reservedPresentationProfile,
+  isCanonicalReservedPresentationProfile,
+  normalizePresentationProfiles,
   hydrateProject,
   defaultSettings,
   slugKey,

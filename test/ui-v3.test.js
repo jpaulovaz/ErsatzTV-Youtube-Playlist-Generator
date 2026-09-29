@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.5/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.5/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.6/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.6/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -177,8 +177,8 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.0 modul
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.4\.5/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.5/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.4\.6/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.6/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -329,7 +329,7 @@ test('Scripted Schedules Help stays inside the Programacao sidebar group and is 
   assert.match(programacaoGroup, /data-view="help"/);
   assert.doesNotMatch(sistemaGroup, /data-view="help"/);
   assert.match(html, /id="view-help"/);
-  assert.match(html, /helpView\.js\?v=3\.4\.5/);
+  assert.match(html, /helpView\.js\?v=3\.4\.6/);
   assert.match(help, /Programação · Scripted Schedules/);
   assert.match(help, /Assuntos da ajuda de Scripted Schedules/);
   for (const tab of ['Começando', 'Recursos', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));
@@ -384,6 +384,21 @@ test('Scripted Schedules follows a fluent resource order and configures Filler b
   assert.match(help, /A tela segue a ordem mais comum/);
   assert.match(help, /Post-roll é o mais indicado para preencher lacunas/);
   assert.match(css, /\.ss-module-picker-description \.ss-callout \+ \.ss-callout \{ margin-top: 12px; \}/);
+});
+
+
+test('internal none Presentation Profile is hidden from Resources but remains a simple selector choice', () => {
+  const view = read('js/scriptedSchedulesView.js');
+  const help = read('js/helpView.js');
+  const profilesRenderer = view.match(/function renderProfiles\(\)[\s\S]*?function renderGroupChoices/)?.[0] || '';
+  assert.match(view, /function visibleProfiles\(\)/);
+  assert.match(view, /<option value="none" \$\{noneSelected \? 'selected' : ''\}>Nenhum<\/option>/);
+  assert.doesNotMatch(profilesRenderer, /Reservado/);
+  assert.doesNotMatch(profilesRenderer, /profile\.key === 'none'/);
+  assert.match(view, /profile: visibleProfiles\(\)\.length/);
+  assert.match(view, /<span>Profiles<\/span><strong>\$\{visibleProfiles\(\)\.length\}<\/strong>/);
+  assert.match(help, /Ao escolher <strong>Nenhum<\/strong>/);
+  assert.match(help, /Você não precisa criar nem configurar esse perfil/);
 });
 
 test('global Filler exposes a compact filler type picklist with postroll as the recommended default', () => {

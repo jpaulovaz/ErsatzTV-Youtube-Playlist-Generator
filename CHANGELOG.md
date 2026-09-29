@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.4.6
+
+- O Presentation Profile interno `none` deixa de aparecer na lista de perfis. Para o usuário, **Nenhum** continua disponível somente nos seletores de Presentation.
+- Novos Scripted Schedules não armazenam mais um cartão `none`; o gerador cria automaticamente um perfil vazio e imutável para o motor.
+- Projetos antigos com o `none` padrão são normalizados sem intervenção. Se uma versão anterior tiver permitido configurar conteúdo dentro de `none`, essas configurações são preservadas em um Presentation Profile visível chamado **Perfil antigo**, e as referências existentes são atualizadas para ele.
+- A chave `none` passa a ser reservada de verdade: um perfil criado pelo usuário não pode usar essa chave.
+- Contadores de Presentation Profiles passam a mostrar apenas os perfis realmente criados pelo usuário.
+- A Ajuda explica de forma curta que **Nenhum** significa simplesmente não aplicar um Presentation Profile.
+- Nenhuma alteração em `configVersion`, schema de projetos, Universal v1.3.0, Pad, Filler, Canais, Bibliotecas, fila ou downloads.
+
 ## 3.4.5
 
 - O **Filler geral** volta a permitir a escolha do **Tipo de Filler**, agora em um picklist compacto em vez de campo de texto livre. As opções são **Post-roll**, **Pre-roll**, **Mid-roll** e **Nenhum**.

@@ -5,7 +5,7 @@ const fsp = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { defaultProject } = require('../src/scriptedSchedules/schema');
+const { defaultProject, hydrateProject } = require('../src/scriptedSchedules/schema');
 const { validateProject } = require('../src/scriptedSchedules/validator');
 const { generateScript } = require('../src/scriptedSchedules/generator');
 const { safePublishedPath, publishScript } = require('../src/scriptedSchedules/publisher');
@@ -25,7 +25,6 @@ function musicProject() {
     { key: 'FILLER', label: 'Filler', type: 'smart_collection', name: '000 - FALLBACK FILLER', order: 'shuffle', presentation: 'common' }
   ];
   project.presentationProfiles = [
-    { key: 'none', label: 'Nenhum', graphicsGroups: [], graphics: [], graphicsVariables: [], watermarks: [], preRoll: null, epgGroup: false, epgTitle: '', epgAdvance: true },
     { key: 'common', label: 'Comum', graphicsGroups: ['COMMON_GRAPHICS'], graphics: [], graphicsVariables: [], watermarks: [], preRoll: null, epgGroup: false, epgTitle: '', epgAdvance: true },
     { key: 'music', label: 'Música', graphicsGroups: ['MUSIC_GRAPHICS'], graphics: [], graphicsVariables: [], watermarks: [], preRoll: null, epgGroup: false, epgTitle: '', epgAdvance: true }
   ];
@@ -502,6 +501,51 @@ test('projects cannot publish or validate the same output filename', async () =>
     await store.deleteProject(first.id);
     await store.deleteProject(second.id);
   }
+});
+
+
+test('reserved none presentation stays internal while remaining available to the engine', async () => {
+  const project = defaultProject('33333333-3333-4333-8333-333333333333', { name: 'Sem perfil', fileName: 'sem-perfil.py' });
+  assert.deepEqual(project.presentationProfiles, []);
+  project.sources = [{ key: 'SRC', label: 'Source', type: 'smart_collection', name: 'Source', order: 'shuffle', presentation: 'none' }];
+  project.modules.fixedEvents = [{ id: 'event_1', time: '10:00', source: 'SRC', count: 1, priority: 100, presentation: 'none', days: [] }];
+  assert.deepEqual(validateProject(project).errors, []);
+  const script = await generateScript(project);
+  assert.match(script, /"none": \{/);
+  assert.match(script, /"graphics": \[\]/);
+  assert.match(script, /"epg_group": False/);
+});
+
+test('hydrateProject removes the old canonical none card and safely preserves a customized legacy none profile', async () => {
+  const canonical = defaultProject('44444444-4444-4444-8444-444444444444', { name: 'Canonico', fileName: 'canonico.py' });
+  canonical.presentationProfiles = [{ key: 'none', label: 'Nenhum', graphicsGroups: [], graphics: [], graphicsVariables: [], watermarks: [], preRoll: null, epgGroup: false, epgTitle: '', epgAdvance: true }];
+  assert.deepEqual(hydrateProject(canonical).presentationProfiles, []);
+
+  const legacy = defaultProject('55555555-5555-4555-8555-555555555555', { name: 'Legado', fileName: 'legado.py' });
+  legacy.presentationProfiles = [{ key: 'none', label: 'Nenhum', graphicsGroups: [], graphics: ['legacy.yml'], graphicsVariables: [{ key: 'message', value: 'Oi' }], watermarks: [], preRoll: null, epgGroup: false, epgTitle: '', epgAdvance: true }];
+  legacy.sources = [{ key: 'SRC', label: 'Source', type: 'smart_collection', name: 'Source', order: 'shuffle', presentation: 'none' }];
+  legacy.modules.fixedEvents = [{ id: 'event_1', time: '10:00', source: 'SRC', count: 1, priority: 100, presentation: 'none', days: [] }];
+  const hydrated = hydrateProject(legacy);
+  assert.equal(hydrated.presentationProfiles.some((profile) => profile.key === 'none'), false);
+  const migrated = hydrated.presentationProfiles.find((profile) => profile.key.startsWith('legacy_none'));
+  assert.ok(migrated);
+  assert.deepEqual(migrated.graphics, ['legacy.yml']);
+  assert.deepEqual(migrated.graphicsVariables, [{ key: 'message', value: 'Oi' }]);
+  assert.equal(hydrated.sources[0].presentation, migrated.key);
+  assert.equal(hydrated.modules.fixedEvents[0].presentation, migrated.key);
+  assert.deepEqual(validateProject(hydrated).errors, []);
+  const script = await generateScript(hydrated);
+  assert.match(script, new RegExp(`\"${migrated.key}\": \{`));
+  assert.match(script, /legacy\.yml/);
+  assert.match(script, /\"none\": \{/);
+});
+
+test('a user Presentation Profile cannot take the internal none key', () => {
+  const project = defaultProject('66666666-6666-4666-8666-666666666666', { name: 'Chave reservada', fileName: 'chave-reservada.py' });
+  project.presentationProfiles = [{ key: 'none', label: 'Meu perfil', graphicsGroups: [], graphics: ['custom.yml'], graphicsVariables: [], watermarks: [], preRoll: null, epgGroup: false, epgTitle: '', epgAdvance: true }];
+  const validation = validateProject(project);
+  assert.equal(validation.ok, false);
+  assert.ok(validation.errors.some((item) => item.path === 'presentationProfiles[0].key' && /interna/i.test(item.message)));
 });
 
 test('global Filler defaults to postroll and preserves an explicit supported filler kind', async () => {
