@@ -114,7 +114,12 @@ function dateFields(input = {}) {
     start_date: input.startDate,
     end_date: input.endDate,
     dates: arrayStrings(input.dates),
-    exclude_dates: arrayStrings(input.excludeDates)
+    exclude_dates: arrayStrings(input.excludeDates),
+    recurrence_type: input.recurrenceType && input.recurrenceType !== 'none' ? input.recurrenceType : undefined,
+    recurrence_ordinal: input.recurrenceOrdinal !== '' && input.recurrenceOrdinal !== undefined ? Number(input.recurrenceOrdinal) : undefined,
+    recurrence_weekday: input.recurrenceWeekday !== '' && input.recurrenceWeekday !== undefined ? Number(input.recurrenceWeekday) : undefined,
+    recurrence_every_days: input.recurrenceEveryDays !== '' && input.recurrenceEveryDays !== undefined ? Number(input.recurrenceEveryDays) : undefined,
+    recurrence_anchor_date: input.recurrenceAnchorDate
   });
 }
 
@@ -146,42 +151,74 @@ function stepToEngine(step = {}) {
 function modulesToEngine(project) {
   const modules = project.modules || {};
   const rotation = (modules.rotation || []).map((item) => compact({
-    source: item.source,
-    presentation: item.presentation,
+    source: item.source, presentation: item.presentation,
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
     pad_to_nearest_minutes: item.padToNearestMinutes !== '' && item.padToNearestMinutes !== null && item.padToNearestMinutes !== undefined ? Number(item.padToNearestMinutes) : undefined,
     ...playbackFields(item)
   }));
-  const fixedEvents = (modules.fixedEvents || []).map((item) => compact({
-    ...baseEvent(item), time: item.time, source: item.source, count: Number(item.count)
+  const countRotation = (modules.countRotation || []).map((item) => compact({
+    source: item.source, presentation: item.presentation, count: Number(item.count),
+    pad_to_nearest_minutes: item.padToNearestMinutes !== '' && item.padToNearestMinutes !== null && item.padToNearestMinutes !== undefined ? Number(item.padToNearestMinutes) : undefined,
+    ...playbackFields(item)
   }));
-  const fixedDurationEvents = (modules.fixedDurationEvents || []).map((item) => compact({
-    ...baseEvent(item), time: item.time, source: item.source, duration_minutes: Number(item.durationMinutes)
+  const weightedRotation = (modules.weightedRotation || []).map((item) => compact({
+    source: item.source, presentation: item.presentation, weight: Number(item.weight), avoid_repeat: item.avoidRepeat === true ? true : undefined,
+    pad_to_nearest_minutes: item.padToNearestMinutes !== '' && item.padToNearestMinutes !== null && item.padToNearestMinutes !== undefined ? Number(item.padToNearestMinutes) : undefined,
+    ...playbackFields(item)
   }));
-  const fixedAllEvents = (modules.fixedAllEvents || []).map((item) => compact({
-    ...baseEvent(item), time: item.time, source: item.source
+  const continuousBlocks = (modules.continuousBlocks || []).map((item) => compact({
+    ...baseEvent(item, { includePad: false }), start_time: item.startTime, source: item.source
   }));
-  const fixedWindowEvents = (modules.fixedWindowEvents || []).map((item) => compact({
-    ...baseEvent(item), start_time: item.startTime, end_time: item.endTime, source: item.source
+  const contentBreaks = (modules.contentBreaks || []).map((item) => compact({
+    ...baseEvent(item), source: item.source, every_items: Number(item.everyItems), break_source: item.breakSource,
+    break_count: Number(item.breakCount), break_presentation: item.breakPresentation,
+    ...playbackFields(item), break_playback: playbackFields(item.breakPlayback || {})
   }));
+  const fitToWindow = (modules.fitToWindow || []).map((item) => compact({
+    ...baseEvent(item, { includePad: false }), start_time: item.startTime, end_time: item.endTime, source: item.source,
+    look_ahead_minutes: Number(item.lookAheadMinutes), discard_attempts: Number(item.discardAttempts || 0),
+    use_filler_remainder: item.useFillerRemainder !== false
+  }));
+  const fixedEvents = (modules.fixedEvents || []).map((item) => compact({ ...baseEvent(item), time: item.time, source: item.source, count: Number(item.count) }));
+  const fixedDurationEvents = (modules.fixedDurationEvents || []).map((item) => compact({ ...baseEvent(item), time: item.time, source: item.source, duration_minutes: Number(item.durationMinutes) }));
+  const fixedAllEvents = (modules.fixedAllEvents || []).map((item) => compact({ ...baseEvent(item), time: item.time, source: item.source }));
+  const fixedWindowEvents = (modules.fixedWindowEvents || []).map((item) => compact({ ...baseEvent(item), start_time: item.startTime, end_time: item.endTime, source: item.source }));
   const windowRotations = (modules.windowRotations || []).map((item) => compact({
     ...baseEvent(item, { includePad: false }), start_time: item.startTime, end_time: item.endTime, block_minutes: Number(item.blockMinutes),
     items: (item.items || []).map((entry) => compact({
-      source: entry.source,
-      presentation: entry.presentation,
+      source: entry.source, presentation: entry.presentation,
       duration_minutes: entry.durationMinutes !== '' && entry.durationMinutes !== undefined ? Number(entry.durationMinutes) : undefined,
       pad_to_nearest_minutes: entry.padToNearestMinutes !== '' && entry.padToNearestMinutes !== null && entry.padToNearestMinutes !== undefined ? Number(entry.padToNearestMinutes) : undefined,
       ...playbackFields(entry)
     }))
   }));
-  const sequenceEvents = (modules.sequenceEvents || []).map((item) => compact({
-    ...baseEvent(item), time: item.time, atomic: Boolean(item.atomic), steps: (item.steps || []).map(stepToEngine)
-  }));
+  const sequenceEvents = (modules.sequenceEvents || []).map((item) => compact({ ...baseEvent(item), time: item.time, atomic: Boolean(item.atomic), steps: (item.steps || []).map(stepToEngine) }));
   const intervalEvents = (modules.intervalEvents || []).map((item) => compact({
     ...baseEvent(item), start_time: item.startTime, end_time: item.endTime, every_minutes: Number(item.everyMinutes),
     source: item.source, mode: item.mode, count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
     late_policy: item.latePolicy || 'queue', max_lateness_minutes: item.maxLatenessMinutes !== '' && item.maxLatenessMinutes !== undefined ? Number(item.maxLatenessMinutes) : undefined
+  }));
+  const choiceEvents = (modules.choiceEvents || []).map((item) => compact({
+    ...baseEvent(item), time: item.time, mode: item.mode, count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
+    duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
+    selection: item.selection || 'weighted', choices: (item.choices || []).map((choice) => compact({
+      source: choice.source, presentation: choice.presentation, weight: Number(choice.weight || 1), ...playbackFields(choice)
+    }))
+  }));
+  const clockTemplates = (modules.clockTemplates || []).map((item) => compact({
+    ...baseEvent(item, { includePad: false }), start_time: item.startTime, end_time: item.endTime, cycle_minutes: Number(item.cycleMinutes),
+    slots: (item.slots || []).map((slot) => compact({
+      offset_minutes: Number(slot.offsetMinutes), mode: slot.mode || 'count', source: slot.source,
+      count: slot.count !== '' && slot.count !== undefined ? Number(slot.count) : undefined,
+      duration_minutes: slot.durationMinutes !== '' && slot.durationMinutes !== undefined ? Number(slot.durationMinutes) : undefined,
+      presentation: slot.presentation, priority: slot.priority !== '' && slot.priority !== undefined ? Number(slot.priority) : undefined,
+      pad_to_nearest_minutes: slot.padToNearestMinutes !== '' && slot.padToNearestMinutes !== undefined ? Number(slot.padToNearestMinutes) : undefined,
+      ...playbackFields(slot)
+    }))
+  }));
+  const temporaryOverrides = (modules.temporaryOverrides || []).map((item) => compact({
+    ...baseEvent(item), start_datetime: item.startDatetime, end_datetime: item.endDatetime, source: item.source
   }));
   const dateEvents = (modules.dateEvents || []).map((item) => compact({
     ...baseEvent(item), datetime: item.datetime, source: item.source, mode: item.mode,
@@ -189,10 +226,8 @@ function modulesToEngine(project) {
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
     steps: item.mode === 'sequence' ? (item.steps || []).map(stepToEngine) : undefined
   }));
-  const offlineWindows = (modules.offlineWindows || []).map((item) => compact({
-    ...baseEvent(item, { includePad: false }), start_time: item.startTime, end_time: item.endTime
-  }));
-  return { rotation, fixedEvents, fixedDurationEvents, fixedAllEvents, fixedWindowEvents, windowRotations, sequenceEvents, intervalEvents, dateEvents, offlineWindows };
+  const offlineWindows = (modules.offlineWindows || []).map((item) => compact({ ...baseEvent(item, { includePad: false }), start_time: item.startTime, end_time: item.endTime }));
+  return { rotation, countRotation, weightedRotation, continuousBlocks, contentBreaks, fitToWindow, fixedEvents, fixedDurationEvents, fixedAllEvents, fixedWindowEvents, windowRotations, sequenceEvents, intervalEvents, choiceEvents, clockTemplates, temporaryOverrides, dateEvents, offlineWindows };
 }
 
 function projectToEngine(project) {
@@ -262,6 +297,11 @@ function generatedConfig(project, templateVersion = String(project.templateVersi
     '',
     `DEFAULT_ROTATION_DURATION_MINUTES = ${py(data.options.defaultRotationDurationMinutes)}`,
     `ROTATION: list[dict[str, Any]] = ${py(data.modules.rotation)}`,
+    `COUNT_ROTATION: list[dict[str, Any]] = ${py(data.modules.countRotation)}`,
+    `WEIGHTED_ROTATION: list[dict[str, Any]] = ${py(data.modules.weightedRotation)}`,
+    `CONTINUOUS_BLOCKS: list[dict[str, Any]] = ${py(data.modules.continuousBlocks)}`,
+    `CONTENT_BREAKS: list[dict[str, Any]] = ${py(data.modules.contentBreaks)}`,
+    `FIT_TO_WINDOW: list[dict[str, Any]] = ${py(data.modules.fitToWindow)}`,
     '',
     `FIXED_EVENTS: list[dict[str, Any]] = ${py(data.modules.fixedEvents)}`,
     `FIXED_DURATION_EVENTS: list[dict[str, Any]] = ${py(data.modules.fixedDurationEvents)}`,
@@ -270,6 +310,9 @@ function generatedConfig(project, templateVersion = String(project.templateVersi
     `WINDOW_ROTATIONS: list[dict[str, Any]] = ${py(data.modules.windowRotations)}`,
     `SEQUENCE_EVENTS: list[dict[str, Any]] = ${py(data.modules.sequenceEvents)}`,
     `INTERVAL_EVENTS: list[dict[str, Any]] = ${py(data.modules.intervalEvents)}`,
+    `CHOICE_EVENTS: list[dict[str, Any]] = ${py(data.modules.choiceEvents)}`,
+    `CLOCK_TEMPLATES: list[dict[str, Any]] = ${py(data.modules.clockTemplates)}`,
+    `TEMPORARY_OVERRIDES: list[dict[str, Any]] = ${py(data.modules.temporaryOverrides)}`,
     `DATE_EVENTS: list[dict[str, Any]] = ${py(data.modules.dateEvents)}`,
     `OFFLINE_WINDOWS: list[dict[str, Any]] = ${py(data.modules.offlineWindows)}`,
     '',
@@ -279,7 +322,7 @@ function generatedConfig(project, templateVersion = String(project.templateVersi
     `ALLOW_OVERRUN = ${py(data.options.allowOverrun)}`,
     `HTTP_TIMEOUT_SECONDS = ${py(data.options.httpTimeoutSeconds)}`,
     `DEFAULT_STATE_DIR = Path(os.environ.get("ETV_SCRIPT_STATE_DIR", Path(__file__).resolve().parent))`,
-    'STATE_VERSION = 10',
+    'STATE_VERSION = 11',
     `SEEN_OCCURRENCE_RETENTION_DAYS = ${py(data.options.seenOccurrenceRetentionDays)}`
   ].join('\n');
 }

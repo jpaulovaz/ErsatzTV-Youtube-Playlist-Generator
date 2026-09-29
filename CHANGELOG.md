@@ -1,5 +1,23 @@
 # Changelog
 
+## 3.4.0
+
+- **Scripted Schedules** passa a usar o motor **Universal v1.3.0** em novos projetos e em upgrades manuais. Projetos existentes em v1.1.1/v1.2.0 continuam na versão já salva até o usuário escolher atualizar o motor.
+- O Builder passa de 10 para **18 tipos de módulo**, mantendo o Filler separado e opcional.
+- Novos módulos: **Rotação por quantidade**, **Rotação por peso**, **Bloco contínuo por horário**, **Inserções após X itens**, **Encaixar até o próximo evento**, **Escolha entre fontes**, **Relógio de programação** e **Programação especial temporária**.
+- Filtros de dias/datas ganham **recorrência avançada**: primeira/segunda/terceira/quarta/última ocorrência de um dia da semana no mês e repetição a cada N dias.
+- O novo **Bloco contínuo por horário** permite definir a programação-base somente por horários de início; eventos fixos entram temporariamente e, ao terminar, a programação-base vigente volta.
+- **Encaixar até o próximo evento** usa operações suportadas pelo Scripted Schedule do ErsatzTV para tentar escolher conteúdo que caiba antes do próximo horário, sem cortar o item; o Filler pode completar o pequeno restante quando configurado.
+- Os nomes mostrados na interface foram revisados para linguagem mais descritiva, mantendo as chaves internas compatíveis.
+- **Adicionar módulo** agora abre um modal com a lista de módulos, resumo curto e indicação de combinações úteis antes da inclusão.
+- Nova área lateral **Ajuda**, com abas Começando, Recursos, Módulos, Combinações, Publicar e Glossário, escrita em linguagem simples e com exemplos práticos.
+- A Ajuda diferencia programação-base, Filler, Pad To Nearest Minute, Fallback Source, Filler kind, prioridade e demais conceitos que costumam gerar dúvida.
+- Clicar em qualquer opção do menu lateral agora sempre volta ao início daquela seção. Scripted Schedules fecha o editor e volta à lista de projetos; Canais fecha a edição; Bibliotecas/Configurações recolhem sanfonas; Ajuda volta à primeira aba; Logs são recarregados.
+- O seletor modal também aceita `Esc` para fechar e devolve o foco ao botão de origem.
+- O validador avisa quando mais de uma programação-base é configurada ao mesmo tempo, evitando que uma base esconda outra sem o usuário perceber.
+- `configVersion` permanece 8 e o schema do armazenamento de Scripted Schedules permanece 1; UPDATE continua preservando `config/` e `data/`.
+- **108 testes automatizados** aprovados na árvore de desenvolvimento.
+
 ## 3.3.1
 
 - Toda a área **Scripted Schedules** ganha ajuda contextual discreta nos campos de configuração.

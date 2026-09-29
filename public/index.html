@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>ErsatzTV YouTube Downloader</title>
-  <link rel="icon" href="/brand-mark.svg?v=3.3.1" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=3.3.1&amp;rev=scripted-schedules-1">
-  <link rel="stylesheet" href="/scripted-schedules.css?v=3.3.1">
+  <link rel="icon" href="/brand-mark.svg?v=3.4.0" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=3.4.0&amp;rev=scripted-schedules-2">
+  <link rel="stylesheet" href="/scripted-schedules.css?v=3.4.0">
 </head>
 <body class="app-page">
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.3.1" alt=""></span>
+        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.4.0" alt=""></span>
         <div class="brand-copy">
           <div class="title-line">
             <h1>ErsatzTV YouTube Downloader</h1>
-            <span id="versionBadge" class="version-badge">v3.3.1</span>
+            <span id="versionBadge" class="version-badge">v3.4.0</span>
           </div>
         </div>
       </div>
@@ -127,6 +127,10 @@
 
       <div class="nav-group">
         <span class="nav-label">Sistema</span>
+        <button type="button" class="nav-button" data-view="help">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 9a2.7 2.7 0 1 1 4.4 2.1c-1.2.9-1.9 1.4-1.9 2.9M12 18h.01M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z"/></svg>
+          <span>Ajuda</span>
+        </button>
         <button type="button" class="nav-button" data-view="settings">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7ZM19 12l2-1-2-3.5-2.2.5-1.3-.8L15 5h-6l-.5 2.2-1.3.8L5 7.5 3 11l2 1v1l-2 1 2 3.5 2.2-.5 1.3.8L9 20h6l.5-2.2 1.3-.8 2.2.5 2-3.5-2-1v-1Z"/></svg>
           <span>Configurações</span>
@@ -341,6 +345,10 @@
 
       <section id="view-scripted-schedules" class="view-panel" data-view-panel="scripted-schedules">
         <div id="scriptedSchedulesRoot"></div>
+      </section>
+
+      <section id="view-help" class="view-panel" data-view-panel="help">
+        <div id="helpRoot"></div>
       </section>
 
       <section id="view-settings" class="view-panel" data-view-panel="settings">
@@ -582,9 +590,10 @@
   </dialog>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="/js/destinationForm.js?v=3.3.1"></script>
-  <script src="/js/channelsView.js?v=3.3.1&amp;rev=ersatztv-catalog-1"></script>
-  <script src="/js/scriptedSchedulesView.js?v=3.3.1"></script>
-  <script src="/app.js?v=3.3.1"></script>
+  <script src="/js/destinationForm.js?v=3.4.0"></script>
+  <script src="/js/channelsView.js?v=3.4.0&amp;rev=ersatztv-catalog-1"></script>
+  <script src="/js/scriptedSchedulesView.js?v=3.4.0"></script>
+  <script src="/js/helpView.js?v=3.4.0"></script>
+  <script src="/app.js?v=3.4.0"></script>
 </body>
 </html>

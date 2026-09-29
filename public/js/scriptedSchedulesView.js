@@ -1,21 +1,29 @@
 (() => {
   const MODULE_META = {
-    rotation: { label: 'Rotation', hint: 'Rotação contínua entre Sources por blocos de duração.' },
-    fixedEvents: { label: 'Horário + quantidade', hint: 'Toca uma quantidade de itens em um horário.' },
-    fixedDurationEvents: { label: 'Horário + duração', hint: 'Toca por X minutos e preserva o saldo se for interrompido.' },
-    fixedAllEvents: { label: 'Todos os itens', hint: 'Toca todos os itens da Source; depois de iniciar é atômico.' },
-    fixedWindowEvents: { label: 'Janela', hint: 'Toca uma Source somente dentro de uma faixa de horário.' },
-    windowRotations: { label: 'Rotação em janela', hint: 'Alterna Sources apenas dentro de uma faixa de horário.' },
-    sequenceEvents: { label: 'Sequência', hint: 'Executa vários passos na ordem definida.' },
-    intervalEvents: { label: 'Intervalo', hint: 'Repete um evento a cada X minutos.' },
-    dateEvents: { label: 'Data específica', hint: 'Executa uma vez em uma data e hora.' },
-    offlineWindows: { label: 'Offline', hint: 'Reserva uma faixa de horário sem programação.' }
+    rotation: { label: 'Rotação por tempo', hint: 'Alterna Sources por blocos de minutos.', combines: 'Eventos fixos, Filler e Pad To Nearest.' },
+    countRotation: { label: 'Rotação por quantidade', hint: 'Alterna Sources depois de tocar uma quantidade de itens.', combines: 'Eventos fixos e Filler. Use como alternativa à Rotação por tempo.' },
+    weightedRotation: { label: 'Rotação por peso', hint: 'Escolhe Sources por proporção, sem uma ordem rígida.', combines: 'Eventos fixos e Filler. Use como programação-base quando quiser variedade por proporção.' },
+    continuousBlocks: { label: 'Bloco contínuo por horário', hint: 'A partir de um horário, toca uma Source sem duração final.', combines: 'Eventos fixos: eles entram e, ao terminar, o bloco contínuo volta.' },
+    contentBreaks: { label: 'Inserções após X itens', hint: 'Toca uma inserção depois de uma quantidade de itens principais.', combines: 'Eventos fixos e Filler. Ele próprio faz a sequência principal → inserção → principal.' },
+    fitToWindow: { label: 'Encaixar até o próximo evento', hint: 'Tenta usar conteúdo que caiba no tempo disponível antes do próximo horário.', combines: 'Eventos fixos e Filler para fechar pequenos espaços.' },
+    fixedEvents: { label: 'Horário fixo · quantidade', hint: 'Em um horário, toca uma quantidade definida de itens.', combines: 'Bloco contínuo, rotações e Pad To Nearest.' },
+    fixedDurationEvents: { label: 'Horário fixo · duração', hint: 'Em um horário, toca por X minutos e guarda o saldo se for interrompido.', combines: 'Bloco contínuo e eventos de prioridade maior.' },
+    fixedAllEvents: { label: 'Horário fixo · todos os itens', hint: 'Em um horário, toca todos os itens da Source antes de liberar outro módulo.', combines: 'Especiais e maratonas completas.' },
+    fixedWindowEvents: { label: 'Faixa de horário · fonte única', hint: 'Toca uma Source somente dentro de uma faixa de horário.', combines: 'Programação por turnos e eventos fixos.' },
+    windowRotations: { label: 'Faixa de horário · rotação', hint: 'Alterna Sources somente dentro de uma faixa de horário.', combines: 'Manhã/tarde/noite com estilos diferentes.' },
+    sequenceEvents: { label: 'Sequência programada', hint: 'Executa vários passos na ordem que você montar.', combines: 'Vinheta + programa + intervalo + Pad.' },
+    intervalEvents: { label: 'Repetição por intervalo', hint: 'Repete um evento a cada X minutos dentro de uma faixa.', combines: 'Station IDs, promos e chamadas periódicas.' },
+    choiceEvents: { label: 'Escolha entre fontes', hint: 'No horário marcado, escolhe uma das Sources disponíveis.', combines: 'Sessões de filme, sorteios de faixa e programação variada.' },
+    clockTemplates: { label: 'Relógio de programação', hint: 'Repete posições dentro de um ciclo, como :00, :15, :30 e :45.', combines: 'Rádio/TV linear, IDs, promos e blocos de conteúdo.' },
+    temporaryOverrides: { label: 'Programação especial temporária', hint: 'Uma Source assume entre uma data/hora inicial e final e depois a grade normal volta.', combines: 'Natal, maratonas, eventos e semanas temáticas.' },
+    dateEvents: { label: 'Evento em data específica', hint: 'Executa uma vez em uma data e hora exatas.', combines: 'Especiais, estreias e eventos únicos.' },
+    offlineWindows: { label: 'Janela offline', hint: 'Reserva uma faixa de horário sem programação.', combines: 'Manutenção e períodos em que o canal deve ficar sem conteúdo.' }
   };
 
   const DAY_OPTIONS = [
     ['seg', 'Seg'], ['ter', 'Ter'], ['qua', 'Qua'], ['qui', 'Qui'], ['sex', 'Sex'], ['sab', 'Sáb'], ['dom', 'Dom']
   ];
-  const LATEST_TEMPLATE_VERSION = '1.2.0';
+  const LATEST_TEMPLATE_VERSION = '1.3.0';
   const PAD_TO_NEAREST_OPTIONS = [5, 10, 15, 30];
 
   const SOURCE_TYPES = [
@@ -106,6 +114,27 @@
     sequenceStepDuration: 'Tempo deste passo em minutos.',
     sequenceStepMark: 'Marca de relógio usada pelo passo “Até próxima marca”. Exemplo: 30 leva 10:07 até 10:30 usando a Source escolhida.',
     sequenceStepPresentation: 'Presentation usada somente neste passo da sequência.',
+    recurrenceType: 'Permite repetir a regra de formas mais específicas. Exemplo: primeira segunda-feira do mês ou a cada 14 dias. Deixe em “Sem recorrência extra” para usar apenas os dias e datas normais.',
+    recurrenceOrdinal: 'Escolhe qual ocorrência do dia da semana no mês. Exemplo: 1ª segunda-feira ou última sexta-feira.',
+    recurrenceWeekday: 'Dia da semana usado pela recorrência mensal.',
+    recurrenceEveryDays: 'Repete a regra a cada N dias a partir da data-base. Exemplo: 14 cria uma programação quinzenal.',
+    recurrenceAnchorDate: 'Data usada como ponto de partida para a repetição “a cada N dias”.',
+    weight: 'Peso usado para definir a frequência relativa desta Source. Exemplo: peso 60 e peso 20 fazem a primeira aparecer aproximadamente três vezes mais.',
+    avoidRepeat: 'Evita escolher a mesma Source duas vezes seguidas quando houver outra opção disponível.',
+    everyItems: 'Quantidade de itens principais tocados antes da inserção. Exemplo: 4 significa “depois de quatro músicas, faça a pausa”.',
+    breakSource: 'Source que entra na pausa automática. Exemplo: STATION_IDS ou PROMOS.',
+    breakCount: 'Quantidade de itens da Source de inserção. Exemplo: 1 toca uma vinheta e depois volta ao conteúdo principal.',
+    breakPresentation: 'Presentation usada somente durante a inserção.',
+    lookAhead: 'Quanto tempo antes do próximo evento o módulo começa a tentar encaixar conteúdo. Exemplo: 45 procura algo que caiba quando faltarem até 45 minutos.',
+    fitDiscard: 'Quantos itens podem ser pulados enquanto o ErsatzTV procura um que caiba no tempo restante.',
+    fitFiller: 'Se sobrar um pequeno espaço, usa o Filler geral para completar até o próximo evento. Exige Filler configurado.',
+    selection: 'Como escolher uma Source: “Por peso” respeita os pesos; “Em rodízio” passa por cada opção em sequência previsível.',
+    choiceWeight: 'Peso desta opção quando a escolha estiver configurada como “Por peso”.',
+    cycleMinutes: 'Tamanho do relógio que se repete. Exemplo: 60 cria um ciclo de uma hora.',
+    offsetMinutes: 'Posição dentro do ciclo. Em um relógio de 60 min, offset 15 significa :15 de cada ciclo.',
+    startDatetime: 'Data e hora em que a programação especial começa.',
+    endDatetime: 'Data e hora em que a programação especial termina e a grade normal volta.',
+    moduleDescription: 'Resumo rápido do módulo. A área Ajuda possui exemplos maiores e sugestões de combinações.',
     fillerSource: 'Source usada como preenchimento geral quando não há outro conteúdo ativo. Ela também é usada pelo Pad To Nearest Minute.',
     fillerPresentation: 'Presentation aplicada ao Filler geral enquanto ele estiver preenchendo uma lacuna.'
   };
@@ -121,6 +150,8 @@
     preview: '',
     history: [],
     openAccordions: new Set(),
+    modulePickerOpen: false,
+    modulePickerSelection: '',
     loading: false
   };
 
@@ -275,6 +306,15 @@
     el.addEventListener('input', handleInput);
     el.addEventListener('change', handleInput);
     el.addEventListener('toggle', handleAccordionToggle, true);
+    el.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && state.modulePickerOpen) {
+        event.preventDefault();
+        state.modulePickerOpen = false;
+        state.modulePickerSelection = '';
+        render();
+        window.requestAnimationFrame(() => root()?.querySelector('[data-ss-action="open-module-picker"]')?.focus());
+      }
+    });
     window.addEventListener('resize', hideHelpPopover);
     window.addEventListener('scroll', hideHelpPopover, true);
   }
@@ -403,7 +443,10 @@
     if (action === 'remove-guid') { getPath(state.current, button.dataset.path).splice(Number(button.dataset.index), 1); render(); return; }
     if (action === 'add-variable') { getPath(state.current, button.dataset.path).push({ key: '', value: '' }); render(); return; }
     if (action === 'remove-variable') { getPath(state.current, button.dataset.path).splice(Number(button.dataset.index), 1); render(); return; }
-    if (action === 'add-module') { const type = button.dataset.module || document.querySelector('#ssModulePicker')?.value; addModule(type); openAccordion(`module:${type}`); openAccordion(`module-entry:${type}:0`); render(); return; }
+    if (action === 'open-module-picker') { state.modulePickerOpen = true; state.modulePickerSelection = ''; render(); window.requestAnimationFrame(() => root()?.querySelector('.ss-module-picker-item')?.focus()); return; }
+    if (action === 'close-module-picker') { state.modulePickerOpen = false; state.modulePickerSelection = ''; render(); window.requestAnimationFrame(() => root()?.querySelector('[data-ss-action="open-module-picker"]')?.focus()); return; }
+    if (action === 'select-module') { state.modulePickerSelection = button.dataset.module || ''; render(); window.requestAnimationFrame(() => root()?.querySelector(`[data-ss-action="select-module"][data-module="${state.modulePickerSelection}"]`)?.focus()); return; }
+    if (action === 'add-module') { const type = button.dataset.module || state.modulePickerSelection; if (!type) return; addModule(type); state.modulePickerOpen = false; state.modulePickerSelection = ''; openAccordion(`module:${type}`); openAccordion(`module-entry:${type}:0`); render(); return; }
     if (action === 'remove-module') { const type = button.dataset.module; state.current.modules[type] = []; state.openAccordions.delete(`module:${type}`); clearAccordionPrefix(`module-entry:${type}:`); render(); return; }
     if (action === 'add-module-entry') { const type = button.dataset.module; const index = state.current.modules[type].length; state.current.modules[type].push(defaultModuleEntry(type)); openAccordion(`module:${type}`); openAccordion(`module-entry:${type}:${index}`); render(); return; }
     if (action === 'remove-module-entry') { const type = button.dataset.module; state.current.modules[type].splice(Number(button.dataset.index), 1); clearAccordionPrefix(`module-entry:${type}:`); render(); return; }
@@ -411,6 +454,10 @@
     if (action === 'remove-window-item') { state.current.modules.windowRotations[Number(button.dataset.index)].items.splice(Number(button.dataset.itemIndex), 1); render(); return; }
     if (action === 'add-step') { getPath(state.current, button.dataset.path).push({ mode: 'count', source: firstSource(), count: 1, presentation: '' }); render(); return; }
     if (action === 'remove-step') { getPath(state.current, button.dataset.path).splice(Number(button.dataset.index), 1); render(); return; }
+    if (action === 'add-choice') { getPath(state.current, button.dataset.path).push({ source: firstSource(), presentation: '', weight: 1 }); render(); return; }
+    if (action === 'remove-choice') { getPath(state.current, button.dataset.path).splice(Number(button.dataset.index), 1); render(); return; }
+    if (action === 'add-clock-slot') { getPath(state.current, button.dataset.path).push({ offsetMinutes: 0, mode: 'count', source: firstSource(), count: 1, durationMinutes: '', presentation: '', priority: '', padToNearestMinutes: '' }); render(); return; }
+    if (action === 'remove-clock-slot') { getPath(state.current, button.dataset.path).splice(Number(button.dataset.index), 1); render(); return; }
     if (action === 'toggle-filler') {
       if (state.current.filler) {
         const cleared = clearPadToNearestSettings();
@@ -508,19 +555,33 @@
     if (!type || !state.current.modules[type] || state.current.modules[type].length) return;
     state.current.modules[type].push(defaultModuleEntry(type));
   }
-  function defaultFilters() { return { days: [], startDate: '', endDate: '', dates: [], excludeDates: [], enabled: true }; }
+  function defaultFilters() {
+    return {
+      days: [], startDate: '', endDate: '', dates: [], excludeDates: [], enabled: true,
+      recurrenceType: 'none', recurrenceOrdinal: 1, recurrenceWeekday: 0,
+      recurrenceEveryDays: 14, recurrenceAnchorDate: new Date().toISOString().slice(0, 10)
+    };
+  }
   function defaultBase(id) { return { id, label: '', priority: state.current.options.defaultFixedPriority || 100, presentation: '', ...defaultFilters() }; }
   function defaultModuleEntry(type) {
     const s = firstSource(); const p = state.current.options.defaultFixedPriority || 100; const n = (state.current.modules[type]?.length || 0) + 1;
     if (type === 'rotation') return { source: s, presentation: '', durationMinutes: state.current.options.defaultRotationDurationMinutes || 60, padToNearestMinutes: '' };
-    if (type === 'fixedEvents') return { ...defaultBase(`fixed_${n}`), time: '10:00', source: s, count: 1, priority: p , padToNearestMinutes: ''};
-    if (type === 'fixedDurationEvents') return { ...defaultBase(`duration_${n}`), time: '20:00', source: s, durationMinutes: 60, priority: p , padToNearestMinutes: ''};
-    if (type === 'fixedAllEvents') return { ...defaultBase(`all_${n}`), time: '14:00', source: s, priority: p , padToNearestMinutes: ''};
-    if (type === 'fixedWindowEvents') return { ...defaultBase(`window_${n}`), startTime: '06:00', endTime: '10:00', source: s, priority: p , padToNearestMinutes: ''};
+    if (type === 'countRotation') return { source: s, presentation: '', count: 3, padToNearestMinutes: '' };
+    if (type === 'weightedRotation') return { source: s, presentation: '', weight: 1, avoidRepeat: true, padToNearestMinutes: '' };
+    if (type === 'continuousBlocks') return { ...defaultBase(`continuous_${n}`), startTime: '06:00', source: s, priority: p };
+    if (type === 'contentBreaks') return { ...defaultBase(`breaks_${n}`), source: s, everyItems: 4, breakSource: s, breakCount: 1, breakPresentation: '', breakPlayback: {}, priority: p, padToNearestMinutes: '' };
+    if (type === 'fitToWindow') return { ...defaultBase(`fit_${n}`), startTime: '00:00', endTime: '00:00', source: s, lookAheadMinutes: 45, discardAttempts: 5, useFillerRemainder: true, priority: p };
+    if (type === 'fixedEvents') return { ...defaultBase(`fixed_${n}`), time: '10:00', source: s, count: 1, priority: p, padToNearestMinutes: '' };
+    if (type === 'fixedDurationEvents') return { ...defaultBase(`duration_${n}`), time: '20:00', source: s, durationMinutes: 60, priority: p, padToNearestMinutes: '' };
+    if (type === 'fixedAllEvents') return { ...defaultBase(`all_${n}`), time: '14:00', source: s, priority: p, padToNearestMinutes: '' };
+    if (type === 'fixedWindowEvents') return { ...defaultBase(`window_${n}`), startTime: '06:00', endTime: '10:00', source: s, priority: p, padToNearestMinutes: '' };
     if (type === 'windowRotations') return { ...defaultBase(`window_rotation_${n}`), startTime: '12:00', endTime: '18:00', blockMinutes: 30, priority: p, items: [{ source: s, presentation: '', durationMinutes: '', padToNearestMinutes: '' }] };
-    if (type === 'sequenceEvents') return { ...defaultBase(`sequence_${n}`), time: '19:55', priority: p, atomic: false, steps: [{ mode: 'count', source: s, count: 1, presentation: '' }] , padToNearestMinutes: ''};
-    if (type === 'intervalEvents') return { ...defaultBase(`interval_${n}`), startTime: '00:00', endTime: '00:00', everyMinutes: 30, source: s, mode: 'count', count: 1, durationMinutes: '', priority: p, latePolicy: 'skip', maxLatenessMinutes: 10 , padToNearestMinutes: ''};
-    if (type === 'dateEvents') return { ...defaultBase(`date_${n}`), datetime: `${new Date().toISOString().slice(0, 10)} 20:00`, source: s, mode: 'count', count: 1, durationMinutes: '', priority: p, steps: [] , padToNearestMinutes: ''};
+    if (type === 'sequenceEvents') return { ...defaultBase(`sequence_${n}`), time: '19:55', priority: p, atomic: false, steps: [{ mode: 'count', source: s, count: 1, presentation: '' }], padToNearestMinutes: '' };
+    if (type === 'intervalEvents') return { ...defaultBase(`interval_${n}`), startTime: '00:00', endTime: '00:00', everyMinutes: 30, source: s, mode: 'count', count: 1, durationMinutes: '', priority: p, latePolicy: 'skip', maxLatenessMinutes: 10, padToNearestMinutes: '' };
+    if (type === 'choiceEvents') return { ...defaultBase(`choice_${n}`), time: '20:00', mode: 'count', count: 1, durationMinutes: '', selection: 'weighted', choices: [{ source: s, presentation: '', weight: 1 }], priority: p, padToNearestMinutes: '' };
+    if (type === 'clockTemplates') return { ...defaultBase(`clock_${n}`), startTime: '00:00', endTime: '00:00', cycleMinutes: 60, priority: p, slots: [{ offsetMinutes: 0, mode: 'count', source: s, count: 1, durationMinutes: '', presentation: '', priority: '', padToNearestMinutes: '' }] };
+    if (type === 'temporaryOverrides') return { ...defaultBase(`override_${n}`), startDatetime: `${new Date().toISOString().slice(0, 10)} 18:00`, endDatetime: `${new Date().toISOString().slice(0, 10)} 23:59`, source: s, priority: 500, padToNearestMinutes: '' };
+    if (type === 'dateEvents') return { ...defaultBase(`date_${n}`), datetime: `${new Date().toISOString().slice(0, 10)} 20:00`, source: s, mode: 'count', count: 1, durationMinutes: '', priority: p, steps: [], padToNearestMinutes: '' };
     if (type === 'offlineWindows') return { ...defaultBase(`offline_${n}`), startTime: '03:00', endTime: '05:00', priority: 1000 };
     return {};
   }
@@ -634,7 +695,7 @@
           <label>${labelTitle('Motor', 'templateVersion')}<input value="${esc(p.templateVersion)}" disabled></label>
           <label>${labelTitle('Pasta de saída', 'outputRootReadOnly')}<input value="${esc(state.settings?.outputRoot || '')}" disabled></label>
         </div>
-        ${p.templateVersion !== LATEST_TEMPLATE_VERSION ? `<div class="ss-callout">Este projeto usa o motor ${esc(p.templateVersion)}. O Pad To Nearest Minute está disponível no motor ${LATEST_TEMPLATE_VERSION}. <button type="button" data-ss-action="upgrade-template">Atualizar motor</button></div>` : ''}
+        ${p.templateVersion !== LATEST_TEMPLATE_VERSION ? `<div class="ss-callout">Este projeto usa o motor ${esc(p.templateVersion)}. Os novos módulos e recursos estão disponíveis no motor ${LATEST_TEMPLATE_VERSION}. <button type="button" data-ss-action="upgrade-template">Atualizar motor</button></div>` : ''}
       </section>
       <section class="card ss-section-card">
         <div class="section-heading">
@@ -807,12 +868,30 @@
       <section class="card ss-section-card">
         <div class="section-heading">
           <div><span class="eyebrow">Módulos</span><h3>Programação</h3><p>Adicione somente os módulos que este canal precisa.</p></div>
-          ${inactive.length ? `<div class="ss-add-module"><label class="ss-inline-field">${labelTitle('Tipo de módulo', 'modulePicker')}<select id="ssModulePicker">${inactive.map(([key, meta]) => `<option value="${key}">${esc(meta.label)}</option>`).join('')}</select></label><button type="button" data-ss-action="add-module">Adicionar módulo</button></div>` : ''}
+          ${inactive.length ? `<div class="ss-add-module"><button type="button" class="primary" data-ss-action="open-module-picker">Adicionar módulo</button></div>` : ''}
         </div>
+        <div class="ss-callout"><strong>Programação-base:</strong> normalmente escolha uma entre Rotação por tempo, Rotação por quantidade, Rotação por peso, Bloco contínuo ou Inserções após X itens. Eventos fixos podem entrar por cima dela.</div>
         <div class="ss-stack">${active.length ? active.map(([key]) => renderModule(key)).join('') : '<div class="empty-state">Nenhum módulo ativo. Adicione um módulo ou use somente o Filler.</div>'}</div>
       </section>
       ${renderFiller()}
-      ${renderEditorSaveBar('Programação')}`;
+      ${renderEditorSaveBar('Programação')}
+      ${state.modulePickerOpen ? renderModulePickerModal(inactive) : ''}`;
+  }
+
+  function renderModulePickerModal(inactive) {
+    const entries = inactive || Object.entries(MODULE_META).filter(([key]) => !(state.current.modules[key] || []).length);
+    const selected = state.modulePickerSelection;
+    const meta = selected ? MODULE_META[selected] : null;
+    return `<div class="ss-module-modal-backdrop" data-ss-action="close-module-picker">
+      <section class="ss-module-modal" role="dialog" aria-modal="true" aria-label="Adicionar módulo" onclick="event.stopPropagation()">
+        <div class="section-heading"><div><span class="eyebrow">Programação</span><h3>Adicionar módulo</h3><p>Escolha o tipo de programação. Clique em um nome para ver um resumo antes de adicionar.</p></div><button type="button" class="ghost" data-ss-action="close-module-picker">Fechar</button></div>
+        <div class="ss-module-picker-layout">
+          <div class="ss-module-picker-list">${entries.map(([key, item]) => `<button type="button" class="ss-module-picker-item ${selected === key ? 'active' : ''}" data-ss-action="select-module" data-module="${key}"><strong>${esc(item.label)}</strong><span>${esc(item.hint)}</span></button>`).join('')}</div>
+          <div class="ss-module-picker-description">${meta ? `<span class="eyebrow">Como funciona</span><h3>${esc(meta.label)}</h3><p>${esc(meta.hint)}</p><div class="ss-callout"><strong>Combina bem com</strong><br>${esc(meta.combines || 'Outros eventos da programação.')}</div><p class="muted">A área Ajuda possui explicações e exemplos mais completos.</p>` : '<div class="empty-state">Selecione um módulo à esquerda para ver a descrição.</div>'}</div>
+        </div>
+        <div class="modal-actions"><button type="button" data-ss-action="close-module-picker">Cancelar</button><button type="button" class="primary" data-ss-action="add-module" ${selected ? '' : 'disabled'}>Adicionar módulo</button></div>
+      </section>
+    </div>`;
   }
 
   function renderModule(type) {
@@ -835,8 +914,14 @@
         <label>${labelTitle('Duração (min)', 'duration')}<input type="number" min="1" data-type="number" data-bind="modules.rotation.${index}.durationMinutes" value="${esc(item.durationMinutes ?? '')}" placeholder="${esc(state.current.options.defaultRotationDurationMinutes || 60)}"></label>
       </div>${renderPadToNearest(`modules.rotation.${index}`, item)}${renderPlaybackAdvanced(`modules.rotation.${index}`, item)}`);
 
+    if (type === 'countRotation') return moduleEntryShell(type, index, `Bloco ${index + 1}`, `<div class="form-grid three">${sourceSelect(`modules.countRotation.${index}.source`, item.source)}${profileSelect(`modules.countRotation.${index}.presentation`, item.presentation)}<label>${labelTitle('Quantidade', 'quantity')}<input type="number" min="1" data-type="number" data-bind="modules.countRotation.${index}.count" value="${esc(item.count || 1)}"></label></div>${renderPadToNearest(`modules.countRotation.${index}`, item)}${renderPlaybackAdvanced(`modules.countRotation.${index}`, item)}`);
+    if (type === 'weightedRotation') return moduleEntryShell(type, index, `Opção ${index + 1}`, `<div class="form-grid three">${sourceSelect(`modules.weightedRotation.${index}.source`, item.source)}${profileSelect(`modules.weightedRotation.${index}.presentation`, item.presentation)}<label>${labelTitle('Peso', 'weight')}<input type="number" min="0.1" step="0.1" data-type="number" data-bind="modules.weightedRotation.${index}.weight" value="${esc(item.weight || 1)}"></label><label class="check-row"><input type="checkbox" data-bind="modules.weightedRotation.${index}.avoidRepeat" ${item.avoidRepeat !== false ? 'checked' : ''}><span>Evitar repetir a mesma Source${help('avoidRepeat')}</span></label></div>${renderPadToNearest(`modules.weightedRotation.${index}`, item)}${renderPlaybackAdvanced(`modules.weightedRotation.${index}`, item)}`);
+
     const base = `modules.${type}.${index}`;
     let body = '';
+    if (type === 'continuousBlocks') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${sourceSelect(`${base}.source`, item.source)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div><div class="ss-callout">Não existe horário de fim. Este bloco continua até outro Bloco Contínuo assumir ou um evento programado entrar temporariamente.</div>${renderCommonAdvanced(base, item, true)}`;
+    if (type === 'contentBreaks') body = `<div class="form-grid four">${commonIdFields(base, item)}${sourceSelect(`${base}.source`, item.source)}<label>${labelTitle('A cada itens', 'everyItems')}<input type="number" min="1" data-type="number" data-bind="${base}.everyItems" value="${esc(item.everyItems || 4)}"></label>${sourceSelect(`${base}.breakSource`, item.breakSource, 'breakSource')}<label>${labelTitle('Itens na inserção', 'breakCount')}<input type="number" min="1" data-type="number" data-bind="${base}.breakCount" value="${esc(item.breakCount || 1)}"></label>${profileSelect(`${base}.presentation`, item.presentation)}${profileSelect(`${base}.breakPresentation`, item.breakPresentation, 'breakPresentation')}${priorityInput(base, item)}</div><div class="ss-callout">Exemplo: 4 músicas → 1 vinheta → 4 músicas → 1 vinheta.</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
+    if (type === 'fitToWindow') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}${sourceSelect(`${base}.source`, item.source)}<label>${labelTitle('Olhar adiante (min)', 'lookAhead')}<input type="number" min="1" data-type="number" data-bind="${base}.lookAheadMinutes" value="${esc(item.lookAheadMinutes || 45)}"></label><label>${labelTitle('Tentativas', 'fitDiscard')}<input type="number" min="0" data-type="number" data-bind="${base}.discardAttempts" value="${esc(item.discardAttempts ?? 5)}"></label>${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}<label class="check-row"><input type="checkbox" data-bind="${base}.useFillerRemainder" ${item.useFillerRemainder !== false ? 'checked' : ''}><span>Completar sobra com Filler${help('fitFiller')}</span></label></div><div class="ss-callout">Este módulo não corta o conteúdo para caber: ele pede ao ErsatzTV para procurar itens adequados antes do próximo evento.</div>${renderDateFilters(base, item)}`;
     if (type === 'fixedEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${sourceSelect(`${base}.source`, item.source)}<label>${labelTitle('Quantidade', 'quantity')}<input type="number" min="1" data-type="number" data-bind="${base}.count" value="${esc(item.count || 1)}"></label>${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
     if (type === 'fixedDurationEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${sourceSelect(`${base}.source`, item.source)}<label>${labelTitle('Duração (min)', 'duration')}<input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(item.durationMinutes || 60)}"></label>${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
     if (type === 'fixedAllEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${sourceSelect(`${base}.source`, item.source)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div><div class="ss-callout">Depois que este bloco começar, todos os itens da Source terminam antes de outro módulo assumir.</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
@@ -844,6 +929,9 @@
     if (type === 'windowRotations') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}<label>${labelTitle('Bloco padrão (min)', 'blockMinutes')}<input type="number" min="1" data-type="number" data-bind="${base}.blockMinutes" value="${esc(item.blockMinutes || 30)}"></label>${priorityInput(base, item)}</div>${renderWindowRotationItems(item, index)}${renderCommonAdvanced(base, item, false)}`;
     if (type === 'sequenceEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}<label class="check-row"><input type="checkbox" data-bind="${base}.atomic" ${item.atomic ? 'checked' : ''}><span>Sequência atômica${help('atomic')}</span></label></div>${renderSequenceSteps(item.steps || [], `${base}.steps`)}${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, false)}`;
     if (type === 'intervalEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}<label>${labelTitle('A cada (min)', 'everyMinutes')}<input type="number" min="1" data-type="number" data-bind="${base}.everyMinutes" value="${esc(item.everyMinutes || 30)}"></label>${modeSelect(`${base}.mode`, item.mode, false)}${intervalModeFields(base, item)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}<label>${labelTitle('Se atrasar', 'latePolicy')}<select data-bind="${base}.latePolicy" data-rerender="true"><option value="queue" ${item.latePolicy === 'queue' ? 'selected' : ''}>Esperar na fila</option><option value="skip" ${item.latePolicy === 'skip' ? 'selected' : ''}>Ignorar se atrasar demais</option></select></label>${item.latePolicy === 'skip' ? `<label>${labelTitle('Atraso máximo (min)', 'maxLateness')}<input type="number" min="0" data-type="number" data-bind="${base}.maxLatenessMinutes" value="${esc(item.maxLatenessMinutes ?? 10)}"></label>` : ''}</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
+    if (type === 'choiceEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${modeSelect(`${base}.mode`, item.mode, false)}${item.mode === 'duration' ? `<label>${labelTitle('Duração (min)', 'duration')}<input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(item.durationMinutes || 60)}"></label>` : item.mode === 'count' ? `<label>${labelTitle('Quantidade', 'quantity')}<input type="number" min="1" data-type="number" data-bind="${base}.count" value="${esc(item.count || 1)}"></label>` : ''}${priorityInput(base, item)}<label>${labelTitle('Escolha', 'selection')}<select data-bind="${base}.selection"><option value="weighted" ${item.selection !== 'round_robin' ? 'selected' : ''}>Por peso</option><option value="round_robin" ${item.selection === 'round_robin' ? 'selected' : ''}>Em rodízio</option></select></label></div>${renderChoiceItems(item.choices || [], `${base}.choices`)}${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, false)}`;
+    if (type === 'clockTemplates') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}<label>${labelTitle('Ciclo (min)', 'cycleMinutes')}<input type="number" min="1" data-type="number" data-bind="${base}.cycleMinutes" value="${esc(item.cycleMinutes || 60)}"></label>${priorityInput(base, item)}</div>${renderClockSlots(item.slots || [], `${base}.slots`)}${renderDateFilters(base, item)}`;
+    if (type === 'temporaryOverrides') body = `<div class="form-grid four">${commonIdFields(base, item)}<label>${labelTitle('Começa em', 'startDatetime')}<input data-bind="${base}.startDatetime" value="${esc(item.startDatetime || '')}" placeholder="2026-12-24 18:00"></label><label>${labelTitle('Termina em', 'endDatetime')}<input data-bind="${base}.endDatetime" value="${esc(item.endDatetime || '')}" placeholder="2026-12-26 06:00"></label>${sourceSelect(`${base}.source`, item.source)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div><div class="ss-callout">Durante este período a Source especial assume. Quando o período termina, a programação normal volta automaticamente.</div>${renderPadToNearest(base, item)}${renderPlaybackAdvanced(base, item)}`;
     if (type === 'dateEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}<label>${labelTitle('Data e hora', 'dateTime')}<input data-bind="${base}.datetime" value="${esc(item.datetime || '')}" placeholder="2026-12-24 20:00"></label>${modeSelect(`${base}.mode`, item.mode, true)}${dateModeFields(base, item)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${item.mode === 'sequence' ? renderSequenceSteps(item.steps || [], `${base}.steps`) : ''}${renderPadToNearest(base, item)}${renderPlaybackAdvanced(base, item)}`;
     if (type === 'offlineWindows') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}${priorityInput(base, item)}</div>${renderDateFilters(base, item)}`;
     return moduleEntryShell(type, index, item.label || item.id || `Item ${index + 1}`, body);
@@ -875,10 +963,18 @@
     return `${sourceSelect(`${base}.source`, item.source)}<label>${labelTitle('Quantidade', 'quantity')}<input type="number" min="1" data-type="number" data-bind="${base}.count" value="${esc(item.count || 1)}"></label>`;
   }
 
+  function renderChoiceItems(items, path) {
+    return `<div class="ss-mini-editor"><div class="ss-mini-head"><strong>Sources que podem ser escolhidas</strong><span class="ss-mini-help">Uma delas será usada em cada ocorrência${help('selection')}</span><button type="button" data-ss-action="add-choice" data-path="${esc(path)}">Adicionar Source</button></div>${items.map((entry, index) => { const base = `${path}.${index}`; return `<div class="ss-inline-row"><label class="ss-inline-field">${labelTitle('Source', 'source')}<select data-bind="${base}.source">${sourceOptions(entry.source)}</select></label><label class="ss-inline-field">${labelTitle('Presentation', 'presentation')}<select data-bind="${base}.presentation">${profileOptions(entry.presentation)}</select></label><label class="ss-inline-field">${labelTitle('Peso', 'choiceWeight')}<input type="number" min="0.1" step="0.1" data-type="number" data-bind="${base}.weight" value="${esc(entry.weight || 1)}"></label><button type="button" class="danger ghost" data-ss-action="remove-choice" data-path="${esc(path)}" data-index="${index}" aria-label="Remover Source">×</button></div>`; }).join('')}</div>`;
+  }
+
+  function renderClockSlots(slots, path) {
+    return `<div class="ss-mini-editor"><div class="ss-mini-head"><strong>Posições do relógio</strong><span class="ss-mini-help">Ex.: 0=:00, 15=:15 em ciclo de 60 min${help('offsetMinutes')}</span><button type="button" data-ss-action="add-clock-slot" data-path="${esc(path)}">Adicionar posição</button></div>${slots.map((slot, index) => { const base = `${path}.${index}`; return `<div class="ss-sequence-step"><div class="ss-inline-row"><label class="ss-inline-field">${labelTitle('Minuto no ciclo', 'offsetMinutes')}<input type="number" min="0" data-type="number" data-bind="${base}.offsetMinutes" value="${esc(slot.offsetMinutes ?? 0)}"></label>${modeSelect(`${base}.mode`, slot.mode || 'count', false)}${slot.mode === 'duration' ? `<label class="ss-inline-field">${labelTitle('Duração', 'duration')}<input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(slot.durationMinutes || 30)}"></label>` : slot.mode === 'count' ? `<label class="ss-inline-field">${labelTitle('Quantidade', 'quantity')}<input type="number" min="1" data-type="number" data-bind="${base}.count" value="${esc(slot.count || 1)}"></label>` : ''}${sourceSelect(`${base}.source`, slot.source)}${profileSelect(`${base}.presentation`, slot.presentation)}<label class="ss-inline-field">${labelTitle('Prioridade', 'priority')}<input type="number" data-type="number" data-bind="${base}.priority" value="${esc(slot.priority ?? '')}" placeholder="Do relógio"></label><button type="button" class="danger ghost" data-ss-action="remove-clock-slot" data-path="${esc(path)}" data-index="${index}" aria-label="Remover posição">×</button></div>${renderPadToNearest(base, slot)}${renderPlaybackAdvanced(base, slot)}</div>`; }).join('')}</div>`;
+  }
+
   function renderWindowRotationItems(item, index) {
     return `<div class="ss-mini-editor"><div class="ss-mini-head"><strong>Itens da rotação</strong><span class="ss-mini-help">Configuração de cada bloco${help('blockMinutes')}</span><button type="button" data-ss-action="add-window-item" data-index="${index}">Adicionar Source</button></div>${(item.items || []).map((entry, j) => {
       const base = `modules.windowRotations.${index}.items.${j}`;
-      const padEnabled = Boolean(state.current.filler && String(state.current.filler.source || '').trim()) && state.current.templateVersion === LATEST_TEMPLATE_VERSION;
+      const padEnabled = Boolean(state.current.filler && String(state.current.filler.source || '').trim()) && versionAtLeast(state.current.templateVersion, '1.2.0');
       const padValue = entry.padToNearestMinutes === null || entry.padToNearestMinutes === undefined ? '' : String(entry.padToNearestMinutes);
       return `<div class="ss-inline-row ss-window-row"><label class="ss-inline-field">${labelTitle('Source', 'source')}<select data-bind="${base}.source">${sourceOptions(entry.source)}</select></label><label class="ss-inline-field">${labelTitle('Presentation', 'presentation')}<select data-bind="${base}.presentation">${profileOptions(entry.presentation)}</select></label><label class="ss-inline-field">${labelTitle('Duração (min)', 'duration')}<input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(entry.durationMinutes ?? '')}" placeholder="Bloco padrão"></label><label class="ss-inline-field">${labelTitle('Pad To Nearest', 'padToNearest')}<select data-type="number" data-bind="${base}.padToNearestMinutes" ${padEnabled ? '' : 'disabled'}><option value="" ${padValue === '' ? 'selected' : ''}>Desativado</option>${PAD_TO_NEAREST_OPTIONS.map((minutes) => `<option value="${minutes}" ${padValue === String(minutes) ? 'selected' : ''}>${minutes} min</option>`).join('')}</select></label><button type="button" class="danger ghost" data-ss-action="remove-window-item" data-index="${index}" data-item-index="${j}" aria-label="Remover item">×</button></div>`;
     }).join('')}</div>`;
@@ -896,19 +992,27 @@
   }
   function renderDateFilters(base, item) {
     const days = Array.isArray(item.days) ? item.days : [];
-    return `<details class="ss-advanced"><summary><span>Dias e datas${help('days')}</span></summary><div class="ss-advanced-body"><label class="check-row"><input type="checkbox" data-bind="${base}.enabled" ${item.enabled !== false ? 'checked' : ''}><span>Evento ativo${help('eventEnabled')}</span></label><div class="ss-day-filter-title">Dias da semana${help('days')}</div><div class="ss-day-picker">${DAY_OPTIONS.map(([value, label]) => `<label title="${esc(HELP_TEXT.days)}"><input type="checkbox" value="${value}" data-array-toggle="${base}.days" ${days.includes(value) ? 'checked' : ''}><span>${label}</span></label>`).join('')}</div><div class="form-grid two"><label>${labelTitle('Data inicial', 'startDate')}<input type="date" data-bind="${base}.startDate" value="${esc(item.startDate || '')}"></label><label>${labelTitle('Data final', 'endDate')}<input type="date" data-bind="${base}.endDate" value="${esc(item.endDate || '')}"></label><label>${labelTitle('Somente estas datas', 'onlyDates', '<small>Uma por linha</small>')}<textarea rows="2" data-type="list" data-bind="${base}.dates">${esc(listValue(item.dates))}</textarea></label><label>${labelTitle('Excluir estas datas', 'excludeDates', '<small>Uma por linha</small>')}<textarea rows="2" data-type="list" data-bind="${base}.excludeDates">${esc(listValue(item.excludeDates))}</textarea></label></div></div></details>`;
+    const recurrence = item.recurrenceType || 'none';
+    const recurrenceFields = recurrence === 'monthly_nth_weekday'
+      ? `<label>${labelTitle('Qual semana', 'recurrenceOrdinal')}<select data-type="number" data-bind="${base}.recurrenceOrdinal"><option value="1" ${Number(item.recurrenceOrdinal || 1) === 1 ? 'selected' : ''}>1ª</option><option value="2" ${Number(item.recurrenceOrdinal) === 2 ? 'selected' : ''}>2ª</option><option value="3" ${Number(item.recurrenceOrdinal) === 3 ? 'selected' : ''}>3ª</option><option value="4" ${Number(item.recurrenceOrdinal) === 4 ? 'selected' : ''}>4ª</option><option value="-1" ${Number(item.recurrenceOrdinal) === -1 ? 'selected' : ''}>Última</option></select></label><label>${labelTitle('Dia da semana', 'recurrenceWeekday')}<select data-type="number" data-bind="${base}.recurrenceWeekday">${[['0','Segunda'],['1','Terça'],['2','Quarta'],['3','Quinta'],['4','Sexta'],['5','Sábado'],['6','Domingo']].map(([v,l]) => `<option value="${v}" ${Number(item.recurrenceWeekday ?? 0) === Number(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`
+      : recurrence === 'every_n_days'
+        ? `<label>${labelTitle('A cada quantos dias', 'recurrenceEveryDays')}<input type="number" min="1" data-type="number" data-bind="${base}.recurrenceEveryDays" value="${esc(item.recurrenceEveryDays || 14)}"></label><label>${labelTitle('Data-base', 'recurrenceAnchorDate')}<input type="date" data-bind="${base}.recurrenceAnchorDate" value="${esc(item.recurrenceAnchorDate || new Date().toISOString().slice(0,10))}"></label>`
+        : '';
+    return `<details class="ss-advanced"><summary><span>Dias e datas${help('days')}</span></summary><div class="ss-advanced-body"><label class="check-row"><input type="checkbox" data-bind="${base}.enabled" ${item.enabled !== false ? 'checked' : ''}><span>Evento ativo${help('eventEnabled')}</span></label><div class="ss-day-filter-title">Dias da semana${help('days')}</div><div class="ss-day-picker">${DAY_OPTIONS.map(([value, label]) => `<label title="${esc(HELP_TEXT.days)}"><input type="checkbox" value="${value}" data-array-toggle="${base}.days" ${days.includes(value) ? 'checked' : ''}><span>${label}</span></label>`).join('')}</div><div class="form-grid two"><label>${labelTitle('Data inicial', 'startDate')}<input type="date" data-bind="${base}.startDate" value="${esc(item.startDate || '')}"></label><label>${labelTitle('Data final', 'endDate')}<input type="date" data-bind="${base}.endDate" value="${esc(item.endDate || '')}"></label><label>${labelTitle('Somente estas datas', 'onlyDates', '<small>Uma por linha</small>')}<textarea rows="2" data-type="list" data-bind="${base}.dates">${esc(listValue(item.dates))}</textarea></label><label>${labelTitle('Excluir estas datas', 'excludeDates', '<small>Uma por linha</small>')}<textarea rows="2" data-type="list" data-bind="${base}.excludeDates">${esc(listValue(item.excludeDates))}</textarea></label><label>${labelTitle('Recorrência avançada', 'recurrenceType')}<select data-bind="${base}.recurrenceType" data-rerender="true"><option value="none" ${recurrence === 'none' ? 'selected' : ''}>Sem recorrência extra</option><option value="monthly_nth_weekday" ${recurrence === 'monthly_nth_weekday' ? 'selected' : ''}>Uma semana do mês</option><option value="every_n_days" ${recurrence === 'every_n_days' ? 'selected' : ''}>A cada N dias</option></select></label>${recurrenceFields}</div></div></details>`;
   }
   function renderPlaybackAdvanced(base, item) {
     return `<details class="ss-advanced"><summary><span>Reprodução avançada${help('fallback')}</span></summary><div class="ss-advanced-body form-grid three"><label>${labelTitle('Título customizado', 'customTitle')}<input data-bind="${base}.customTitle" value="${esc(item.customTitle || '')}"></label><label>${labelTitle('Filler kind', 'fillerKind')}<input data-bind="${base}.fillerKind" value="${esc(item.fillerKind || '')}"></label><label>${labelTitle('Fallback Source', 'fallback')}<select data-bind="${base}.fallback">${sourceOptions(item.fallback)}</select></label><label>${labelTitle('Tentativas descartadas', 'discardAttempts')}<input type="number" min="0" data-type="number" data-bind="${base}.discardAttempts" value="${esc(item.discardAttempts ?? '')}"></label><label class="check-row"><input type="checkbox" data-bind="${base}.disableWatermarks" ${item.disableWatermarks ? 'checked' : ''}><span>Desativar watermarks nativos${help('disableWatermarks')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.trim" ${item.trim ? 'checked' : ''}><span>Permitir trim${help('trim')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.offlineTail" ${item.offlineTail ? 'checked' : ''}><span>Offline tail${help('offlineTail')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.allowOverrun" ${item.allowOverrun !== false ? 'checked' : ''}><span>Deixar o vídeo terminar${help('allowOverrun')}</span></label></div></details>`;
   }
 
+  function versionAtLeast(value, minimum) { const a = String(value || '').split('.').map(Number); const b = String(minimum).split('.').map(Number); for (let i = 0; i < 3; i += 1) { if ((a[i] || 0) > (b[i] || 0)) return true; if ((a[i] || 0) < (b[i] || 0)) return false; } return true; }
+
   function renderPadToNearest(base, item) {
     const hasFiller = Boolean(state.current.filler && String(state.current.filler.source || '').trim());
-    const hasMotor = state.current.templateVersion === LATEST_TEMPLATE_VERSION;
+    const hasMotor = versionAtLeast(state.current.templateVersion, '1.2.0');
     const enabled = hasFiller && hasMotor;
     const current = item.padToNearestMinutes === null || item.padToNearestMinutes === undefined ? '' : String(item.padToNearestMinutes);
     const reason = !hasMotor
-      ? `Atualize o motor para ${LATEST_TEMPLATE_VERSION} para usar esta opção.`
+      ? 'Atualize o motor para 1.2.0 ou mais recente para usar esta opção.'
       : (!hasFiller ? 'Configure o Filler do projeto para liberar esta opção.' : 'Ao terminar este bloco, o Filler completa até a próxima marca do relógio escolhida.');
     return `<details class="ss-advanced"><summary><span>Alinhamento após o bloco${help('padToNearest')}</span></summary><div class="ss-advanced-body form-grid two"><label>${labelTitle('Pad To Nearest Minute', 'padToNearest')}<select data-type="number" data-bind="${base}.padToNearestMinutes" ${enabled ? '' : 'disabled'}><option value="" ${current === '' ? 'selected' : ''}>Desativado</option>${PAD_TO_NEAREST_OPTIONS.map((minutes) => `<option value="${minutes}" ${current === String(minutes) ? 'selected' : ''}>${minutes} ${minutes === 5 ? '(:00, :05, :10, :15...)' : minutes === 10 ? '(:00, :10, :20, :30, :40, :50)' : minutes === 15 ? '(:00, :15, :30, :45)' : '(:00, :30)'}</option>`).join('')}</select><small>${esc(reason)}</small></label></div></details>`;
   }
@@ -922,11 +1026,10 @@
         if (item.padToNearestMinutes !== '' && item.padToNearestMinutes !== null && item.padToNearestMinutes !== undefined) {
           item.padToNearestMinutes = ''; cleared += 1;
         }
-        if (type === 'windowRotations') {
-          for (const entry of item.items || []) {
-            if (entry.padToNearestMinutes !== '' && entry.padToNearestMinutes !== null && entry.padToNearestMinutes !== undefined) {
-              entry.padToNearestMinutes = ''; cleared += 1;
-            }
+        const nested = type === 'windowRotations' ? item.items : type === 'choiceEvents' ? item.choices : type === 'clockTemplates' ? item.slots : [];
+        for (const entry of nested || []) {
+          if (entry.padToNearestMinutes !== '' && entry.padToNearestMinutes !== null && entry.padToNearestMinutes !== undefined) {
+            entry.padToNearestMinutes = ''; cleared += 1;
           }
         }
       }
@@ -936,7 +1039,7 @@
 
   function renderFiller() {
     const filler = state.current.filler;
-    return `<details class="card ss-section-card ss-section-accordion" ${accordionAttrs('programming:filler')}><summary class="ss-section-summary"><div><span class="eyebrow">Filler</span><h3>Preenchimento de lacunas</h3><p>Usado quando não existe outro evento e a Rotation está vazia.</p></div><span>${filler ? 'Ativo' : 'Desativado'}</span></summary><div class="ss-section-accordion-body"><div class="ss-section-actions"><button type="button" data-ss-action="toggle-filler">${filler ? 'Desativar Filler' : 'Ativar Filler'}</button></div>${filler ? `<div class="form-grid two">${sourceSelect('filler.source', filler.source, 'fillerSource')}${profileSelect('filler.presentation', filler.presentation, 'fillerPresentation')}</div>${renderPlaybackAdvanced('filler', filler)}` : '<div class="empty-state">Filler desativado. Lacunas sem outros módulos ficarão sem programação.</div>'}</div></details>`;
+    return `<details class="card ss-section-card ss-section-accordion" ${accordionAttrs('programming:filler')}><summary class="ss-section-summary"><div><span class="eyebrow">Filler</span><h3>Preenchimento de lacunas</h3><p>Última camada de preenchimento quando nenhum outro conteúdo de programação está ativo.</p></div><span>${filler ? 'Ativo' : 'Desativado'}</span></summary><div class="ss-section-accordion-body"><div class="ss-section-actions"><button type="button" data-ss-action="toggle-filler">${filler ? 'Desativar Filler' : 'Ativar Filler'}</button></div>${filler ? `<div class="form-grid two">${sourceSelect('filler.source', filler.source, 'fillerSource')}${profileSelect('filler.presentation', filler.presentation, 'fillerPresentation')}</div>${renderPlaybackAdvanced('filler', filler)}` : '<div class="empty-state">Filler desativado. Lacunas sem outros módulos ficarão sem programação.</div>'}</div></details>`;
   }
 
   function renderEditorSaveBar(sectionLabel) {
@@ -1011,5 +1114,11 @@
     catch { return String(value); }
   }
 
-  window.ScriptedSchedulesView = { init, refresh: reloadList };
+  async function home() {
+    state.current = null; state.tab = 'general'; state.validation = null; state.preview = ''; state.history = [];
+    state.openAccordions.clear(); state.modulePickerOpen = false; state.modulePickerSelection = '';
+    await reloadList();
+  }
+
+  window.ScriptedSchedulesView = { init, refresh: reloadList, home };
 })();

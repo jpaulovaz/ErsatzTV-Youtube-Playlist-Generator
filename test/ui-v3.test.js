@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.3\.1/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.3\.1/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.0/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.0/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -167,7 +167,7 @@ test('ErsatzTV settings validate the API Key through GET api version and show a 
 });
 
 
-test('Scripted Schedules is an isolated builder view with all Universal v1.2.0 modules', () => {
+test('Scripted Schedules is an isolated builder view with Universal v1.3.0 modules', () => {
   const html = read('index.html');
   const app = read('app.js');
   const view = read('js/scriptedSchedulesView.js');
@@ -177,20 +177,20 @@ test('Scripted Schedules is an isolated builder view with all Universal v1.2.0 m
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.3\.1/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.3\.1/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.4\.0/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.0/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
 
-  for (const moduleName of ['rotation', 'fixedEvents', 'fixedDurationEvents', 'fixedAllEvents', 'fixedWindowEvents', 'windowRotations', 'sequenceEvents', 'intervalEvents', 'dateEvents', 'offlineWindows']) {
+  for (const moduleName of ['rotation', 'countRotation', 'weightedRotation', 'continuousBlocks', 'contentBreaks', 'fitToWindow', 'fixedEvents', 'fixedDurationEvents', 'fixedAllEvents', 'fixedWindowEvents', 'windowRotations', 'sequenceEvents', 'intervalEvents', 'choiceEvents', 'clockTemplates', 'temporaryOverrides', 'dateEvents', 'offlineWindows']) {
     assert.match(view, new RegExp(`${moduleName}:`));
   }
   assert.match(view, /toggle-filler/);
   assert.match(view, /Presentation Profiles/);
   assert.match(view, /Scripted Playlists/);
   assert.match(view, /Grupos de Graphics/);
-  assert.match(view, /LATEST_TEMPLATE_VERSION = '1\.2\.0'/);
+  assert.match(view, /LATEST_TEMPLATE_VERSION = '1\.3\.0'/);
   assert.match(view, /Pad To Nearest Minute/);
   assert.match(view, /PAD_TO_NEAREST_OPTIONS = \[5, 10, 15, 30\]/);
   assert.match(view, /Configure o Filler do projeto para liberar esta opção/);
@@ -264,4 +264,44 @@ test('Scripted Schedules exposes post-block padding only on content modules and 
   const fillerRenderer = view.match(/function renderFiller\(\)[\s\S]*?function renderEditorSaveBar/);
   assert.ok(fillerRenderer && !fillerRenderer[0].includes('renderPadToNearest'), 'Filler itself must not expose Pad To Nearest Minute');
   assert.match(view, /clearPadToNearestSettings/);
+});
+
+
+test('sidebar navigation always returns each section to its home state', () => {
+  const app = read('app.js');
+  const channels = read('js/channelsView.js');
+  const schedules = read('js/scriptedSchedulesView.js');
+  assert.match(app, /async function goToViewHome\(view\)/);
+  assert.match(app, /ScriptedSchedulesView\?\.home/);
+  assert.match(app, /ChannelView\?\.home/);
+  assert.match(app, /library-accordion/);
+  assert.match(app, /downloadsAccordion/);
+  assert.match(app, /settings-accordion/);
+  assert.match(channels, /function home\(\)[\s\S]*editingChannelId = ''/);
+  assert.match(schedules, /async function home\(\)[\s\S]*state\.current = null/);
+});
+
+test('Help is a separate sidebar area with beginner tabs, practical module examples and combinations', () => {
+  const html = read('index.html');
+  const help = read('js/helpView.js');
+  assert.match(html, /data-view="help"/);
+  assert.match(html, /id="view-help"/);
+  assert.match(html, /helpView\.js\?v=3\.4\.0/);
+  for (const tab of ['Começando', 'Recursos', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));
+  for (const name of ['Rotação por quantidade', 'Rotação por peso', 'Bloco contínuo por horário', 'Inserções após X itens', 'Encaixar até o próximo evento', 'Escolha entre fontes', 'Relógio de programação', 'Programação especial temporária']) assert.match(help, new RegExp(name));
+  assert.match(help, /Combina bem com/);
+  assert.match(help, /Exemplo simples/);
+  assert.match(help, /Fallback Source/);
+});
+
+test('module selection uses a descriptive modal instead of an inline picklist', () => {
+  const view = read('js/scriptedSchedulesView.js');
+  const css = read('scripted-schedules.css');
+  assert.match(view, /data-ss-action="open-module-picker"/);
+  assert.match(view, /function renderModulePickerModal/);
+  assert.match(view, /data-ss-action="select-module"/);
+  assert.match(view, /Combina bem com/);
+  assert.doesNotMatch(view, /id="ssModulePicker"/);
+  assert.match(css, /\.ss-module-modal-backdrop/);
+  assert.match(css, /\.ss-module-picker-description/);
 });

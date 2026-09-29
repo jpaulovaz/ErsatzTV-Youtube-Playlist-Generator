@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.3.1
+# ErsatzTV YouTube Downloader 3.4.0
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.3.1 melhora a usabilidade de **Scripted Schedules** com ajuda contextual em todos os grupos de configuração. Pequenos ícones `?` explicam cada campo em linguagem simples e mostram exemplos práticos quando isso ajuda, sem alterar o motor Universal v1.2.0 nem a lógica dos scripts gerados.
+A versão 3.4.0 amplia **Scripted Schedules** com o motor **Universal v1.3.0**, 18 tipos de módulo, recorrência avançada, novos modelos de programação-base e uma área de **Ajuda** escrita para leigos. O seletor de módulos passa a ser um modal explicativo e o menu lateral sempre retorna ao início da seção escolhida.
 
 ## Arquitetura
 
@@ -51,8 +51,9 @@ Biblioteca local do ErsatzTV
 - Seleção de Canal do ErsatzTV por nome, carregada automaticamente por `GET /api/channels`; o número do canal fica interno.
 - Integração com Smart Collections: criar nova, agregar `library_id` a uma query existente ou substituir a query.
 - Validação automática da API Key do ErsatzTV por `GET /api/version`, com exibição compacta da versão conectada em Configurações.
-- Nova área **Scripted Schedules** com vários projetos independentes, 10 tipos de módulo de programação, Filler opcional e geração de Python sem edição manual de código.
+- Área **Scripted Schedules** com vários projetos independentes, **18 tipos de módulo**, Filler opcional, motor Universal versionado e geração de Python sem edição manual de código.
 - Publicação atômica dos scripts em pasta configurável, com validação, SHA-256, backup e histórico para restauração.
+- Menu **Ajuda** com explicações simples, exemplos de módulos, combinações sugeridas e glossário de termos do Scripted Schedule.
 - Limpeza manual de órfãos.
 - Migração automática da configuração da versão 1.
 
@@ -205,17 +206,44 @@ Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando
 
 ## Scripted Schedules
 
-A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do motor interno **Universal v1.2.0**.
+A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir de um motor Universal versionado. **Novos projetos usam Universal v1.3.0**; projetos antigos em v1.1.1/v1.2.0 não são atualizados silenciosamente.
 
-O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos podem ser cadastrados grupos de Graphics, Sources, Scripted Playlists e Presentation Profiles. Em Programação, somente os módulos escolhidos aparecem na tela. Estão disponíveis Rotation, Horário + quantidade, Horário + duração, Todos os itens, Janela, Rotação em janela, Sequência, Intervalo, Data específica, Offline e Filler. Nenhum módulo é obrigatório.
+O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos podem ser cadastrados grupos de Graphics, Sources, Scripted Playlists e Presentation Profiles. Em Programação, somente os módulos escolhidos aparecem. O botão **Adicionar módulo** abre um modal com nome amigável, descrição curta e sugestão de combinação.
 
-Nos módulos que reproduzem conteúdo, cada bloco/evento pode habilitar manualmente **Pad To Nearest Minute** com marcas de 5, 10, 15 ou 30 minutos. A opção nasce desativada, reutiliza o Filler do próprio projeto e só fica disponível quando esse Filler possui uma Source configurada. Assim, um mesmo canal pode misturar blocos com e sem alinhamento sem criar Fillers duplicados. OFFLINE_WINDOWS e o próprio Filler não exibem essa opção.
+Módulos disponíveis na v3.4.0:
+
+- **Rotação por tempo**: alterna Sources por blocos de minutos.
+- **Rotação por quantidade**: alterna depois de X itens.
+- **Rotação por peso**: escolhe Sources por proporção.
+- **Bloco contínuo por horário**: uma Source vira a programação-base a partir de um horário, sem horário de término; eventos entram no meio e depois a base volta.
+- **Inserções após X itens**: exemplo 4 músicas -> 1 vinheta -> repete.
+- **Encaixar até o próximo evento**: tenta ocupar o espaço disponível antes do próximo horário com itens que caibam sem corte.
+- **Horário fixo · quantidade**.
+- **Horário fixo · duração**.
+- **Horário fixo · todos os itens**.
+- **Faixa de horário · fonte única**.
+- **Faixa de horário · rotação**.
+- **Sequência programada**.
+- **Repetição por intervalo**.
+- **Escolha entre fontes**.
+- **Relógio de programação**: posições repetidas em um ciclo, como :00, :15, :30 e :45.
+- **Programação especial temporária**: uma Source assume entre duas datas/horas e depois a grade normal volta.
+- **Evento em data específica**.
+- **Janela offline**.
+
+O **Filler** permanece separado dos módulos e é opcional. Programações de fundo como rotações, Bloco contínuo e Inserções após X itens são alternativas de programação-base; o validador avisa quando várias bases são configuradas ao mesmo tempo. Eventos fixos podem ser colocados por cima da base usando prioridade e horários.
+
+Os filtros de dias e datas também suportam **recorrência avançada**, incluindo primeira/segunda/terceira/quarta/última ocorrência de um dia da semana no mês e repetição a cada N dias.
+
+Nos módulos em que existe um término natural, cada bloco/evento pode habilitar manualmente **Pad To Nearest Minute** com marcas de 5, 10, 15 ou 30 minutos. A opção nasce desativada, reutiliza o Filler do próprio projeto e só fica disponível quando esse Filler possui uma Source configurada. Assim, um mesmo canal pode misturar blocos com e sem alinhamento sem criar Fillers duplicados. Janela offline, Filler, Bloco contínuo e o módulo Encaixar até o próximo evento não precisam desse pós-bloco.
 
 A pasta de saída é configurada na própria área. O backend aceita apenas arquivos `.py` dentro dessa raiz. Ao publicar, o aplicativo valida as referências, gera o script de forma determinística, tenta executar `python3 <script> --validate-config`, cria backup do arquivo anterior, troca o arquivo de forma atômica e registra hash/histórico.
 
 Smart Collections e Canais são carregados pelo nome quando a API do ErsatzTV está disponível. Cada vínculo de canal possui um `state_key` próprio. O primeiro cadastro do caminho do Scripted Schedule no Playout continua manual, porque a API pública da v26.10.0 não expõe esse cadastro. Depois do primeiro vínculo, novas publicações mantêm o mesmo arquivo atualizado.
 
 **Reset Playout** é uma ação separada e destrutiva. Publicar um script nunca dispara reset automaticamente.
+
+A opção lateral **Ajuda** possui explicações simples de Recursos, todos os módulos, combinações sugeridas, publicação e termos técnicos. Os `?` contextuais continuam disponíveis diretamente ao lado dos campos.
 
 Os dados do builder ficam em `data/scripted-schedules/` e não alteram o `configVersion` principal da aplicação.
 

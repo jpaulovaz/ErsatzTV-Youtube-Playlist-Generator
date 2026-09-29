@@ -843,5 +843,16 @@
     render();
   }
 
-  global.ChannelView = { init, render, update };
+  function home() {
+    editingChannelId = '';
+    catalog = null;
+    const input = $('#channelUrlInput');
+    if (input) input.value = '';
+    const result = $('#channelAnalyzeResult');
+    if (result) result.innerHTML = '';
+    showEditor(false);
+    render();
+  }
+
+  global.ChannelView = { init, render, update, home };
 })(window);

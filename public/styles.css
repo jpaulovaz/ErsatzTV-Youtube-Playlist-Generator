@@ -1824,3 +1824,23 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
 @media (max-width: 760px) and (prefers-reduced-motion: reduce) {
   .sidebar { transition: none; scroll-behavior: auto; }
 }
+
+/* v3.4.0 - Ajuda */
+.help-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 18px; }
+.help-tabs button.active { background: var(--accent, #477fe8); color: #fff; border-color: transparent; }
+.help-body { display: grid; gap: 16px; }
+.help-lead, .help-note { padding: 22px; }
+.help-lead h3, .help-note h3 { margin-top: 4px; }
+.help-steps { display: grid; gap: 10px; margin-top: 18px; }
+.help-steps > div { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; }
+.help-steps strong { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; border: 1px solid currentColor; }
+.help-module-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.help-module-card { padding: 18px; }
+.help-module-card h3 { margin: 5px 0 10px; }
+.help-module-card p { line-height: 1.55; }
+.help-example { display: grid; gap: 4px; margin: 12px 0; padding: 12px; border-radius: 10px; background: rgba(127,127,127,.08); }
+.help-example span { line-height: 1.45; }
+.help-glossary { display: grid; gap: 10px; }
+.help-glossary article { padding: 16px 18px; }
+.help-glossary h3 { margin: 0 0 6px; }
+.help-glossary p { margin: 0; line-height: 1.5; }

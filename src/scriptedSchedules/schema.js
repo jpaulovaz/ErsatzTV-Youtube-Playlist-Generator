@@ -2,8 +2,8 @@ const path = require('path');
 const { ROOT_DIR } = require('../config');
 
 const MODULE_SCHEMA_VERSION = 1;
-const TEMPLATE_VERSION = '1.2.0';
-const SUPPORTED_TEMPLATE_VERSIONS = ['1.1.1', '1.2.0'];
+const TEMPLATE_VERSION = '1.3.0';
+const SUPPORTED_TEMPLATE_VERSIONS = ['1.1.1', '1.2.0', '1.3.0'];
 const DEFAULT_OUTPUT_ROOT = path.join(ROOT_DIR, 'data', 'scripted-schedules', 'published');
 const HISTORY_LIMIT = 10;
 
@@ -67,6 +67,11 @@ function defaultProject(id, options = {}) {
     ],
     modules: {
       rotation: [],
+      countRotation: [],
+      weightedRotation: [],
+      continuousBlocks: [],
+      contentBreaks: [],
+      fitToWindow: [],
       fixedEvents: [],
       fixedDurationEvents: [],
       fixedAllEvents: [],
@@ -74,6 +79,9 @@ function defaultProject(id, options = {}) {
       windowRotations: [],
       sequenceEvents: [],
       intervalEvents: [],
+      choiceEvents: [],
+      clockTemplates: [],
+      temporaryOverrides: [],
       dateEvents: [],
       offlineWindows: []
     },
@@ -88,6 +96,25 @@ function defaultProject(id, options = {}) {
   };
 }
 
+function hydrateProject(project) {
+  if (!project || typeof project !== 'object') return project;
+  const base = defaultProject(String(project.id || 'unknown'), {
+    name: project.name,
+    fileName: project.fileName
+  });
+  return {
+    ...base,
+    ...project,
+    channelLinks: Array.isArray(project.channelLinks) ? project.channelLinks : [],
+    graphicsGroups: Array.isArray(project.graphicsGroups) ? project.graphicsGroups : [],
+    sources: Array.isArray(project.sources) ? project.sources : [],
+    scriptedPlaylists: Array.isArray(project.scriptedPlaylists) ? project.scriptedPlaylists : [],
+    presentationProfiles: Array.isArray(project.presentationProfiles) ? project.presentationProfiles : base.presentationProfiles,
+    modules: { ...base.modules, ...(project.modules && typeof project.modules === 'object' ? project.modules : {}) },
+    options: { ...base.options, ...(project.options && typeof project.options === 'object' ? project.options : {}) }
+  };
+}
+
 function defaultSettings() {
   return {
     schemaVersion: MODULE_SCHEMA_VERSION,
@@ -99,6 +126,11 @@ function defaultSettings() {
 
 const MODULE_TYPES = [
   'rotation',
+  'countRotation',
+  'weightedRotation',
+  'continuousBlocks',
+  'contentBreaks',
+  'fitToWindow',
   'fixedEvents',
   'fixedDurationEvents',
   'fixedAllEvents',
@@ -106,6 +138,9 @@ const MODULE_TYPES = [
   'windowRotations',
   'sequenceEvents',
   'intervalEvents',
+  'choiceEvents',
+  'clockTemplates',
+  'temporaryOverrides',
   'dateEvents',
   'offlineWindows'
 ];
@@ -118,6 +153,7 @@ module.exports = {
   HISTORY_LIMIT,
   MODULE_TYPES,
   defaultProject,
+  hydrateProject,
   defaultSettings,
   slugKey,
   slugFile,

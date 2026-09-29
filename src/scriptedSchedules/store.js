@@ -2,7 +2,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
 const { ROOT_DIR } = require('../config');
-const { defaultProject, defaultSettings, MODULE_SCHEMA_VERSION, nowIso } = require('./schema');
+const { defaultProject, hydrateProject, defaultSettings, MODULE_SCHEMA_VERSION, nowIso } = require('./schema');
 
 const BASE_DIR = path.join(ROOT_DIR, 'data', 'scripted-schedules');
 const SETTINGS_PATH = path.join(BASE_DIR, 'settings.json');
@@ -83,18 +83,18 @@ async function getProject(id) {
     error.statusCode = 404;
     throw error;
   }
-  return project;
+  return hydrateProject(project);
 }
 
 async function saveProject(project) {
   await ensureBase();
   const current = await readJson(projectPath(project.id), null);
-  const next = {
+  const next = hydrateProject({
     ...project,
     schemaVersion: MODULE_SCHEMA_VERSION,
     createdAt: current && current.createdAt || project.createdAt || nowIso(),
     updatedAt: nowIso()
-  };
+  });
   await atomicJsonWrite(projectPath(next.id), next);
   return next;
 }

@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.3.1 - pacote de atualização
+ErsatzTV YouTube Downloader 3.4.0 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.3.0.
+Extraia este ZIP sobre uma instalação v3.3.1.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,10 +9,12 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principais mudanças:
-- ajuda contextual discreta em toda a configuração de Scripted Schedules;
-- explicações em linguagem simples com exemplos práticos quando necessário;
-- Filler kind, Fallback Source e demais opções avançadas agora documentadas diretamente na interface;
-- controles em linha ganham rótulos curtos e ajuda;
-- nenhuma alteração no motor Universal, schema ou scripts já configurados.
+- Universal v1.3.0 e 18 tipos de módulo no Builder de Scripted Schedules;
+- novos blocos: rotação por quantidade/peso, bloco contínuo, inserções após X itens, encaixe até o próximo evento, escolha entre fontes, relógio e programação temporária;
+- recorrência avançada em dias/datas;
+- novo menu Ajuda, escrito em linguagem simples, com exemplos e combinações;
+- seletor de módulos em modal com descrição curta;
+- menu lateral sempre retorna à tela inicial da seção escolhida;
+- projetos existentes em Universal v1.1.1/v1.2.0 não são atualizados silenciosamente.
 
 Consulte UPGRADE.md antes da atualização.

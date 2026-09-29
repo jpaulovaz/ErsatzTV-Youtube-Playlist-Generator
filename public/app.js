@@ -17,7 +17,7 @@ const ERSATZTV_VERSION_DEBOUNCE_MS = 650;
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
-const APP_VIEWS = new Set(['overview', 'downloads', 'libraries', 'channels', 'scripted-schedules', 'settings', 'logs']);
+const APP_VIEWS = new Set(['overview', 'downloads', 'libraries', 'channels', 'scripted-schedules', 'help', 'settings', 'logs']);
 const MOBILE_NAV_BREAKPOINT = 760;
 const MOBILE_NAV_IDLE_MS = 3600;
 const MOBILE_NAV_SCROLL_THRESHOLD = 8;
@@ -156,6 +156,30 @@ function setActiveView(view, { persist = true, scroll = false } = {}) {
   setMobileActionSheet(false);
   if (isMobileNavMode()) showMobileNav({ scheduleHide: true, centerActive: true });
   if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function goToViewHome(view) {
+  const nextView = APP_VIEWS.has(view) ? view : 'overview';
+  setActiveView(nextView, { scroll: true });
+  if (nextView === 'downloads') {
+    const accordion = $('#downloadsAccordion');
+    if (accordion) accordion.open = false;
+    if ($('#downloadFilter')) $('#downloadFilter').value = 'all';
+    if ($('#downloadLibraryFilter')) $('#downloadLibraryFilter').value = '';
+  } else if (nextView === 'libraries') {
+    $$('.library-accordion').forEach((item) => { item.open = false; });
+  } else if (nextView === 'channels') {
+    await window.ChannelView?.home?.();
+  } else if (nextView === 'scripted-schedules') {
+    await window.ScriptedSchedulesView?.home?.();
+  } else if (nextView === 'help') {
+    window.HelpView?.home?.();
+  } else if (nextView === 'settings') {
+    $$('.settings-accordion').forEach((item) => { item.open = false; });
+    updateSettingsAccordionToggle();
+  } else if (nextView === 'logs') {
+    await refreshLogs();
+  }
 }
 
 function updateSettingsAccordionToggle() {
@@ -764,7 +788,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '3.3.1'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '3.4.0'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -1178,7 +1202,7 @@ async function toggleQueueFrom(button) {
 
 function bindEvents() {
   $$('.nav-button[data-view]').forEach((button) => {
-    button.addEventListener('click', () => setActiveView(button.dataset.view, { scroll: true }));
+    button.addEventListener('click', () => goToViewHome(button.dataset.view).catch((error) => showToast(error.message, true)));
   });
 
   $('#settingsAccordionToggle').addEventListener('click', () => {
@@ -1390,6 +1414,7 @@ async function bootstrap() {
   if (window.ScriptedSchedulesView) {
     await window.ScriptedSchedulesView.init({ api, showToast, showDialog: showAppDialog });
   }
+  if (window.HelpView) window.HelpView.init();
   setInterval(() => refreshAll(false), 4000);
 }
 

@@ -335,3 +335,26 @@ button.ghost { background: transparent; }
   .ss-mini-help { margin-left: 0; width: 100%; }
   .ss-help-popover { width: min(320px, calc(100vw - 24px)); }
 }
+
+/* v3.4.0 - seletor de módulos */
+.ss-module-modal-backdrop {
+  position: fixed; inset: 0; z-index: 2200; background: rgba(5, 10, 18, .72);
+  display: grid; place-items: center; padding: 20px;
+}
+.ss-module-modal {
+  width: min(980px, 96vw); max-height: min(780px, 92vh); overflow: auto;
+  background: var(--panel, #111923); border: 1px solid var(--border, #2a3442); border-radius: 16px; padding: 22px;
+  box-shadow: 0 24px 80px rgba(0,0,0,.45);
+}
+.ss-module-picker-layout { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(300px, .9fr); gap: 18px; }
+.ss-module-picker-list { display: grid; gap: 8px; max-height: 55vh; overflow: auto; padding-right: 4px; }
+.ss-module-picker-item { text-align: left; display: grid; gap: 4px; padding: 12px 14px; border-radius: 10px; }
+.ss-module-picker-item span { font-size: .82rem; opacity: .74; line-height: 1.35; }
+.ss-module-picker-item.active { outline: 2px solid var(--accent, #78a8ff); }
+.ss-module-picker-description { min-height: 230px; border: 1px solid var(--border, #2a3442); border-radius: 12px; padding: 18px; }
+.ss-module-picker-description h3 { margin: 6px 0 10px; }
+@media (max-width: 760px) {
+  .ss-module-picker-layout { grid-template-columns: 1fr; }
+  .ss-module-modal { padding: 16px; }
+  .ss-module-picker-list { max-height: 35vh; }
+}

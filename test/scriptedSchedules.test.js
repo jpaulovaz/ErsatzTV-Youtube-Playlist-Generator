@@ -52,18 +52,18 @@ async function validateWithPython(script) {
   }
 }
 
-test('Scripted Schedule golden music project generates a valid Universal v1.2.0 script', async () => {
+test('Scripted Schedule golden music project generates a valid Universal v1.3.0 script', async () => {
   const project = musicProject();
   assert.deepEqual(validateProject(project).errors, []);
   const script = await generateScript(project);
-  assert.match(script, /SCRIPT_VERSION = "1\.2\.0"/);
+  assert.match(script, /SCRIPT_VERSION = "1\.3\.0"/);
   assert.match(script, /DEFAULT_ROTATION_DURATION_MINUTES = 60/);
   assert.match(script, /"duration_minutes": 30/);
   assert.match(script, /"420 - CONCERTS"/);
   assert.match(script, /text\/youtube_credits_music_atual\.yml/);
   const output = await validateWithPython(script);
   assert.match(output, /configuracao valida/);
-  assert.match(output, /ROTATION=True/);
+  assert.match(output, /ROTATION=2/);
   assert.match(output, /FIXED_EVENTS=2/);
 });
 
@@ -132,7 +132,7 @@ test('Pad To Nearest Minute is generated for content modules and absent from Off
 });
 
 
-test('Universal v1.2.0 post padding uses ErsatzTV pad_to_next and does nothing on an exact mark', async () => {
+test('Universal v1.3.0 post padding uses ErsatzTV pad_to_next and does nothing on an exact mark', async () => {
   const project = musicProject();
   project.modules.fixedEvents[0].padToNearestMinutes = 15;
   const script = await generateScript(project);
@@ -210,6 +210,83 @@ test('all modules are optional and an intentional gap is warning, not an error',
   const result = validateProject(project);
   assert.equal(result.ok, true);
   assert.ok(result.warnings.some((item) => /sem programacao/i.test(item.message)));
+});
+
+
+test('Universal v1.3.0 validates every new programming module together', async () => {
+  const project = musicProject();
+  project.modules.countRotation = [{ source: 'TOP', count: 3, presentation: 'music', padToNearestMinutes: 5 }];
+  project.modules.weightedRotation = [
+    { source: 'TOP', weight: 3, avoidRepeat: true, presentation: 'music' },
+    { source: 'BASTILLE', weight: 1, avoidRepeat: true, presentation: 'music' }
+  ];
+  project.modules.continuousBlocks = [{ id: 'base_day', startTime: '06:00', source: 'TOP', priority: 10, presentation: 'music', enabled: true, days: [] }];
+  project.modules.contentBreaks = [{ id: 'ids', source: 'TOP', everyItems: 4, breakSource: 'CONCERTS', breakCount: 1, priority: 10, presentation: 'music', breakPresentation: 'common', enabled: true, days: [], padToNearestMinutes: 10 }];
+  project.modules.fitToWindow = [{ id: 'fit', startTime: '00:00', endTime: '00:00', source: 'TOP', lookAheadMinutes: 45, discardAttempts: 4, useFillerRemainder: true, priority: 20, presentation: 'music', enabled: true, days: [] }];
+  project.modules.choiceEvents = [{ id: 'movie_choice', time: '21:00', mode: 'count', count: 1, selection: 'weighted', choices: [{ source: 'CONCERTS', weight: 2, presentation: 'common' }, { source: 'TOP', weight: 1, presentation: 'music' }], priority: 180, presentation: 'common', enabled: true, days: [] }];
+  project.modules.clockTemplates = [{ id: 'clock', startTime: '00:00', endTime: '00:00', cycleMinutes: 60, priority: 170, presentation: 'common', enabled: true, days: [], slots: [{ offsetMinutes: 0, mode: 'count', source: 'CONCERTS', count: 1, presentation: 'common' }, { offsetMinutes: 30, mode: 'duration', source: 'TOP', durationMinutes: 10, presentation: 'music' }] }];
+  project.modules.temporaryOverrides = [{ id: 'xmas', startDatetime: '2026-12-24 18:00', endDatetime: '2026-12-26 06:00', source: 'CONCERTS', priority: 500, presentation: 'common', enabled: true, days: [] }];
+  project.modules.fixedEvents[0].recurrenceType = 'monthly_nth_weekday';
+  project.modules.fixedEvents[0].recurrenceOrdinal = 1;
+  project.modules.fixedEvents[0].recurrenceWeekday = 0;
+
+  const validation = validateProject(project);
+  assert.equal(validation.ok, true, JSON.stringify(validation.errors));
+  const script = await generateScript(project);
+  for (const token of ['COUNT_ROTATION', 'WEIGHTED_ROTATION', 'CONTINUOUS_BLOCKS', 'CONTENT_BREAKS', 'FIT_TO_WINDOW', 'CHOICE_EVENTS', 'CLOCK_TEMPLATES', 'TEMPORARY_OVERRIDES']) {
+    assert.match(script, new RegExp(`${token}: list`));
+  }
+  assert.match(script, /recurrence_type/);
+  assert.match(script, /def run_continuous_block/);
+  assert.match(script, /def run_fit_to_window/);
+  const output = await validateWithPython(script);
+  assert.match(output, /configuracao valida/);
+  assert.match(output, /CONTINUOUS_BLOCKS=1/);
+  assert.match(output, /CLOCK_TEMPLATES=1/);
+});
+
+test('new v1.3.0 modules do not silently upgrade an older project', async () => {
+  const project = musicProject();
+  project.templateVersion = '1.2.0';
+  let validation = validateProject(project);
+  assert.equal(validation.ok, true, JSON.stringify(validation.errors));
+  let script = await generateScript(project);
+  assert.match(script, /SCRIPT_VERSION = "1\.2\.0"/);
+
+  project.modules.continuousBlocks = [{ id: 'base', startTime: '06:00', source: 'TOP', priority: 10, presentation: 'music', enabled: true, days: [] }];
+  validation = validateProject(project);
+  assert.equal(validation.ok, false);
+  assert.ok(validation.errors.some((item) => item.path === 'templateVersion' && /1\.3\.0/.test(item.message)));
+});
+
+test('continuous blocks find the latest start marker and Fit To Window targets the next scheduled event', async () => {
+  const project = musicProject();
+  project.modules.rotation = [];
+  project.modules.continuousBlocks = [
+    { id: 'morning', startTime: '06:00', source: 'TOP', priority: 10, presentation: 'music', enabled: true, days: [] },
+    { id: 'night', startTime: '18:00', source: 'BASTILLE', priority: 10, presentation: 'music', enabled: true, days: [] }
+  ];
+  project.modules.fitToWindow = [{ id: 'fit', startTime: '00:00', endTime: '00:00', source: 'TOP', lookAheadMinutes: 45, discardAttempts: 3, useFillerRemainder: true, priority: 20, presentation: 'music', enabled: true, days: [] }];
+  project.modules.fixedEvents = [{ id: 'fixed', time: '20:00', source: 'CONCERTS', count: 1, priority: 100, presentation: 'common', enabled: true, days: [] }];
+  const script = await generateScript(project);
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'scripted-v13-runtime-'));
+  const scheduleFile = path.join(dir, 'schedule.py');
+  const probeFile = path.join(dir, 'probe.py');
+  await fsp.writeFile(scheduleFile, script, 'utf8');
+  await fsp.writeFile(probeFile, `
+import importlib.util, json, sys
+from datetime import datetime
+spec=importlib.util.spec_from_file_location("schedule", sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+now=datetime.fromisoformat("2026-09-28T19:30:00+00:00")
+active=m.active_continuous_block(now)
+fit=m.active_fit_to_window(now, datetime.fromisoformat("2026-09-28T21:00:00+00:00"))
+print(json.dumps({"continuous": active[1]["source"] if active else None, "fit_target": fit[2].isoformat() if fit else None}))
+`, 'utf8');
+  try {
+    const output = JSON.parse(execFileSync('python3', [probeFile, scheduleFile], { encoding: 'utf8' }));
+    assert.equal(output.continuous, 'BASTILLE');
+    assert.equal(output.fit_target, '2026-09-28T20:00:00+00:00');
+  } finally { await fsp.rm(dir, { recursive: true, force: true }); }
 });
 
 test('generator safely quotes queries and paths instead of producing free Python code', async () => {
