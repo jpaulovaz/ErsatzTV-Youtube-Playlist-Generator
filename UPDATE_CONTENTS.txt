@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.4.1 - pacote de atualização
+ErsatzTV YouTube Downloader 3.4.2 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.4.0.
+Extraia este ZIP sobre uma instalação v3.4.1.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,11 +9,11 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principais mudanças:
-- Ajuda de Scripted Schedules movida para o grupo lateral Programação;
-- tela de Ajuda explicitamente identificada como conteúdo de Scripted Schedules;
-- modal Adicionar módulo simplificado: somente nomes à esquerda;
-- descrição e combinações concentradas no painel direito;
-- layout do modal corrigido para evitar overflow horizontal e sobreposição visual.
+- modal Adicionar módulo informa onde Pad To Nearest Minute não se aplica;
+- Ajuda dos módulos mostra as mesmas regras em linguagem simples;
+- Horário fixo · todos os itens deixa claro que o Pad ocorre depois de todos os itens;
+- Faixa de horário · rotação e Relógio de programação indicam onde o Pad fica nas etapas/posições internas.
+- a Ajuda deixa claro que o Pad atua ao fim do bloco configurado; se o bloco tocar 3 itens, entra depois do terceiro.
 
 Sem alteração de schema ou do motor Universal v1.3.0.
 

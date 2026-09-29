@@ -1,23 +1,23 @@
 (() => {
   const MODULE_META = {
-    rotation: { label: 'Rotação por tempo', hint: 'Alterna Sources por blocos de minutos.', combines: 'Eventos fixos, Filler e Pad To Nearest.' },
-    countRotation: { label: 'Rotação por quantidade', hint: 'Alterna Sources depois de tocar uma quantidade de itens.', combines: 'Eventos fixos e Filler. Use como alternativa à Rotação por tempo.' },
-    weightedRotation: { label: 'Rotação por peso', hint: 'Escolhe Sources por proporção, sem uma ordem rígida.', combines: 'Eventos fixos e Filler. Use como programação-base quando quiser variedade por proporção.' },
-    continuousBlocks: { label: 'Bloco contínuo por horário', hint: 'A partir de um horário, toca uma Source sem duração final.', combines: 'Eventos fixos: eles entram e, ao terminar, o bloco contínuo volta.' },
-    contentBreaks: { label: 'Inserções após X itens', hint: 'Toca uma inserção depois de uma quantidade de itens principais.', combines: 'Eventos fixos e Filler. Ele próprio faz a sequência principal → inserção → principal.' },
-    fitToWindow: { label: 'Encaixar até o próximo evento', hint: 'Tenta usar conteúdo que caiba no tempo disponível antes do próximo horário.', combines: 'Eventos fixos e Filler para fechar pequenos espaços.' },
-    fixedEvents: { label: 'Horário fixo · quantidade', hint: 'Em um horário, toca uma quantidade definida de itens.', combines: 'Bloco contínuo, rotações e Pad To Nearest.' },
-    fixedDurationEvents: { label: 'Horário fixo · duração', hint: 'Em um horário, toca por X minutos e guarda o saldo se for interrompido.', combines: 'Bloco contínuo e eventos de prioridade maior.' },
-    fixedAllEvents: { label: 'Horário fixo · todos os itens', hint: 'Em um horário, toca todos os itens da Source antes de liberar outro módulo.', combines: 'Especiais e maratonas completas.' },
-    fixedWindowEvents: { label: 'Faixa de horário · fonte única', hint: 'Toca uma Source somente dentro de uma faixa de horário.', combines: 'Programação por turnos e eventos fixos.' },
-    windowRotations: { label: 'Faixa de horário · rotação', hint: 'Alterna Sources somente dentro de uma faixa de horário.', combines: 'Manhã/tarde/noite com estilos diferentes.' },
-    sequenceEvents: { label: 'Sequência programada', hint: 'Executa vários passos na ordem que você montar.', combines: 'Vinheta + programa + intervalo + Pad.' },
-    intervalEvents: { label: 'Repetição por intervalo', hint: 'Repete um evento a cada X minutos dentro de uma faixa.', combines: 'Station IDs, promos e chamadas periódicas.' },
-    choiceEvents: { label: 'Escolha entre fontes', hint: 'No horário marcado, escolhe uma das Sources disponíveis.', combines: 'Sessões de filme, sorteios de faixa e programação variada.' },
-    clockTemplates: { label: 'Relógio de programação', hint: 'Repete posições dentro de um ciclo, como :00, :15, :30 e :45.', combines: 'Rádio/TV linear, IDs, promos e blocos de conteúdo.' },
-    temporaryOverrides: { label: 'Programação especial temporária', hint: 'Uma Source assume entre uma data/hora inicial e final e depois a grade normal volta.', combines: 'Natal, maratonas, eventos e semanas temáticas.' },
-    dateEvents: { label: 'Evento em data específica', hint: 'Executa uma vez em uma data e hora exatas.', combines: 'Especiais, estreias e eventos únicos.' },
-    offlineWindows: { label: 'Janela offline', hint: 'Reserva uma faixa de horário sem programação.', combines: 'Manutenção e períodos em que o canal deve ficar sem conteúdo.' }
+    rotation: { label: 'Rotação por tempo', hint: 'Alterna Sources por blocos de minutos.', combines: 'Eventos fixos, Filler e Pad To Nearest.', pad: 'direct' },
+    countRotation: { label: 'Rotação por quantidade', hint: 'Alterna Sources depois de tocar uma quantidade de itens.', combines: 'Eventos fixos e Filler. Use como alternativa à Rotação por tempo.', pad: 'direct' },
+    weightedRotation: { label: 'Rotação por peso', hint: 'Escolhe Sources por proporção, sem uma ordem rígida.', combines: 'Eventos fixos e Filler. Use como programação-base quando quiser variedade por proporção.', pad: 'direct' },
+    continuousBlocks: { label: 'Bloco contínuo por horário', hint: 'A partir de um horário, toca uma Source sem duração final.', combines: 'Eventos fixos: eles entram e, ao terminar, o bloco contínuo volta.', pad: 'none', padNote: 'Não se aplica aqui, porque este bloco não termina sozinho.' },
+    contentBreaks: { label: 'Inserções após X itens', hint: 'Toca uma inserção depois de uma quantidade de itens principais.', combines: 'Eventos fixos e Filler. Ele próprio faz a sequência principal → inserção → principal.', pad: 'direct' },
+    fitToWindow: { label: 'Encaixar até o próximo evento', hint: 'Tenta usar conteúdo que caiba no tempo disponível antes do próximo horário.', combines: 'Eventos fixos e Filler para fechar pequenos espaços.', pad: 'none', padNote: 'Não se aplica aqui, porque este módulo já trabalha até o próximo evento e pode usar Filler para a sobra.' },
+    fixedEvents: { label: 'Horário fixo · quantidade', hint: 'Em um horário, toca uma quantidade definida de itens.', combines: 'Bloco contínuo, rotações e Pad To Nearest.', pad: 'direct' },
+    fixedDurationEvents: { label: 'Horário fixo · duração', hint: 'Em um horário, toca por X minutos e guarda o saldo se for interrompido.', combines: 'Bloco contínuo e eventos de prioridade maior.', pad: 'direct' },
+    fixedAllEvents: { label: 'Horário fixo · todos os itens', hint: 'Em um horário, toca todos os itens da Source antes de liberar outro módulo.', combines: 'Especiais e maratonas completas.', pad: 'direct', padNote: 'Disponível. O Pad só começa depois que todos os itens terminarem.' },
+    fixedWindowEvents: { label: 'Faixa de horário · fonte única', hint: 'Toca uma Source somente dentro de uma faixa de horário.', combines: 'Programação por turnos e eventos fixos.', pad: 'direct' },
+    windowRotations: { label: 'Faixa de horário · rotação', hint: 'Alterna Sources somente dentro de uma faixa de horário.', combines: 'Manhã/tarde/noite com estilos diferentes.', pad: 'nested', padNote: 'Disponível em cada etapa da rotação.' },
+    sequenceEvents: { label: 'Sequência programada', hint: 'Executa vários passos na ordem que você montar.', combines: 'Vinheta + programa + intervalo + Pad.', pad: 'direct' },
+    intervalEvents: { label: 'Repetição por intervalo', hint: 'Repete um evento a cada X minutos dentro de uma faixa.', combines: 'Station IDs, promos e chamadas periódicas.', pad: 'direct' },
+    choiceEvents: { label: 'Escolha entre fontes', hint: 'No horário marcado, escolhe uma das Sources disponíveis.', combines: 'Sessões de filme, sorteios de faixa e programação variada.', pad: 'direct' },
+    clockTemplates: { label: 'Relógio de programação', hint: 'Repete posições dentro de um ciclo, como :00, :15, :30 e :45.', combines: 'Rádio/TV linear, IDs, promos e blocos de conteúdo.', pad: 'nested', padNote: 'Disponível em cada posição do relógio.' },
+    temporaryOverrides: { label: 'Programação especial temporária', hint: 'Uma Source assume entre uma data/hora inicial e final e depois a grade normal volta.', combines: 'Natal, maratonas, eventos e semanas temáticas.', pad: 'direct' },
+    dateEvents: { label: 'Evento em data específica', hint: 'Executa uma vez em uma data e hora exatas.', combines: 'Especiais, estreias e eventos únicos.', pad: 'direct' },
+    offlineWindows: { label: 'Janela offline', hint: 'Reserva uma faixa de horário sem programação.', combines: 'Manutenção e períodos em que o canal deve ficar sem conteúdo.', pad: 'none', padNote: 'Não se aplica aqui, porque esta janela existe para deixar o canal sem programação.' }
   };
 
   const DAY_OPTIONS = [
@@ -107,7 +107,7 @@
     trim: 'Permite ao ErsatzTV cortar um item para caber exatamente no tempo disponível. Deixe desligado quando não quiser cortar vídeos.',
     offlineTail: 'Depois de colocar tudo que couber, deixa o tempo restante sem programação em vez de preenchê-lo.',
     allowOverrun: 'Permite que o último vídeo termine mesmo ultrapassando o limite do bloco. É a opção indicada quando você não quer cortes.',
-    padToNearest: 'Depois que este bloco terminar, usa o Filler geral do projeto até a próxima marca escolhida. Exemplo: com 15, se terminar 10:07, preenche até 10:15. Fica desativado por padrão.',
+    padToNearest: 'Depois que este bloco terminar, usa o Filler geral do projeto até a próxima marca escolhida. Se o bloco tocar 3 itens, o Pad entra depois do terceiro, não entre eles. Exemplo: com 15, se terminar 10:07, preenche até 10:15. Fica desativado por padrão.',
     sequenceStepMode: 'O que este passo faz: toca uma quantidade, toca por duração, toca todos, preenche até a próxima marca ou espera offline.',
     sequenceStepSource: 'Source usada apenas neste passo da sequência.',
     sequenceStepCount: 'Quantidade de itens tocados neste passo antes de seguir para o próximo.',
@@ -887,7 +887,7 @@
         <div class="section-heading"><div><span class="eyebrow">Programação</span><h3>Adicionar módulo</h3><p>Escolha o tipo de programação. Clique em um nome para ver um resumo antes de adicionar.</p></div><button type="button" class="ghost" data-ss-action="close-module-picker">Fechar</button></div>
         <div class="ss-module-picker-layout">
           <div class="ss-module-picker-list" aria-label="Tipos de módulo">${entries.map(([key, item]) => `<button type="button" class="ss-module-picker-item ${selected === key ? 'active' : ''}" data-ss-action="select-module" data-module="${key}"><strong>${esc(item.label)}</strong></button>`).join('')}</div>
-          <div class="ss-module-picker-description">${meta ? `<span class="eyebrow">Como funciona</span><h3>${esc(meta.label)}</h3><p>${esc(meta.hint)}</p><div class="ss-callout"><strong>Combina bem com</strong><br>${esc(meta.combines || 'Outros eventos da programação.')}</div><p class="muted">A Ajuda de Scripted Schedules possui explicações e exemplos mais completos.</p>` : '<div class="empty-state">Selecione um módulo à esquerda para ver a descrição.</div>'}</div>
+          <div class="ss-module-picker-description">${meta ? `<span class="eyebrow">Como funciona</span><h3>${esc(meta.label)}</h3><p>${esc(meta.hint)}</p><div class="ss-callout"><strong>Combina bem com</strong><br>${esc(meta.combines || 'Outros eventos da programação.')}</div>${meta.pad === 'none' || meta.padNote ? `<div class="ss-callout"><strong>Pad To Nearest Minute</strong><br>${esc(meta.padNote || 'Disponível neste módulo.')}</div>` : ''}<p class="muted">A Ajuda de Scripted Schedules possui explicações e exemplos mais completos.</p>` : '<div class="empty-state">Selecione um módulo à esquerda para ver a descrição.</div>'}</div>
         </div>
         <div class="modal-actions"><button type="button" data-ss-action="close-module-picker">Cancelar</button><button type="button" class="primary" data-ss-action="add-module" ${selected ? '' : 'disabled'}>Adicionar módulo</button></div>
       </section>

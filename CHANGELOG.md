@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.4.2
+
+- A compatibilidade de **Pad To Nearest Minute** foi revisada nos 18 módulos do Scripted Schedules.
+- O modal **Adicionar módulo** agora avisa de forma curta quando o Pad não se aplica e explica os dois casos em que a configuração fica dentro das etapas/posições: **Faixa de horário · rotação** e **Relógio de programação**.
+- A Ajuda recebeu as mesmas observações em linguagem simples, sem transformar cada cartão em documentação técnica.
+- **Bloco contínuo por horário**, **Encaixar até o próximo evento** e **Janela offline** continuam sem opção de Pad porque o alinhamento não se aplica ao funcionamento desses módulos.
+- **Horário fixo · todos os itens** permanece compatível com Pad: o preenchimento começa somente depois que todos os itens terminarem. A característica de esse módulo poder atravessar outro horário continua separada e inalterada.
+- A explicação geral do Pad agora deixa claro que ele atua ao fim do bloco configurado: se um bloco toca 3 itens, o Pad entra depois do terceiro, não entre eles.
+- Nenhuma alteração no schema, Universal v1.3.0, API ou lógica de geração/execução do Pad; a correção é de apresentação, documentação e cobertura de regressão.
+
 ## 3.4.1
 
 - A opção **Ajuda** de Scripted Schedules deixa de aparecer em **Sistema** e passa a ficar junto de **Scripted Schedules** no grupo lateral **Programação**, deixando claro que o conteúdo é específico do Builder.

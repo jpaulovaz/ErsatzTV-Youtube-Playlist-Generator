@@ -1,14 +1,15 @@
-# Atualização para 3.4.1
+# Atualização para 3.4.2
 
-A versão 3.4.1 é uma correção de interface sobre a **v3.4.0**. Não altera schema, motor Universal, gerador Python nem contratos de execução do Scripted Schedule.
+A versão 3.4.2 é uma correção de clareza sobre a **v3.4.1**. Não altera schema, motor Universal, gerador Python nem a lógica de execução do Pad To Nearest Minute.
 
 ## O que muda
 
-- **Ajuda** passa a ficar no grupo lateral **Programação**, imediatamente junto de Scripted Schedules, em vez de aparecer como tópico de Sistema.
-- A tela deixa explícito que se trata da **Ajuda de Scripted Schedules**.
-- O modal **Adicionar módulo** mostra somente os nomes na coluna esquerda.
-- Descrição, funcionamento e combinações ficam no painel direito após a seleção.
-- A lista foi ajustada para evitar overflow horizontal e melhorar a leitura de nomes longos.
+- O modal **Adicionar módulo** avisa quando **Pad To Nearest Minute** não se aplica.
+- A aba **Ajuda → Módulos** mostra a mesma informação em linguagem simples.
+- **Bloco contínuo por horário**, **Encaixar até o próximo evento** e **Janela offline** ficam claramente marcados como módulos sem Pad.
+- **Faixa de horário · rotação** informa que o Pad fica em cada etapa da rotação.
+- **Relógio de programação** informa que o Pad fica em cada posição do relógio.
+- **Horário fixo · todos os itens** deixa claro que o Pad funciona somente depois que todos os itens terminarem.
 
 ## Compatibilidade
 
@@ -22,16 +23,16 @@ A versão 3.4.1 é uma correção de interface sobre a **v3.4.0**. Não altera s
 
 1. Pare o serviço da aplicação.
 2. Faça backup da instalação atual.
-3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.1-update.zip` sobre a instalação v3.4.0.
+3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.2-update.zip` sobre a instalação v3.4.1.
 4. Inicie novamente o serviço.
-5. Abra **Programação → Scripted Schedules** e confirme que **Ajuda** aparece no mesmo grupo lateral.
-6. Em um projeto, abra **Programação → Adicionar módulo** e confirme que a lista esquerda contém somente os nomes.
+5. Em **Programação → Scripted Schedules**, abra **Adicionar módulo** e confira as observações de Pad no painel direito.
+6. Em **Programação → Ajuda → Módulos**, confira as mesmas regras em linguagem simples.
 
 Não é necessária migração manual de configuração ou de projetos.
 
 ## Gate esperado
 
-- upgrade esperado: **v3.4.0 -> v3.4.1**;
+- upgrade esperado: **v3.4.1 -> v3.4.2**;
 - `npm run check`: aprovado;
 - suíte automatizada: aprovada;
 - UPDATE não deve conter `config/config.json`, `config/auth.json` nem `data/`.

@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.1/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.1/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.2/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.2/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -177,8 +177,8 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.0 modul
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.4\.1/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.1/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.4\.2/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.2/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -249,23 +249,53 @@ test('Scripted Schedules exposes discreet contextual help for configuration fiel
   assert.match(css, /width: 14px/);
 });
 
-test('Scripted Schedules exposes post-block padding only on content modules and not on Offline or Filler', () => {
+test('Scripted Schedules exposes Pad To Nearest on every compatible module and hides it where it does not apply', () => {
   const view = read('js/scriptedSchedulesView.js');
+  for (const type of ['rotation', 'countRotation', 'weightedRotation', 'contentBreaks', 'fixedEvents', 'fixedDurationEvents', 'fixedAllEvents', 'fixedWindowEvents', 'sequenceEvents', 'intervalEvents', 'choiceEvents', 'temporaryOverrides', 'dateEvents']) {
+    assert.match(view, new RegExp(`${type}: \\{[^\\n]+pad: 'direct'`));
+  }
+  for (const type of ['windowRotations', 'clockTemplates']) {
+    assert.match(view, new RegExp(`${type}: \\{[^\\n]+pad: 'nested'`));
+  }
+  for (const type of ['continuousBlocks', 'fitToWindow', 'offlineWindows']) {
+    assert.match(view, new RegExp(`${type}: \\{[^\\n]+pad: 'none'`));
+  }
+
   assert.match(view, /renderPadToNearest\(`modules\.rotation\.\$\{index\}`/);
-  for (const type of ['fixedEvents', 'fixedDurationEvents', 'fixedAllEvents', 'fixedWindowEvents', 'sequenceEvents', 'intervalEvents', 'dateEvents']) {
+  assert.match(view, /renderPadToNearest\(`modules\.countRotation\.\$\{index\}`/);
+  assert.match(view, /renderPadToNearest\(`modules\.weightedRotation\.\$\{index\}`/);
+  for (const type of ['contentBreaks', 'fixedEvents', 'fixedDurationEvents', 'fixedAllEvents', 'fixedWindowEvents', 'sequenceEvents', 'intervalEvents', 'choiceEvents', 'temporaryOverrides', 'dateEvents']) {
     const line = view.split('\n').find((row) => row.includes(`if (type === '${type}') body =`));
     assert.ok(line && line.includes('renderPadToNearest(base, item)'), `${type} should expose Pad To Nearest Minute`);
   }
+  for (const type of ['continuousBlocks', 'fitToWindow', 'offlineWindows']) {
+    const line = view.split('\n').find((row) => row.includes(`if (type === '${type}') body =`));
+    assert.ok(line && !line.includes('renderPadToNearest'), `${type} must not expose Pad To Nearest Minute`);
+  }
   const windowRotationRenderer = view.match(/function renderWindowRotationItems\(item, index\)[\s\S]*?function renderSequenceSteps/);
   assert.ok(windowRotationRenderer && windowRotationRenderer[0].includes('padToNearestMinutes'), 'Window Rotation items should expose Pad To Nearest Minute per item');
-  assert.ok(windowRotationRenderer && windowRotationRenderer[0].includes('>Desativado</option>'), 'Window Rotation pad should default to disabled');
-  const offlineLine = view.split('\n').find((row) => row.includes("if (type === 'offlineWindows') body ="));
-  assert.ok(offlineLine && !offlineLine.includes('renderPadToNearest'), 'Offline must not expose Pad To Nearest Minute');
+  const clockRenderer = view.match(/function renderClockSlots\(slots, path\)[\s\S]*?function renderPadToNearest/);
+  assert.ok(clockRenderer && clockRenderer[0].includes('renderPadToNearest(base, slot)'), 'Clock positions should expose Pad To Nearest Minute per position');
   const fillerRenderer = view.match(/function renderFiller\(\)[\s\S]*?function renderEditorSaveBar/);
   assert.ok(fillerRenderer && !fillerRenderer[0].includes('renderPadToNearest'), 'Filler itself must not expose Pad To Nearest Minute');
   assert.match(view, /clearPadToNearestSettings/);
 });
 
+test('module picker and Help explain Pad exceptions in simple language', () => {
+  const view = read('js/scriptedSchedulesView.js');
+  const help = read('js/helpView.js');
+  assert.match(view, /Não se aplica aqui, porque este bloco não termina sozinho/);
+  assert.match(view, /Não se aplica aqui, porque este módulo já trabalha até o próximo evento/);
+  assert.match(view, /Não se aplica aqui, porque esta janela existe para deixar o canal sem programação/);
+  assert.match(view, /Disponível\. O Pad só começa depois que todos os itens terminarem/);
+  assert.match(view, /Disponível em cada etapa da rotação/);
+  assert.match(view, /Disponível em cada posição do relógio/);
+  assert.match(view, /meta\.pad === 'none' \|\| meta\.padNote/);
+  assert.match(help, /Pad To Nearest não se aplica aqui, porque este bloco não termina sozinho/);
+  assert.match(help, /Pad To Nearest não se aplica aqui, porque este módulo já trabalha até o próximo evento/);
+  assert.match(help, /Pad To Nearest funciona\. Ele só começa depois que todos os itens terminarem/);
+  assert.match(help, /Pad To Nearest não se aplica aqui, porque esta faixa foi criada para ficar sem programação/);
+});
 
 test('sidebar navigation always returns each section to its home state', () => {
   const app = read('app.js');
@@ -290,7 +320,7 @@ test('Scripted Schedules Help stays inside the Programacao sidebar group and is 
   assert.match(programacaoGroup, /data-view="help"/);
   assert.doesNotMatch(sistemaGroup, /data-view="help"/);
   assert.match(html, /id="view-help"/);
-  assert.match(html, /helpView\.js\?v=3\.4\.1/);
+  assert.match(html, /helpView\.js\?v=3\.4\.2/);
   assert.match(help, /Programação · Scripted Schedules/);
   assert.match(help, /Assuntos da ajuda de Scripted Schedules/);
   for (const tab of ['Começando', 'Recursos', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));

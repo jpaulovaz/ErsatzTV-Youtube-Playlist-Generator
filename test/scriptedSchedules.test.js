@@ -176,6 +176,115 @@ print(json.dumps({"first": first, "exact": api.calls}))
   }
 });
 
+
+test('Horário fixo quantidade applies Pad To Nearest only after the configured item count finishes', async () => {
+  const project = musicProject();
+  project.modules.fixedEvents = [];
+  const script = await generateScript(project);
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'scripted-count-pad-runtime-'));
+  const scheduleFile = path.join(dir, 'schedule.py');
+  const probeFile = path.join(dir, 'probe.py');
+  await fsp.writeFile(scheduleFile, script, 'utf8');
+  await fsp.writeFile(probeFile, `
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("schedule", sys.argv[1])
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+class Presentation:
+    def set(self, presentation, token):
+        pass
+class Api:
+    def __init__(self):
+        self.calls = []
+        self.item_times = [
+            "2026-09-28T10:07:00+00:00",
+            "2026-09-28T10:14:00+00:00",
+            "2026-09-28T10:21:00+00:00",
+        ]
+    def add_count(self, content, count, options=None):
+        self.calls.append(["add_count", content, count])
+        current = self.item_times.pop(0)
+        return {"currentTime": current, "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
+    def pad_to_next(self, content, minutes, options=None):
+        self.calls.append(["pad_to_next", content, minutes])
+        return {"currentTime": "2026-09-28T10:30:00+00:00", "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
+    def pad_until_exact(self, content, when, options=None):
+        self.calls.append(["pad_until_exact", content, when.isoformat()])
+        return {"currentTime": when.isoformat(), "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
+api = Api()
+task = {
+    "task_id": "three-movies-probe", "module": "FIXED_EVENTS", "label": "3 filmes",
+    "priority": 100, "source": "CONCERTS", "presentation": "common", "playback": {},
+    "remaining_count": 3, "pad_to_nearest_minutes": 15
+}
+state = {"tasks": [task], "active_task_id": "three-movies-probe", "seen_occurrences": {}}
+ctx = {"currentTime": "2026-09-28T10:00:00+00:00", "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
+ctx = m.run_count_task(api, Presentation(), ctx, state, task)
+ctx = m.run_count_task(api, Presentation(), ctx, state, task)
+ctx = m.run_count_task(api, Presentation(), ctx, state, task)
+print(json.dumps(api.calls))
+`, 'utf8');
+  try {
+    const output = execFileSync('python3', [probeFile, scheduleFile], { encoding: 'utf8' }).trim().split('\n').pop();
+    assert.deepEqual(JSON.parse(output), [
+      ['add_count', 'CONCERTS', 1],
+      ['add_count', 'CONCERTS', 1],
+      ['add_count', 'CONCERTS', 1],
+      ['pad_to_next', 'FILLER', 15]
+    ]);
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Horário fixo todos os itens applies Pad To Nearest only after add_all finishes', async () => {
+  const project = musicProject();
+  project.modules.fixedEvents = [];
+  project.modules.fixedAllEvents = [{ id: 'all_pad', time: '14:00', source: 'CONCERTS', priority: 80, presentation: 'common', padToNearestMinutes: 15 }];
+  const script = await generateScript(project);
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'scripted-all-pad-runtime-'));
+  const scheduleFile = path.join(dir, 'schedule.py');
+  const probeFile = path.join(dir, 'probe.py');
+  await fsp.writeFile(scheduleFile, script, 'utf8');
+  await fsp.writeFile(probeFile, `
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("schedule", sys.argv[1])
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+class Presentation:
+    def set(self, presentation, token):
+        pass
+class Api:
+    def __init__(self):
+        self.calls = []
+    def add_all(self, content, options=None):
+        self.calls.append(["add_all", content])
+        return {"currentTime": "2026-09-28T10:07:00+00:00", "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
+    def pad_to_next(self, content, minutes, options=None):
+        self.calls.append(["pad_to_next", content, minutes])
+        return {"currentTime": "2026-09-28T10:15:00+00:00", "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
+    def pad_until_exact(self, content, when, options=None):
+        self.calls.append(["pad_until_exact", content, when.isoformat()])
+        return {"currentTime": when.isoformat(), "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
+api = Api()
+task = {
+    "task_id": "all-pad-probe", "module": "FIXED_ALL_EVENTS", "label": "Especial",
+    "priority": 80, "source": "CONCERTS", "presentation": "common", "playback": {},
+    "pad_to_nearest_minutes": 15
+}
+state = {"tasks": [task], "active_task_id": "all-pad-probe", "seen_occurrences": {}}
+ctx = {"currentTime": "2026-09-28T10:00:00+00:00", "finishTime": "2026-09-28T11:00:00+00:00", "isDone": False}
+m.run_all_task(api, Presentation(), ctx, state, task)
+print(json.dumps(api.calls))
+`, 'utf8');
+  try {
+    const output = execFileSync('python3', [probeFile, scheduleFile], { encoding: 'utf8' }).trim().split('\n').pop();
+    assert.deepEqual(JSON.parse(output), [['add_all', 'CONCERTS'], ['pad_to_next', 'FILLER', 15]]);
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('all ten scheduling modules can coexist and validate through the Python engine', async () => {
   const project = musicProject();
   project.modules.fixedDurationEvents = [{ id: 'duration_1', time: '20:00', source: 'TOP', durationMinutes: 60, priority: 120, presentation: 'music' }];
