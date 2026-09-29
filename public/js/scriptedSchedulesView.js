@@ -23,6 +23,93 @@
     ['playlist', 'Playlist'], ['search', 'Search'], ['show', 'Show'], ['marathon', 'Marathon']
   ];
 
+  const HELP_TEXT = {
+    settingsOutputRoot: 'Pasta do servidor onde os arquivos .py gerados serão gravados. Exemplo: /srv/ersatztv/scripts. O ErsatzTV também precisa conseguir acessar esse caminho.',
+    historyLimit: 'Quantidade de versões anteriores que o aplicativo guarda para restauração. Exemplo: 10 mantém as 10 publicações mais recentes.',
+    projectName: 'Nome usado somente para identificar este projeto no aplicativo. Exemplo: JohnFlix Filmes.',
+    fileName: 'Nome do arquivo Python que será gerado. Depois de vincular o arquivo no ErsatzTV, evite mudar esse nome sem atualizar o Playout. Exemplo: johnflix-filmes.py.',
+    templateVersion: 'Versão do motor Universal usada para gerar o script. Projetos antigos não são atualizados silenciosamente.',
+    outputRootReadOnly: 'Pasta onde este projeto será publicado. Ela é definida na tela principal de Scripted Schedules.',
+    channel: 'Canal do ErsatzTV associado localmente a este projeto. O número do canal é usado internamente pelo aplicativo.',
+    stateKey: 'Nome exclusivo do arquivo de estado usado pelo script para lembrar rotação, saldos e eventos pendentes. Use uma chave diferente para cada Playout. Exemplo: filmes_420.',
+    friendlyName: 'Nome fácil de ler mostrado na interface. Ele pode ter espaços e não precisa ser igual à chave interna.',
+    key: 'Identificador interno usado pelo script para referenciar este item. Deve ser único e estável. Exemplo: MOVIES_PRIME.',
+    graphicsElements: 'Caminhos dos arquivos YAML de Graphics Elements que fazem parte deste grupo, um por linha. Exemplo: image/icon.yml.',
+    includeGraphicsGroups: 'Permite montar um grupo usando outros grupos já cadastrados. Exemplo: MUSIC_GRAPHICS pode incluir COMMON_GRAPHICS.',
+    sourceType: 'Define de onde o ErsatzTV buscará o conteúdo: Smart Collection, Collection, Playlist, Search, Show, Marathon etc.',
+    sourceOrder: 'Ordem entregue pelo ErsatzTV. Chronological segue a ordem natural; Shuffle embaralha os itens.',
+    sourcePresentation: 'Perfil visual usado por padrão quando esta Source toca. Um módulo pode escolher outra Presentation e substituir este padrão.',
+    smartCollection: 'Smart Collection do ErsatzTV usada como fonte de conteúdo. Quando o catálogo está disponível, escolha pelo nome.',
+    ersatzName: 'Nome exato da Collection ou Multi-Collection existente no ErsatzTV.',
+    playlist: 'Nome da Playlist existente no ErsatzTV.',
+    playlistGroup: 'Grupo ao qual a Playlist pertence no ErsatzTV. Ele ajuda o Scripted Schedule a localizar a playlist correta.',
+    searchQuery: 'Busca que o ErsatzTV executará para encontrar mídia. Exemplo: type:movie AND tag:"comedia".',
+    marathonGroupBy: 'Critério usado para separar o conteúdo em grupos de maratona, como show, temporada, artista, álbum ou diretor.',
+    marathonItemOrder: 'Ordem dos itens dentro de cada grupo da maratona: cronológica ou embaralhada.',
+    marathonPlayAll: 'Quando ativo, toca todos os itens do grupo atual antes de passar ao próximo grupo.',
+    marathonShuffleGroups: 'Quando ativo, embaralha a ordem dos grupos da maratona. Os itens dentro de cada grupo continuam seguindo a ordem escolhida acima.',
+    marathonSearches: 'Buscas usadas para formar a maratona, uma por linha. Exemplo: type:music_video.',
+    guidProvider: 'Nome do provedor do identificador. Exemplo: tmdb, tvdb ou outro GUID reconhecido pelo ErsatzTV.',
+    guidValue: 'Valor do identificador no provedor escolhido. Exemplo: 12345.',
+    playlistItemSource: 'Source que será usada neste passo da Scripted Playlist.',
+    playlistItemCount: 'Quantidade de itens dessa Source colocados na Scripted Playlist. Exemplo: 2 toca dois itens antes de seguir para o próximo passo.',
+    preRoll: 'Scripted Playlist executada antes dos itens que usam este perfil. Exemplo: uma vinheta e dois comerciais antes do programa.',
+    epgGroup: 'Agrupa o conteúdo deste bloco como um programa no EPG, em vez de deixar cada item aparecer separadamente.',
+    epgTitle: 'Título mostrado no EPG quando o agrupamento está ativo. Exemplo: Sessão Prime.',
+    epgAdvance: 'Quando ativo, inicia um novo grupo no EPG. Desativado continua o grupo EPG que já estiver aberto.',
+    directGraphics: 'Graphics Elements aplicados diretamente por este perfil, sem precisar criar um grupo. Informe um YAML por linha.',
+    nativeWatermarks: 'Watermarks nativos cadastrados no ErsatzTV. Eles são diferentes dos arquivos YAML de Graphics Elements.',
+    graphicsGroupSelection: 'Grupos de Graphics que serão ligados quando este perfil estiver ativo.',
+    graphicsVariableKey: 'Nome de uma variável esperada por um Graphics Element. Exemplo: artist_name.',
+    graphicsVariableValue: 'Valor enviado para a variável do Graphics Element. Exemplo: Bastille.',
+    defaultRotationDuration: 'Duração usada pela ROTATION quando um bloco não informa sua própria duração. Exemplo: 60 significa uma hora.',
+    defaultPriority: 'Prioridade usada quando um evento não informa outra. Número maior tem preferência quando dois módulos disputam o mesmo horário.',
+    httpTimeout: 'Tempo máximo que o script espera por uma resposta da API do ErsatzTV antes de considerar a chamada com falha.',
+    occurrenceRetention: 'Por quantos dias o script lembra ocorrências já processadas. Isso evita repetir eventos antigos depois de rebuilds ou reinícios.',
+    allowOverrunGlobal: 'Quando ativo, o vídeo atual pode terminar mesmo que ultrapasse o horário planejado. Evita cortar vídeos no meio.',
+    modulePicker: 'Escolha qual tipo de módulo deseja adicionar à programação. Você só precisa adicionar os módulos que o canal realmente usa.',
+    source: 'Source que fornece o conteúdo deste bloco. Ela deve existir na aba Recursos.',
+    presentation: 'Perfil visual usado neste bloco. Se ficar no padrão, será usada a Presentation configurada na Source.',
+    duration: 'Tempo nominal deste bloco em minutos. Com a regra de não cortar vídeo, o último item pode terminar depois desse tempo.',
+    id: 'Identificador único deste evento dentro do projeto. O script usa esse ID para reconhecer a ocorrência e manter seu estado.',
+    optionalName: 'Nome apenas para facilitar a leitura na interface e nos logs. Não muda a lógica do evento.',
+    time: 'Horário em que este evento deve começar. Se um vídeo anterior ainda estiver tocando e cortes não forem permitidos, ele começa assim que esse vídeo terminar.',
+    quantity: 'Quantidade de itens da Source que serão tocados neste evento.',
+    priority: 'Define qual evento tem preferência. Número maior vence. Em empate, quem já está ativo continua.',
+    startTime: 'Horário em que esta janela ou regra passa a valer.',
+    endTime: 'Horário em que esta janela ou regra deixa de valer. A janela pode atravessar a meia-noite quando o fim for menor que o início.',
+    blockMinutes: 'Duração padrão de cada bloco da rotação em janela. Um item pode informar sua própria duração para substituir este valor.',
+    atomic: 'Quando ativo, a sequência inteira termina antes de outro módulo assumir. Use quando os passos precisam ficar juntos.',
+    everyMinutes: 'Intervalo entre as ocorrências. Exemplo: 30 executa o evento a cada 30 minutos dentro da janela.',
+    mode: 'Define como o conteúdo será adicionado: por quantidade, por duração, todos os itens ou, quando disponível, uma sequência.',
+    latePolicy: 'O que fazer se o horário já passou: esperar na fila ou ignorar a ocorrência quando o atraso ultrapassar o limite.',
+    maxLateness: 'Atraso máximo permitido para uma ocorrência configurada como “ignorar se atrasar demais”. Exemplo: 10 aceita até 10 minutos de atraso.',
+    dateTime: 'Data e hora exatas de um evento único. Exemplo: 2026-12-24 20:00.',
+    eventEnabled: 'Liga ou desliga este evento sem precisar apagá-lo da configuração.',
+    days: 'Dias da semana em que este evento pode acontecer. Se nenhum dia for marcado, a regra não limita por dia da semana.',
+    startDate: 'Primeiro dia em que esta regra pode acontecer. Deixe vazio para não limitar o início do período.',
+    endDate: 'Último dia em que esta regra pode acontecer. Deixe vazio para não limitar o fim do período.',
+    onlyDates: 'Lista de datas específicas permitidas, uma por linha. Quando preenchida, o evento só ocorre nessas datas.',
+    excludeDates: 'Datas que devem ser ignoradas mesmo que as outras regras permitam o evento, uma por linha.',
+    customTitle: 'Substitui o título usado no EPG para o conteúdo adicionado por este bloco. Deixe vazio para usar o título normal.',
+    fillerKind: 'Marca este conteúdo como filler para o ErsatzTV, o que influencia o agrupamento no EPG. Se você não usa fillerKind na sua programação, deixe vazio.',
+    fallback: 'Source de reserva usada pelo próprio ErsatzTV para completar o tempo que sobrar numa operação de duração/pad. Ele escolhe um item dessa Source, repete se necessário e pode recortar para caber exatamente. Isso é diferente do Filler geral do projeto.',
+    discardAttempts: 'Usado quando Trim está desligado. Define quantos itens o ErsatzTV pode descartar enquanto procura um que caiba no tempo restante. Exemplo: 3 permite tentar até três alternativas antes de desistir.',
+    disableWatermarks: 'Desliga os watermarks nativos do ErsatzTV somente para o conteúdo deste bloco. Não desliga Graphics Elements YAML.',
+    trim: 'Permite ao ErsatzTV cortar um item para caber exatamente no tempo disponível. Deixe desligado quando não quiser cortar vídeos.',
+    offlineTail: 'Depois de colocar tudo que couber, deixa o tempo restante sem programação em vez de preenchê-lo.',
+    allowOverrun: 'Permite que o último vídeo termine mesmo ultrapassando o limite do bloco. É a opção indicada quando você não quer cortes.',
+    padToNearest: 'Depois que este bloco terminar, usa o Filler geral do projeto até a próxima marca escolhida. Exemplo: com 15, se terminar 10:07, preenche até 10:15. Fica desativado por padrão.',
+    sequenceStepMode: 'O que este passo faz: toca uma quantidade, toca por duração, toca todos, preenche até a próxima marca ou espera offline.',
+    sequenceStepSource: 'Source usada apenas neste passo da sequência.',
+    sequenceStepCount: 'Quantidade de itens tocados neste passo antes de seguir para o próximo.',
+    sequenceStepDuration: 'Tempo deste passo em minutos.',
+    sequenceStepMark: 'Marca de relógio usada pelo passo “Até próxima marca”. Exemplo: 30 leva 10:07 até 10:30 usando a Source escolhida.',
+    sequenceStepPresentation: 'Presentation usada somente neste passo da sequência.',
+    fillerSource: 'Source usada como preenchimento geral quando não há outro conteúdo ativo. Ela também é usada pelo Pad To Nearest Minute.',
+    fillerPresentation: 'Presentation aplicada ao Filler geral enquanto ele estiver preenchendo uma lacuna.'
+  };
+
   const state = {
     deps: null,
     settings: null,
@@ -41,6 +128,58 @@
   const esc = (value) => String(value ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+
+  function help(key) {
+    const text = HELP_TEXT[key] || '';
+    if (!text) return '';
+    return `<span class="ss-help" tabindex="0" aria-label="Ajuda: ${esc(text)}" data-ss-help="${esc(text)}">?</span>`;
+  }
+
+  function labelTitle(text, key, extra = '') {
+    return `<span class="ss-label-title">${esc(text)}${help(key)}${extra}</span>`;
+  }
+
+  let helpPopover = null;
+  function ensureHelpPopover() {
+    if (helpPopover?.isConnected) return helpPopover;
+    helpPopover = document.createElement('div');
+    helpPopover.className = 'ss-help-popover';
+    helpPopover.setAttribute('role', 'tooltip');
+    helpPopover.hidden = true;
+    document.body.appendChild(helpPopover);
+    return helpPopover;
+  }
+
+  function hideHelpPopover() {
+    if (!helpPopover) return;
+    helpPopover.hidden = true;
+    helpPopover.textContent = '';
+  }
+
+  function showHelpPopover(target) {
+    const text = target?.dataset?.ssHelp;
+    if (!text) return;
+    const popover = ensureHelpPopover();
+    popover.textContent = text;
+    popover.hidden = false;
+    popover.style.left = '12px';
+    popover.style.top = '12px';
+    const targetRect = target.getBoundingClientRect();
+    const popRect = popover.getBoundingClientRect();
+    let left = targetRect.left + (targetRect.width / 2) - (popRect.width / 2);
+    left = Math.max(12, Math.min(left, window.innerWidth - popRect.width - 12));
+    let top = targetRect.bottom + 8;
+    if (top + popRect.height > window.innerHeight - 12 && targetRect.top - popRect.height - 8 >= 12) {
+      top = targetRect.top - popRect.height - 8;
+    }
+    top = Math.max(12, Math.min(top, window.innerHeight - popRect.height - 12));
+    popover.style.left = `${Math.round(left)}px`;
+    popover.style.top = `${Math.round(top)}px`;
+  }
+
+  function helpTarget(event) {
+    return event.target?.closest?.('[data-ss-help]') || null;
+  }
 
   function clone(value) { return JSON.parse(JSON.stringify(value)); }
   function pathParts(path) { return String(path || '').split('.').filter(Boolean).map((part) => /^\d+$/.test(part) ? Number(part) : part); }
@@ -121,10 +260,23 @@
 
   function bindRoot() {
     const el = root();
-    el.addEventListener('click', (event) => handleClick(event).catch((error) => state.deps.showToast(error.message, true)));
+    el.addEventListener('click', (event) => {
+      const target = helpTarget(event);
+      if (target) showHelpPopover(target);
+      handleClick(event).catch((error) => state.deps.showToast(error.message, true));
+    });
+    el.addEventListener('mouseover', (event) => { const target = helpTarget(event); if (target) showHelpPopover(target); });
+    el.addEventListener('mouseout', (event) => {
+      const target = helpTarget(event);
+      if (target && !target.contains(event.relatedTarget)) hideHelpPopover();
+    });
+    el.addEventListener('focusin', (event) => { const target = helpTarget(event); if (target) showHelpPopover(target); });
+    el.addEventListener('focusout', (event) => { const target = helpTarget(event); if (target) hideHelpPopover(); });
     el.addEventListener('input', handleInput);
     el.addEventListener('change', handleInput);
     el.addEventListener('toggle', handleAccordionToggle, true);
+    window.addEventListener('resize', hideHelpPopover);
+    window.addEventListener('scroll', hideHelpPopover, true);
   }
 
   function handleAccordionToggle(event) {
@@ -376,6 +528,7 @@
   function render() {
     const el = root();
     if (!el) return;
+    hideHelpPopover();
     if (state.loading) {
       el.innerHTML = '<section class="card ss-loading"><strong>Carregando Scripted Schedules...</strong></section>';
       return;
@@ -406,10 +559,10 @@
       <details class="card ss-settings-card">
         <summary><strong>Pasta de saída dos scripts</strong><span>${esc(settings.outputRoot || 'Não configurada')}</span></summary>
         <div class="ss-settings-body">
-          <label class="wide">Pasta absoluta
+          <label class="wide">${labelTitle('Pasta absoluta', 'settingsOutputRoot')}
             <input type="text" data-ss-settings="outputRoot" value="${esc(settings.outputRoot || '')}" placeholder="/srv/ersatztv/scripts">
           </label>
-          <label>Versões no histórico
+          <label>${labelTitle('Versões no histórico', 'historyLimit')}
             <input type="number" min="1" max="50" data-ss-settings="historyLimit" value="${esc(settings.historyLimit || 10)}">
           </label>
           <button type="button" data-ss-action="save-settings">Salvar pasta</button>
@@ -476,10 +629,10 @@
       <section class="card ss-section-card">
         <div class="section-heading"><div><span class="eyebrow">01 · Geral</span><h3>Projeto</h3></div></div>
         <div class="form-grid two">
-          <label>Nome do projeto<input data-bind="name" value="${esc(p.name)}"></label>
-          <label>Arquivo Python<input data-bind="fileName" value="${esc(p.fileName)}" placeholder="johnflix-music.py"></label>
-          <label>Motor<input value="${esc(p.templateVersion)}" disabled></label>
-          <label>Pasta de saída<input value="${esc(state.settings?.outputRoot || '')}" disabled></label>
+          <label>${labelTitle('Nome do projeto', 'projectName')}<input data-bind="name" value="${esc(p.name)}"></label>
+          <label>${labelTitle('Arquivo Python', 'fileName')}<input data-bind="fileName" value="${esc(p.fileName)}" placeholder="johnflix-music.py"></label>
+          <label>${labelTitle('Motor', 'templateVersion')}<input value="${esc(p.templateVersion)}" disabled></label>
+          <label>${labelTitle('Pasta de saída', 'outputRootReadOnly')}<input value="${esc(state.settings?.outputRoot || '')}" disabled></label>
         </div>
         ${p.templateVersion !== LATEST_TEMPLATE_VERSION ? `<div class="ss-callout">Este projeto usa o motor ${esc(p.templateVersion)}. O Pad To Nearest Minute está disponível no motor ${LATEST_TEMPLATE_VERSION}. <button type="button" data-ss-action="upgrade-template">Atualizar motor</button></div>` : ''}
       </section>
@@ -495,8 +648,8 @@
   function renderChannelLink(link, index) {
     return `
       <div class="ss-row-card ss-channel-link">
-        <label>Canal no ErsatzTV<select data-channel-index="${index}">${channelOptions(link.channelNumber)}</select></label>
-        <label>state_key<input data-bind="channelLinks.${index}.stateKey" value="${esc(link.stateKey || '')}" placeholder="music_420"></label>
+        <label>${labelTitle('Canal no ErsatzTV', 'channel')}<select data-channel-index="${index}">${channelOptions(link.channelNumber)}</select></label>
+        <label>${labelTitle('state_key', 'stateKey')}<input data-bind="channelLinks.${index}.stateKey" value="${esc(link.stateKey || '')}" placeholder="music_420"></label>
         <button type="button" class="danger ghost" data-ss-action="remove-channel" data-index="${index}">Remover</button>
       </div>`;
   }
@@ -520,11 +673,11 @@
             <div class="ss-accordion-body">
               <div class="ss-accordion-actions"><button class="danger ghost" type="button" data-ss-action="remove-resource" data-kind="graphics" data-index="${index}">Remover</button></div>
               <div class="form-grid two">
-                <label>Nome amigável<input data-bind="graphicsGroups.${index}.label" value="${esc(group.label || '')}"></label>
-                <label>Chave<input data-bind="graphicsGroups.${index}.key" value="${esc(group.key)}"></label>
-                <label class="wide">Graphics Elements <small>Um caminho por linha</small><textarea rows="4" data-bind="graphicsGroups.${index}.graphics" data-type="list">${esc(listValue(group.graphics))}</textarea></label>
+                <label>${labelTitle('Nome amigável', 'friendlyName')}<input data-bind="graphicsGroups.${index}.label" value="${esc(group.label || '')}"></label>
+                <label>${labelTitle('Chave', 'key')}<input data-bind="graphicsGroups.${index}.key" value="${esc(group.key)}"></label>
+                <label class="wide">${labelTitle('Graphics Elements', 'graphicsElements', '<small>Um caminho por linha</small>')}<textarea rows="4" data-bind="graphicsGroups.${index}.graphics" data-type="list">${esc(listValue(group.graphics))}</textarea></label>
               </div>
-              ${otherGroups.length ? `<div class="ss-check-group"><span>Incluir outros grupos</span>${otherGroups.map((item) => `<label class="check-row"><input type="checkbox" value="${esc(item.key)}" data-array-toggle="graphicsGroups.${index}.includes" ${(group.includes || []).includes(item.key) ? 'checked' : ''}><span>${esc(item.label || item.key)}</span></label>`).join('')}</div>` : ''}
+              ${otherGroups.length ? `<div class="ss-check-group"><span class="ss-check-group-title">Incluir outros grupos${help('includeGraphicsGroups')}</span>${otherGroups.map((item) => `<label class="check-row"><input type="checkbox" value="${esc(item.key)}" data-array-toggle="graphicsGroups.${index}.includes" ${(group.includes || []).includes(item.key) ? 'checked' : ''}><span>${esc(item.label || item.key)}</span></label>`).join('')}</div>` : ''}
             </div>
           </details>`;
       }).join(''));
@@ -543,12 +696,12 @@
         <div class="ss-accordion-body">
           <div class="ss-accordion-actions"><button class="danger ghost" type="button" data-ss-action="remove-resource" data-kind="source" data-index="${index}">Remover</button></div>
           <div class="form-grid three">
-            <label>Nome amigável<input data-bind="sources.${index}.label" value="${esc(source.label || '')}"></label>
-            <label>Chave<input data-bind="sources.${index}.key" value="${esc(source.key)}"></label>
-            <label>Tipo<select data-bind="sources.${index}.type" data-rerender="true">${SOURCE_TYPES.map(([value, label]) => `<option value="${value}" ${source.type === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+            <label>${labelTitle('Nome amigável', 'friendlyName')}<input data-bind="sources.${index}.label" value="${esc(source.label || '')}"></label>
+            <label>${labelTitle('Chave', 'key')}<input data-bind="sources.${index}.key" value="${esc(source.key)}"></label>
+            <label>${labelTitle('Tipo', 'sourceType')}<select data-bind="sources.${index}.type" data-rerender="true">${SOURCE_TYPES.map(([value, label]) => `<option value="${value}" ${source.type === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
             ${renderSourceTypeFields(source, index)}
-            ${['smart_collection', 'collection', 'multi_collection', 'search', 'show'].includes(source.type) ? `<label>Ordem<select data-bind="sources.${index}.order"><option value="chronological" ${source.order === 'chronological' ? 'selected' : ''}>Chronological</option><option value="shuffle" ${source.order === 'shuffle' ? 'selected' : ''}>Shuffle</option></select></label>` : ''}
-            <label>Presentation padrão<select data-bind="sources.${index}.presentation">${profileOptions(source.presentation, true)}</select></label>
+            ${['smart_collection', 'collection', 'multi_collection', 'search', 'show'].includes(source.type) ? `<label>${labelTitle('Ordem', 'sourceOrder')}<select data-bind="sources.${index}.order"><option value="chronological" ${source.order === 'chronological' ? 'selected' : ''}>Chronological</option><option value="shuffle" ${source.order === 'shuffle' ? 'selected' : ''}>Shuffle</option></select></label>` : ''}
+            <label>${labelTitle('Presentation padrão', 'sourcePresentation')}<select data-bind="sources.${index}.presentation">${profileOptions(source.presentation, true)}</select></label>
           </div>
         </div>
       </details>`;
@@ -557,25 +710,25 @@
   function renderSourceTypeFields(source, index) {
     const base = `sources.${index}`;
     if (source.type === 'smart_collection') {
-      if (state.catalog.smartCollections?.length) return `<label class="wide">Smart Collection<select data-bind="${base}.name">${smartCollectionOptions(source.name)}</select></label>`;
-      return `<label class="wide">Smart Collection<input data-bind="${base}.name" value="${esc(source.name || '')}" placeholder="Nome exato no ErsatzTV"><small>Catálogo indisponível; o nome pode ser informado manualmente.</small></label>`;
+      if (state.catalog.smartCollections?.length) return `<label class="wide">${labelTitle('Smart Collection', 'smartCollection')}<select data-bind="${base}.name">${smartCollectionOptions(source.name)}</select></label>`;
+      return `<label class="wide">${labelTitle('Smart Collection', 'smartCollection')}<input data-bind="${base}.name" value="${esc(source.name || '')}" placeholder="Nome exato no ErsatzTV"><small>Catálogo indisponível; o nome pode ser informado manualmente.</small></label>`;
     }
-    if (['collection', 'multi_collection'].includes(source.type)) return `<label class="wide">Nome no ErsatzTV<input data-bind="${base}.name" value="${esc(source.name || '')}"></label>`;
-    if (source.type === 'playlist') return `<label>Playlist<input data-bind="${base}.playlist" value="${esc(source.playlist || '')}"></label><label>Playlist Group<input data-bind="${base}.playlistGroup" value="${esc(source.playlistGroup || '')}"></label>`;
-    if (source.type === 'search') return `<label class="wide">Query<textarea rows="3" data-bind="${base}.query">${esc(source.query || '')}</textarea></label>`;
+    if (['collection', 'multi_collection'].includes(source.type)) return `<label class="wide">${labelTitle('Nome no ErsatzTV', 'ersatzName')}<input data-bind="${base}.name" value="${esc(source.name || '')}"></label>`;
+    if (source.type === 'playlist') return `<label>${labelTitle('Playlist', 'playlist')}<input data-bind="${base}.playlist" value="${esc(source.playlist || '')}"></label><label>${labelTitle('Playlist Group', 'playlistGroup')}<input data-bind="${base}.playlistGroup" value="${esc(source.playlistGroup || '')}"></label>`;
+    if (source.type === 'search') return `<label class="wide">${labelTitle('Query', 'searchQuery')}<textarea rows="3" data-bind="${base}.query">${esc(source.query || '')}</textarea></label>`;
     if (source.type === 'show') return `<div class="wide">${renderGuidEditor(source.guids || [], `${base}.guids`)}</div>`;
     if (source.type === 'marathon') return `
-      <label>Agrupar por<select data-bind="${base}.groupBy"><option value="show" ${source.groupBy === 'show' ? 'selected' : ''}>Show</option><option value="season" ${source.groupBy === 'season' ? 'selected' : ''}>Season</option><option value="artist" ${source.groupBy === 'artist' ? 'selected' : ''}>Artist</option><option value="album" ${source.groupBy === 'album' ? 'selected' : ''}>Album</option><option value="director" ${source.groupBy === 'director' ? 'selected' : ''}>Director</option></select></label>
-      <label>Ordem dos itens<select data-bind="${base}.itemOrder"><option value="chronological" ${source.itemOrder === 'chronological' ? 'selected' : ''}>Chronological</option><option value="shuffle" ${source.itemOrder === 'shuffle' ? 'selected' : ''}>Shuffle</option></select></label>
-      <label class="check-row"><input type="checkbox" data-bind="${base}.playAllItems" ${source.playAllItems ? 'checked' : ''}><span>Tocar todos os itens do grupo</span></label>
-      <label class="check-row"><input type="checkbox" data-bind="${base}.shuffleGroups" ${source.shuffleGroups ? 'checked' : ''}><span>Embaralhar grupos</span></label>
-      <label class="wide">Searches <small>Uma query por linha</small><textarea rows="3" data-bind="${base}.searches" data-type="list">${esc(listValue(source.searches))}</textarea></label>
+      <label>${labelTitle('Agrupar por', 'marathonGroupBy')}<select data-bind="${base}.groupBy"><option value="show" ${source.groupBy === 'show' ? 'selected' : ''}>Show</option><option value="season" ${source.groupBy === 'season' ? 'selected' : ''}>Season</option><option value="artist" ${source.groupBy === 'artist' ? 'selected' : ''}>Artist</option><option value="album" ${source.groupBy === 'album' ? 'selected' : ''}>Album</option><option value="director" ${source.groupBy === 'director' ? 'selected' : ''}>Director</option></select></label>
+      <label>${labelTitle('Ordem dos itens', 'marathonItemOrder')}<select data-bind="${base}.itemOrder"><option value="chronological" ${source.itemOrder === 'chronological' ? 'selected' : ''}>Chronological</option><option value="shuffle" ${source.itemOrder === 'shuffle' ? 'selected' : ''}>Shuffle</option></select></label>
+      <label class="check-row"><input type="checkbox" data-bind="${base}.playAllItems" ${source.playAllItems ? 'checked' : ''}><span>Tocar todos os itens do grupo${help('marathonPlayAll')}</span></label>
+      <label class="check-row"><input type="checkbox" data-bind="${base}.shuffleGroups" ${source.shuffleGroups ? 'checked' : ''}><span>Embaralhar grupos${help('marathonShuffleGroups')}</span></label>
+      <label class="wide">${labelTitle('Searches', 'marathonSearches', '<small>Uma query por linha</small>')}<textarea rows="3" data-bind="${base}.searches" data-type="list">${esc(listValue(source.searches))}</textarea></label>
       <div class="wide">${renderGuidEditor(source.guids || [], `${base}.guids`)}</div>`;
     return '';
   }
 
   function renderGuidEditor(items, path) {
-    return `<div class="ss-mini-editor"><div class="ss-mini-head"><strong>GUIDs</strong><button type="button" data-ss-action="add-guid" data-path="${esc(path)}">Adicionar GUID</button></div>${items.length ? items.map((item, index) => `<div class="ss-inline-row"><input data-bind="${path}.${index}.provider" value="${esc(item.provider || '')}" placeholder="tmdb"><input data-bind="${path}.${index}.value" value="${esc(item.value || '')}" placeholder="12345"><button type="button" class="danger ghost" data-ss-action="remove-guid" data-path="${esc(path)}" data-index="${index}">×</button></div>`).join('') : '<small>Nenhum GUID.</small>'}</div>`;
+    return `<div class="ss-mini-editor"><div class="ss-mini-head"><strong>GUIDs</strong><span class="ss-mini-help">Identificadores externos${help('guidProvider')}</span><button type="button" data-ss-action="add-guid" data-path="${esc(path)}">Adicionar GUID</button></div>${items.length ? items.map((item, index) => `<div class="ss-inline-row"><label class="ss-inline-field">${labelTitle('Provedor', 'guidProvider')}<input data-bind="${path}.${index}.provider" value="${esc(item.provider || '')}" placeholder="tmdb"></label><label class="ss-inline-field">${labelTitle('Valor', 'guidValue')}<input data-bind="${path}.${index}.value" value="${esc(item.value || '')}" placeholder="12345"></label><button type="button" class="danger ghost" data-ss-action="remove-guid" data-path="${esc(path)}" data-index="${index}">×</button></div>`).join('') : '<small>Nenhum GUID.</small>'}</div>`;
   }
 
   function renderScriptedPlaylists() {
@@ -585,9 +738,9 @@
           <summary class="ss-accordion-summary"><strong>${esc(playlist.label || playlist.key)}</strong><span>${(playlist.items || []).length} item(ns)</span></summary>
           <div class="ss-accordion-body">
             <div class="ss-accordion-actions"><button class="danger ghost" type="button" data-ss-action="remove-resource" data-kind="playlist" data-index="${index}">Remover</button></div>
-            <div class="form-grid two"><label>Nome amigável<input data-bind="scriptedPlaylists.${index}.label" value="${esc(playlist.label || '')}"></label><label>Chave<input data-bind="scriptedPlaylists.${index}.key" value="${esc(playlist.key)}"></label></div>
-            <div class="ss-mini-editor"><div class="ss-mini-head"><strong>Itens</strong><button type="button" data-ss-action="add-playlist-item" data-index="${index}">Adicionar item</button></div>
-              ${(playlist.items || []).map((item, itemIndex) => `<div class="ss-inline-row ss-playlist-row"><select data-bind="scriptedPlaylists.${index}.items.${itemIndex}.source">${sourceOptions(item.source)}</select><input type="number" min="1" data-type="number" data-bind="scriptedPlaylists.${index}.items.${itemIndex}.count" value="${esc(item.count || 1)}" aria-label="Quantidade"><div class="ss-order-buttons"><button type="button" data-ss-action="move-playlist-item" data-index="${index}" data-item-index="${itemIndex}" data-delta="-1">↑</button><button type="button" data-ss-action="move-playlist-item" data-index="${index}" data-item-index="${itemIndex}" data-delta="1">↓</button><button type="button" class="danger ghost" data-ss-action="remove-playlist-item" data-index="${index}" data-item-index="${itemIndex}">×</button></div></div>`).join('') || '<small>Adicione itens à sequência.</small>'}
+            <div class="form-grid two"><label>${labelTitle('Nome amigável', 'friendlyName')}<input data-bind="scriptedPlaylists.${index}.label" value="${esc(playlist.label || '')}"></label><label>${labelTitle('Chave', 'key')}<input data-bind="scriptedPlaylists.${index}.key" value="${esc(playlist.key)}"></label></div>
+            <div class="ss-mini-editor"><div class="ss-mini-head"><strong>Itens</strong><span class="ss-mini-help">Ordem de execução${help('playlistItemSource')}</span><button type="button" data-ss-action="add-playlist-item" data-index="${index}">Adicionar item</button></div>
+              ${(playlist.items || []).map((item, itemIndex) => `<div class="ss-inline-row ss-playlist-row"><label class="ss-inline-field">${labelTitle('Source', 'playlistItemSource')}<select data-bind="scriptedPlaylists.${index}.items.${itemIndex}.source">${sourceOptions(item.source)}</select></label><label class="ss-inline-field">${labelTitle('Quantidade', 'playlistItemCount')}<input type="number" min="1" data-type="number" data-bind="scriptedPlaylists.${index}.items.${itemIndex}.count" value="${esc(item.count || 1)}"></label><div class="ss-order-buttons"><button type="button" data-ss-action="move-playlist-item" data-index="${index}" data-item-index="${itemIndex}" data-delta="-1" aria-label="Mover item para cima">↑</button><button type="button" data-ss-action="move-playlist-item" data-index="${index}" data-item-index="${itemIndex}" data-delta="1" aria-label="Mover item para baixo">↓</button><button type="button" class="danger ghost" data-ss-action="remove-playlist-item" data-index="${index}" data-item-index="${itemIndex}" aria-label="Remover item">×</button></div></div>`).join('') || '<small>Adicione itens à sequência.</small>'}
             </div>
           </div>
         </details>`).join(''));
@@ -601,26 +754,26 @@
           <div class="ss-accordion-body">
             <div class="ss-accordion-actions">${profile.key === 'none' ? '<span class="status-pill">Reservado</span>' : `<button class="danger ghost" type="button" data-ss-action="remove-resource" data-kind="profile" data-index="${index}">Remover</button>`}</div>
             <div class="form-grid two">
-              <label>Nome amigável<input data-bind="presentationProfiles.${index}.label" value="${esc(profile.label || '')}"></label>
-              <label>Chave<input data-bind="presentationProfiles.${index}.key" value="${esc(profile.key)}" ${profile.key === 'none' ? 'disabled' : ''}></label>
-              <label>Pre-roll<select data-bind="presentationProfiles.${index}.preRoll">${playlistOptions(profile.preRoll)}</select></label>
-              <label class="check-row"><input type="checkbox" data-bind="presentationProfiles.${index}.epgGroup" data-rerender="true" ${profile.epgGroup ? 'checked' : ''}><span>Agrupar no EPG</span></label>
-              ${profile.epgGroup ? `<label>Título no EPG<input data-bind="presentationProfiles.${index}.epgTitle" value="${esc(profile.epgTitle || '')}"></label><label class="check-row"><input type="checkbox" data-bind="presentationProfiles.${index}.epgAdvance" ${profile.epgAdvance !== false ? 'checked' : ''}><span>Iniciar novo grupo no EPG</span></label>` : ''}
-              <label class="wide">Graphics diretos <small>Um YAML por linha</small><textarea rows="3" data-bind="presentationProfiles.${index}.graphics" data-type="list">${esc(listValue(profile.graphics))}</textarea></label>
-              <label class="wide">Watermarks nativos <small>Um nome por linha</small><textarea rows="2" data-bind="presentationProfiles.${index}.watermarks" data-type="list">${esc(listValue(profile.watermarks))}</textarea></label>
+              <label>${labelTitle('Nome amigável', 'friendlyName')}<input data-bind="presentationProfiles.${index}.label" value="${esc(profile.label || '')}"></label>
+              <label>${labelTitle('Chave', 'key')}<input data-bind="presentationProfiles.${index}.key" value="${esc(profile.key)}" ${profile.key === 'none' ? 'disabled' : ''}></label>
+              <label>${labelTitle('Pre-roll', 'preRoll')}<select data-bind="presentationProfiles.${index}.preRoll">${playlistOptions(profile.preRoll)}</select></label>
+              <label class="check-row"><input type="checkbox" data-bind="presentationProfiles.${index}.epgGroup" data-rerender="true" ${profile.epgGroup ? 'checked' : ''}><span>Agrupar no EPG${help('epgGroup')}</span></label>
+              ${profile.epgGroup ? `<label>${labelTitle('Título no EPG', 'epgTitle')}<input data-bind="presentationProfiles.${index}.epgTitle" value="${esc(profile.epgTitle || '')}"></label><label class="check-row"><input type="checkbox" data-bind="presentationProfiles.${index}.epgAdvance" ${profile.epgAdvance !== false ? 'checked' : ''}><span>Iniciar novo grupo no EPG${help('epgAdvance')}</span></label>` : ''}
+              <label class="wide">${labelTitle('Graphics diretos', 'directGraphics', '<small>Um YAML por linha</small>')}<textarea rows="3" data-bind="presentationProfiles.${index}.graphics" data-type="list">${esc(listValue(profile.graphics))}</textarea></label>
+              <label class="wide">${labelTitle('Watermarks nativos', 'nativeWatermarks', '<small>Um nome por linha</small>')}<textarea rows="2" data-bind="presentationProfiles.${index}.watermarks" data-type="list">${esc(listValue(profile.watermarks))}</textarea></label>
             </div>
             ${renderGroupChoices(profile.graphicsGroups || [], `presentationProfiles.${index}.graphicsGroups`)}
-            <details class="ss-advanced"><summary>Variáveis dos Graphics</summary>${renderPairEditor(profile.graphicsVariables || [], `presentationProfiles.${index}.graphicsVariables`)}</details>
+            <details class="ss-advanced"><summary><span>Variáveis dos Graphics${help('graphicsVariableKey')}</span></summary>${renderPairEditor(profile.graphicsVariables || [], `presentationProfiles.${index}.graphicsVariables`)}</details>
           </div>
         </details>`).join(''));
   }
 
   function renderGroupChoices(selected, path) {
     if (!state.current.graphicsGroups.length) return '';
-    return `<div class="ss-check-group"><span>Grupos de Graphics</span>${state.current.graphicsGroups.map((group) => `<label class="check-row"><input type="checkbox" value="${esc(group.key)}" data-array-toggle="${esc(path)}" ${selected.includes(group.key) ? 'checked' : ''}><span>${esc(group.label || group.key)}</span></label>`).join('')}</div>`;
+    return `<div class="ss-check-group"><span class="ss-check-group-title">Grupos de Graphics${help('graphicsGroupSelection')}</span>${state.current.graphicsGroups.map((group) => `<label class="check-row"><input type="checkbox" value="${esc(group.key)}" data-array-toggle="${esc(path)}" ${selected.includes(group.key) ? 'checked' : ''}><span>${esc(group.label || group.key)}</span></label>`).join('')}</div>`;
   }
   function renderPairEditor(items, path) {
-    return `<div class="ss-mini-editor"><div class="ss-mini-head"><span>Chave = valor</span><button type="button" data-ss-action="add-variable" data-path="${esc(path)}">Adicionar</button></div>${items.map((item, index) => `<div class="ss-inline-row"><input data-bind="${path}.${index}.key" value="${esc(item.key || '')}" placeholder="chave"><input data-bind="${path}.${index}.value" value="${esc(item.value || '')}" placeholder="valor"><button type="button" class="danger ghost" data-ss-action="remove-variable" data-path="${esc(path)}" data-index="${index}">×</button></div>`).join('') || '<small>Nenhuma variável.</small>'}</div>`;
+    return `<div class="ss-mini-editor"><div class="ss-mini-head"><span>Chave = valor</span><button type="button" data-ss-action="add-variable" data-path="${esc(path)}">Adicionar</button></div>${items.map((item, index) => `<div class="ss-inline-row"><label class="ss-inline-field">${labelTitle('Chave', 'graphicsVariableKey')}<input data-bind="${path}.${index}.key" value="${esc(item.key || '')}" placeholder="chave"></label><label class="ss-inline-field">${labelTitle('Valor', 'graphicsVariableValue')}<input data-bind="${path}.${index}.value" value="${esc(item.value || '')}" placeholder="valor"></label><button type="button" class="danger ghost" data-ss-action="remove-variable" data-path="${esc(path)}" data-index="${index}" aria-label="Remover variável">×</button></div>`).join('') || '<small>Nenhuma variável.</small>'}</div>`;
   }
 
   function resourceSection(title, subtitle, kind, content) {
@@ -643,18 +796,18 @@
         <summary class="ss-section-summary"><div><span class="eyebrow">Opções globais</span><h3>Comportamento padrão</h3><p>Valores usados quando um módulo não informa uma opção própria.</p></div><span>Configuração</span></summary>
         <div class="ss-section-accordion-body">
           <div class="form-grid four">
-            <label>Duração padrão da Rotation (min)<input type="number" min="1" data-type="number" data-bind="options.defaultRotationDurationMinutes" value="${esc(state.current.options.defaultRotationDurationMinutes)}"></label>
-            <label>Prioridade padrão<input type="number" data-type="number" data-bind="options.defaultFixedPriority" value="${esc(state.current.options.defaultFixedPriority)}"></label>
-            <label>Timeout HTTP (s)<input type="number" min="1" data-type="number" data-bind="options.httpTimeoutSeconds" value="${esc(state.current.options.httpTimeoutSeconds)}"></label>
-            <label>Retenção de ocorrências (dias)<input type="number" min="1" data-type="number" data-bind="options.seenOccurrenceRetentionDays" value="${esc(state.current.options.seenOccurrenceRetentionDays)}"></label>
-            <label class="check-row wide"><input type="checkbox" data-bind="options.allowOverrun" ${state.current.options.allowOverrun !== false ? 'checked' : ''}><span>Não cortar o vídeo atual para cumprir o horário exato</span></label>
+            <label>${labelTitle('Duração padrão da Rotation (min)', 'defaultRotationDuration')}<input type="number" min="1" data-type="number" data-bind="options.defaultRotationDurationMinutes" value="${esc(state.current.options.defaultRotationDurationMinutes)}"></label>
+            <label>${labelTitle('Prioridade padrão', 'defaultPriority')}<input type="number" data-type="number" data-bind="options.defaultFixedPriority" value="${esc(state.current.options.defaultFixedPriority)}"></label>
+            <label>${labelTitle('Timeout HTTP (s)', 'httpTimeout')}<input type="number" min="1" data-type="number" data-bind="options.httpTimeoutSeconds" value="${esc(state.current.options.httpTimeoutSeconds)}"></label>
+            <label>${labelTitle('Retenção de ocorrências (dias)', 'occurrenceRetention')}<input type="number" min="1" data-type="number" data-bind="options.seenOccurrenceRetentionDays" value="${esc(state.current.options.seenOccurrenceRetentionDays)}"></label>
+            <label class="check-row wide"><input type="checkbox" data-bind="options.allowOverrun" ${state.current.options.allowOverrun !== false ? 'checked' : ''}><span>Não cortar o vídeo atual para cumprir o horário exato${help('allowOverrunGlobal')}</span></label>
           </div>
         </div>
       </details>
       <section class="card ss-section-card">
         <div class="section-heading">
           <div><span class="eyebrow">Módulos</span><h3>Programação</h3><p>Adicione somente os módulos que este canal precisa.</p></div>
-          ${inactive.length ? `<div class="ss-add-module"><select id="ssModulePicker">${inactive.map(([key, meta]) => `<option value="${key}">${esc(meta.label)}</option>`).join('')}</select><button type="button" data-ss-action="add-module">Adicionar módulo</button></div>` : ''}
+          ${inactive.length ? `<div class="ss-add-module"><label class="ss-inline-field">${labelTitle('Tipo de módulo', 'modulePicker')}<select id="ssModulePicker">${inactive.map(([key, meta]) => `<option value="${key}">${esc(meta.label)}</option>`).join('')}</select></label><button type="button" data-ss-action="add-module">Adicionar módulo</button></div>` : ''}
         </div>
         <div class="ss-stack">${active.length ? active.map(([key]) => renderModule(key)).join('') : '<div class="empty-state">Nenhum módulo ativo. Adicione um módulo ou use somente o Filler.</div>'}</div>
       </section>
@@ -679,19 +832,19 @@
       <div class="form-grid three">
         ${sourceSelect(`modules.rotation.${index}.source`, item.source)}
         ${profileSelect(`modules.rotation.${index}.presentation`, item.presentation)}
-        <label>Duração (min)<input type="number" min="1" data-type="number" data-bind="modules.rotation.${index}.durationMinutes" value="${esc(item.durationMinutes ?? '')}" placeholder="${esc(state.current.options.defaultRotationDurationMinutes || 60)}"></label>
+        <label>${labelTitle('Duração (min)', 'duration')}<input type="number" min="1" data-type="number" data-bind="modules.rotation.${index}.durationMinutes" value="${esc(item.durationMinutes ?? '')}" placeholder="${esc(state.current.options.defaultRotationDurationMinutes || 60)}"></label>
       </div>${renderPadToNearest(`modules.rotation.${index}`, item)}${renderPlaybackAdvanced(`modules.rotation.${index}`, item)}`);
 
     const base = `modules.${type}.${index}`;
     let body = '';
-    if (type === 'fixedEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${sourceSelect(`${base}.source`, item.source)}<label>Quantidade<input type="number" min="1" data-type="number" data-bind="${base}.count" value="${esc(item.count || 1)}"></label>${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
-    if (type === 'fixedDurationEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${sourceSelect(`${base}.source`, item.source)}<label>Duração (min)<input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(item.durationMinutes || 60)}"></label>${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
+    if (type === 'fixedEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${sourceSelect(`${base}.source`, item.source)}<label>${labelTitle('Quantidade', 'quantity')}<input type="number" min="1" data-type="number" data-bind="${base}.count" value="${esc(item.count || 1)}"></label>${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
+    if (type === 'fixedDurationEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${sourceSelect(`${base}.source`, item.source)}<label>${labelTitle('Duração (min)', 'duration')}<input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(item.durationMinutes || 60)}"></label>${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
     if (type === 'fixedAllEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${sourceSelect(`${base}.source`, item.source)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div><div class="ss-callout">Depois que este bloco começar, todos os itens da Source terminam antes de outro módulo assumir.</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
     if (type === 'fixedWindowEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}${sourceSelect(`${base}.source`, item.source)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
-    if (type === 'windowRotations') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}<label>Bloco padrão (min)<input type="number" min="1" data-type="number" data-bind="${base}.blockMinutes" value="${esc(item.blockMinutes || 30)}"></label>${priorityInput(base, item)}</div>${renderWindowRotationItems(item, index)}${renderCommonAdvanced(base, item, false)}`;
-    if (type === 'sequenceEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}<label class="check-row"><input type="checkbox" data-bind="${base}.atomic" ${item.atomic ? 'checked' : ''}><span>Sequência atômica</span></label></div>${renderSequenceSteps(item.steps || [], `${base}.steps`)}${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, false)}`;
-    if (type === 'intervalEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}<label>A cada (min)<input type="number" min="1" data-type="number" data-bind="${base}.everyMinutes" value="${esc(item.everyMinutes || 30)}"></label>${modeSelect(`${base}.mode`, item.mode, false)}${intervalModeFields(base, item)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}<label>Se atrasar<select data-bind="${base}.latePolicy" data-rerender="true"><option value="queue" ${item.latePolicy === 'queue' ? 'selected' : ''}>Esperar na fila</option><option value="skip" ${item.latePolicy === 'skip' ? 'selected' : ''}>Ignorar se atrasar demais</option></select></label>${item.latePolicy === 'skip' ? `<label>Atraso máximo (min)<input type="number" min="0" data-type="number" data-bind="${base}.maxLatenessMinutes" value="${esc(item.maxLatenessMinutes ?? 10)}"></label>` : ''}</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
-    if (type === 'dateEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}<label>Data e hora<input data-bind="${base}.datetime" value="${esc(item.datetime || '')}" placeholder="2026-12-24 20:00"></label>${modeSelect(`${base}.mode`, item.mode, true)}${dateModeFields(base, item)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${item.mode === 'sequence' ? renderSequenceSteps(item.steps || [], `${base}.steps`) : ''}${renderPadToNearest(base, item)}${renderPlaybackAdvanced(base, item)}`;
+    if (type === 'windowRotations') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}<label>${labelTitle('Bloco padrão (min)', 'blockMinutes')}<input type="number" min="1" data-type="number" data-bind="${base}.blockMinutes" value="${esc(item.blockMinutes || 30)}"></label>${priorityInput(base, item)}</div>${renderWindowRotationItems(item, index)}${renderCommonAdvanced(base, item, false)}`;
+    if (type === 'sequenceEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.time`, item.time, 'Horário')}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}<label class="check-row"><input type="checkbox" data-bind="${base}.atomic" ${item.atomic ? 'checked' : ''}><span>Sequência atômica${help('atomic')}</span></label></div>${renderSequenceSteps(item.steps || [], `${base}.steps`)}${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, false)}`;
+    if (type === 'intervalEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}<label>${labelTitle('A cada (min)', 'everyMinutes')}<input type="number" min="1" data-type="number" data-bind="${base}.everyMinutes" value="${esc(item.everyMinutes || 30)}"></label>${modeSelect(`${base}.mode`, item.mode, false)}${intervalModeFields(base, item)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}<label>${labelTitle('Se atrasar', 'latePolicy')}<select data-bind="${base}.latePolicy" data-rerender="true"><option value="queue" ${item.latePolicy === 'queue' ? 'selected' : ''}>Esperar na fila</option><option value="skip" ${item.latePolicy === 'skip' ? 'selected' : ''}>Ignorar se atrasar demais</option></select></label>${item.latePolicy === 'skip' ? `<label>${labelTitle('Atraso máximo (min)', 'maxLateness')}<input type="number" min="0" data-type="number" data-bind="${base}.maxLatenessMinutes" value="${esc(item.maxLatenessMinutes ?? 10)}"></label>` : ''}</div>${renderPadToNearest(base, item)}${renderCommonAdvanced(base, item, true)}`;
+    if (type === 'dateEvents') body = `<div class="form-grid four">${commonIdFields(base, item)}<label>${labelTitle('Data e hora', 'dateTime')}<input data-bind="${base}.datetime" value="${esc(item.datetime || '')}" placeholder="2026-12-24 20:00"></label>${modeSelect(`${base}.mode`, item.mode, true)}${dateModeFields(base, item)}${priorityInput(base, item)}${profileSelect(`${base}.presentation`, item.presentation)}</div>${item.mode === 'sequence' ? renderSequenceSteps(item.steps || [], `${base}.steps`) : ''}${renderPadToNearest(base, item)}${renderPlaybackAdvanced(base, item)}`;
     if (type === 'offlineWindows') body = `<div class="form-grid four">${commonIdFields(base, item)}${timeInput(`${base}.startTime`, item.startTime, 'Início')}${timeInput(`${base}.endTime`, item.endTime, 'Fim')}${priorityInput(base, item)}</div>${renderDateFilters(base, item)}`;
     return moduleEntryShell(type, index, item.label || item.id || `Item ${index + 1}`, body);
   }
@@ -700,38 +853,41 @@
     return `<details class="ss-event-card ss-accordion-card ss-nested-accordion" ${accordionAttrs(`module-entry:${type}:${index}`)}><summary class="ss-accordion-summary ss-event-summary"><strong>${esc(title)}</strong><span>Editar</span></summary><div class="ss-accordion-body"><div class="ss-accordion-actions"><button type="button" class="danger ghost" data-ss-action="remove-module-entry" data-module="${type}" data-index="${index}">Remover</button></div>${body}</div></details>`;
   }
   function commonIdFields(base, item) {
-    return `<label>ID<input data-bind="${base}.id" value="${esc(item.id || '')}"></label><label>Nome opcional<input data-bind="${base}.label" value="${esc(item.label || '')}" placeholder="Ex.: Especial da noite"></label>`;
+    return `<label>${labelTitle('ID', 'id')}<input data-bind="${base}.id" value="${esc(item.id || '')}"></label><label>${labelTitle('Nome opcional', 'optionalName')}<input data-bind="${base}.label" value="${esc(item.label || '')}" placeholder="Ex.: Especial da noite"></label>`;
   }
-  function sourceSelect(path, value) { return `<label>Source<select data-bind="${path}">${sourceOptions(value)}</select></label>`; }
-  function profileSelect(path, value) { return `<label>Presentation<select data-bind="${path}">${profileOptions(value)}</select></label>`; }
-  function priorityInput(base, item) { return `<label>Prioridade<input type="number" data-type="number" data-bind="${base}.priority" value="${esc(item.priority ?? state.current.options.defaultFixedPriority ?? 100)}"></label>`; }
-  function timeInput(path, value, label) { return `<label>${label}<input type="time" data-bind="${path}" value="${esc(value || '')}"></label>`; }
-  function modeSelect(path, value, sequence) { return `<label>Modo<select data-bind="${path}" data-rerender="true"><option value="count" ${value === 'count' ? 'selected' : ''}>Quantidade</option><option value="duration" ${value === 'duration' ? 'selected' : ''}>Duração</option><option value="all" ${value === 'all' ? 'selected' : ''}>Todos os itens</option>${sequence ? `<option value="sequence" ${value === 'sequence' ? 'selected' : ''}>Sequência</option>` : ''}</select></label>`; }
+  function sourceSelect(path, value, helpKey = 'source') { return `<label>${labelTitle('Source', helpKey)}<select data-bind="${path}">${sourceOptions(value)}</select></label>`; }
+  function profileSelect(path, value, helpKey = 'presentation') { return `<label>${labelTitle('Presentation', helpKey)}<select data-bind="${path}">${profileOptions(value)}</select></label>`; }
+  function priorityInput(base, item) { return `<label>${labelTitle('Prioridade', 'priority')}<input type="number" data-type="number" data-bind="${base}.priority" value="${esc(item.priority ?? state.current.options.defaultFixedPriority ?? 100)}"></label>`; }
+  function timeInput(path, value, label) {
+    const helpKey = label === 'Início' ? 'startTime' : (label === 'Fim' ? 'endTime' : 'time');
+    return `<label>${labelTitle(label, helpKey)}<input type="time" data-bind="${path}" value="${esc(value || '')}"></label>`;
+  }
+  function modeSelect(path, value, sequence) { return `<label>${labelTitle('Modo', 'mode')}<select data-bind="${path}" data-rerender="true"><option value="count" ${value === 'count' ? 'selected' : ''}>Quantidade</option><option value="duration" ${value === 'duration' ? 'selected' : ''}>Duração</option><option value="all" ${value === 'all' ? 'selected' : ''}>Todos os itens</option>${sequence ? `<option value="sequence" ${value === 'sequence' ? 'selected' : ''}>Sequência</option>` : ''}</select></label>`; }
   function intervalModeFields(base, item) {
-    if (item.mode === 'duration') return `${sourceSelect(`${base}.source`, item.source)}<label>Duração (min)<input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(item.durationMinutes || 60)}"></label>`;
+    if (item.mode === 'duration') return `${sourceSelect(`${base}.source`, item.source)}<label>${labelTitle('Duração (min)', 'duration')}<input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(item.durationMinutes || 60)}"></label>`;
     if (item.mode === 'all') return sourceSelect(`${base}.source`, item.source);
-    return `${sourceSelect(`${base}.source`, item.source)}<label>Quantidade<input type="number" min="1" data-type="number" data-bind="${base}.count" value="${esc(item.count || 1)}"></label>`;
+    return `${sourceSelect(`${base}.source`, item.source)}<label>${labelTitle('Quantidade', 'quantity')}<input type="number" min="1" data-type="number" data-bind="${base}.count" value="${esc(item.count || 1)}"></label>`;
   }
   function dateModeFields(base, item) {
     if (item.mode === 'sequence') return '';
-    if (item.mode === 'duration') return `${sourceSelect(`${base}.source`, item.source)}<label>Duração (min)<input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(item.durationMinutes || 60)}"></label>`;
+    if (item.mode === 'duration') return `${sourceSelect(`${base}.source`, item.source)}<label>${labelTitle('Duração (min)', 'duration')}<input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(item.durationMinutes || 60)}"></label>`;
     if (item.mode === 'all') return sourceSelect(`${base}.source`, item.source);
-    return `${sourceSelect(`${base}.source`, item.source)}<label>Quantidade<input type="number" min="1" data-type="number" data-bind="${base}.count" value="${esc(item.count || 1)}"></label>`;
+    return `${sourceSelect(`${base}.source`, item.source)}<label>${labelTitle('Quantidade', 'quantity')}<input type="number" min="1" data-type="number" data-bind="${base}.count" value="${esc(item.count || 1)}"></label>`;
   }
 
   function renderWindowRotationItems(item, index) {
-    return `<div class="ss-mini-editor"><div class="ss-mini-head"><strong>Itens da rotação</strong><button type="button" data-ss-action="add-window-item" data-index="${index}">Adicionar Source</button></div>${(item.items || []).map((entry, j) => {
+    return `<div class="ss-mini-editor"><div class="ss-mini-head"><strong>Itens da rotação</strong><span class="ss-mini-help">Configuração de cada bloco${help('blockMinutes')}</span><button type="button" data-ss-action="add-window-item" data-index="${index}">Adicionar Source</button></div>${(item.items || []).map((entry, j) => {
       const base = `modules.windowRotations.${index}.items.${j}`;
       const padEnabled = Boolean(state.current.filler && String(state.current.filler.source || '').trim()) && state.current.templateVersion === LATEST_TEMPLATE_VERSION;
       const padValue = entry.padToNearestMinutes === null || entry.padToNearestMinutes === undefined ? '' : String(entry.padToNearestMinutes);
-      return `<div class="ss-inline-row ss-window-row"><select data-bind="${base}.source">${sourceOptions(entry.source)}</select><select data-bind="${base}.presentation">${profileOptions(entry.presentation)}</select><input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(entry.durationMinutes ?? '')}" placeholder="Bloco padrão"><select data-type="number" data-bind="${base}.padToNearestMinutes" ${padEnabled ? '' : 'disabled'} aria-label="Pad To Nearest Minute"><option value="" ${padValue === '' ? 'selected' : ''}>Pad: desativado</option>${PAD_TO_NEAREST_OPTIONS.map((minutes) => `<option value="${minutes}" ${padValue === String(minutes) ? 'selected' : ''}>Pad: ${minutes} min</option>`).join('')}</select><button type="button" class="danger ghost" data-ss-action="remove-window-item" data-index="${index}" data-item-index="${j}">×</button></div>`;
+      return `<div class="ss-inline-row ss-window-row"><label class="ss-inline-field">${labelTitle('Source', 'source')}<select data-bind="${base}.source">${sourceOptions(entry.source)}</select></label><label class="ss-inline-field">${labelTitle('Presentation', 'presentation')}<select data-bind="${base}.presentation">${profileOptions(entry.presentation)}</select></label><label class="ss-inline-field">${labelTitle('Duração (min)', 'duration')}<input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(entry.durationMinutes ?? '')}" placeholder="Bloco padrão"></label><label class="ss-inline-field">${labelTitle('Pad To Nearest', 'padToNearest')}<select data-type="number" data-bind="${base}.padToNearestMinutes" ${padEnabled ? '' : 'disabled'}><option value="" ${padValue === '' ? 'selected' : ''}>Desativado</option>${PAD_TO_NEAREST_OPTIONS.map((minutes) => `<option value="${minutes}" ${padValue === String(minutes) ? 'selected' : ''}>${minutes} min</option>`).join('')}</select></label><button type="button" class="danger ghost" data-ss-action="remove-window-item" data-index="${index}" data-item-index="${j}" aria-label="Remover item">×</button></div>`;
     }).join('')}</div>`;
   }
 
   function renderSequenceSteps(steps, path) {
-    return `<div class="ss-mini-editor"><div class="ss-mini-head"><strong>Passos da sequência</strong><button type="button" data-ss-action="add-step" data-path="${esc(path)}">Adicionar passo</button></div>${steps.map((step, index) => {
+    return `<div class="ss-mini-editor"><div class="ss-mini-head"><strong>Passos da sequência</strong><span class="ss-mini-help">Executados na ordem${help('sequenceStepMode')}</span><button type="button" data-ss-action="add-step" data-path="${esc(path)}">Adicionar passo</button></div>${steps.map((step, index) => {
       const base = `${path}.${index}`; const mode = step.mode || 'count';
-      return `<div class="ss-sequence-step"><div class="ss-inline-row"><select data-bind="${base}.mode" data-rerender="true"><option value="count" ${mode === 'count' ? 'selected' : ''}>Quantidade</option><option value="duration" ${mode === 'duration' ? 'selected' : ''}>Duração</option><option value="all" ${mode === 'all' ? 'selected' : ''}>Todos</option><option value="pad_to_next" ${mode === 'pad_to_next' ? 'selected' : ''}>Até próxima marca</option><option value="wait" ${mode === 'wait' ? 'selected' : ''}>Esperar/offline</option></select>${mode !== 'wait' ? `<select data-bind="${base}.source">${sourceOptions(step.source)}</select>` : ''}${mode === 'count' ? `<input type="number" min="1" data-type="number" data-bind="${base}.count" value="${esc(step.count || 1)}" placeholder="Qtd.">` : ''}${['duration', 'wait'].includes(mode) ? `<input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(step.durationMinutes || 1)}" placeholder="Minutos">` : ''}${mode === 'pad_to_next' ? `<input type="number" min="1" data-type="number" data-bind="${base}.minutes" value="${esc(step.minutes || 30)}" placeholder="Marca min.">` : ''}<select data-bind="${base}.presentation">${profileOptions(step.presentation)}</select><button type="button" class="danger ghost" data-ss-action="remove-step" data-path="${esc(path)}" data-index="${index}">×</button></div>${renderPlaybackAdvanced(base, step)}</div>`;
+      return `<div class="ss-sequence-step"><div class="ss-inline-row"><label class="ss-inline-field">${labelTitle('Modo', 'sequenceStepMode')}<select data-bind="${base}.mode" data-rerender="true"><option value="count" ${mode === 'count' ? 'selected' : ''}>Quantidade</option><option value="duration" ${mode === 'duration' ? 'selected' : ''}>Duração</option><option value="all" ${mode === 'all' ? 'selected' : ''}>Todos</option><option value="pad_to_next" ${mode === 'pad_to_next' ? 'selected' : ''}>Até próxima marca</option><option value="wait" ${mode === 'wait' ? 'selected' : ''}>Esperar/offline</option></select></label>${mode !== 'wait' ? `<label class="ss-inline-field">${labelTitle('Source', 'sequenceStepSource')}<select data-bind="${base}.source">${sourceOptions(step.source)}</select></label>` : ''}${mode === 'count' ? `<label class="ss-inline-field">${labelTitle('Quantidade', 'sequenceStepCount')}<input type="number" min="1" data-type="number" data-bind="${base}.count" value="${esc(step.count || 1)}"></label>` : ''}${['duration', 'wait'].includes(mode) ? `<label class="ss-inline-field">${labelTitle('Minutos', 'sequenceStepDuration')}<input type="number" min="1" data-type="number" data-bind="${base}.durationMinutes" value="${esc(step.durationMinutes || 1)}"></label>` : ''}${mode === 'pad_to_next' ? `<label class="ss-inline-field">${labelTitle('Marca (min)', 'sequenceStepMark')}<input type="number" min="1" data-type="number" data-bind="${base}.minutes" value="${esc(step.minutes || 30)}"></label>` : ''}<label class="ss-inline-field">${labelTitle('Presentation', 'sequenceStepPresentation')}<select data-bind="${base}.presentation">${profileOptions(step.presentation)}</select></label><button type="button" class="danger ghost" data-ss-action="remove-step" data-path="${esc(path)}" data-index="${index}" aria-label="Remover passo">×</button></div>${renderPlaybackAdvanced(base, step)}</div>`;
     }).join('')}</div>`;
   }
 
@@ -740,10 +896,10 @@
   }
   function renderDateFilters(base, item) {
     const days = Array.isArray(item.days) ? item.days : [];
-    return `<details class="ss-advanced"><summary>Dias e datas</summary><div class="ss-advanced-body"><label class="check-row"><input type="checkbox" data-bind="${base}.enabled" ${item.enabled !== false ? 'checked' : ''}><span>Evento ativo</span></label><div class="ss-day-picker">${DAY_OPTIONS.map(([value, label]) => `<label><input type="checkbox" value="${value}" data-array-toggle="${base}.days" ${days.includes(value) ? 'checked' : ''}><span>${label}</span></label>`).join('')}</div><div class="form-grid two"><label>Data inicial<input type="date" data-bind="${base}.startDate" value="${esc(item.startDate || '')}"></label><label>Data final<input type="date" data-bind="${base}.endDate" value="${esc(item.endDate || '')}"></label><label>Somente estas datas <small>Uma por linha</small><textarea rows="2" data-type="list" data-bind="${base}.dates">${esc(listValue(item.dates))}</textarea></label><label>Excluir estas datas <small>Uma por linha</small><textarea rows="2" data-type="list" data-bind="${base}.excludeDates">${esc(listValue(item.excludeDates))}</textarea></label></div></div></details>`;
+    return `<details class="ss-advanced"><summary><span>Dias e datas${help('days')}</span></summary><div class="ss-advanced-body"><label class="check-row"><input type="checkbox" data-bind="${base}.enabled" ${item.enabled !== false ? 'checked' : ''}><span>Evento ativo${help('eventEnabled')}</span></label><div class="ss-day-filter-title">Dias da semana${help('days')}</div><div class="ss-day-picker">${DAY_OPTIONS.map(([value, label]) => `<label title="${esc(HELP_TEXT.days)}"><input type="checkbox" value="${value}" data-array-toggle="${base}.days" ${days.includes(value) ? 'checked' : ''}><span>${label}</span></label>`).join('')}</div><div class="form-grid two"><label>${labelTitle('Data inicial', 'startDate')}<input type="date" data-bind="${base}.startDate" value="${esc(item.startDate || '')}"></label><label>${labelTitle('Data final', 'endDate')}<input type="date" data-bind="${base}.endDate" value="${esc(item.endDate || '')}"></label><label>${labelTitle('Somente estas datas', 'onlyDates', '<small>Uma por linha</small>')}<textarea rows="2" data-type="list" data-bind="${base}.dates">${esc(listValue(item.dates))}</textarea></label><label>${labelTitle('Excluir estas datas', 'excludeDates', '<small>Uma por linha</small>')}<textarea rows="2" data-type="list" data-bind="${base}.excludeDates">${esc(listValue(item.excludeDates))}</textarea></label></div></div></details>`;
   }
   function renderPlaybackAdvanced(base, item) {
-    return `<details class="ss-advanced"><summary>Reprodução avançada</summary><div class="ss-advanced-body form-grid three"><label>Título customizado<input data-bind="${base}.customTitle" value="${esc(item.customTitle || '')}"></label><label>Filler kind<input data-bind="${base}.fillerKind" value="${esc(item.fillerKind || '')}"></label><label>Fallback Source<select data-bind="${base}.fallback">${sourceOptions(item.fallback)}</select></label><label>Tentativas descartadas<input type="number" min="0" data-type="number" data-bind="${base}.discardAttempts" value="${esc(item.discardAttempts ?? '')}"></label><label class="check-row"><input type="checkbox" data-bind="${base}.disableWatermarks" ${item.disableWatermarks ? 'checked' : ''}><span>Desativar watermarks nativos</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.trim" ${item.trim ? 'checked' : ''}><span>Permitir trim</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.offlineTail" ${item.offlineTail ? 'checked' : ''}><span>Offline tail</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.allowOverrun" ${item.allowOverrun !== false ? 'checked' : ''}><span>Deixar o vídeo terminar</span></label></div></details>`;
+    return `<details class="ss-advanced"><summary><span>Reprodução avançada${help('fallback')}</span></summary><div class="ss-advanced-body form-grid three"><label>${labelTitle('Título customizado', 'customTitle')}<input data-bind="${base}.customTitle" value="${esc(item.customTitle || '')}"></label><label>${labelTitle('Filler kind', 'fillerKind')}<input data-bind="${base}.fillerKind" value="${esc(item.fillerKind || '')}"></label><label>${labelTitle('Fallback Source', 'fallback')}<select data-bind="${base}.fallback">${sourceOptions(item.fallback)}</select></label><label>${labelTitle('Tentativas descartadas', 'discardAttempts')}<input type="number" min="0" data-type="number" data-bind="${base}.discardAttempts" value="${esc(item.discardAttempts ?? '')}"></label><label class="check-row"><input type="checkbox" data-bind="${base}.disableWatermarks" ${item.disableWatermarks ? 'checked' : ''}><span>Desativar watermarks nativos${help('disableWatermarks')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.trim" ${item.trim ? 'checked' : ''}><span>Permitir trim${help('trim')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.offlineTail" ${item.offlineTail ? 'checked' : ''}><span>Offline tail${help('offlineTail')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.allowOverrun" ${item.allowOverrun !== false ? 'checked' : ''}><span>Deixar o vídeo terminar${help('allowOverrun')}</span></label></div></details>`;
   }
 
   function renderPadToNearest(base, item) {
@@ -754,7 +910,7 @@
     const reason = !hasMotor
       ? `Atualize o motor para ${LATEST_TEMPLATE_VERSION} para usar esta opção.`
       : (!hasFiller ? 'Configure o Filler do projeto para liberar esta opção.' : 'Ao terminar este bloco, o Filler completa até a próxima marca do relógio escolhida.');
-    return `<details class="ss-advanced"><summary>Alinhamento após o bloco</summary><div class="ss-advanced-body form-grid two"><label>Pad To Nearest Minute<select data-type="number" data-bind="${base}.padToNearestMinutes" ${enabled ? '' : 'disabled'}><option value="" ${current === '' ? 'selected' : ''}>Desativado</option>${PAD_TO_NEAREST_OPTIONS.map((minutes) => `<option value="${minutes}" ${current === String(minutes) ? 'selected' : ''}>${minutes} ${minutes === 5 ? '(:00, :05, :10, :15...)' : minutes === 10 ? '(:00, :10, :20, :30, :40, :50)' : minutes === 15 ? '(:00, :15, :30, :45)' : '(:00, :30)'}</option>`).join('')}</select><small>${esc(reason)}</small></label></div></details>`;
+    return `<details class="ss-advanced"><summary><span>Alinhamento após o bloco${help('padToNearest')}</span></summary><div class="ss-advanced-body form-grid two"><label>${labelTitle('Pad To Nearest Minute', 'padToNearest')}<select data-type="number" data-bind="${base}.padToNearestMinutes" ${enabled ? '' : 'disabled'}><option value="" ${current === '' ? 'selected' : ''}>Desativado</option>${PAD_TO_NEAREST_OPTIONS.map((minutes) => `<option value="${minutes}" ${current === String(minutes) ? 'selected' : ''}>${minutes} ${minutes === 5 ? '(:00, :05, :10, :15...)' : minutes === 10 ? '(:00, :10, :20, :30, :40, :50)' : minutes === 15 ? '(:00, :15, :30, :45)' : '(:00, :30)'}</option>`).join('')}</select><small>${esc(reason)}</small></label></div></details>`;
   }
 
   function clearPadToNearestSettings() {
@@ -780,7 +936,7 @@
 
   function renderFiller() {
     const filler = state.current.filler;
-    return `<details class="card ss-section-card ss-section-accordion" ${accordionAttrs('programming:filler')}><summary class="ss-section-summary"><div><span class="eyebrow">Filler</span><h3>Preenchimento de lacunas</h3><p>Usado quando não existe outro evento e a Rotation está vazia.</p></div><span>${filler ? 'Ativo' : 'Desativado'}</span></summary><div class="ss-section-accordion-body"><div class="ss-section-actions"><button type="button" data-ss-action="toggle-filler">${filler ? 'Desativar Filler' : 'Ativar Filler'}</button></div>${filler ? `<div class="form-grid two">${sourceSelect('filler.source', filler.source)}${profileSelect('filler.presentation', filler.presentation)}</div>${renderPlaybackAdvanced('filler', filler)}` : '<div class="empty-state">Filler desativado. Lacunas sem outros módulos ficarão sem programação.</div>'}</div></details>`;
+    return `<details class="card ss-section-card ss-section-accordion" ${accordionAttrs('programming:filler')}><summary class="ss-section-summary"><div><span class="eyebrow">Filler</span><h3>Preenchimento de lacunas</h3><p>Usado quando não existe outro evento e a Rotation está vazia.</p></div><span>${filler ? 'Ativo' : 'Desativado'}</span></summary><div class="ss-section-accordion-body"><div class="ss-section-actions"><button type="button" data-ss-action="toggle-filler">${filler ? 'Desativar Filler' : 'Ativar Filler'}</button></div>${filler ? `<div class="form-grid two">${sourceSelect('filler.source', filler.source, 'fillerSource')}${profileSelect('filler.presentation', filler.presentation, 'fillerPresentation')}</div>${renderPlaybackAdvanced('filler', filler)}` : '<div class="empty-state">Filler desativado. Lacunas sem outros módulos ficarão sem programação.</div>'}</div></details>`;
   }
 
   function renderEditorSaveBar(sectionLabel) {

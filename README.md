@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.3.0
+# ErsatzTV YouTube Downloader 3.3.1
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.3.0 amplia **Scripted Schedules** com o motor Universal v1.2.0 e o recurso opcional **Pad To Nearest Minute** por bloco/evento. O preenchimento usa o Filler do projeto e só pode ser ativado quando ele está configurado. Projetos existentes no motor v1.1.1 continuam compatíveis e podem ser atualizados manualmente para v1.2.0.
+A versão 3.3.1 melhora a usabilidade de **Scripted Schedules** com ajuda contextual em todos os grupos de configuração. Pequenos ícones `?` explicam cada campo em linguagem simples e mostram exemplos práticos quando isso ajuda, sem alterar o motor Universal v1.2.0 nem a lógica dos scripts gerados.
 
 ## Arquitetura
 

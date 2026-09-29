@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.3.1
+
+- Toda a área **Scripted Schedules** ganha ajuda contextual discreta nos campos de configuração.
+- Um pequeno `?` ao lado do rótulo mostra explicações em linguagem simples ao passar o mouse, focar pelo teclado ou tocar no ícone.
+- As ajudas cobrem Geral, Recursos, opções globais, módulos, filtros de dias/datas, Filler e Reprodução avançada.
+- Campos técnicos como **Filler kind**, **Fallback Source**, **Tentativas descartadas**, **Trim**, **Offline tail** e **Pad To Nearest Minute** agora explicam o efeito prático e quando deixar a opção vazia/desativada.
+- Campos compostos que antes apareciam apenas como controles em linha (GUIDs, itens de Scripted Playlist, rotação em janela, passos de sequência e variáveis de Graphics) passam a exibir rótulos curtos com ajuda contextual.
+- Nenhuma alteração no schema, motor Universal v1.2.0, gerador Python ou comportamento da programação.
+- 102 testes automatizados aprovados para a v3.3.1.
+
 ## 3.3.0
 
 - Scripted Schedules ganha **Pad To Nearest Minute** opcional por bloco/evento nos módulos de conteúdo.

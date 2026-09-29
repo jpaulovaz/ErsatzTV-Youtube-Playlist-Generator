@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.3.0 - pacote de atualização
+ErsatzTV YouTube Downloader 3.3.1 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.2.1.
+Extraia este ZIP sobre uma instalação v3.3.0.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,13 +9,10 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principais mudanças:
-- novo motor Scripted Schedule Universal v1.2.0;
-- Pad To Nearest Minute opcional por bloco/evento de conteúdo;
-- valores 5, 10, 15 e 30 minutos, desativados por padrão;
-- o preenchimento reutiliza o Filler já configurado no projeto;
-- sem Filler configurado a interface não libera a opção e o backend rejeita a configuração;
-- OFFLINE_WINDOWS e o próprio Filler não recebem esta opção;
-- projetos antigos no motor v1.1.1 continuam suportados sem atualização silenciosa;
-- botão Atualizar motor na aba Geral libera manualmente o v1.2.0 em projetos antigos.
+- ajuda contextual discreta em toda a configuração de Scripted Schedules;
+- explicações em linguagem simples com exemplos práticos quando necessário;
+- Filler kind, Fallback Source e demais opções avançadas agora documentadas diretamente na interface;
+- controles em linha ganham rótulos curtos e ajuda;
+- nenhuma alteração no motor Universal, schema ou scripts já configurados.
 
 Consulte UPGRADE.md antes da atualização.

@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.3\.0/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.3\.0/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.3\.1/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.3\.1/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -177,8 +177,8 @@ test('Scripted Schedules is an isolated builder view with all Universal v1.2.0 m
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.3\.0/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.3\.0/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.3\.1/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.3\.1/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -223,6 +223,32 @@ test('Scripted Schedules resources and programming keep accordion state and expo
 });
 
 
+
+test('Scripted Schedules exposes discreet contextual help for configuration fields', () => {
+  const view = read('js/scriptedSchedulesView.js');
+  const css = read('scripted-schedules.css');
+
+  assert.match(view, /const HELP_TEXT = \{/);
+  assert.match(view, /function help\(key\)/);
+  assert.match(view, /function labelTitle\(text, key/);
+  assert.match(view, /data-ss-help=/);
+  assert.match(view, /showHelpPopover/);
+  assert.match(view, /hideHelpPopover/);
+  assert.match(view, /Filler kind/);
+  assert.match(view, /Marca este conteúdo como filler/);
+  assert.match(view, /Fallback Source/);
+  assert.match(view, /Isso é diferente do Filler geral do projeto/);
+  assert.match(view, /Pad To Nearest Minute/);
+  assert.match(view, /se terminar 10:07, preenche até 10:15/);
+  assert.match(view, /labelTitle\('Nome do projeto', 'projectName'\)/);
+  assert.match(view, /labelTitle\('Smart Collection', 'smartCollection'\)/);
+  assert.match(view, /labelTitle\('Prioridade', 'priority'\)/);
+  assert.match(view, /labelTitle\('Título customizado', 'customTitle'\)/);
+  assert.match(css, /\.ss-help\s*\{/);
+  assert.match(css, /\.ss-help-popover\s*\{/);
+  assert.match(css, /width: 14px/);
+});
+
 test('Scripted Schedules exposes post-block padding only on content modules and not on Offline or Filler', () => {
   const view = read('js/scriptedSchedulesView.js');
   assert.match(view, /renderPadToNearest\(`modules\.rotation\.\$\{index\}`/);
@@ -232,7 +258,7 @@ test('Scripted Schedules exposes post-block padding only on content modules and 
   }
   const windowRotationRenderer = view.match(/function renderWindowRotationItems\(item, index\)[\s\S]*?function renderSequenceSteps/);
   assert.ok(windowRotationRenderer && windowRotationRenderer[0].includes('padToNearestMinutes'), 'Window Rotation items should expose Pad To Nearest Minute per item');
-  assert.ok(windowRotationRenderer && windowRotationRenderer[0].includes('Pad: desativado'), 'Window Rotation pad should default to disabled');
+  assert.ok(windowRotationRenderer && windowRotationRenderer[0].includes('>Desativado</option>'), 'Window Rotation pad should default to disabled');
   const offlineLine = view.split('\n').find((row) => row.includes("if (type === 'offlineWindows') body ="));
   assert.ok(offlineLine && !offlineLine.includes('renderPadToNearest'), 'Offline must not expose Pad To Nearest Minute');
   const fillerRenderer = view.match(/function renderFiller\(\)[\s\S]*?function renderEditorSaveBar/);
