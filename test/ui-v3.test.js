@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.3/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.3/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.4/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.4/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -177,8 +177,8 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.0 modul
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.4\.3/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.3/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.4\.4/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.4/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -239,7 +239,7 @@ test('Scripted Schedules exposes discreet contextual help for configuration fiel
   assert.match(view, /Fallback Source/);
   assert.match(view, /Isso é diferente do Filler geral do projeto/);
   assert.match(view, /Pad To Nearest Minute/);
-  assert.match(view, /se um item terminar 10:07, preenche até 10:15/);
+  assert.match(view, /se um filme terminar 10:07, o Filler completa até 10:15/);
   assert.match(view, /labelTitle\('Nome do projeto', 'projectName'\)/);
   assert.match(view, /labelTitle\('Smart Collection', 'smartCollection'\)/);
   assert.match(view, /labelTitle\('Prioridade', 'priority'\)/);
@@ -329,7 +329,7 @@ test('Scripted Schedules Help stays inside the Programacao sidebar group and is 
   assert.match(programacaoGroup, /data-view="help"/);
   assert.doesNotMatch(sistemaGroup, /data-view="help"/);
   assert.match(html, /id="view-help"/);
-  assert.match(html, /helpView\.js\?v=3\.4\.3/);
+  assert.match(html, /helpView\.js\?v=3\.4\.4/);
   assert.match(help, /Programação · Scripted Schedules/);
   assert.match(help, /Assuntos da ajuda de Scripted Schedules/);
   for (const tab of ['Começando', 'Recursos', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));
@@ -359,4 +359,37 @@ test('module selection modal keeps only module names in the left list and detail
   assert.match(css, /\.ss-module-picker-list[\s\S]*overflow-x: hidden/);
   assert.match(css, /\.ss-module-picker-item[\s\S]*white-space: normal/);
   assert.match(css, /\.ss-module-picker-description/);
+});
+
+test('Scripted Schedules follows a fluent resource order and configures Filler before modules', () => {
+  const view = read('js/scriptedSchedulesView.js');
+  const help = read('js/helpView.js');
+  const css = read('scripted-schedules.css');
+
+  const resources = view.match(/function renderResources\(\)[\s\S]*?function renderGraphicsGroups/)?.[0] || '';
+  const graphicsIndex = resources.indexOf('${renderGraphicsGroups()}');
+  const profilesIndex = resources.indexOf('${renderProfiles()}');
+  const sourcesIndex = resources.indexOf('${renderSources()}');
+  const playlistsIndex = resources.indexOf('${renderScriptedPlaylists()}');
+  assert.ok(graphicsIndex >= 0 && graphicsIndex < profilesIndex, 'Graphics Groups should come before Presentation Profiles');
+  assert.ok(profilesIndex < sourcesIndex, 'Presentation Profiles should exist before Sources choose a default profile');
+  assert.ok(sourcesIndex < playlistsIndex, 'Sources should exist before Scripted Playlists use them');
+
+  assert.match(view, /Pre-roll opcional/);
+  assert.match(view, /crie a Scripted Playlist depois e volte aqui para selecioná-la/);
+
+  const programming = view.match(/function renderProgramming\(\)[\s\S]*?function renderModulePickerModal/)?.[0] || '';
+  assert.ok(programming.indexOf('${renderFiller()}') < programming.indexOf('>Módulos<'), 'Filler should be configured before programming modules');
+
+  assert.match(help, /A tela segue a ordem mais comum/);
+  assert.match(help, /Quando usado como Filler do projeto, o conteúdo é marcado como Filler no ErsatzTV/);
+  assert.match(css, /\.ss-module-picker-description \.ss-callout \+ \.ss-callout \{ margin-top: 12px; \}/);
+});
+
+test('global Filler hides manual filler kind because EPG filler marking is automatic', () => {
+  const view = read('js/scriptedSchedulesView.js');
+  const fillerRenderer = view.match(/function renderFiller\(\)[\s\S]*?function renderEditorSaveBar/)?.[0] || '';
+  assert.match(fillerRenderer, /hideFillerKind: true/);
+  assert.match(fillerRenderer, /marcado automaticamente como Filler no ErsatzTV/);
+  assert.doesNotMatch(fillerRenderer, /data-bind=\\"filler\.fillerKind\\"/);
 });

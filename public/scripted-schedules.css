@@ -393,6 +393,7 @@ button.ghost { background: transparent; }
   padding: 18px;
 }
 .ss-module-picker-description h3 { margin: 6px 0 10px; }
+.ss-module-picker-description .ss-callout + .ss-callout { margin-top: 12px; }
 .ss-module-modal > .modal-actions { flex: 0 0 auto; }
 @media (max-width: 760px) {
   .ss-module-picker-layout { grid-template-columns: 1fr; overflow-y: auto; }

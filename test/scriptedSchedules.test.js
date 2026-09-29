@@ -503,3 +503,14 @@ test('projects cannot publish or validate the same output filename', async () =>
     await store.deleteProject(second.id);
   }
 });
+
+test('global Filler is always serialized as ErsatzTV postroll filler for EPG grouping', async () => {
+  const project = musicProject();
+  project.filler = { source: 'FILLER', presentation: 'common', fillerKind: 'midroll' };
+  const script = await generateScript(project);
+  const fillerBlock = script.match(/FILLER: dict\[str, Any\] \| None = \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(fillerBlock, /"filler_kind": "postroll"/);
+  assert.doesNotMatch(fillerBlock, /"filler_kind": "midroll"/);
+  const output = await validateWithPython(script);
+  assert.match(output, /configuracao valida/);
+});

@@ -287,7 +287,7 @@ function projectToEngine(project) {
   if (!profiles.none) profiles.none = { graphics: [], watermarks: [], pre_roll: null, epg_group: false };
 
   const modules = modulesToEngine(project);
-  const filler = project.filler ? compact({ source: project.filler.source, presentation: project.filler.presentation, ...playbackFields(project.filler) }) : null;
+  const filler = project.filler ? compact({ source: project.filler.source, presentation: project.filler.presentation, ...playbackFields(project.filler), filler_kind: 'postroll' }) : null;
   const options = project.options || {};
 
   return {

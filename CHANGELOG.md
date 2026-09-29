@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.4.4
+
+- A ordem de **Recursos** foi revisada para reduzir idas e voltas: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. Presentation Profiles ficam logo após Graphics, permitindo que uma nova Source já escolha sua Presentation padrão.
+- Como o pre-roll depende de uma Scripted Playlist, ele passa a ficar em uma área opcional dentro do Presentation Profile; se a playlist ainda não existir, a interface orienta a voltar depois sem bloquear a criação do perfil.
+- Na aba **Programação**, o **Filler** passa a aparecer antes dos módulos, pois ele precisa existir antes de liberar Pad To Nearest Minute.
+- O Filler geral é marcado automaticamente como `postroll` no payload do ErsatzTV. Assim, o conteúdo usado para preencher lacunas é tratado como filler para o EPG, em vez de criar uma entrada própria no guia.
+- O campo técnico **Filler kind** deixa de aparecer no Filler geral; essa marcação passa a ser responsabilidade do aplicativo. O campo continua disponível onde faz sentido em reprodução avançada de outros conteúdos.
+- O modal **Adicionar módulo** ganha espaçamento entre os cards **Combina bem com** e **Pad To Nearest Minute**, eliminando a junção visual entre os dois blocos.
+- A Ajuda foi alinhada à nova ordem de configuração e ao comportamento do Filler no EPG.
+- A ajuda contextual antiga do Pad foi corrigida para descrever o comportamento por item já implantado na v3.4.3.
+- Nenhuma alteração em `configVersion`, schema de projetos, Universal v1.3.0, Canais, Bibliotecas, fila ou downloads.
+
 ## 3.4.3
 
 - **Pad To Nearest Minute** passa a significar alinhamento **entre os itens**, e não depois do bloco inteiro. Exemplo: 3 filmes com Pad de 15 minutos executam filme -> Filler até a próxima marca -> filme -> Filler -> filme -> Filler.

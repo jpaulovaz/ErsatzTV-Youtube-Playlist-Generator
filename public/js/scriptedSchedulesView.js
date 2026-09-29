@@ -46,7 +46,7 @@
     includeGraphicsGroups: 'Permite montar um grupo usando outros grupos já cadastrados. Exemplo: MUSIC_GRAPHICS pode incluir COMMON_GRAPHICS.',
     sourceType: 'Define de onde o ErsatzTV buscará o conteúdo: Smart Collection, Collection, Playlist, Search, Show, Marathon etc.',
     sourceOrder: 'Ordem entregue pelo ErsatzTV. Chronological segue a ordem natural; Shuffle embaralha os itens.',
-    sourcePresentation: 'Perfil visual usado por padrão quando esta Source toca. Um módulo pode escolher outra Presentation e substituir este padrão.',
+    sourcePresentation: 'Perfil visual usado por padrão quando esta Source toca. Os Presentation Profiles ficam acima nesta tela; um módulo também pode escolher outro perfil.',
     smartCollection: 'Smart Collection do ErsatzTV usada como fonte de conteúdo. Quando o catálogo está disponível, escolha pelo nome.',
     ersatzName: 'Nome exato da Collection ou Multi-Collection existente no ErsatzTV.',
     playlist: 'Nome da Playlist existente no ErsatzTV.',
@@ -61,7 +61,7 @@
     guidValue: 'Valor do identificador no provedor escolhido. Exemplo: 12345.',
     playlistItemSource: 'Source que será usada neste passo da Scripted Playlist.',
     playlistItemCount: 'Quantidade de itens dessa Source colocados na Scripted Playlist. Exemplo: 2 toca dois itens antes de seguir para o próximo passo.',
-    preRoll: 'Scripted Playlist executada antes dos itens que usam este perfil. Exemplo: uma vinheta e dois comerciais antes do programa.',
+    preRoll: 'Scripted Playlist executada antes dos itens que usam este perfil. É opcional: se ainda não criou a playlist, deixe vazio e volte depois.',
     epgGroup: 'Agrupa o conteúdo deste bloco como um programa no EPG, em vez de deixar cada item aparecer separadamente.',
     epgTitle: 'Título mostrado no EPG quando o agrupamento está ativo. Exemplo: Sessão Prime.',
     epgAdvance: 'Quando ativo, inicia um novo grupo no EPG. Desativado continua o grupo EPG que já estiver aberto.',
@@ -107,7 +107,7 @@
     trim: 'Permite ao ErsatzTV cortar um item para caber exatamente no tempo disponível. Deixe desligado quando não quiser cortar vídeos.',
     offlineTail: 'Depois de colocar tudo que couber, deixa o tempo restante sem programação em vez de preenchê-lo.',
     allowOverrun: 'Permite que o último vídeo termine mesmo ultrapassando o limite do bloco. É a opção indicada quando você não quer cortes.',
-    padToNearest: 'Depois que este bloco terminar, usa o Filler geral do projeto até a próxima marca escolhida. Se o bloco tocar 3 itens, o Pad entra depois do terceiro, não entre eles. Exemplo: com 15, se um item terminar 10:07, preenche até 10:15 antes do próximo item. Fica desativado por padrão.',
+    padToNearest: 'Nos módulos compatíveis, depois de cada item usa o Filler geral até a próxima marca escolhida. Exemplo: com 15, se um filme terminar 10:07, o Filler completa até 10:15 antes do próximo filme. Um evento com horário marcado continua entrando no horário dele.',
     sequenceStepMode: 'O que este passo faz: toca uma quantidade, toca por duração, toca todos, preenche até a próxima marca ou espera offline.',
     sequenceStepSource: 'Source usada apenas neste passo da sequência.',
     sequenceStepCount: 'Quantidade de itens tocados neste passo antes de seguir para o próximo.',
@@ -135,7 +135,7 @@
     startDatetime: 'Data e hora em que a programação especial começa.',
     endDatetime: 'Data e hora em que a programação especial termina e a grade normal volta.',
     moduleDescription: 'Resumo rápido do módulo. A área Ajuda possui exemplos maiores e sugestões de combinações.',
-    fillerSource: 'Source usada como preenchimento geral quando não há outro conteúdo ativo. Ela também é usada pelo Pad To Nearest Minute.',
+    fillerSource: 'Source usada como preenchimento geral quando não há outro conteúdo ativo. Ela também é usada pelo Pad To Nearest Minute e é marcada automaticamente como Filler no EPG.',
     fillerPresentation: 'Presentation aplicada ao Filler geral enquanto ele estiver preenchendo uma lacuna.'
   };
 
@@ -718,9 +718,9 @@
   function renderResources() {
     return `
       ${renderGraphicsGroups()}
+      ${renderProfiles()}
       ${renderSources()}
       ${renderScriptedPlaylists()}
-      ${renderProfiles()}
       ${renderEditorSaveBar('Recursos')}`;
   }
 
@@ -817,7 +817,6 @@
             <div class="form-grid two">
               <label>${labelTitle('Nome amigável', 'friendlyName')}<input data-bind="presentationProfiles.${index}.label" value="${esc(profile.label || '')}"></label>
               <label>${labelTitle('Chave', 'key')}<input data-bind="presentationProfiles.${index}.key" value="${esc(profile.key)}" ${profile.key === 'none' ? 'disabled' : ''}></label>
-              <label>${labelTitle('Pre-roll', 'preRoll')}<select data-bind="presentationProfiles.${index}.preRoll">${playlistOptions(profile.preRoll)}</select></label>
               <label class="check-row"><input type="checkbox" data-bind="presentationProfiles.${index}.epgGroup" data-rerender="true" ${profile.epgGroup ? 'checked' : ''}><span>Agrupar no EPG${help('epgGroup')}</span></label>
               ${profile.epgGroup ? `<label>${labelTitle('Título no EPG', 'epgTitle')}<input data-bind="presentationProfiles.${index}.epgTitle" value="${esc(profile.epgTitle || '')}"></label><label class="check-row"><input type="checkbox" data-bind="presentationProfiles.${index}.epgAdvance" ${profile.epgAdvance !== false ? 'checked' : ''}><span>Iniciar novo grupo no EPG${help('epgAdvance')}</span></label>` : ''}
               <label class="wide">${labelTitle('Graphics diretos', 'directGraphics', '<small>Um YAML por linha</small>')}<textarea rows="3" data-bind="presentationProfiles.${index}.graphics" data-type="list">${esc(listValue(profile.graphics))}</textarea></label>
@@ -825,6 +824,7 @@
             </div>
             ${renderGroupChoices(profile.graphicsGroups || [], `presentationProfiles.${index}.graphicsGroups`)}
             <details class="ss-advanced"><summary><span>Variáveis dos Graphics${help('graphicsVariableKey')}</span></summary>${renderPairEditor(profile.graphicsVariables || [], `presentationProfiles.${index}.graphicsVariables`)}</details>
+            <details class="ss-advanced"><summary><span>Pre-roll opcional${help('preRoll')}</span></summary><div class="ss-advanced-body form-grid two"><label>${labelTitle('Scripted Playlist', 'preRoll')}<select data-bind="presentationProfiles.${index}.preRoll">${playlistOptions(profile.preRoll)}</select>${state.current.scriptedPlaylists.length ? '' : '<small>Se precisar de pre-roll, crie a Scripted Playlist depois e volte aqui para selecioná-la.</small>'}</label></div></details>
           </div>
         </details>`).join(''));
   }
@@ -865,6 +865,7 @@
           </div>
         </div>
       </details>
+      ${renderFiller()}
       <section class="card ss-section-card">
         <div class="section-heading">
           <div><span class="eyebrow">Módulos</span><h3>Programação</h3><p>Adicione somente os módulos que este canal precisa.</p></div>
@@ -873,7 +874,6 @@
         <div class="ss-callout"><strong>Programação-base:</strong> normalmente escolha uma entre Rotação por tempo, Rotação por quantidade, Rotação por peso, Bloco contínuo ou Inserções após X itens. Eventos fixos podem entrar por cima dela.</div>
         <div class="ss-stack">${active.length ? active.map(([key]) => renderModule(key)).join('') : '<div class="empty-state">Nenhum módulo ativo. Adicione um módulo ou use somente o Filler.</div>'}</div>
       </section>
-      ${renderFiller()}
       ${renderEditorSaveBar('Programação')}
       ${state.modulePickerOpen ? renderModulePickerModal(inactive) : ''}`;
   }
@@ -998,8 +998,9 @@
         : '';
     return `<details class="ss-advanced"><summary><span>Dias e datas${help('days')}</span></summary><div class="ss-advanced-body"><label class="check-row"><input type="checkbox" data-bind="${base}.enabled" ${item.enabled !== false ? 'checked' : ''}><span>Evento ativo${help('eventEnabled')}</span></label><div class="ss-day-filter-title">Dias da semana${help('days')}</div><div class="ss-day-picker">${DAY_OPTIONS.map(([value, label]) => `<label title="${esc(HELP_TEXT.days)}"><input type="checkbox" value="${value}" data-array-toggle="${base}.days" ${days.includes(value) ? 'checked' : ''}><span>${label}</span></label>`).join('')}</div><div class="form-grid two"><label>${labelTitle('Data inicial', 'startDate')}<input type="date" data-bind="${base}.startDate" value="${esc(item.startDate || '')}"></label><label>${labelTitle('Data final', 'endDate')}<input type="date" data-bind="${base}.endDate" value="${esc(item.endDate || '')}"></label><label>${labelTitle('Somente estas datas', 'onlyDates', '<small>Uma por linha</small>')}<textarea rows="2" data-type="list" data-bind="${base}.dates">${esc(listValue(item.dates))}</textarea></label><label>${labelTitle('Excluir estas datas', 'excludeDates', '<small>Uma por linha</small>')}<textarea rows="2" data-type="list" data-bind="${base}.excludeDates">${esc(listValue(item.excludeDates))}</textarea></label><label>${labelTitle('Recorrência avançada', 'recurrenceType')}<select data-bind="${base}.recurrenceType" data-rerender="true"><option value="none" ${recurrence === 'none' ? 'selected' : ''}>Sem recorrência extra</option><option value="monthly_nth_weekday" ${recurrence === 'monthly_nth_weekday' ? 'selected' : ''}>Uma semana do mês</option><option value="every_n_days" ${recurrence === 'every_n_days' ? 'selected' : ''}>A cada N dias</option></select></label>${recurrenceFields}</div></div></details>`;
   }
-  function renderPlaybackAdvanced(base, item) {
-    return `<details class="ss-advanced"><summary><span>Reprodução avançada${help('fallback')}</span></summary><div class="ss-advanced-body form-grid three"><label>${labelTitle('Título customizado', 'customTitle')}<input data-bind="${base}.customTitle" value="${esc(item.customTitle || '')}"></label><label>${labelTitle('Filler kind', 'fillerKind')}<input data-bind="${base}.fillerKind" value="${esc(item.fillerKind || '')}"></label><label>${labelTitle('Fallback Source', 'fallback')}<select data-bind="${base}.fallback">${sourceOptions(item.fallback)}</select></label><label>${labelTitle('Tentativas descartadas', 'discardAttempts')}<input type="number" min="0" data-type="number" data-bind="${base}.discardAttempts" value="${esc(item.discardAttempts ?? '')}"></label><label class="check-row"><input type="checkbox" data-bind="${base}.disableWatermarks" ${item.disableWatermarks ? 'checked' : ''}><span>Desativar watermarks nativos${help('disableWatermarks')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.trim" ${item.trim ? 'checked' : ''}><span>Permitir trim${help('trim')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.offlineTail" ${item.offlineTail ? 'checked' : ''}><span>Offline tail${help('offlineTail')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.allowOverrun" ${item.allowOverrun !== false ? 'checked' : ''}><span>Deixar o vídeo terminar${help('allowOverrun')}</span></label></div></details>`;
+  function renderPlaybackAdvanced(base, item, options = {}) {
+    const fillerKindField = options.hideFillerKind ? '' : `<label>${labelTitle('Filler kind', 'fillerKind')}<input data-bind="${base}.fillerKind" value="${esc(item.fillerKind || '')}"></label>`;
+    return `<details class="ss-advanced"><summary><span>Reprodução avançada${help('fallback')}</span></summary><div class="ss-advanced-body form-grid three"><label>${labelTitle('Título customizado', 'customTitle')}<input data-bind="${base}.customTitle" value="${esc(item.customTitle || '')}"></label>${fillerKindField}<label>${labelTitle('Fallback Source', 'fallback')}<select data-bind="${base}.fallback">${sourceOptions(item.fallback)}</select></label><label>${labelTitle('Tentativas descartadas', 'discardAttempts')}<input type="number" min="0" data-type="number" data-bind="${base}.discardAttempts" value="${esc(item.discardAttempts ?? '')}"></label><label class="check-row"><input type="checkbox" data-bind="${base}.disableWatermarks" ${item.disableWatermarks ? 'checked' : ''}><span>Desativar watermarks nativos${help('disableWatermarks')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.trim" ${item.trim ? 'checked' : ''}><span>Permitir trim${help('trim')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.offlineTail" ${item.offlineTail ? 'checked' : ''}><span>Offline tail${help('offlineTail')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.allowOverrun" ${item.allowOverrun !== false ? 'checked' : ''}><span>Deixar o vídeo terminar${help('allowOverrun')}</span></label></div></details>`;
   }
 
   function versionAtLeast(value, minimum) { const a = String(value || '').split('.').map(Number); const b = String(minimum).split('.').map(Number); for (let i = 0; i < 3; i += 1) { if ((a[i] || 0) > (b[i] || 0)) return true; if ((a[i] || 0) < (b[i] || 0)) return false; } return true; }
@@ -1048,7 +1049,7 @@
 
   function renderFiller() {
     const filler = state.current.filler;
-    return `<details class="card ss-section-card ss-section-accordion" ${accordionAttrs('programming:filler')}><summary class="ss-section-summary"><div><span class="eyebrow">Filler</span><h3>Preenchimento de lacunas</h3><p>Última camada de preenchimento quando nenhum outro conteúdo de programação está ativo.</p></div><span>${filler ? 'Ativo' : 'Desativado'}</span></summary><div class="ss-section-accordion-body"><div class="ss-section-actions"><button type="button" data-ss-action="toggle-filler">${filler ? 'Desativar Filler' : 'Ativar Filler'}</button></div>${filler ? `<div class="form-grid two">${sourceSelect('filler.source', filler.source, 'fillerSource')}${profileSelect('filler.presentation', filler.presentation, 'fillerPresentation')}</div>${renderPlaybackAdvanced('filler', filler)}` : '<div class="empty-state">Filler desativado. Lacunas sem outros módulos ficarão sem programação.</div>'}</div></details>`;
+    return `<details class="card ss-section-card ss-section-accordion" ${accordionAttrs('programming:filler')}><summary class="ss-section-summary"><div><span class="eyebrow">Filler</span><h3>Preenchimento de lacunas</h3><p>Última camada de preenchimento quando nenhum outro conteúdo de programação está ativo.</p></div><span>${filler ? 'Ativo' : 'Desativado'}</span></summary><div class="ss-section-accordion-body"><div class="ss-section-actions"><button type="button" data-ss-action="toggle-filler">${filler ? 'Desativar Filler' : 'Ativar Filler'}</button></div>${filler ? `<div class="form-grid two">${sourceSelect('filler.source', filler.source, 'fillerSource')}${profileSelect('filler.presentation', filler.presentation, 'fillerPresentation')}</div><div class="ss-callout"><strong>EPG:</strong> o conteúdo usado aqui é marcado automaticamente como Filler no ErsatzTV e não cria uma entrada própria no guia.</div>${renderPlaybackAdvanced('filler', filler, { hideFillerKind: true })}` : '<div class="empty-state">Filler desativado. Lacunas sem outros módulos ficarão sem programação.</div>'}</div></details>`;
   }
 
   function renderEditorSaveBar(sectionLabel) {

@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.3
+# ErsatzTV YouTube Downloader 3.4.4
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.3 corrige o comportamento de **Pad To Nearest Minute** no motor Universal v1.3.0: quando o módulo é compatível, o alinhamento acontece **depois de cada item**, usando o Filler até a próxima marca. Eventos com horário marcado continuam entrando no horário configurado. A compatibilidade foi ajustada conforme as operações disponíveis no Scripted Schedule do ErsatzTV Legacy v26.10.0.
+A versão 3.4.4 melhora o fluxo de configuração do **Scripted Schedules**, marca automaticamente o Filler geral como filler no ErsatzTV para não criar uma entrada própria no EPG e corrige o espaçamento dos cards de ajuda no seletor de módulos. O motor continua Universal v1.3.0 e o comportamento do Pad por item da v3.4.3 é preservado.
 
 ## Arquitetura
 
@@ -208,9 +208,9 @@ Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando
 
 A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir de um motor Universal versionado. **Novos projetos usam Universal v1.3.0**; projetos antigos em v1.1.1/v1.2.0 não são atualizados silenciosamente.
 
-O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos podem ser cadastrados grupos de Graphics, Sources, Scripted Playlists e Presentation Profiles. Em Programação, somente os módulos escolhidos aparecem. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas.
+O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas.
 
-Módulos disponíveis na v3.4.3:
+Módulos disponíveis na v3.4.4:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -231,7 +231,7 @@ Módulos disponíveis na v3.4.3:
 - **Evento em data específica**.
 - **Janela offline**.
 
-O **Filler** permanece separado dos módulos e é opcional. Programações de fundo como rotações, Bloco contínuo e Inserções após X itens são alternativas de programação-base; o validador avisa quando várias bases são configuradas ao mesmo tempo. Eventos fixos podem ser colocados por cima da base usando prioridade e horários.
+O **Filler** permanece separado dos módulos e é opcional. Quando configurado como Filler geral, o gerador o envia ao ErsatzTV com `filler_kind=postroll`, para que o conteúdo de preenchimento não crie uma entrada própria no EPG. Programações de fundo como rotações, Bloco contínuo e Inserções após X itens são alternativas de programação-base; o validador avisa quando várias bases são configuradas ao mesmo tempo. Eventos fixos podem ser colocados por cima da base usando prioridade e horários.
 
 Os filtros de dias e datas também suportam **recorrência avançada**, incluindo primeira/segunda/terceira/quarta/última ocorrência de um dia da semana no mês e repetição a cada N dias.
 
