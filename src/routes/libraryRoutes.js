@@ -45,6 +45,8 @@ async function handleLibraryRoutes(req, res, url, deps) {
     result = await testPlaylistCookies(config, playlistName);
   } else if (action === 'refresh-thumbnails') {
     result = await downloadManager.refreshThumbnails(playlist.folderName);
+  } else if (action === 'refresh-release-dates') {
+    result = await downloadManager.refreshReleaseDates(playlist.folderName);
   } else if (action === 'refresh-subtitles') {
     result = await downloadManager.queueMissingSubtitles(playlist.folderName);
   } else if (action === 'orphans-preview') {

@@ -1,47 +1,50 @@
-# Atualização para 3.4.9
+# Atualização para 3.4.10
 
-A versão 3.4.9 adiciona o motor **Universal v1.3.1** para tratar melhor eventos com horário marcado.
+A versão 3.4.10 adiciona metadata temporal aos downloads do YouTube e aos NFOs sem alterar o motor de Scripted Schedule.
 
 ## O que muda
 
-- Eventos compatíveis ganham a opção **Se o conteúdo passar do horário**.
-- **Usar o horário mais próximo** consulta a duração do próximo item antes de iniciá-lo e compara o adiantamento possível com o atraso que esse item causaria.
-- **Pode adiantar até (min)** vem preenchido com **40** e pode ser alterado pelo usuário.
-- **Esperar o conteúdo terminar** mantém o comportamento em que o item atual pode ultrapassar o horário antes do evento começar.
-- Quando o próximo item ainda cabe antes do evento, o motor toca somente esse item e reavalia a programação depois, em vez de entregar um bloco longo ao ErsatzTV.
-- O cálculo considera um pre-roll quando a Scripted Playlist pode ser estimada com segurança.
-- **Trim** e **Deixar o vídeo terminar** deixam de poder ficar ativos ao mesmo tempo. Trim força `allow_overrun=false` também no Python gerado.
-- O Pad To Nearest, quando é interrompido por um evento marcado, não recebe permissão para ultrapassar essa fronteira.
+- Downloads novos passam a armazenar `publishedAt` quando a API fornece timestamp, `uploadDate` no fallback do yt-dlp, `releaseDate`, `releaseDateSource=youtube` e `year`.
+- Genérico/Filmes gravam `year` + `premiered` no NFO quando existe data disponível.
+- Clipes musicais (Seriados) gravam `aired` no NFO do episódio.
+- Se a descoberta inicial não trouxer a data exata, o aplicativo tenta enriquecê-la antes de escrever o NFO. Uma falha nessa consulta não cancela nem invalida o MP4 concluído.
+- A biblioteca recebe temporariamente o botão **Atualizar datas dos NFOs** para o acervo existente.
 
-## Motor
+## Proteção dos NFOs já editados
 
-- Novos projetos usam **Universal v1.3.1**.
-- Projetos salvos em v1.1.1, v1.2.0 ou v1.3.0 não são atualizados silenciosamente.
-- Para usar a política de horário mais próximo em um projeto existente, abra-o e use **Atualizar motor**; depois revise, valide e publique novamente o `.py`.
-- `STATE_VERSION` do motor v1.3.1 passa para **12**, reiniciando somente o estado interno do script quando necessário. A configuração visual do projeto não é apagada.
+O backfill temporário não reconstrói os NFOs. Ele lê o arquivo atual e insere somente os campos de data ausentes.
+
+- `music_clips`: acrescenta `aired` somente se ainda não existir.
+- `generic`/`movie`: acrescenta `year` + `premiered` somente se o NFO não contiver nenhum desses campos.
+- título, plot, artista, gênero, tags, temporada, episódio e quaisquer outras alterações manuais permanecem intocados.
+- uma data já existente no NFO é tratada como escolha manual/autoridade local e nunca é substituída pela data do YouTube.
+
+Quando algum NFO for alterado e a biblioteca tiver Library ID, o aplicativo solicita um scan do ErsatzTV ao final.
+
+O botão é deliberadamente temporário e deve ser removido na próxima versão, depois da migração das bibliotecas atuais. Downloads novos já ficam enriquecidos automaticamente.
 
 ## Compatibilidade técnica
 
-- `configVersion` permanece **8**.
-- O schema de armazenamento de Scripted Schedules permanece **1**.
-- Universal v1.1.1, v1.2.0 e v1.3.0 continuam disponíveis sem alteração.
-- A arquitetura de ordem por uso da v3.4.8 permanece: Chronological/Shuffle continuam definidos na Programação, Filler, Scripted Playlists e Fallbacks.
-- Graphics, Presentation Profiles, Canais, Bibliotecas e downloads não mudam nesta versão.
+- aplicação: **v3.4.10**;
+- Universal permanece **v1.3.1**;
+- `configVersion` permanece **8**;
+- schema de Scripted Schedules permanece **1**;
+- estado da fila permanece na versão existente; os novos campos são aditivos;
+- deduplicação, fila persistente, órfãos, layout dos arquivos, legendas, thumbnails e download/transcode não mudam.
 - `config/config.json`, `config/auth.json` e `data/` devem ser preservados durante o UPDATE.
 
 ## Atualização recomendada
 
 1. Pare o serviço da aplicação.
 2. Faça backup da instalação atual.
-3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.9-update.zip` sobre a instalação v3.4.8.
+3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.10-update.zip` sobre a instalação v3.4.9.
 4. Inicie novamente o serviço e faça um recarregamento completo do navegador.
-5. Nos projetos em que quiser o novo comportamento, atualize o motor para **1.3.1**.
-6. Revise **Se o conteúdo passar do horário** e o limite de adiantamento.
-7. Valide e publique novamente os `.py`.
+5. Em cada biblioteca antiga que quiser enriquecer, use **Atualizar datas dos NFOs** uma única vez.
+6. Revise o resumo retornado pela ação. NFOs com datas já existentes serão preservados.
 
 ## Gate esperado
 
-- upgrade esperado: **v3.4.8 -> v3.4.9**;
+- upgrade esperado: **v3.4.9 -> v3.4.10**;
 - `npm run check`: aprovado;
 - suíte automatizada: aprovada;
 - UPDATE não deve conter `config/config.json`, `config/auth.json` nem `data/`.

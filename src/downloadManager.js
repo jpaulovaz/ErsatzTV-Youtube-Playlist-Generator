@@ -30,8 +30,15 @@ const {
   writeGenericNfo,
   writeMovieNfo,
   writeTvShowNfo,
-  writeEpisodeNfo
+  writeEpisodeNfo,
+  patchNfoReleaseMetadata
 } = require('./mediaProfileService');
+const {
+  normalizeDateOnly,
+  releaseMetadataFromVideo,
+  mergeReleaseMetadata
+} = require('./releaseMetadataUtils');
+const { fetchReleaseMetadataForItems } = require('./releaseDateService');
 const {
   sanitizeName,
   sanitizeFileComponent,
@@ -1174,17 +1181,33 @@ class DownloadManager {
     return inspection;
   }
 
-  async finalizeDownload(item, stagedMedia, workDir) {
-    await fs.mkdir(path.dirname(item.targetPath), { recursive: true });
+  async ensureReleaseMetadata(item, source) {
+    if (normalizeDateOnly(item && (item.releaseDate || item.publishedAt || item.uploadDate))) return item;
+    try {
+      const result = await fetchReleaseMetadataForItems(this.config, source || {}, [item]);
+      const fetched = result.byVideoId.get(String(item.videoId));
+      if (fetched) Object.assign(item, mergeReleaseMetadata(item, fetched));
+      if (!fetched && result.failed.length > 0) {
+        await logger.warn(`Data de publicacao nao encontrada para ${item.title} (${item.videoId}); NFO sera salvo sem data.`);
+      }
+    } catch (error) {
+      await logger.warn(`Falha ao enriquecer data de publicacao de ${item.title} (${item.videoId}): ${error.message}`);
+    }
+    return item;
+  }
 
+  async finalizeDownload(item, stagedMedia, workDir) {
+    const playlist = findPlaylistByFolder(this.config, item.destinationId || item.libraryFolder);
+    const profileSettings = getMediaProfileSettings(playlist);
+    await this.ensureReleaseMetadata(item, playlist);
+
+    await fs.mkdir(path.dirname(item.targetPath), { recursive: true });
     if (await pathExists(item.targetPath)) {
       await fs.rm(stagedMedia, { force: true });
     } else {
       await moveAcrossFileSystems(stagedMedia, item.targetPath);
     }
 
-    const playlist = findPlaylistByFolder(this.config, item.destinationId || item.libraryFolder);
-    const profileSettings = getMediaProfileSettings(playlist);
     const stagedThumbnail = await this.findStagedThumbnail(workDir);
     const forceArtwork = profileSettings.movie || profileSettings.musicClips;
     if (this.config.downloads.writeThumbnails !== false || forceArtwork) {
@@ -1232,6 +1255,8 @@ class DownloadManager {
           title: metadata.trackTitle,
           seasonNumber: metadata.seasonNumber,
           episodeNumber: metadata.episodeNumber,
+          releaseDate: metadata.releaseDate,
+          year: metadata.year,
           nfoPath: item.nfoPath,
           showNfoPath: item.showNfoPath,
           artworkPath: item.thumbnailPath,
@@ -1253,6 +1278,8 @@ class DownloadManager {
           profile: profileSettings.profile,
           artist: metadata.artist,
           title: metadata.trackTitle,
+          releaseDate: metadata.releaseDate,
+          year: metadata.year,
           nfoPath: item.nfoPath,
           artworkPath: item.thumbnailPath,
           updatedAt: nowIso(),
@@ -1271,6 +1298,8 @@ class DownloadManager {
           status: 'complete',
           profile: profileSettings.profile,
           title: metadata.title,
+          releaseDate: metadata.releaseDate,
+          year: metadata.year,
           nfoPath: item.nfoPath,
           artworkPath: item.thumbnailPath,
           updatedAt: nowIso(),
@@ -1660,11 +1689,16 @@ class DownloadManager {
       summary.discovered += 1;
       const id = makeItemId(destinationId, videoId);
       const existing = this.state.items[id];
+      const releaseMetadata = mergeReleaseMetadata(existing, releaseMetadataFromVideo(video));
       const metadata = {
         title: String(video.title || existing && existing.title || `Video ${videoId}`).trim(),
         description: String(video.description || existing && existing.description || ''),
         durationSeconds: Number(video.duration) || existing && existing.durationSeconds || null,
-        year: Number(video.year) || existing && existing.year || null,
+        publishedAt: releaseMetadata.publishedAt,
+        uploadDate: releaseMetadata.uploadDate,
+        releaseDate: releaseMetadata.releaseDate,
+        releaseDateSource: releaseMetadata.releaseDateSource,
+        year: releaseMetadata.year,
         thumbnailUrl: String(video.thumbnailUrl || video.thumbnail || existing && existing.thumbnailUrl || '').trim(),
         channelTitle: String(video.channelTitle || existing && existing.channelTitle || '').trim(),
         url: String(video.webpage_url || video.url || `https://www.youtube.com/watch?v=${videoId}`).trim(),
@@ -2300,6 +2334,103 @@ class DownloadManager {
     libraryState.dirty = true;
     await this.saveNow();
     this.kick();
+    return summary;
+  }
+
+  async refreshReleaseDates(libraryFolder) {
+    const folder = resolveDestinationId(this.config, libraryFolder);
+    const destination = findPlaylistByFolder(this.config, folder);
+    if (!destination) throw new Error('Biblioteca nao encontrada para atualizar datas.');
+
+    const items = Object.values(this.state.items).filter((item) =>
+      (item.destinationId || item.libraryFolder) === folder && item.status === 'completed'
+    );
+    const summary = {
+      playlist: folder,
+      checked: items.length,
+      metadataUpdated: 0,
+      nfoUpdated: 0,
+      nfoPreserved: 0,
+      missingNfo: 0,
+      missingDate: 0,
+      failed: 0,
+      apiFetched: 0,
+      apiCached: 0,
+      ytDlpFetched: 0,
+      scan: null
+    };
+
+    const needsFetch = items.filter((item) => !normalizeDateOnly(item.releaseDate || item.publishedAt || item.uploadDate));
+    let fetched = { byVideoId: new Map(), failed: [], apiFetched: 0, apiCached: 0, ytDlpFetched: 0 };
+    if (needsFetch.length > 0) {
+      fetched = await fetchReleaseMetadataForItems(this.config, destination, needsFetch);
+      summary.apiFetched = fetched.apiFetched;
+      summary.apiCached = fetched.apiCached;
+      summary.ytDlpFetched = fetched.ytDlpFetched;
+    }
+
+    for (const item of items) {
+      const remote = fetched.byVideoId.get(String(item.videoId));
+      if (remote) {
+        const before = JSON.stringify({
+          publishedAt: item.publishedAt || null,
+          uploadDate: item.uploadDate || null,
+          releaseDate: item.releaseDate || null,
+          releaseDateSource: item.releaseDateSource || null,
+          year: item.year || null
+        });
+        Object.assign(item, mergeReleaseMetadata(item, remote));
+        const after = JSON.stringify({
+          publishedAt: item.publishedAt || null,
+          uploadDate: item.uploadDate || null,
+          releaseDate: item.releaseDate || null,
+          releaseDateSource: item.releaseDateSource || null,
+          year: item.year || null
+        });
+        if (before !== after) summary.metadataUpdated += 1;
+      }
+
+      const releaseDate = normalizeDateOnly(item.releaseDate || item.publishedAt || item.uploadDate);
+      if (!releaseDate) {
+        summary.missingDate += 1;
+        continue;
+      }
+
+      const nfoPath = String(item.nfoPath || (item.targetPath ? item.targetPath.replace(/\.[^.]+$/, '.nfo') : '')).trim();
+      if (!nfoPath || !(await pathExists(nfoPath))) {
+        summary.missingNfo += 1;
+        continue;
+      }
+
+      try {
+        const profile = item.mediaProfile || getMediaProfileSettings(destination).profile;
+        const patch = await patchNfoReleaseMetadata(item, nfoPath, profile);
+        if (patch.changed) {
+          summary.nfoUpdated += 1;
+        } else {
+          summary.nfoPreserved += 1;
+        }
+        item.releaseMetadataUpdatedAt = nowIso();
+        item.updatedAt = item.releaseMetadataUpdatedAt;
+      } catch (error) {
+        summary.failed += 1;
+        await logger.warn(`Falha ao acrescentar data ao NFO de ${item.videoId}: ${error.message}`);
+      }
+    }
+
+    summary.failed += fetched.failed.filter((entry) => entry.videoId).length;
+    await this.saveNow();
+
+    if (summary.nfoUpdated > 0 && destination.libraryId) {
+      try {
+        summary.scan = await runLibraryAction(this.config, destination, 'scan');
+      } catch (error) {
+        summary.scan = { ok: false, statusText: error.message };
+        await logger.warn(`Datas dos NFOs foram atualizadas, mas o scan do ErsatzTV falhou para ${folder}: ${error.message}`);
+      }
+    }
+
+    await logger.info(`Atualizacao temporaria de datas concluida para ${folder}.`, summary);
     return summary;
   }
 

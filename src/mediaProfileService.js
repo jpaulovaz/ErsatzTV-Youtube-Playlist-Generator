@@ -1,6 +1,7 @@
 const fs = require('fs/promises');
 const path = require('path');
 const { normalizeArtistDisplayName, extractArtistAndTitle } = require('./utils');
+const { normalizeDateOnly } = require('./releaseMetadataUtils');
 
 const MEDIA_PROFILES = Object.freeze({
   GENERIC: 'generic',
@@ -72,6 +73,58 @@ function xmlEscape(value) {
     .replace(/'/g, '&apos;');
 }
 
+function getReleaseMetadata(item) {
+  const releaseDate = normalizeDateOnly(item && (item.releaseDate || item.publishedAt || item.uploadDate));
+  const yearFromDate = releaseDate ? Number(releaseDate.slice(0, 4)) : null;
+  const rawYear = Number(item && item.year);
+  return {
+    releaseDate: releaseDate || null,
+    year: Number.isInteger(yearFromDate) && yearFromDate > 0
+      ? yearFromDate
+      : (Number.isInteger(rawYear) && rawYear > 0 ? rawYear : null)
+  };
+}
+
+function hasXmlTag(content, tagName) {
+  const tagPattern = new RegExp(`<${tagName}\\b[^>]*>`, 'i');
+  return tagPattern.test(String(content || ''));
+}
+
+function insertMissingXmlTag(content, rootTag, tagName, value) {
+  if (value == null || value === '') return { content, changed: false };
+  if (hasXmlTag(content, tagName)) return { content, changed: false };
+  const closePattern = new RegExp(`(^[ \\t]*)<\\/${rootTag}>`, 'im');
+  const match = content.match(closePattern);
+  if (!match) return { content, changed: false };
+  const newline = content.includes('\r\n') ? '\r\n' : '\n';
+  const indent = match[1] || '';
+  const childIndent = `${indent}  `;
+  const replacement = `${childIndent}<${tagName}>${xmlEscape(value)}</${tagName}>${newline}${match[0]}`;
+  return { content: content.replace(closePattern, replacement), changed: true };
+}
+
+function patchNfoReleaseMetadataContent(content, profile, item) {
+  const metadata = getReleaseMetadata(item);
+  let next = String(content || '');
+  const added = [];
+  const normalizedProfile = normalizeMediaProfile(profile || item && item.mediaProfile);
+
+  if (normalizedProfile === MEDIA_PROFILES.MUSIC_CLIPS) {
+    const result = insertMissingXmlTag(next, 'episodedetails', 'aired', metadata.releaseDate);
+    next = result.content;
+    if (result.changed) added.push('aired');
+  } else if (!hasXmlTag(next, 'year') && !hasXmlTag(next, 'premiered')) {
+    let result = insertMissingXmlTag(next, 'movie', 'year', metadata.year);
+    next = result.content;
+    if (result.changed) added.push('year');
+    result = insertMissingXmlTag(next, 'movie', 'premiered', metadata.releaseDate);
+    next = result.content;
+    if (result.changed) added.push('premiered');
+  }
+
+  return { content: next, changed: added.length > 0, added };
+}
+
 function resolveMediaIdentity(item) {
   const extracted = extractArtistAndTitle(item && (item.title || item.trackTitle) || 'Sem Titulo');
   const itemArtist = cleanArtist(item && item.artist);
@@ -98,7 +151,8 @@ function getGenericMetadata(item) {
   return {
     title,
     plot: description || title,
-    videoId: String(item && item.videoId || '').trim()
+    videoId: String(item && item.videoId || '').trim(),
+    ...getReleaseMetadata(item)
   };
 }
 
@@ -107,7 +161,8 @@ function getMovieMetadata(item) {
   return {
     ...identity,
     sortTitle: `${identity.artist} - ${identity.trackTitle}`,
-    videoId: String(item && item.videoId || '').trim()
+    videoId: String(item && item.videoId || '').trim(),
+    ...getReleaseMetadata(item)
   };
 }
 
@@ -117,7 +172,8 @@ function getMusicClipMetadata(item) {
     ...identity,
     seasonNumber: Math.max(1, Number(item && item.showSeasonNumber) || 1),
     episodeNumber: Math.max(1, Number(item && item.showEpisodeNumber) || 1),
-    videoId: String(item && item.videoId || '').trim()
+    videoId: String(item && item.videoId || '').trim(),
+    ...getReleaseMetadata(item)
   };
 }
 
@@ -129,6 +185,8 @@ function buildGenericNfo(item) {
     `  <title>${xmlEscape(metadata.title)}</title>`,
     `  <plot>${xmlEscape(metadata.plot)}</plot>`
   ];
+  if (metadata.year) lines.push(`  <year>${metadata.year}</year>`);
+  if (metadata.releaseDate) lines.push(`  <premiered>${xmlEscape(metadata.releaseDate)}</premiered>`);
   if (metadata.videoId) {
     lines.push(`  <uniqueid type="youtube" default="true">${xmlEscape(metadata.videoId)}</uniqueid>`);
   }
@@ -148,6 +206,8 @@ function buildMovieNfo(item) {
     '  <genre>Music</genre>',
     '  <tag>Music Video</tag>'
   ];
+  if (metadata.year) lines.push(`  <year>${metadata.year}</year>`);
+  if (metadata.releaseDate) lines.push(`  <premiered>${xmlEscape(metadata.releaseDate)}</premiered>`);
   if (metadata.videoId) {
     lines.push(`  <uniqueid type="youtube" default="true">${xmlEscape(metadata.videoId)}</uniqueid>`);
   }
@@ -178,6 +238,7 @@ function buildEpisodeNfo(item) {
     `  <season>${metadata.seasonNumber}</season>`,
     `  <episode>${metadata.episodeNumber}</episode>`,
     `  <plot>${xmlEscape(metadata.trackTitle)}</plot>`,
+    ...(metadata.releaseDate ? [`  <aired>${xmlEscape(metadata.releaseDate)}</aired>`] : []),
     '</episodedetails>',
     ''
   ].join('\n');
@@ -218,6 +279,19 @@ async function writeEpisodeNfo(item, nfoPath) {
   return target;
 }
 
+async function patchNfoReleaseMetadata(item, nfoPath, profile) {
+  const target = String(nfoPath || item && item.nfoPath || '').trim();
+  if (!target) throw new Error('Caminho do NFO nao informado para atualizar a data.');
+  const current = await fs.readFile(target, 'utf8');
+  const stat = await fs.stat(target);
+  const result = patchNfoReleaseMetadataContent(current, profile, item);
+  if (result.changed) {
+    await atomicWriteText(target, result.content);
+    await fs.chmod(target, stat.mode & 0o777);
+  }
+  return { target, changed: result.changed, added: result.added };
+}
+
 module.exports = {
   MEDIA_PROFILES,
   ALLOWED_MEDIA_PROFILES,
@@ -226,6 +300,8 @@ module.exports = {
   cleanTrackTitle,
   cleanArtist,
   xmlEscape,
+  getReleaseMetadata,
+  patchNfoReleaseMetadataContent,
   resolveMediaIdentity,
   getGenericMetadata,
   getMovieMetadata,
@@ -237,5 +313,6 @@ module.exports = {
   writeGenericNfo,
   writeMovieNfo,
   writeTvShowNfo,
-  writeEpisodeNfo
+  writeEpisodeNfo,
+  patchNfoReleaseMetadata
 };

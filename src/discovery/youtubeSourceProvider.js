@@ -109,6 +109,10 @@ function getThumbnailFromYtDlp(video) {
 function normalizeYtDlpVideo(video, sourceUrl, sourceIndex, sourceKind) {
   const id = String(video && video.id || '').trim();
   const uploadDate = String(video && video.upload_date || '').trim();
+  const timestamp = Number(video && video.timestamp);
+  const publishedAt = Number.isFinite(timestamp) && timestamp > 0
+    ? new Date(timestamp * 1000).toISOString()
+    : '';
   const yearFromDate = /^\d{4}/.test(uploadDate) ? Number(uploadDate.slice(0, 4)) : null;
   return {
     id,
@@ -116,6 +120,9 @@ function normalizeYtDlpVideo(video, sourceUrl, sourceIndex, sourceKind) {
     description: String(video && video.description || ''),
     duration: Number(video && video.duration) || null,
     thumbnailUrl: getThumbnailFromYtDlp(video || {}),
+    publishedAt,
+    uploadDate,
+    timestamp: Number.isFinite(timestamp) && timestamp > 0 ? timestamp : null,
     year: Number(video && video.release_year) || yearFromDate || null,
     channelTitle: String(video && (video.channel || video.channel_title || video.uploader) || '').trim(),
     channelId: String(video && (video.channel_id || video.uploader_id) || '').trim(),

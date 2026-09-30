@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.4.10
+
+- Downloads novos passam a preservar metadata temporal do YouTube no estado local: `publishedAt` quando disponível, `uploadDate` no fallback do yt-dlp, `releaseDate`, `releaseDateSource` e `year`.
+- A data de publicação é normalizada como `releaseDate` sem tratá-la como uma verdade editorial externa: a origem fica marcada como `youtube`.
+- NFOs novos passam a gravar `year` + `premiered` nos perfis Genérico/Filmes e `aired` em Clipes musicais (Seriados), permitindo que o ErsatzTV tenha uma data utilizável para ordenação cronológica.
+- Quando a descoberta não trouxe uma data exata, o fluxo de download consulta a metadata antes de escrever o NFO: YouTube Data API quando o modo API está ativo, com fallback para yt-dlp. Falha nesse enriquecimento não transforma o download do vídeo em falha.
+- Bibliotecas recebem temporariamente a ação **Atualizar datas dos NFOs** para o acervo já existente. A ação busca a data e acrescenta somente os campos de data ausentes; não regrava título, plot, artista, gênero, temporada, episódio nem outras edições manuais.
+- Se um NFO já contém `aired`, `year` ou `premiered` inserido manualmente, o backfill preserva essa informação e não substitui pela data do YouTube.
+- O backfill altera somente NFOs de vídeos concluídos da biblioteca escolhida, persiste a nova metadata no estado e solicita um scan do ErsatzTV quando a biblioteca possui Library ID configurado.
+- O botão de backfill é deliberadamente temporário e deve ser removido na versão seguinte, depois da janela de homologação/migração.
+- Nenhuma alteração no motor Universal v1.3.1, `configVersion` 8, schema de Scripted Schedules 1, fila, deduplicação ou política de órfãos.
+
 ## 3.4.9
 
 - Adiciona o motor **Universal v1.3.1** com política configurável para eventos com horário marcado.

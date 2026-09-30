@@ -11,7 +11,8 @@ const {
   buildGenericNfo,
   buildMovieNfo,
   buildTvShowNfo,
-  buildEpisodeNfo
+  buildEpisodeNfo,
+  patchNfoReleaseMetadataContent
 } = require('../src/mediaProfileService');
 
 test('normalizes the three media profiles and defaults to generic', () => {
@@ -93,4 +94,66 @@ test('music clips profile creates show and episode NFO metadata', () => {
 test('preserves stylized artist names', () => {
   const metadata = getMusicClipMetadata({ artist: 'AC/DC', trackTitle: 'Thunderstruck' });
   assert.equal(metadata.artist, 'AC/DC');
+});
+
+
+test('new NFOs include YouTube release dates without changing existing profile metadata', () => {
+  const generic = buildGenericNfo({
+    title: 'Artist - Video',
+    description: 'Descrição manual',
+    videoId: 'datevideo01',
+    publishedAt: '2025-06-12T14:30:00Z'
+  });
+  assert.match(generic, /<year>2025<\/year>/);
+  assert.match(generic, /<premiered>2025-06-12<\/premiered>/);
+
+  const movie = buildMovieNfo({
+    artist: 'Artist',
+    trackTitle: 'Concert',
+    videoId: 'datevideo02',
+    releaseDate: '2024-11-03'
+  });
+  assert.match(movie, /<year>2024<\/year>/);
+  assert.match(movie, /<premiered>2024-11-03<\/premiered>/);
+
+  const episode = buildEpisodeNfo({
+    artist: 'Artist',
+    trackTitle: 'Song',
+    showSeasonNumber: 1,
+    showEpisodeNumber: 7,
+    uploadDate: '20230609'
+  });
+  assert.match(episode, /<aired>2023-06-09<\/aired>/);
+});
+
+test('temporary NFO migration adds only missing date fields and preserves manual edits byte-for-byte otherwise', () => {
+  const original = [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<episodedetails>',
+    '  <title>Meu título corrigido manualmente</title>',
+    '  <plot>Descrição que não veio do YouTube</plot>',
+    '  <genre>Especial</genre>',
+    '</episodedetails>',
+    ''
+  ].join('\n');
+  const result = patchNfoReleaseMetadataContent(original, 'music_clips', { releaseDate: '2025-06-12' });
+  assert.equal(result.changed, true);
+  assert.deepEqual(result.added, ['aired']);
+  assert.match(result.content, /<aired>2025-06-12<\/aired>/);
+  assert.equal(result.content.replace('  <aired>2025-06-12</aired>\n', ''), original);
+});
+
+test('temporary NFO migration never overwrites an existing manual release date', () => {
+  const original = [
+    '<movie>',
+    '  <title>Filme corrigido</title>',
+    '  <premiered>1999-01-02</premiered>',
+    '  <plot>Texto manual</plot>',
+    '</movie>',
+    ''
+  ].join('\n');
+  const result = patchNfoReleaseMetadataContent(original, 'movie', { releaseDate: '2025-06-12', year: 2025 });
+  assert.equal(result.changed, false);
+  assert.equal(result.content, original);
+  assert.doesNotMatch(result.content, /<year>2025<\/year>/);
 });

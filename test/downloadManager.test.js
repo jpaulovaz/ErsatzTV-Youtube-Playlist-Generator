@@ -557,3 +557,85 @@ test('recomputes a missing target path into the current music clips layout befor
   assert.equal(path.basename(path.dirname(path.dirname(item.targetPath))), 'Twenty One Pilots');
   assert.equal(path.basename(item.targetPath), 'Twenty One Pilots - S01E01 - City Walls.mp4');
 });
+
+test('discovery persists YouTube publication metadata for future NFO generation', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-release-state-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const config = makeConfig(path.join(root, 'media'));
+  const playlist = { ...config.playlists[0], folderName: 'Teste' };
+  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
+  await manager.init(config);
+
+  await manager.reconcileLibrary(config, playlist, [{
+    id: 'releasedate01',
+    title: 'Artist - Song',
+    publishedAt: '2025-06-12T14:30:00Z',
+    year: 2025
+  }]);
+
+  const item = manager.state.items[makeItemId('Teste', 'releasedate01')];
+  assert.equal(item.publishedAt, '2025-06-12T14:30:00Z');
+  assert.equal(item.releaseDate, '2025-06-12');
+  assert.equal(item.releaseDateSource, 'youtube');
+  assert.equal(item.year, 2025);
+});
+
+test('temporary release-date refresh patches only the missing date in existing manually edited NFOs', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-release-nfo-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const config = makeConfig(path.join(root, 'media'));
+  config.playlists[0].mediaProfile = 'music_clips';
+  const playlist = { ...config.playlists[0], folderName: 'Teste' };
+  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
+  await manager.init(config);
+
+  const id = makeItemId('Teste', 'releasedate02');
+  const target = manager.chooseTargetPaths(playlist, {
+    id: 'releasedate02',
+    title: 'Artist - Song'
+  }, id);
+  await fs.mkdir(path.dirname(target.nfoPath), { recursive: true });
+  const manualNfo = [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<episodedetails>',
+    '  <title>Título corrigido pelo usuário</title>',
+    '  <season>9</season>',
+    '  <episode>99</episode>',
+    '  <plot>Descrição manual importante</plot>',
+    '  <genre>Personalizado</genre>',
+    '</episodedetails>',
+    ''
+  ].join('\n');
+  await fs.writeFile(target.nfoPath, manualNfo, 'utf8');
+
+  manager.state.items[id] = {
+    id,
+    destinationId: 'Teste',
+    libraryFolder: 'Teste',
+    destinationType: 'library',
+    videoId: 'releasedate02',
+    title: 'Artist - Song',
+    status: 'completed',
+    releaseDate: '2025-06-12',
+    releaseDateSource: 'youtube',
+    year: 2025,
+    mediaProfile: 'music_clips',
+    nfoPath: target.nfoPath,
+    targetPath: target.targetPath,
+    progress: {},
+    subtitles: {}
+  };
+
+  const summary = await manager.refreshReleaseDates('Teste');
+  assert.equal(summary.checked, 1);
+  assert.equal(summary.nfoUpdated, 1);
+  assert.equal(summary.failed, 0);
+  const updated = await fs.readFile(target.nfoPath, 'utf8');
+  assert.match(updated, /<aired>2025-06-12<\/aired>/);
+  assert.match(updated, /<title>Título corrigido pelo usuário<\/title>/);
+  assert.match(updated, /<season>9<\/season>/);
+  assert.match(updated, /<episode>99<\/episode>/);
+  assert.match(updated, /<plot>Descrição manual importante<\/plot>/);
+  assert.match(updated, /<genre>Personalizado<\/genre>/);
+  assert.equal(updated.replace('  <aired>2025-06-12</aired>\n', ''), manualNfo);
+});

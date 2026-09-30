@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.4.9 - pacote de atualização
+ErsatzTV YouTube Downloader 3.4.10 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.4.8.
+Extraia este ZIP sobre uma instalação v3.4.9.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,15 +9,12 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principal alteração:
-- adiciona Universal v1.3.1;
-- eventos com horário marcado podem usar a política "Usar o horário mais próximo";
-- o motor consulta a duração do próximo item e escolhe entre adiantar ou atrasar pelo menor desvio;
-- o adiantamento máximo vem com 40 minutos e é editável;
-- itens que ainda cabem antes do evento são adicionados um por vez para que o motor reavalie a fronteira;
-- Trim e "Deixar o vídeo terminar" passam a ser mutuamente exclusivos;
-- Pad interrompido por evento marcado não pode ultrapassar essa fronteira.
+- novos downloads armazenam a data de publicação do YouTube e a convertem em releaseDate/ano;
+- NFOs novos recebem year + premiered (Genérico/Filmes) ou aired (Clipes musicais);
+- botão temporário "Atualizar datas dos NFOs" migra bibliotecas existentes;
+- o backfill acrescenta somente campos de data ausentes e preserva todas as outras edições manuais;
+- datas já existentes manualmente também são preservadas;
+- YouTube Data API é preferida quando ativa, com fallback para yt-dlp.
 
-Projetos antigos não recebem upgrade silencioso de motor. Para usar a nova política, atualize o projeto para Universal v1.3.1 e publique novamente o .py.
-
-configVersion permanece 8 e o schema de Scripted Schedules permanece 1.
+Universal permanece v1.3.1, configVersion permanece 8 e o schema de Scripted Schedules permanece 1.
 Consulte UPGRADE.md antes da atualização.

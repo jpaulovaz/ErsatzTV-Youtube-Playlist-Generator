@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.9
+# ErsatzTV YouTube Downloader 3.4.10
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.9 adiciona ao motor **Universal v1.3.1** uma política de início para eventos com horário marcado. Quando o próximo conteúdo ultrapassaria o horário do evento, o motor pode comparar o adiantamento com o atraso e escolher o menor desvio, respeitando um limite configurável de adiantamento que vem com **40 minutos**. A mesma versão também impede a combinação contraditória entre **Trim** e **Deixar o vídeo terminar**.
+A versão 3.4.10 enriquece os downloads do YouTube com a data de publicação e passa essa informação aos NFOs usados pelo ErsatzTV. Downloads novos guardam a metadata temporal automaticamente; para o acervo atual existe, somente nesta versão de migração, o botão **Atualizar datas dos NFOs**, que acrescenta apenas campos de data ausentes e preserva as demais edições manuais do arquivo.
 
 ## Arquitetura
 
@@ -33,6 +33,9 @@ Biblioteca local do ErsatzTV
 - Resolução máxima geral ou específica por biblioteca: 360p, 480p, 720p, 1080p, 1440p e 2160p.
 - Organização padrão `Biblioteca/Artista/Artista - Título.mp4`, com nome canônico de artista para evitar duplicação apenas por diferenças de maiúsculas/minúsculas.
 - Modo opcional para ErsatzTV/Shows com `Biblioteca/Artista/Season 01/`, `tvshow.nfo` e NFO por episódio.
+- Metadata temporal do YouTube preservada no estado (`publishedAt`/`uploadDate`, `releaseDate`, origem e ano) para novos downloads.
+- NFOs novos incluem `year` + `premiered` em Movies e `aired` em episódios de Clipes musicais.
+- Ação temporária **Atualizar datas dos NFOs** para preencher somente datas ausentes no acervo atual sem sobrescrever outras edições manuais.
 - Thumbnail do vídeo como artwork de episódio (`-thumb.jpg`) e `poster.jpg` no nível do artista/Show.
 - Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
 - Seleção múltipla de idiomas: `pt-BR`, `pt`, `en` e `es`.
@@ -212,7 +215,7 @@ O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão**
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.4.9:
+Módulos disponíveis na v3.4.10:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -324,7 +327,7 @@ Biblioteca/
     └── Artista - Titulo.pt-BR.srt
 ```
 
-O NFO é básico e grava título, plot e `uniqueid` do YouTube.
+O NFO grava título, plot, `uniqueid` do YouTube e, quando disponível, `year` + `premiered` derivados da data de publicação.
 
 ### Show / vídeo completo (Filmes)
 
@@ -340,7 +343,7 @@ Biblioteca/
         └── poster.jpg
 ```
 
-O NFO coloca o artista em `title` e o nome do vídeo em `outline`/`plot`.
+O NFO coloca o artista em `title`, o nome do vídeo em `outline`/`plot` e, quando disponível, grava `year` + `premiered` derivados da data de publicação.
 
 ### Clipes musicais (Seriados)
 
@@ -358,9 +361,25 @@ Biblioteca/
         └── Twenty One Pilots - S01E01 - City Walls.pt-BR.srt
 ```
 
-O artista vira o Show e a música vira o episódio. A numeração é estável por artista.
+O artista vira o Show e a música vira o episódio. A numeração é estável por artista. Quando disponível, o NFO do episódio recebe `aired` com a data de publicação do vídeo no YouTube.
 
 A normalização de nomes continua conservadora: casing claramente ruidoso é corrigido, enquanto grafias estilizadas como `AC/DC`, `P!NK`, `deadmau5`, `blink-182` e `CHVRCHES` são preservadas.
+
+## Atualização temporária das datas dos NFOs
+
+Na v3.4.10, cada biblioteca possui a ação **Atualizar datas dos NFOs**. Ela existe apenas para migrar o acervo que já estava baixado antes de a data de publicação passar a ser armazenada automaticamente.
+
+A operação é conservadora:
+
+- usa a YouTube Data API quando esse modo está ativo e tenta yt-dlp como fallback;
+- atualiza `publishedAt`/`uploadDate`, `releaseDate`, origem e ano no estado local;
+- em Clipes musicais, acrescenta somente `aired` quando esse campo ainda não existe;
+- em Genérico/Filmes, acrescenta `year` e `premiered` somente quando o NFO não possui nenhum desses campos de data;
+- não reconstrói o NFO e não altera título, descrição, artista, gênero, temporada, episódio ou outras tags já editadas;
+- se uma data já foi ajustada manualmente, ela é preservada;
+- quando houver Library ID configurado e algum NFO for alterado, solicita um scan da biblioteca no ErsatzTV ao final.
+
+Esse botão é temporário e está previsto para ser removido na versão seguinte. Downloads novos não dependem dele.
 
 ## Compatibilidade de mídia
 
