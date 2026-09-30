@@ -1,50 +1,55 @@
-# Atualização para 3.4.10
+# Atualização para 3.4.11
 
-A versão 3.4.10 adiciona metadata temporal aos downloads do YouTube e aos NFOs sem alterar o motor de Scripted Schedule.
+A versão 3.4.11 ajusta o perfil **Clipes musicais (Seriados)** para que temporada/episódio acompanhem a cronologia de publicação. O motor de Scripted Schedule não muda.
 
 ## O que muda
 
-- Downloads novos passam a armazenar `publishedAt` quando a API fornece timestamp, `uploadDate` no fallback do yt-dlp, `releaseDate`, `releaseDateSource=youtube` e `year`.
-- Genérico/Filmes gravam `year` + `premiered` no NFO quando existe data disponível.
-- Clipes musicais (Seriados) gravam `aired` no NFO do episódio.
-- Se a descoberta inicial não trouxer a data exata, o aplicativo tenta enriquecê-la antes de escrever o NFO. Uma falha nessa consulta não cancela nem invalida o MP4 concluído.
-- A biblioteca recebe temporariamente o botão **Atualizar datas dos NFOs** para o acervo existente.
+- Em Clipes musicais, cada artista continua em `Season 01`, mas os episódios passam a ser numerados pela data: E01 é o vídeo mais antigo, E02 o seguinte e assim por diante.
+- A data usada para a ordem é `aired` do NFO quando ele já existe e é válido; isso preserva correções manuais. Quando não há `aired`, usa-se a metadata de publicação armazenada pelo aplicativo.
+- Novos downloads já recebem a numeração cronológica automaticamente.
+- Se um vídeo novo precisar entrar antes de episódios existentes, o aplicativo pode renumerar os itens do mesmo artista para manter a sequência correta.
+- Ao renumerar arquivos existentes, somente o trecho `SxxExx` do nome é trocado. MP4, NFO, thumbnail e legendas SRT sidecar permanecem associados ao mesmo vídeo.
 
-## Proteção dos NFOs já editados
+## Botão temporário de migração
 
-O backfill temporário não reconstrói os NFOs. Ele lê o arquivo atual e insere somente os campos de data ausentes.
+O botão da v3.4.10 passa a se chamar **Atualizar datas e episódios** e continua disponível somente para a janela de homologação.
 
-- `music_clips`: acrescenta `aired` somente se ainda não existir.
-- `generic`/`movie`: acrescenta `year` + `premiered` somente se o NFO não contiver nenhum desses campos.
-- título, plot, artista, gênero, tags, temporada, episódio e quaisquer outras alterações manuais permanecem intocados.
-- uma data já existente no NFO é tratada como escolha manual/autoridade local e nunca é substituída pela data do YouTube.
+Para Clipes musicais, ele:
 
-Quando algum NFO for alterado e a biblioteca tiver Library ID, o aplicativo solicita um scan do ErsatzTV ao final.
+- busca e acrescenta `aired` somente quando a data não existe;
+- preserva um `aired` já editado manualmente e usa essa data como autoridade para a ordem;
+- atualiza somente `season` e `episode` dentro do NFO;
+- não reconstrói título, plot, gênero, tags nem outras edições manuais;
+- renomeia MP4/NFO/thumbnail/SRT alterando apenas `SxxExx`;
+- solicita um scan do ErsatzTV ao final quando a biblioteca tem Library ID e houve mudança.
 
-O botão é deliberadamente temporário e deve ser removido na próxima versão, depois da migração das bibliotecas atuais. Downloads novos já ficam enriquecidos automaticamente.
+Para Genérico/Filmes, o comportamento de datas da v3.4.10 permanece igual.
+
+Recomenda-se usar o botão com a fila sem download ativo e revisar o resumo retornado. O botão fica previsto para remoção na próxima versão, depois desta migração.
 
 ## Compatibilidade técnica
 
-- aplicação: **v3.4.10**;
+- aplicação: **v3.4.11**;
 - Universal permanece **v1.3.1**;
 - `configVersion` permanece **8**;
 - schema de Scripted Schedules permanece **1**;
-- estado da fila permanece na versão existente; os novos campos são aditivos;
-- deduplicação, fila persistente, órfãos, layout dos arquivos, legendas, thumbnails e download/transcode não mudam.
+- estado da fila permanece **4**;
+- downloads, transcode, deduplicação, órfãos e estrutura de canais não mudam fora da renumeração do perfil Clipes musicais;
 - `config/config.json`, `config/auth.json` e `data/` devem ser preservados durante o UPDATE.
 
 ## Atualização recomendada
 
 1. Pare o serviço da aplicação.
 2. Faça backup da instalação atual.
-3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.10-update.zip` sobre a instalação v3.4.9.
+3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.11-update.zip` sobre a instalação v3.4.10.
 4. Inicie novamente o serviço e faça um recarregamento completo do navegador.
-5. Em cada biblioteca antiga que quiser enriquecer, use **Atualizar datas dos NFOs** uma única vez.
-6. Revise o resumo retornado pela ação. NFOs com datas já existentes serão preservados.
+5. Aguarde a fila ficar sem download ativo.
+6. Em cada biblioteca antiga de **Clipes musicais (Seriados)**, use **Atualizar datas e episódios** uma vez.
+7. Confira o resumo e, se desejar, revise alguns artistas no ErsatzTV após o scan.
 
 ## Gate esperado
 
-- upgrade esperado: **v3.4.9 -> v3.4.10**;
+- upgrade esperado: **v3.4.10 -> v3.4.11**;
 - `npm run check`: aprovado;
 - suíte automatizada: aprovada;
 - UPDATE não deve conter `config/config.json`, `config/auth.json` nem `data/`.

@@ -12,7 +12,9 @@ const {
   buildMovieNfo,
   buildTvShowNfo,
   buildEpisodeNfo,
-  patchNfoReleaseMetadataContent
+  patchNfoReleaseMetadataContent,
+  getEpisodeNfoSequenceMetadata,
+  patchMusicClipEpisodeSequenceContent
 } = require('../src/mediaProfileService');
 
 test('normalizes the three media profiles and defaults to generic', () => {
@@ -156,4 +158,34 @@ test('temporary NFO migration never overwrites an existing manual release date',
   assert.equal(result.changed, false);
   assert.equal(result.content, original);
   assert.doesNotMatch(result.content, /<year>2025<\/year>/);
+});
+
+
+test('music clip sequence patch changes only season and episode while preserving the rest of the NFO', () => {
+  const original = [
+    '<episodedetails>',
+    '  <title>Título manual</title>',
+    '  <season>9</season>',
+    '  <episode>77</episode>',
+    '  <plot>Texto manual</plot>',
+    '  <aired>1999-12-31</aired>',
+    '</episodedetails>',
+    ''
+  ].join('\n');
+  const parsed = getEpisodeNfoSequenceMetadata(original);
+  assert.equal(parsed.aired, '1999-12-31');
+  assert.equal(parsed.seasonNumber, 9);
+  assert.equal(parsed.episodeNumber, 77);
+
+  const result = patchMusicClipEpisodeSequenceContent(original, {
+    showSeasonNumber: 1,
+    showEpisodeNumber: 3,
+    releaseDate: '2025-01-01'
+  }, { addMissingDate: false });
+  assert.deepEqual(result.updated, ['season', 'episode']);
+  assert.match(result.content, /<season>1<\/season>/);
+  assert.match(result.content, /<episode>3<\/episode>/);
+  assert.match(result.content, /<title>Título manual<\/title>/);
+  assert.match(result.content, /<plot>Texto manual<\/plot>/);
+  assert.match(result.content, /<aired>1999-12-31<\/aired>/);
 });

@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.4.10 - pacote de atualização
+ErsatzTV YouTube Downloader 3.4.11 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.4.9.
+Extraia este ZIP sobre uma instalação v3.4.10.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,12 +9,12 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principal alteração:
-- novos downloads armazenam a data de publicação do YouTube e a convertem em releaseDate/ano;
-- NFOs novos recebem year + premiered (Genérico/Filmes) ou aired (Clipes musicais);
-- botão temporário "Atualizar datas dos NFOs" migra bibliotecas existentes;
-- o backfill acrescenta somente campos de data ausentes e preserva todas as outras edições manuais;
-- datas já existentes manualmente também são preservadas;
-- YouTube Data API é preferida quando ativa, com fallback para yt-dlp.
+- Clipes musicais passam a numerar episódios pela cronologia de publicação por artista;
+- `aired` manual existente tem prioridade para a ordem e não é substituído;
+- botão temporário passa a "Atualizar datas e episódios" e migra o acervo existente;
+- NFOs existentes têm somente `season`/`episode` corrigidos, além do backfill de data já existente;
+- MP4, NFO, thumbnail e SRT podem ser renomeados, alterando somente o trecho SxxExx; nomes manuais sem esse token permanecem intactos;
+- demais campos manuais dos NFOs permanecem preservados.
 
-Universal permanece v1.3.1, configVersion permanece 8 e o schema de Scripted Schedules permanece 1.
+Universal permanece v1.3.1, configVersion permanece 8, schema de Scripted Schedules permanece 1 e estado da fila permanece 4.
 Consulte UPGRADE.md antes da atualização.

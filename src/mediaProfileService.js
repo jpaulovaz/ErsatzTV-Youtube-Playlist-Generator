@@ -103,6 +103,57 @@ function insertMissingXmlTag(content, rootTag, tagName, value) {
   return { content: content.replace(closePattern, replacement), changed: true };
 }
 
+function getXmlTagText(content, tagName) {
+  const pattern = new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'i');
+  const match = String(content || '').match(pattern);
+  return match ? String(match[1] || '').trim() : '';
+}
+
+function replaceOrInsertXmlTag(content, rootTag, tagName, value) {
+  if (value == null || value === '') return { content, changed: false };
+  const source = String(content || '');
+  const pattern = new RegExp(`(<${tagName}\\b[^>]*>)[\\s\\S]*?(<\\/${tagName}>)`, 'i');
+  const match = source.match(pattern);
+  if (match) {
+    const replacement = `${match[1]}${xmlEscape(value)}${match[2]}`;
+    const next = source.replace(pattern, replacement);
+    return { content: next, changed: next !== source };
+  }
+  return insertMissingXmlTag(source, rootTag, tagName, value);
+}
+
+function getEpisodeNfoSequenceMetadata(content) {
+  return {
+    aired: normalizeDateOnly(getXmlTagText(content, 'aired')),
+    seasonNumber: Math.max(0, Number(getXmlTagText(content, 'season')) || 0),
+    episodeNumber: Math.max(0, Number(getXmlTagText(content, 'episode')) || 0)
+  };
+}
+
+function patchMusicClipEpisodeSequenceContent(content, item, options = {}) {
+  let next = String(content || '');
+  const updated = [];
+  const seasonNumber = Math.max(1, Number(item && item.showSeasonNumber) || 1);
+  const episodeNumber = Math.max(1, Number(item && item.showEpisodeNumber) || 1);
+
+  let result = replaceOrInsertXmlTag(next, 'episodedetails', 'season', seasonNumber);
+  next = result.content;
+  if (result.changed) updated.push('season');
+
+  result = replaceOrInsertXmlTag(next, 'episodedetails', 'episode', episodeNumber);
+  next = result.content;
+  if (result.changed) updated.push('episode');
+
+  if (options.addMissingDate !== false) {
+    const metadata = getReleaseMetadata(item);
+    result = insertMissingXmlTag(next, 'episodedetails', 'aired', metadata.releaseDate);
+    next = result.content;
+    if (result.changed) updated.push('aired');
+  }
+
+  return { content: next, changed: updated.length > 0, updated };
+}
+
 function patchNfoReleaseMetadataContent(content, profile, item) {
   const metadata = getReleaseMetadata(item);
   let next = String(content || '');
@@ -292,6 +343,19 @@ async function patchNfoReleaseMetadata(item, nfoPath, profile) {
   return { target, changed: result.changed, added: result.added };
 }
 
+async function patchMusicClipEpisodeSequence(item, nfoPath, options = {}) {
+  const target = String(nfoPath || item && item.nfoPath || '').trim();
+  if (!target) throw new Error('Caminho do NFO do episodio nao informado para renumeracao.');
+  const current = await fs.readFile(target, 'utf8');
+  const stat = await fs.stat(target);
+  const result = patchMusicClipEpisodeSequenceContent(current, item, options);
+  if (result.changed) {
+    await atomicWriteText(target, result.content);
+    await fs.chmod(target, stat.mode & 0o777);
+  }
+  return { target, changed: result.changed, updated: result.updated };
+}
+
 module.exports = {
   MEDIA_PROFILES,
   ALLOWED_MEDIA_PROFILES,
@@ -301,7 +365,10 @@ module.exports = {
   cleanArtist,
   xmlEscape,
   getReleaseMetadata,
+  getXmlTagText,
+  getEpisodeNfoSequenceMetadata,
   patchNfoReleaseMetadataContent,
+  patchMusicClipEpisodeSequenceContent,
   resolveMediaIdentity,
   getGenericMetadata,
   getMovieMetadata,
@@ -314,5 +381,6 @@ module.exports = {
   writeMovieNfo,
   writeTvShowNfo,
   writeEpisodeNfo,
-  patchNfoReleaseMetadata
+  patchNfoReleaseMetadata,
+  patchMusicClipEpisodeSequence
 };

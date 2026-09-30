@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.4.11
+
+- **Clipes musicais (Seriados)** passam a numerar episódios pela cronologia de publicação de cada artista, em vez da ordem em que os vídeos foram descobertos. O mais antigo recebe E01, o seguinte E02 e assim por diante.
+- Quando existe um `aired` válido já editado manualmente no NFO, essa data local é preservada e tem prioridade sobre a data do YouTube para definir a posição cronológica.
+- A numeração é recalculada também para novos downloads antes da conclusão do arquivo, mantendo `season=1` e ajustando o `episode` correspondente. Itens sem data ficam depois dos itens datados e preservam a ordem anterior como desempate estável.
+- Quando uma renumeração altera arquivos já existentes, MP4, NFO, thumbnail e legendas SRT sidecar são renomeados em duas fases para evitar colisões. Somente o trecho `SxxExx` do nome é modificado; o restante do nome do arquivo é preservado. Nomes manuais sem esse token não são renomeados.
+- O botão temporário passa a se chamar **Atualizar datas e episódios**. Além do backfill de data da v3.4.10, ele corrige `season`/`episode` nos NFOs de Clipes musicais e renomeia os arquivos correspondentes. Para evitar disputa de arquivos, a migração recusa iniciar enquanto há download ou legenda em andamento.
+- O backfill continua sem reconstruir NFOs: título, plot, gênero, tags e demais edições manuais permanecem intocados. Datas manuais existentes continuam sem ser substituídas.
+- O botão temporário permanece por mais esta versão para permitir a migração da numeração cronológica e fica previsto para remoção na próxima versão após homologação.
+- Nenhuma alteração no Universal v1.3.1, `configVersion` 8, schema de Scripted Schedules 1, estado da fila 4, ffmpeg/transcode, deduplicação ou política de órfãos.
+
 ## 3.4.10
 
 - Downloads novos passam a preservar metadata temporal do YouTube no estado local: `publishedAt` quando disponível, `uploadDate` no fallback do yt-dlp, `releaseDate`, `releaseDateSource` e `year`.

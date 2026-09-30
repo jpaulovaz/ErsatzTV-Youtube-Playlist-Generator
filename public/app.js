@@ -668,7 +668,7 @@ function renderLibraries() {
               <button class="small primary" type="button" data-library-action="run">Buscar novidades</button>
               <button class="small" type="button" data-library-action="test-cookies">Testar cookies</button>
               <button class="small" type="button" data-library-action="refresh-thumbnails">Atualizar thumbnails</button>
-              <button class="small" type="button" data-library-action="refresh-release-dates" title="Temporário: preenche somente campos de data ausentes nos NFOs existentes.">Atualizar datas dos NFOs</button>
+              <button class="small" type="button" data-library-action="refresh-release-dates" title="Temporário: completa datas e, em Clipes musicais, reorganiza temporada/episódio pela cronologia sem regravar os demais campos do NFO.">Atualizar datas e episódios</button>
               <button class="small" type="button" data-library-action="refresh-subtitles">Buscar legendas ausentes</button>
             </div>
           </div>
@@ -789,7 +789,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '3.4.10'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '3.4.11'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -1132,10 +1132,10 @@ async function handleLibraryAction(button) {
   if (action === 'refresh-release-dates') {
     const decision = await showAppDialog({
       eyebrow: 'Migração temporária',
-      title: 'Atualizar datas dos NFOs',
-      message: 'O aplicativo buscará a data de publicação no YouTube e preencherá somente campos de data que ainda não existem nos NFOs. Títulos, descrições, artistas, gêneros e qualquer outra edição manual serão preservados.',
-      warning: 'Se um NFO já tiver uma data preenchida manualmente, ela também será preservada.',
-      confirmLabel: 'Atualizar datas'
+      title: 'Atualizar datas e episódios',
+      message: 'O aplicativo buscará datas ausentes. Em Clipes musicais, também reorganizará temporada/episódio pela data e renomeará os arquivos para acompanhar a nova numeração. Títulos, descrições, artistas, gêneros e as demais edições manuais do NFO serão preservados.',
+      warning: 'Uma data já preenchida no NFO será preservada e terá prioridade na ordem cronológica. Somente temporada/episódio podem ser corrigidos nesse perfil. Para evitar disputa com o worker, a ação só inicia quando não há download ou legenda em andamento.',
+      confirmLabel: 'Atualizar metadados'
     });
     if (!decision.confirmed) return;
   }
@@ -1148,7 +1148,7 @@ async function handleLibraryAction(button) {
     showToast(`Thumbnails: ${result.result.created || 0} criadas, ${result.result.updated || 0} atualizadas, ${result.result.failed || 0} falhas.`);
   } else if (action === 'refresh-release-dates') {
     const details = result.result;
-    showToast(`Datas dos NFOs: ${details.nfoUpdated || 0} preenchido(s), ${details.nfoPreserved || 0} preservado(s), ${details.missingDate || 0} sem data e ${details.failed || 0} falha(s).`);
+    showToast(`NFOs: ${details.nfoUpdated || 0} data(s) preenchida(s), ${details.episodesRenumbered || 0} episódio(s) renumerado(s), ${details.filesRenamed || 0} arquivo(s) renomeado(s), ${details.nfoPreserved || 0} preservado(s) e ${details.failed || 0} falha(s).`);
   } else if (action === 'refresh-subtitles') {
     const details = result.result;
     showToast(details.queued > 0

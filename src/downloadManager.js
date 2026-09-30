@@ -31,7 +31,9 @@ const {
   writeMovieNfo,
   writeTvShowNfo,
   writeEpisodeNfo,
-  patchNfoReleaseMetadata
+  patchNfoReleaseMetadata,
+  getEpisodeNfoSequenceMetadata,
+  patchMusicClipEpisodeSequence
 } = require('./mediaProfileService');
 const {
   normalizeDateOnly,
@@ -85,6 +87,111 @@ function getAssignedShowEpisodeNumber(state, destinationId, artist, itemId) {
     if (Number.isInteger(episodeNumber) && episodeNumber > maxEpisode) maxEpisode = episodeNumber;
   }
   return maxEpisode + 1;
+}
+
+function currentEpisodeNumber(item) {
+  const value = Number(item && (
+    item.showEpisodeNumber ||
+    item.mediaMetadata && item.mediaMetadata.episodeNumber ||
+    item.showMetadata && item.showMetadata.episodeNumber
+  ));
+  return Number.isInteger(value) && value > 0 ? value : Number.MAX_SAFE_INTEGER;
+}
+
+function chronologyTimestamp(item, releaseDate) {
+  if (!releaseDate) return Number.POSITIVE_INFINITY;
+  const publishedAt = String(item && item.publishedAt || '').trim();
+  const parsed = publishedAt ? new Date(publishedAt) : null;
+  if (parsed && !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === releaseDate) {
+    return parsed.getTime();
+  }
+  return new Date(`${releaseDate}T00:00:00Z`).getTime();
+}
+
+function compareMusicClipChronology(a, b) {
+  const aHasDate = Boolean(a.releaseDate);
+  const bHasDate = Boolean(b.releaseDate);
+  if (aHasDate !== bHasDate) return aHasDate ? -1 : 1;
+  if (a.releaseDate !== b.releaseDate) return String(a.releaseDate || '').localeCompare(String(b.releaseDate || ''));
+  if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+  if (a.previousEpisode !== b.previousEpisode) return a.previousEpisode - b.previousEpisode;
+  if (a.queueOrder !== b.queueOrder) return a.queueOrder - b.queueOrder;
+  return String(a.item.videoId || a.item.id || '').localeCompare(String(b.item.videoId || b.item.id || ''));
+}
+
+function formatEpisodeToken(seasonNumber, episodeNumber) {
+  const season = String(Math.max(1, Number(seasonNumber) || 1)).padStart(2, '0');
+  const episode = String(Math.max(1, Number(episodeNumber) || 1)).padStart(2, '0');
+  return `S${season}E${episode}`;
+}
+
+function replaceEpisodeToken(value, seasonNumber, episodeNumber) {
+  const token = formatEpisodeToken(seasonNumber, episodeNumber);
+  const text = String(value || '');
+  return /S\d+E\d+/i.test(text) ? text.replace(/S\d+E\d+/i, token) : text;
+}
+
+function deriveSequencedPath(filePath, seasonNumber, episodeNumber) {
+  const raw = String(filePath || '').trim();
+  if (!raw) return '';
+  const parsed = path.parse(raw);
+  const nextName = replaceEpisodeToken(parsed.name, seasonNumber, episodeNumber);
+  return path.join(parsed.dir, `${nextName}${parsed.ext}`);
+}
+
+async function renamePathSetAtomically(operations) {
+  const unique = [];
+  const seen = new Set();
+  for (const operation of operations || []) {
+    const rawSource = String(operation && operation.source || '').trim();
+    const rawTarget = String(operation && operation.target || '').trim();
+    if (!rawSource || !rawTarget) continue;
+    const source = path.resolve(rawSource);
+    const target = path.resolve(rawTarget);
+    if (source === target || seen.has(source)) continue;
+    seen.add(source);
+    if (!(await pathExists(source))) continue;
+    unique.push({ source, target });
+  }
+  if (unique.length === 0) return 0;
+
+  const sources = new Set(unique.map((entry) => entry.source));
+  for (const entry of unique) {
+    if (await pathExists(entry.target) && !sources.has(entry.target)) {
+      throw new Error(`Renumeracao cancelada: o destino ja existe: ${entry.target}`);
+    }
+  }
+
+  const token = `.renumber-${process.pid}-${Date.now()}-`;
+  const staged = [];
+  try {
+    for (let index = 0; index < unique.length; index += 1) {
+      const entry = unique[index];
+      const temp = `${entry.source}${token}${index}`;
+      await fs.rename(entry.source, temp);
+      staged.push({ ...entry, temp, finalized: false });
+    }
+    for (const entry of staged) {
+      await fs.mkdir(path.dirname(entry.target), { recursive: true });
+      await fs.rename(entry.temp, entry.target);
+      entry.finalized = true;
+    }
+  } catch (error) {
+    for (const entry of [...staged].reverse()) {
+      try {
+        if (entry.finalized && await pathExists(entry.target) && !(await pathExists(entry.source))) {
+          await fs.rename(entry.target, entry.source);
+        } else if (!entry.finalized && await pathExists(entry.temp) && !(await pathExists(entry.source))) {
+          await fs.rename(entry.temp, entry.source);
+        }
+      } catch {
+        // Best effort rollback; the original error remains the primary failure.
+      }
+    }
+    throw error;
+  }
+
+  return staged.length;
 }
 
 function getPlaylistUrls(playlist) {
@@ -1201,6 +1308,17 @@ class DownloadManager {
     const profileSettings = getMediaProfileSettings(playlist);
     await this.ensureReleaseMetadata(item, playlist);
 
+    if (profileSettings.musicClips) {
+      const sequence = await this.resequenceMusicClipEpisodes(playlist, {
+        renameFiles: true,
+        patchNfos: true,
+        addMissingDate: false
+      });
+      if (sequence.itemsRenumbered > 0 || sequence.filesRenamed > 0) {
+        await logger.info(`Numeracao cronologica atualizada antes de concluir ${item.videoId}.`, sequence);
+      }
+    }
+
     await fs.mkdir(path.dirname(item.targetPath), { recursive: true });
     if (await pathExists(item.targetPath)) {
       await fs.rm(stagedMedia, { force: true });
@@ -1553,6 +1671,166 @@ class DownloadManager {
     );
   }
 
+  async resequenceMusicClipEpisodes(destination, options = {}) {
+    const profileSettings = getMediaProfileSettings(destination);
+    const destinationId = String(destination && (destination.id || destination.folderName) || '').trim();
+    const summary = {
+      applicable: profileSettings.musicClips,
+      items: 0,
+      artists: 0,
+      itemsRenumbered: 0,
+      filesRenamed: 0,
+      nfoSequenceUpdated: 0,
+      missingDate: 0
+    };
+    if (!profileSettings.musicClips || !destinationId) return summary;
+
+    const candidates = Object.values(this.state.items).filter((item) => {
+      if (!item || (item.destinationId || item.libraryFolder) !== destinationId) return false;
+      if (item.status === 'removed' && item.suppressed) return false;
+      if (item.status === 'completed') return true;
+      return item.sourceActive !== false && item.status !== 'orphaned';
+    });
+    if (candidates.length === 0) return summary;
+
+    const rows = [];
+    for (const item of candidates) {
+      const identity = resolveMediaIdentity(item);
+      const nfoPath = String(item.nfoPath || (item.targetPath ? item.targetPath.replace(/\.[^.]+$/, '.nfo') : '')).trim();
+      let nfoSequence = null;
+      if (nfoPath && await pathExists(nfoPath)) {
+        try {
+          nfoSequence = getEpisodeNfoSequenceMetadata(await fs.readFile(nfoPath, 'utf8'));
+        } catch (error) {
+          await logger.warn(`Nao foi possivel ler a data manual do NFO de ${item.videoId}: ${error.message}`);
+        }
+      }
+
+      const releaseDate = nfoSequence && nfoSequence.aired
+        ? nfoSequence.aired
+        : normalizeDateOnly(item.releaseDate || item.publishedAt || item.uploadDate);
+      if (!releaseDate) summary.missingDate += 1;
+      rows.push({
+        item,
+        identity,
+        nfoPath,
+        nfoSequence,
+        releaseDate: releaseDate || null,
+        timestamp: chronologyTimestamp(item, releaseDate),
+        previousEpisode: currentEpisodeNumber(item),
+        queueOrder: Math.max(0, Number(item.queueOrder) || 0)
+      });
+    }
+
+    const groups = new Map();
+    for (const row of rows) {
+      const key = normalizeArtistDisplayName(row.identity.artist).toLocaleLowerCase('pt-BR');
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    }
+    summary.artists = groups.size;
+    summary.items = rows.length;
+
+    const planned = [];
+    for (const group of groups.values()) {
+      group.sort(compareMusicClipChronology);
+      for (let index = 0; index < group.length; index += 1) {
+        const row = group[index];
+        planned.push({ ...row, seasonNumber: 1, episodeNumber: index + 1 });
+      }
+    }
+
+    const fileOperations = [];
+    const pathPlans = [];
+    for (const row of planned) {
+      const item = row.item;
+      const oldTarget = String(item.targetPath || '').trim();
+      if (!oldTarget) continue;
+      const parsedTarget = path.parse(oldTarget);
+      const newTarget = deriveSequencedPath(oldTarget, row.seasonNumber, row.episodeNumber);
+      const oldMediaBase = parsedTarget.name;
+      const newMediaBase = path.parse(newTarget).name;
+
+      const oldNfo = String(item.nfoPath || path.join(parsedTarget.dir, `${oldMediaBase}.nfo`));
+      const parsedNfo = path.parse(oldNfo);
+      const newNfoBase = parsedNfo.name === oldMediaBase
+        ? newMediaBase
+        : (replaceEpisodeToken(parsedNfo.name, row.seasonNumber, row.episodeNumber) || parsedNfo.name);
+      const newNfo = path.join(parsedNfo.dir, `${newNfoBase}${parsedNfo.ext || '.nfo'}`);
+
+      const oldThumbnail = String(item.thumbnailPath || path.join(parsedTarget.dir, `${oldMediaBase}-thumb.jpg`));
+      const parsedThumbnail = path.parse(oldThumbnail);
+      const newThumbnailName = replaceEpisodeToken(parsedThumbnail.name, row.seasonNumber, row.episodeNumber);
+      const newThumbnail = path.join(parsedThumbnail.dir, `${newThumbnailName}${parsedThumbnail.ext}`);
+
+      fileOperations.push({ source: oldTarget, target: newTarget });
+      fileOperations.push({ source: oldNfo, target: newNfo });
+      fileOperations.push({ source: oldThumbnail, target: newThumbnail });
+
+      if (await pathExists(oldTarget)) {
+        for (const subtitlePath of await listSubtitleSidecars(oldTarget)) {
+          const subtitleName = path.basename(subtitlePath);
+          const suffix = subtitleName.slice(oldMediaBase.length);
+          fileOperations.push({
+            source: subtitlePath,
+            target: path.join(path.dirname(subtitlePath), `${newMediaBase}${suffix}`)
+          });
+        }
+      }
+
+      pathPlans.push({ row, oldTarget, newTarget, oldNfo, newNfo, oldThumbnail, newThumbnail });
+    }
+
+    if (options.renameFiles !== false) {
+      summary.filesRenamed = await renamePathSetAtomically(fileOperations);
+    }
+
+    for (const plan of pathPlans) {
+      const { row, newTarget, newNfo, newThumbnail } = plan;
+      const item = row.item;
+      const beforeSeason = Number(item.showSeasonNumber) || 0;
+      const beforeEpisode = currentEpisodeNumber(item);
+      const beforeTarget = String(item.targetPath || '');
+
+      item.artist = row.identity.artist;
+      item.trackTitle = row.identity.trackTitle;
+      item.showSeasonNumber = row.seasonNumber;
+      item.showEpisodeNumber = row.episodeNumber;
+      item.targetPath = newTarget;
+      if (item.mediaPath) item.mediaPath = newTarget;
+      item.nfoPath = newNfo;
+      item.thumbnailPath = newThumbnail;
+
+      if (item.mediaMetadata && typeof item.mediaMetadata === 'object') {
+        item.mediaMetadata.seasonNumber = row.seasonNumber;
+        item.mediaMetadata.episodeNumber = row.episodeNumber;
+        item.mediaMetadata.nfoPath = newNfo;
+        item.mediaMetadata.artworkPath = newThumbnail;
+      }
+      if (item.showMetadata && typeof item.showMetadata === 'object') {
+        item.showMetadata.seasonNumber = row.seasonNumber;
+        item.showMetadata.episodeNumber = row.episodeNumber;
+      }
+
+      if (beforeSeason !== row.seasonNumber || beforeEpisode !== row.episodeNumber || beforeTarget !== newTarget) {
+        summary.itemsRenumbered += 1;
+        item.updatedAt = nowIso();
+      }
+
+      if (options.patchNfos !== false && await pathExists(newNfo)) {
+        const patch = await patchMusicClipEpisodeSequence(item, newNfo, {
+          addMissingDate: options.addMissingDate === true
+        });
+        if (patch.changed) {
+          summary.nfoSequenceUpdated += 1;
+          item.updatedAt = nowIso();
+        }
+      }
+    }
+
+    return summary;
+  }
+
   chooseTargetPaths(playlist, video, itemId) {
     const playlistDir = playlist.rootPath || path.join(this.config.paths.baseDir, playlist.folderName);
     const profileSettings = getMediaProfileSettings(playlist);
@@ -1807,6 +2085,21 @@ class DownloadManager {
         item.nextAttemptAt = null;
       }
       summary.orphaned += 1;
+    }
+
+    if (getMediaProfileSettings(destination).musicClips) {
+      const sequence = await this.resequenceMusicClipEpisodes(destination, {
+        renameFiles: true,
+        patchNfos: true,
+        addMissingDate: false
+      });
+      summary.episodesRenumbered = sequence.itemsRenumbered;
+      summary.sequenceFilesRenamed = sequence.filesRenamed;
+      summary.sequenceNfoUpdated = sequence.nfoSequenceUpdated;
+      summary.sequenceMissingDate = sequence.missingDate;
+      if (sequence.filesRenamed > 0 || sequence.nfoSequenceUpdated > 0) {
+        this.ensureLibraryState(destinationId).dirty = true;
+      }
     }
 
     const destinationState = this.ensureLibraryState(destinationId);
@@ -2341,6 +2634,9 @@ class DownloadManager {
     const folder = resolveDestinationId(this.config, libraryFolder);
     const destination = findPlaylistByFolder(this.config, folder);
     if (!destination) throw new Error('Biblioteca nao encontrada para atualizar datas.');
+    if (this.current || this.currentPromise) {
+      throw new Error('Aguarde o download ou a legenda em andamento terminar (ou pause a fila e espere o item atual concluir) antes de atualizar datas e episodios.');
+    }
 
     const items = Object.values(this.state.items).filter((item) =>
       (item.destinationId || item.libraryFolder) === folder && item.status === 'completed'
@@ -2351,6 +2647,9 @@ class DownloadManager {
       metadataUpdated: 0,
       nfoUpdated: 0,
       nfoPreserved: 0,
+      episodesRenumbered: 0,
+      episodeNfoUpdated: 0,
+      filesRenamed: 0,
       missingNfo: 0,
       missingDate: 0,
       failed: 0,
@@ -2419,18 +2718,35 @@ class DownloadManager {
     }
 
     summary.failed += fetched.failed.filter((entry) => entry.videoId).length;
+
+    if (getMediaProfileSettings(destination).musicClips) {
+      try {
+        const sequence = await this.resequenceMusicClipEpisodes(destination, {
+          renameFiles: true,
+          patchNfos: true,
+          addMissingDate: false
+        });
+        summary.episodesRenumbered = sequence.itemsRenumbered;
+        summary.episodeNfoUpdated = sequence.nfoSequenceUpdated;
+        summary.filesRenamed = sequence.filesRenamed;
+      } catch (error) {
+        summary.failed += 1;
+        await logger.warn(`Falha ao renumerar episodios por data em ${folder}: ${error.message}`);
+      }
+    }
+
     await this.saveNow();
 
-    if (summary.nfoUpdated > 0 && destination.libraryId) {
+    if ((summary.nfoUpdated > 0 || summary.episodeNfoUpdated > 0 || summary.filesRenamed > 0) && destination.libraryId) {
       try {
         summary.scan = await runLibraryAction(this.config, destination, 'scan');
       } catch (error) {
         summary.scan = { ok: false, statusText: error.message };
-        await logger.warn(`Datas dos NFOs foram atualizadas, mas o scan do ErsatzTV falhou para ${folder}: ${error.message}`);
+        await logger.warn(`Metadados dos NFOs foram atualizados, mas o scan do ErsatzTV falhou para ${folder}: ${error.message}`);
       }
     }
 
-    await logger.info(`Atualizacao temporaria de datas concluida para ${folder}.`, summary);
+    await logger.info(`Atualizacao temporaria de datas e episodios concluida para ${folder}.`, summary);
     return summary;
   }
 

@@ -448,6 +448,57 @@ test('music clips profile uses artist/show folders, Season 01 and stable episode
   assert.equal(path.basename(third.targetPath), 'Twenty One Pilots - S01E03 - Next Semester.mp4');
 });
 
+test('music clips episode numbers follow publication chronology instead of discovery order', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-episode-chronology-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const config = makeConfig(path.join(root, 'media'));
+  config.playlists[0].mediaProfile = 'music_clips';
+  const playlist = { ...config.playlists[0], folderName: 'Teste' };
+  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
+  await manager.init(config);
+
+  await manager.reconcileLibrary(config, playlist, [
+    { id: 'chrononewer01', title: 'Artist - Newer', publishedAt: '2025-06-12T14:30:00Z' },
+    { id: 'chronoolder01', title: 'Artist - Older', publishedAt: '2023-01-02T10:00:00Z' },
+    { id: 'chronomiddle1', title: 'Artist - Middle', publishedAt: '2024-04-09T11:00:00Z' }
+  ]);
+
+  const older = manager.state.items[makeItemId('Teste', 'chronoolder01')];
+  const middle = manager.state.items[makeItemId('Teste', 'chronomiddle1')];
+  const newer = manager.state.items[makeItemId('Teste', 'chrononewer01')];
+  assert.equal(older.showEpisodeNumber, 1);
+  assert.equal(middle.showEpisodeNumber, 2);
+  assert.equal(newer.showEpisodeNumber, 3);
+  assert.equal(path.basename(older.targetPath), 'Artist - S01E01 - Older.mp4');
+  assert.equal(path.basename(middle.targetPath), 'Artist - S01E02 - Middle.mp4');
+  assert.equal(path.basename(newer.targetPath), 'Artist - S01E03 - Newer.mp4');
+});
+
+test('music clips chronology uses a manually corrected aired date from the existing NFO', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-episode-manual-aired-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const config = makeConfig(path.join(root, 'media'));
+  config.playlists[0].mediaProfile = 'music_clips';
+  const playlist = { ...config.playlists[0], folderName: 'Teste' };
+  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
+  await manager.init(config);
+
+  await manager.reconcileLibrary(config, playlist, [
+    { id: 'manualaired01', title: 'Artist - First', publishedAt: '2025-01-01T10:00:00Z' },
+    { id: 'manualaired02', title: 'Artist - Second', publishedAt: '2024-01-01T10:00:00Z' }
+  ]);
+  const first = manager.state.items[makeItemId('Teste', 'manualaired01')];
+  const second = manager.state.items[makeItemId('Teste', 'manualaired02')];
+
+  await fs.mkdir(path.dirname(first.nfoPath), { recursive: true });
+  await fs.writeFile(first.nfoPath, '<episodedetails>\n  <season>1</season>\n  <episode>2</episode>\n  <aired>2020-05-10</aired>\n</episodedetails>\n');
+  await fs.writeFile(second.nfoPath, '<episodedetails>\n  <season>1</season>\n  <episode>1</episode>\n  <aired>2024-01-01</aired>\n</episodedetails>\n');
+
+  await manager.resequenceMusicClipEpisodes(playlist, { renameFiles: true, patchNfos: true, addMissingDate: false });
+  assert.equal(first.showEpisodeNumber, 1);
+  assert.equal(second.showEpisodeNumber, 2);
+});
+
 test('music clips profile creates tvshow NFO, episode NFO and episode artwork', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-v27-finalize-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
@@ -580,7 +631,7 @@ test('discovery persists YouTube publication metadata for future NFO generation'
   assert.equal(item.year, 2025);
 });
 
-test('temporary release-date refresh patches only the missing date in existing manually edited NFOs', async (t) => {
+test('temporary NFO refresh adds the missing date, renumbers season/episode and preserves all other manual fields', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-release-nfo-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const config = makeConfig(path.join(root, 'media'));
@@ -633,9 +684,166 @@ test('temporary release-date refresh patches only the missing date in existing m
   const updated = await fs.readFile(target.nfoPath, 'utf8');
   assert.match(updated, /<aired>2025-06-12<\/aired>/);
   assert.match(updated, /<title>Título corrigido pelo usuário<\/title>/);
-  assert.match(updated, /<season>9<\/season>/);
-  assert.match(updated, /<episode>99<\/episode>/);
+  assert.match(updated, /<season>1<\/season>/);
+  assert.match(updated, /<episode>1<\/episode>/);
   assert.match(updated, /<plot>Descrição manual importante<\/plot>/);
   assert.match(updated, /<genre>Personalizado<\/genre>/);
-  assert.equal(updated.replace('  <aired>2025-06-12</aired>\n', ''), manualNfo);
+  assert.equal(summary.episodesRenumbered, 1);
+  assert.equal(summary.episodeNfoUpdated, 1);
+  const normalized = updated
+    .replace('  <season>1</season>', '  <season>9</season>')
+    .replace('  <episode>1</episode>', '  <episode>99</episode>')
+    .replace('  <aired>2025-06-12</aired>\n', '');
+  assert.equal(normalized, manualNfo);
+});
+
+
+test('temporary music-clip migration renames media sidecars when chronology changes without touching manual NFO text', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-episode-rename-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const config = makeConfig(path.join(root, 'media'));
+  config.playlists[0].mediaProfile = 'music_clips';
+  const playlist = { ...config.playlists[0], folderName: 'Teste' };
+  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
+  await manager.init(config);
+
+  await manager.reconcileLibrary(config, playlist, [
+    { id: 'rename-newer1', title: 'Artist - Newer', publishedAt: '2025-01-02T10:00:00Z' },
+    { id: 'rename-older1', title: 'Artist - Older', publishedAt: '2024-01-02T10:00:00Z' }
+  ]);
+  const newer = manager.state.items[makeItemId('Teste', 'rename-newer1')];
+  const older = manager.state.items[makeItemId('Teste', 'rename-older1')];
+
+  // Simulate an old library whose file numbering was discovery-based, opposite to chronology.
+  const seasonDir = path.dirname(newer.targetPath);
+  const newerOldBase = 'Artist - S01E01 - Nome manual do arquivo novo';
+  const olderOldBase = 'Artist - S01E02 - Nome manual do arquivo antigo';
+  Object.assign(newer, {
+    showEpisodeNumber: 1,
+    status: 'completed',
+    targetPath: path.join(seasonDir, `${newerOldBase}.mp4`),
+    mediaPath: path.join(seasonDir, `${newerOldBase}.mp4`),
+    nfoPath: path.join(seasonDir, `${newerOldBase}.nfo`),
+    thumbnailPath: path.join(seasonDir, `${newerOldBase}-thumb.jpg`)
+  });
+  Object.assign(older, {
+    showEpisodeNumber: 2,
+    status: 'completed',
+    targetPath: path.join(seasonDir, `${olderOldBase}.mp4`),
+    mediaPath: path.join(seasonDir, `${olderOldBase}.mp4`),
+    nfoPath: path.join(seasonDir, `${olderOldBase}.nfo`),
+    thumbnailPath: path.join(seasonDir, `${olderOldBase}-thumb.jpg`)
+  });
+  await fs.mkdir(seasonDir, { recursive: true });
+  await fs.writeFile(newer.targetPath, 'newer-video');
+  await fs.writeFile(older.targetPath, 'older-video');
+  await fs.writeFile(newer.thumbnailPath, 'newer-thumb');
+  await fs.writeFile(older.thumbnailPath, 'older-thumb');
+  await fs.writeFile(path.join(seasonDir, `${newerOldBase}.pt-BR.srt`), 'newer-sub');
+  await fs.writeFile(path.join(seasonDir, `${olderOldBase}.pt-BR.srt`), 'older-sub');
+  await fs.writeFile(newer.nfoPath, [
+    '<episodedetails>',
+    '  <title>Título manual mais novo</title>',
+    '  <season>1</season>',
+    '  <episode>1</episode>',
+    '  <plot>Não alterar este texto</plot>',
+    '  <aired>2025-01-02</aired>',
+    '</episodedetails>',
+    ''
+  ].join('\n'));
+  await fs.writeFile(older.nfoPath, [
+    '<episodedetails>',
+    '  <title>Título manual mais antigo</title>',
+    '  <season>1</season>',
+    '  <episode>2</episode>',
+    '  <plot>Também preservar</plot>',
+    '  <aired>2024-01-02</aired>',
+    '</episodedetails>',
+    ''
+  ].join('\n'));
+
+  const summary = await manager.refreshReleaseDates('Teste');
+  assert.equal(summary.episodesRenumbered, 2);
+  assert.ok(summary.filesRenamed >= 8);
+  assert.equal(older.showEpisodeNumber, 1);
+  assert.equal(newer.showEpisodeNumber, 2);
+  assert.equal(path.basename(older.targetPath), 'Artist - S01E01 - Nome manual do arquivo antigo.mp4');
+  assert.equal(path.basename(newer.targetPath), 'Artist - S01E02 - Nome manual do arquivo novo.mp4');
+  assert.equal(await fs.readFile(older.targetPath, 'utf8'), 'older-video');
+  assert.equal(await fs.readFile(newer.targetPath, 'utf8'), 'newer-video');
+  assert.equal(await fs.readFile(path.join(seasonDir, 'Artist - S01E01 - Nome manual do arquivo antigo.pt-BR.srt'), 'utf8'), 'older-sub');
+  assert.equal(await fs.readFile(path.join(seasonDir, 'Artist - S01E02 - Nome manual do arquivo novo.pt-BR.srt'), 'utf8'), 'newer-sub');
+  const olderNfo = await fs.readFile(older.nfoPath, 'utf8');
+  const newerNfo = await fs.readFile(newer.nfoPath, 'utf8');
+  assert.match(olderNfo, /<title>Título manual mais antigo<\/title>/);
+  assert.match(olderNfo, /<plot>Também preservar<\/plot>/);
+  assert.match(olderNfo, /<episode>1<\/episode>/);
+  assert.match(newerNfo, /<title>Título manual mais novo<\/title>/);
+  assert.match(newerNfo, /<plot>Não alterar este texto<\/plot>/);
+  assert.match(newerNfo, /<episode>2<\/episode>/);
+});
+
+test('temporary music-clip migration leaves manual filenames without an episode token unchanged', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-episode-manual-name-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const config = makeConfig(path.join(root, 'media'));
+  config.playlists[0].mediaProfile = 'music_clips';
+  const playlist = { ...config.playlists[0], folderName: 'Teste' };
+  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
+  await manager.init(config);
+
+  await manager.reconcileLibrary(config, playlist, [
+    { id: 'manual-name-1', title: 'Artist - Track', publishedAt: '2024-01-02T10:00:00Z' }
+  ]);
+  const item = manager.state.items[makeItemId('Teste', 'manual-name-1')];
+  const seasonDir = path.dirname(item.targetPath);
+  const manualBase = 'Artist - Nome totalmente manual';
+  Object.assign(item, {
+    showEpisodeNumber: 7,
+    status: 'completed',
+    targetPath: path.join(seasonDir, `${manualBase}.mp4`),
+    mediaPath: path.join(seasonDir, `${manualBase}.mp4`),
+    nfoPath: path.join(seasonDir, `${manualBase}.nfo`),
+    thumbnailPath: path.join(seasonDir, `${manualBase}-thumb.jpg`)
+  });
+  await fs.mkdir(seasonDir, { recursive: true });
+  await fs.writeFile(item.targetPath, 'video');
+  await fs.writeFile(item.thumbnailPath, 'thumb');
+  await fs.writeFile(path.join(seasonDir, `${manualBase}.pt-BR.srt`), 'subtitle');
+  await fs.writeFile(item.nfoPath, [
+    '<episodedetails>',
+    '  <title>Título manual</title>',
+    '  <season>9</season>',
+    '  <episode>7</episode>',
+    '  <aired>2024-01-02</aired>',
+    '</episodedetails>',
+    ''
+  ].join('\n'));
+
+  const summary = await manager.refreshReleaseDates('Teste');
+  assert.equal(summary.episodesRenumbered, 1);
+  assert.equal(summary.filesRenamed, 0);
+  assert.equal(path.basename(item.targetPath), `${manualBase}.mp4`);
+  assert.equal(path.basename(item.nfoPath), `${manualBase}.nfo`);
+  assert.equal(path.basename(item.thumbnailPath), `${manualBase}-thumb.jpg`);
+  assert.equal(await fs.readFile(path.join(seasonDir, `${manualBase}.pt-BR.srt`), 'utf8'), 'subtitle');
+  const nfo = await fs.readFile(item.nfoPath, 'utf8');
+  assert.match(nfo, /<title>Título manual<\/title>/);
+  assert.match(nfo, /<season>1<\/season>/);
+  assert.match(nfo, /<episode>1<\/episode>/);
+});
+
+test('temporary metadata migration refuses to rename libraries while a worker item is active', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-episode-active-worker-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const config = makeConfig(path.join(root, 'media'));
+  config.playlists[0].mediaProfile = 'music_clips';
+  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
+  await manager.init(config);
+  manager.current = { itemId: 'synthetic-active-item' };
+
+  await assert.rejects(
+    () => manager.refreshReleaseDates('Teste'),
+    /Aguarde o download ou a legenda em andamento terminar/
+  );
 });

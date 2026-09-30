@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.10
+# ErsatzTV YouTube Downloader 3.4.11
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.10 enriquece os downloads do YouTube com a data de publicação e passa essa informação aos NFOs usados pelo ErsatzTV. Downloads novos guardam a metadata temporal automaticamente; para o acervo atual existe, somente nesta versão de migração, o botão **Atualizar datas dos NFOs**, que acrescenta apenas campos de data ausentes e preserva as demais edições manuais do arquivo.
+A versão 3.4.11 completa a integração da data de publicação com o perfil **Clipes musicais (Seriados)**: a numeração S01E01, S01E02... passa a seguir a cronologia de publicação de cada artista. O botão temporário de migração agora também corrige temporada/episódio e renomeia os arquivos correspondentes, preservando título, plot, gênero e as demais edições manuais do NFO.
 
 ## Arquitetura
 
@@ -35,7 +35,7 @@ Biblioteca local do ErsatzTV
 - Modo opcional para ErsatzTV/Shows com `Biblioteca/Artista/Season 01/`, `tvshow.nfo` e NFO por episódio.
 - Metadata temporal do YouTube preservada no estado (`publishedAt`/`uploadDate`, `releaseDate`, origem e ano) para novos downloads.
 - NFOs novos incluem `year` + `premiered` em Movies e `aired` em episódios de Clipes musicais.
-- Ação temporária **Atualizar datas dos NFOs** para preencher somente datas ausentes no acervo atual sem sobrescrever outras edições manuais.
+- Ação temporária **Atualizar datas e episódios** para completar datas ausentes e, em Clipes musicais, reorganizar S01E01, S01E02... pela cronologia sem reconstruir os demais metadados do NFO.
 - Thumbnail do vídeo como artwork de episódio (`-thumb.jpg`) e `poster.jpg` no nível do artista/Show.
 - Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
 - Seleção múltipla de idiomas: `pt-BR`, `pt`, `en` e `es`.
@@ -215,7 +215,7 @@ O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão**
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.4.10:
+Módulos disponíveis na v3.4.11:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -361,25 +361,27 @@ Biblioteca/
         └── Twenty One Pilots - S01E01 - City Walls.pt-BR.srt
 ```
 
-O artista vira o Show e a música vira o episódio. A numeração é estável por artista. Quando disponível, o NFO do episódio recebe `aired` com a data de publicação do vídeo no YouTube.
+O artista vira o Show e a música vira o episódio. A partir da v3.4.11, a numeração por artista segue a data de publicação: o vídeo mais antigo recebe E01, o seguinte E02 e assim por diante. Quando dois vídeos têm a mesma data, o timestamp de publicação é usado quando disponível; sem data, a ordem anterior é mantida como desempate estável. O NFO do episódio recebe `aired` quando essa informação existe.
 
 A normalização de nomes continua conservadora: casing claramente ruidoso é corrigido, enquanto grafias estilizadas como `AC/DC`, `P!NK`, `deadmau5`, `blink-182` e `CHVRCHES` são preservadas.
 
-## Atualização temporária das datas dos NFOs
+## Atualização temporária de datas e episódios
 
-Na v3.4.10, cada biblioteca possui a ação **Atualizar datas dos NFOs**. Ela existe apenas para migrar o acervo que já estava baixado antes de a data de publicação passar a ser armazenada automaticamente.
+Na v3.4.11, cada biblioteca mantém temporariamente a ação **Atualizar datas e episódios**. Ela migra o acervo anterior para a nova numeração cronológica sem recriar os NFOs.
 
 A operação é conservadora:
 
 - usa a YouTube Data API quando esse modo está ativo e tenta yt-dlp como fallback;
 - atualiza `publishedAt`/`uploadDate`, `releaseDate`, origem e ano no estado local;
-- em Clipes musicais, acrescenta somente `aired` quando esse campo ainda não existe;
-- em Genérico/Filmes, acrescenta `year` e `premiered` somente quando o NFO não possui nenhum desses campos de data;
-- não reconstrói o NFO e não altera título, descrição, artista, gênero, temporada, episódio ou outras tags já editadas;
-- se uma data já foi ajustada manualmente, ela é preservada;
-- quando houver Library ID configurado e algum NFO for alterado, solicita um scan da biblioteca no ErsatzTV ao final.
+- em Clipes musicais, acrescenta `aired` somente quando ele não existe; se o NFO já possui um `aired` manual válido, essa data é preservada e passa a ter prioridade para definir a ordem;
+- em Clipes musicais, corrige somente `season` e `episode` para refletir a cronologia por artista; as demais tags do NFO são preservadas;
+- quando a numeração muda, renomeia MP4, NFO, thumbnail e legendas sidecar alterando apenas o trecho `SxxExx` do nome. O restante do nome do arquivo é mantido; se um nome manual não possui esse token, ele permanece intacto;
+- em Genérico/Filmes, continua acrescentando `year` e `premiered` somente quando o NFO não possui nenhum desses campos de data;
+- título, descrição, artista, gênero, tags e demais edições manuais não são reconstruídos nem substituídos;
+- para evitar renomear arquivos enquanto o worker os manipula, a ação só inicia quando não há download ou legenda em andamento;
+- quando houver Library ID configurado e algum NFO/arquivo for alterado, solicita um scan da biblioteca no ErsatzTV ao final.
 
-Esse botão é temporário e está previsto para ser removido na versão seguinte. Downloads novos não dependem dele.
+O botão continua temporário nesta versão porque agora também executa a migração da numeração existente. A remoção fica prevista para a versão seguinte, depois da homologação desta nova etapa. Downloads novos já recebem a numeração cronológica automaticamente.
 
 ## Compatibilidade de mídia
 
