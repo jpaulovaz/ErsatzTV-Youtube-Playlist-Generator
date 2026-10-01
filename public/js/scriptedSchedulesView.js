@@ -58,7 +58,7 @@
     ersatzName: 'Nome exato da Collection ou Multi-Collection no ErsatzTV.',
     playlist: 'Nome da Playlist no ErsatzTV.',
     playlistGroup: 'Grupo da Playlist no ErsatzTV. Ele ajuda o Scripted Schedule a encontrar a playlist certa.',
-    searchQuery: 'Busca usada pelo ErsatzTV para encontrar mídia. Exemplo: type:movie AND tag:"comedia".',
+    searchQuery: 'Busca usada pelo ErsatzTV para encontrar mídia. Exemplo: type:movie AND tag:"comedia". A lista completa de campos e exemplos está em Ajuda → Queries.',
     marathonGroupBy: 'Escolha como separar a maratona em grupos: show, temporada, artista, álbum ou diretor.',
     marathonItemOrder: 'Ordem dos itens dentro de cada grupo: cronológica ou embaralhada.',
     marathonPlayAll: 'Quando ligado, termina todos os itens do grupo atual antes de passar para o próximo.',

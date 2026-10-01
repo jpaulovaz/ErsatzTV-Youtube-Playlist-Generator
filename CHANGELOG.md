@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.4.13
+
+- A Ajuda de Scripted Schedules ganha a aba **Queries**, dedicada às Sources do tipo Search.
+- O guia reúne todos os campos de busca documentados pelo ErsatzTV Legacy e os separa por assunto: identidade/organização, conteúdo/classificação, pessoas/origem, séries/episódios, música, áudio/legendas, datas e características técnicas.
+- Cada campo recebe uma explicação curta e a indicação dos tipos de mídia em que é aceito, evitando uma lista solta sem contexto.
+- A Ajuda inclui os campos especiais `released_inthelast`, `released_notinthelast`, `released_onthisday`, `added_inthelast` e `added_notinthelast`, além de exemplos de `AND`, `OR`, `NOT`, `*`, aspas e intervalo de datas.
+- O campo Query da Source Search passa a apontar diretamente para **Ajuda → Queries**.
+- Remote Streams recebem uma observação própria: a documentação Legacy informa que são pesquisáveis, mas não enumera campos específicos; por isso a Ajuda não inventa parâmetros não documentados.
+- Nenhuma alteração no Universal v1.3.1, `configVersion` 8, schema de Scripted Schedules 1, estado da fila 4 ou comportamento do módulo de downloads.
+
 ## 3.4.12
 
 - A identidade de publicação de um Scripted Schedule deixa de ser definida no momento em que o rascunho é criado. Projetos novos e duplicados ficam sem `fileName` e `state_key` definitivos até a primeira publicação.

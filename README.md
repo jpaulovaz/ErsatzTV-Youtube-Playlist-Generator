@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.12
+# ErsatzTV YouTube Downloader 3.4.13
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.12 corrige a identidade de publicação dos **Scripted Schedules**: projetos novos e duplicados só recebem nome de arquivo `.py` e `state_key` definitivos na primeira publicação, usando o nome atual da configuração e o canal escolhido. Assim, uma cópia pode ser renomeada antes de publicar sem herdar o nome/state do canal original.
+A versão 3.4.13 amplia a **Ajuda de Scripted Schedules** com uma aba dedicada a Queries do ErsatzTV. Ela reúne, em grupos coerentes, todos os campos de pesquisa documentados para Movies, Shows, Seasons, Episodes, Artists, Music Videos, Other Videos, Songs e Images, além dos campos especiais de data e exemplos de sintaxe. O Universal permanece v1.3.1 e não há alteração no comportamento de geração/publicação dos scripts.
 
 ## Arquitetura
 
@@ -56,7 +56,7 @@ Biblioteca local do ErsatzTV
 - Validação automática da API Key do ErsatzTV por `GET /api/version`, com exibição compacta da versão conectada em Configurações.
 - Área **Scripted Schedules** com vários projetos independentes, **18 tipos de módulo**, Filler opcional, motor Universal versionado e geração de Python sem edição manual de código.
 - Publicação atômica dos scripts em pasta configurável, com validação, SHA-256, backup e histórico para restauração.
-- Menu **Ajuda** com explicações simples, exemplos de módulos, combinações sugeridas e glossário de termos do Scripted Schedule.
+- Menu **Ajuda** com explicações simples, exemplos de módulos, combinações sugeridas, glossário e um guia completo de Queries do ErsatzTV.
 - Limpeza manual de órfãos.
 - Migração automática da configuração da versão 1.
 
@@ -215,7 +215,7 @@ O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão**
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.4.12:
+Módulos disponíveis na v3.4.13:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -254,7 +254,7 @@ Ao duplicar um Scripted Schedule, Recursos, Programação e opções são copiad
 
 **Reset Playout** é uma ação separada e destrutiva. Publicar um script nunca dispara reset automaticamente.
 
-A opção lateral **Ajuda** possui explicações simples de Recursos, todos os módulos, combinações sugeridas, publicação e termos técnicos. Os `?` contextuais continuam disponíveis diretamente ao lado dos campos. Em **Variáveis dos Graphics**, a Ajuda deixa claro que não existe uma lista fixa: a chave deve ser a mesma usada pelo YAML/Scriban. Dados que o ErsatzTV já fornece ao Graphics, como `MediaItem_Title`, `MediaItem_Artist`, `MediaItem_Path` e `MediaItem_Duration`, são usados diretamente no YAML e não precisam ser cadastrados como variáveis personalizadas. Para os próprios Graphics Elements, use caminhos relativos como `image/watermark.yml`; se um projeto antigo tiver salvo `/image/watermark.yml`, o aplicativo remove a barra inicial automaticamente.
+A opção lateral **Ajuda** possui explicações simples de Recursos, Queries, todos os módulos, combinações sugeridas, publicação e termos técnicos. A aba **Queries** organiza os campos oficiais por assunto (identidade, classificação, créditos, séries, música, idiomas, datas e características técnicas), indica em quais tipos de mídia cada campo é aceito e mostra exemplos com `AND`, `OR`, `NOT`, `*`, aspas e intervalos. Os `?` contextuais continuam disponíveis diretamente ao lado dos campos; a ajuda da Source Search aponta para essa aba completa. Em **Variáveis dos Graphics**, a Ajuda deixa claro que não existe uma lista fixa: a chave deve ser a mesma usada pelo YAML/Scriban. Dados que o ErsatzTV já fornece ao Graphics, como `MediaItem_Title`, `MediaItem_Artist`, `MediaItem_Path` e `MediaItem_Duration`, são usados diretamente no YAML e não precisam ser cadastrados como variáveis personalizadas. Para os próprios Graphics Elements, use caminhos relativos como `image/watermark.yml`; se um projeto antigo tiver salvo `/image/watermark.yml`, o aplicativo remove a barra inicial automaticamente.
 
 Os dados do builder ficam em `data/scripted-schedules/` e não alteram o `configVersion` principal da aplicação.
 
@@ -367,7 +367,7 @@ A normalização de nomes continua conservadora: casing claramente ruidoso é co
 
 ## Atualização temporária de datas e episódios
 
-Na v3.4.12, cada biblioteca ainda mantém temporariamente a ação **Atualizar datas e episódios**. Ela migra o acervo anterior para a nova numeração cronológica sem recriar os NFOs.
+Na v3.4.13, cada biblioteca ainda mantém temporariamente a ação **Atualizar datas e episódios**. Ela migra o acervo anterior para a nova numeração cronológica sem recriar os NFOs.
 
 A operação é conservadora:
 

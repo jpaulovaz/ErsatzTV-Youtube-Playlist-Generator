@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.12/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.12/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.13/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.13/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -177,8 +177,8 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.1 modul
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.4\.12/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.12/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.4\.13/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.13/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -343,14 +343,39 @@ test('Scripted Schedules Help stays inside the Programacao sidebar group and is 
   assert.match(programacaoGroup, /data-view="help"/);
   assert.doesNotMatch(sistemaGroup, /data-view="help"/);
   assert.match(html, /id="view-help"/);
-  assert.match(html, /helpView\.js\?v=3\.4\.12/);
+  assert.match(html, /helpView\.js\?v=3\.4\.13/);
   assert.match(help, /Programação · Scripted Schedules/);
   assert.match(help, /Assuntos da ajuda de Scripted Schedules/);
-  for (const tab of ['Começando', 'Recursos', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));
+  for (const tab of ['Começando', 'Recursos', 'Queries', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));
   for (const name of ['Rotação por quantidade', 'Rotação por peso', 'Bloco contínuo por horário', 'Inserções após X itens', 'Encaixar até o próximo evento', 'Escolha entre fontes', 'Relógio de programação', 'Programação especial temporária']) assert.match(help, new RegExp(name));
   assert.match(help, /Combina bem com/);
   assert.match(help, /Exemplo simples/);
   assert.match(help, /Fallback Source/);
+});
+
+test('Query Help documents every official ErsatzTV Legacy search field in coherent groups', () => {
+  const help = read('js/helpView.js');
+  const view = read('js/scriptedSchedulesView.js');
+  const css = read('styles.css');
+  const fields = [
+    'title', 'type', 'library_name', 'collection', 'genre', 'tag', 'tag_full', 'plot', 'content_rating',
+    'studio', 'network', 'actor', 'director', 'writer', 'season_number', 'episode_number', 'show_title',
+    'show_genre', 'show_studio', 'show_network', 'show_content_rating', 'show_tag', 'artist', 'album',
+    'album_artist', 'style', 'mood', 'language', 'language_tag', 'sub_language', 'sub_language_tag',
+    'release_date', 'added_date', 'released_inthelast', 'released_notinthelast', 'released_onthisday',
+    'added_inthelast', 'added_notinthelast', 'chapters', 'minutes', 'seconds', 'height', 'width',
+    'video_codec', 'video_bit_depth', 'video_dynamic_range'
+  ];
+  for (const field of fields) assert.ok(help.includes(`['${field}',`), `missing query field ${field}`);
+  for (const group of ['Identidade e organização', 'Conteúdo e classificação', 'Pessoas, estúdio e origem', 'Séries, temporadas e episódios', 'Música', 'Áudio e legendas', 'Datas', 'Duração e características técnicas']) assert.match(help, new RegExp(group));
+  assert.match(help, /O curinga é <code>\*<\/code>, não <code>%<\/code>/);
+  assert.match(help, /library_name:\"21 - JOHNFLIX MUSIC\" AND artist:\"Madonna\"/);
+  assert.match(help, /title:\*banana\*/);
+  assert.match(help, /release_date:\[20000101 TO 20091231\]/);
+  assert.match(help, /Remote Streams/);
+  assert.match(help, /não publica uma lista própria de campos/);
+  assert.match(view, /Ajuda → Queries/);
+  assert.match(css, /\.help-query-field/);
 });
 
 test('module selection modal keeps only module names in the left list and details on the right', () => {

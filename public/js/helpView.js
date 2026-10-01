@@ -2,6 +2,7 @@
   const TABS = [
     ['start', 'Começando'],
     ['resources', 'Recursos'],
+    ['queries', 'Queries'],
     ['modules', 'Módulos'],
     ['combinations', 'Combinações'],
     ['publish', 'Publicar'],
@@ -29,6 +30,103 @@
     ['Janela offline', 'Deixa uma faixa sem programação.', 'Domingo 03:00–05:00 → manutenção.', 'Manutenção. Não combine com Filler dentro da mesma janela.', 'Pad To Nearest não se aplica aqui, porque esta faixa foi criada para ficar sem programação.']
   ];
 
+  const QUERY_GROUPS = [
+    {
+      title: 'Identidade e organização',
+      intro: 'Campos para localizar o item certo e limitar a busca a uma parte do catálogo.',
+      fields: [
+        ['title', 'Título do item. Se você não informar nenhum campo, o ErsatzTV pesquisa pelo título por padrão.', 'Todos os tipos pesquisáveis.'],
+        ['type', 'Limita o tipo de mídia.', 'Valores documentados: movie, show, season, episode, artist, music_video, other_video, song e image.'],
+        ['library_name', 'Nome da biblioteca que contém o item.', 'Filmes, shows, temporadas, episódios, artistas, music videos, other videos, músicas e imagens.'],
+        ['collection', 'Nome da Collection que contém o item.', 'Filmes, shows, temporadas, episódios, artistas, music videos, other videos, músicas e imagens.']
+      ]
+    },
+    {
+      title: 'Conteúdo e classificação',
+      intro: 'Metadados editoriais usados para filtrar por assunto, categoria ou descrição.',
+      fields: [
+        ['genre', 'Gênero do conteúdo.', 'Filmes, shows, artistas, music videos, other videos, músicas e imagens.'],
+        ['tag', 'Tag associada ao conteúdo.', 'Filmes, shows, temporadas, episódios, music videos, other videos, músicas e imagens. Em Movies/Shows/Seasons/Episodes não está disponível com metadados Plex.'],
+        ['tag_full', 'A mesma informação de tag, mas sem tokenização/análise do texto; útil quando você quer comparar a tag como valor completo.', 'Mesmos tipos de tag.'],
+        ['plot', 'Sinopse ou descrição do conteúdo.', 'Filmes, shows, episódios e other videos.'],
+        ['content_rating', 'Classificação indicativa. A documentação alerta que a busca é sensível a maiúsculas/minúsculas.', 'Filmes, shows e other videos.']
+      ]
+    },
+    {
+      title: 'Pessoas, estúdio e origem',
+      intro: 'Campos para selecionar conteúdo por créditos ou origem editorial.',
+      fields: [
+        ['studio', 'Estúdio associado ao conteúdo.', 'Filmes, shows e other videos.'],
+        ['network', 'Network do show conforme os metadados do Plex.', 'Shows.'],
+        ['actor', 'Ator presente no conteúdo.', 'Filmes, shows e other videos.'],
+        ['director', 'Diretor do conteúdo.', 'Filmes, episódios e other videos.'],
+        ['writer', 'Roteirista ou crédito de escrita.', 'Filmes, episódios e other videos.']
+      ]
+    },
+    {
+      title: 'Séries, temporadas e episódios',
+      intro: 'Campos próprios da hierarquia de séries.',
+      fields: [
+        ['season_number', 'Número da temporada.', 'Temporadas e episódios.'],
+        ['episode_number', 'Número do episódio.', 'Episódios.'],
+        ['show_title', 'Título do show ao qual a temporada ou episódio pertence.', 'Temporadas e episódios.'],
+        ['show_genre', 'Gênero do show pai.', 'Temporadas e episódios.'],
+        ['show_studio', 'Estúdio do show pai.', 'Temporadas e episódios.'],
+        ['show_network', 'Network do show pai conforme os metadados do Plex.', 'Episódios.'],
+        ['show_content_rating', 'Classificação indicativa do show pai.', 'Temporadas e episódios.'],
+        ['show_tag', 'Tag do show pai.', 'Temporadas e episódios.']
+      ]
+    },
+    {
+      title: 'Música',
+      intro: 'Campos próprios de artistas, clipes e músicas.',
+      fields: [
+        ['artist', 'Artista do music video ou da faixa.', 'Music videos e músicas.'],
+        ['album', 'Álbum do music video ou da faixa.', 'Music videos e músicas.'],
+        ['album_artist', 'Artista principal do álbum.', 'Músicas.'],
+        ['style', 'Estilo associado ao artista.', 'Artistas.'],
+        ['mood', 'Clima/mood associado ao artista.', 'Artistas.']
+      ]
+    },
+    {
+      title: 'Áudio e legendas',
+      intro: 'Campos lidos a partir das faixas de mídia.',
+      fields: [
+        ['language', 'Idioma de uma faixa de áudio.', 'Filmes, shows, temporadas, episódios, artistas, music videos e other videos.'],
+        ['language_tag', 'Tag completa de idioma de uma faixa de áudio.', 'Mesmos tipos de language.'],
+        ['sub_language', 'Idioma de uma faixa de legenda.', 'Filmes, shows, temporadas, episódios, artistas, music videos e other videos.'],
+        ['sub_language_tag', 'Tag completa de idioma de uma faixa de legenda.', 'Mesmos tipos de sub_language.']
+      ]
+    },
+    {
+      title: 'Datas',
+      intro: 'As datas normais usam o formato YYYYMMDD. Os campos especiais trabalham de forma relativa ao dia atual.',
+      fields: [
+        ['release_date', 'Data de lançamento/publicação do conteúdo no formato YYYYMMDD.', 'Filmes, shows, episódios, music videos e other videos.'],
+        ['added_date', 'Data em que o item foi adicionado ao ErsatzTV, no formato YYYYMMDD.', 'Filmes, shows, episódios, artistas, music videos, other videos, músicas e imagens.'],
+        ['released_inthelast', 'Itens lançados dentro do período informado. Exemplo: released_inthelast:"1 week".', 'Qualquer tipo que suporte release_date; aceita days, weeks, months e years.'],
+        ['released_notinthelast', 'Itens lançados antes do período informado. Exemplo: released_notinthelast:"6 months".', 'Qualquer tipo que suporte release_date.'],
+        ['released_onthisday', 'Itens lançados no mesmo mês e dia de hoje, em anos anteriores. O valor informado é ignorado.', 'Qualquer tipo que suporte release_date.'],
+        ['added_inthelast', 'Itens adicionados ao ErsatzTV dentro do período informado.', 'Qualquer tipo que suporte added_date; aceita days, weeks, months e years.'],
+        ['added_notinthelast', 'Itens adicionados antes do período informado.', 'Qualquer tipo que suporte added_date.']
+      ]
+    },
+    {
+      title: 'Duração e características técnicas',
+      intro: 'Úteis para montar faixas por duração, resolução ou propriedades do vídeo.',
+      fields: [
+        ['chapters', 'Quantidade de capítulos.', 'Filmes, episódios, music videos e other videos.'],
+        ['minutes', 'Duração arredondada para cima em minutos inteiros.', 'Filmes, episódios, music videos, other videos e músicas.'],
+        ['seconds', 'Duração arredondada para cima em segundos inteiros.', 'Filmes, episódios, music videos, other videos e músicas.'],
+        ['height', 'Altura do vídeo em pixels.', 'Filmes, episódios, music videos e other videos.'],
+        ['width', 'Largura do vídeo em pixels.', 'Filmes, episódios, music videos e other videos.'],
+        ['video_codec', 'Codec do vídeo.', 'Filmes, episódios, music videos e other videos.'],
+        ['video_bit_depth', 'Profundidade de bits do formato de pixels.', 'Filmes, episódios, music videos e other videos.'],
+        ['video_dynamic_range', 'Faixa dinâmica do vídeo.', 'Filmes, episódios, music videos e other videos; valores documentados: sdr ou hdr.']
+      ]
+    }
+  ];
+
   let tab = 'start';
   const root = () => document.querySelector('#helpRoot');
   const esc = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
@@ -52,6 +150,11 @@
       <article class="card help-module-card"><h3>Filler</h3><p>É o conteúdo que preenche espaços vazios e também é usado pelo Pad To Nearest Minute.</p><div class="help-example"><strong>Tipo de Filler</strong><span>Post-roll é o mais indicado para preencher lacunas. Pre-roll e Mid-roll existem para usos mais específicos. Se escolher Nenhum, o conteúdo pode aparecer separado no EPG.</span></div><p>Filler não é a programação principal. Para uma Source tocar sem fim a partir de um horário, use Bloco Contínuo.</p></article>
       <article class="card help-module-card"><h3>Programação-base</h3><p>É o conteúdo que sustenta o canal quando nenhum evento especial está ativo. Normalmente você escolhe uma base: Rotação por tempo, Rotação por quantidade, Rotação por peso, Bloco contínuo ou Inserções após X itens.</p><div class="help-example"><strong>Exemplo</strong><span>Um canal de música pode usar Rotação por peso como base e colocar shows ao vivo em horários fixos.</span></div></article>
     </div>`;
+  }
+
+  function renderQueries() {
+    const groups = QUERY_GROUPS.map((group) => `<section class="card help-query-group"><div class="help-query-group-head"><h3>${esc(group.title)}</h3><p>${esc(group.intro)}</p></div><div class="help-query-fields">${group.fields.map(([field, description, availability]) => `<div class="help-query-field"><code>${esc(field)}</code><div><p>${esc(description)}</p><small><strong>Disponível em:</strong> ${esc(availability)}</small></div></div>`).join('')}</div></section>`).join('');
+    return `<section class="card help-lead"><span class="eyebrow">Source Search</span><h3>Queries do ErsatzTV</h3><p>Use estes campos na Source do tipo <strong>Search</strong>. Combine condições com <code>AND</code>, <code>OR</code>, <code>NOT</code> e parênteses. Para texto com espaços, use aspas. O curinga é <code>*</code>, não <code>%</code>.</p><div class="help-query-examples"><div><code>library_name:"21 - JOHNFLIX MUSIC" AND artist:"Madonna"</code><span>Biblioteca + artista.</span></div><div><code>title:*banana*</code><span>Título contendo “banana”.</span></div><div><code>release_date:[20000101 TO 20091231]</code><span>Intervalo de datas.</span></div><div><code>type:episode AND released_inthelast:"1 week"</code><span>Episódios lançados na última semana.</span></div></div></section>${groups}<section class="card help-note"><h3>Remote Streams</h3><p>A documentação oficial informa que Remote Streams podem aparecer na pesquisa, mas não publica uma lista própria de campos para esse tipo. Por segurança, esta ajuda mostra somente os campos que o ErsatzTV documenta explicitamente, sem inventar parâmetros.</p></section>`;
   }
 
   function renderCombinations() {
@@ -89,6 +192,7 @@
 
   function content() {
     if (tab === 'resources') return renderResources();
+    if (tab === 'queries') return renderQueries();
     if (tab === 'modules') return moduleCards();
     if (tab === 'combinations') return renderCombinations();
     if (tab === 'publish') return renderPublish();
