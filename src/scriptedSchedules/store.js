@@ -83,7 +83,12 @@ async function getProject(id) {
     error.statusCode = 404;
     throw error;
   }
-  return hydrateProject(project);
+  const hydrated = hydrateProject(project);
+  if (!hydrated.publishedAt) {
+    hydrated.fileName = '';
+    hydrated.channelLinks = (hydrated.channelLinks || []).map((link) => ({ ...link, stateKey: '' }));
+  }
+  return hydrated;
 }
 
 async function saveProject(project) {
@@ -111,7 +116,7 @@ async function listProjects() {
       projects.push({
         id: item.id,
         name: item.name,
-        fileName: item.fileName,
+        fileName: item.publishedAt ? item.fileName : '',
         templateVersion: item.templateVersion,
         updatedAt: item.updatedAt,
         publishedAt: item.publishedAt,

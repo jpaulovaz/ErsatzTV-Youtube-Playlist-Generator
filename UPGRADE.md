@@ -1,55 +1,46 @@
-# Atualização para 3.4.11
+# Atualização para 3.4.12
 
-A versão 3.4.11 ajusta o perfil **Clipes musicais (Seriados)** para que temporada/episódio acompanhem a cronologia de publicação. O motor de Scripted Schedule não muda.
+A versão 3.4.12 ajusta somente a identidade de publicação dos **Scripted Schedules**. O Universal permanece v1.3.1 e o módulo de downloads não recebe alteração funcional nesta versão.
 
 ## O que muda
 
-- Em Clipes musicais, cada artista continua em `Season 01`, mas os episódios passam a ser numerados pela data: E01 é o vídeo mais antigo, E02 o seguinte e assim por diante.
-- A data usada para a ordem é `aired` do NFO quando ele já existe e é válido; isso preserva correções manuais. Quando não há `aired`, usa-se a metadata de publicação armazenada pelo aplicativo.
-- Novos downloads já recebem a numeração cronológica automaticamente.
-- Se um vídeo novo precisar entrar antes de episódios existentes, o aplicativo pode renumerar os itens do mesmo artista para manter a sequência correta.
-- Ao renumerar arquivos existentes, somente o trecho `SxxExx` do nome é trocado. MP4, NFO, thumbnail e legendas SRT sidecar permanecem associados ao mesmo vídeo.
+- Projetos novos não recebem mais um nome de `.py` definitivo enquanto ainda são rascunhos.
+- Ao duplicar uma configuração, o novo projeto copia Recursos, Programação e opções, mas começa sem arquivo publicado e sem vínculo com o canal original.
+- Renomeie a cópia e escolha o novo canal normalmente. Na primeira publicação, o nome atual gera automaticamente o arquivo `.py` e o `state_key`.
+- Depois da primeira publicação, essas duas identidades permanecem estáveis para não quebrar o Playout já configurado.
+- Rascunhos antigos ainda não publicados deixam de usar nomes provisórios como `-copia`; a identidade definitiva será criada quando forem publicados pela primeira vez.
 
-## Botão temporário de migração
+## Exemplo
 
-O botão da v3.4.10 passa a se chamar **Atualizar datas e episódios** e continua disponível somente para a janela de homologação.
+Uma configuração duplicada de `415 - JOHNFLIX MUSIC` pode inicialmente aparecer como `415 - JOHNFLIX MUSIC - Copia`. Antes de publicar, renomeie para o novo canal e selecione o canal correspondente. Se o nome final for `420 - JOHNFLIX MUSIC`, a primeira publicação criará `420-johnflix-music.py` e um `state_key` baseado em `420_johnflix_music` + número do canal.
 
-Para Clipes musicais, ele:
+## Interface
 
-- busca e acrescenta `aired` somente quando a data não existe;
-- preserva um `aired` já editado manualmente e usa essa data como autoridade para a ordem;
-- atualiza somente `season` e `episode` dentro do NFO;
-- não reconstrói título, plot, gênero, tags nem outras edições manuais;
-- renomeia MP4/NFO/thumbnail/SRT alterando apenas `SxxExx`;
-- solicita um scan do ErsatzTV ao final quando a biblioteca tem Library ID e houve mudança.
-
-Para Genérico/Filmes, o comportamento de datas da v3.4.10 permanece igual.
-
-Recomenda-se usar o botão com a fila sem download ativo e revisar o resumo retornado. O botão fica previsto para remoção na próxima versão, depois desta migração.
+Enquanto o projeto ainda não foi publicado, a tela informa de forma curta que o arquivo e o identificador do canal serão criados na primeira publicação. O caminho final e o `state_key` aparecem normalmente depois que o arquivo existe.
 
 ## Compatibilidade técnica
 
-- aplicação: **v3.4.11**;
+- aplicação: **v3.4.12**;
 - Universal permanece **v1.3.1**;
 - `configVersion` permanece **8**;
 - schema de Scripted Schedules permanece **1**;
 - estado da fila permanece **4**;
-- downloads, transcode, deduplicação, órfãos e estrutura de canais não mudam fora da renumeração do perfil Clipes musicais;
+- templates Universal não mudam;
+- o botão temporário **Atualizar datas e episódios** permanece disponível enquanto a homologação da migração de mídia não for encerrada;
 - `config/config.json`, `config/auth.json` e `data/` devem ser preservados durante o UPDATE.
 
 ## Atualização recomendada
 
 1. Pare o serviço da aplicação.
 2. Faça backup da instalação atual.
-3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.11-update.zip` sobre a instalação v3.4.10.
+3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.12-update.zip` sobre a instalação v3.4.11.
 4. Inicie novamente o serviço e faça um recarregamento completo do navegador.
-5. Aguarde a fila ficar sem download ativo.
-6. Em cada biblioteca antiga de **Clipes musicais (Seriados)**, use **Atualizar datas e episódios** uma vez.
-7. Confira o resumo e, se desejar, revise alguns artistas no ErsatzTV após o scan.
+5. Para projetos já publicados, nada precisa ser recriado: arquivo e `state_key` atuais continuam os mesmos.
+6. Para uma cópia ainda não publicada, renomeie, escolha o novo canal e publique; o arquivo/state serão criados usando esses dados.
 
 ## Gate esperado
 
-- upgrade esperado: **v3.4.10 -> v3.4.11**;
+- upgrade esperado: **v3.4.11 -> v3.4.12**;
 - `npm run check`: aprovado;
 - suíte automatizada: aprovada;
 - UPDATE não deve conter `config/config.json`, `config/auth.json` nem `data/`.

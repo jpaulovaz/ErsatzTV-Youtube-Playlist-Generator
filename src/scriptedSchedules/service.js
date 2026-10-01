@@ -1,4 +1,3 @@
-const crypto = require('crypto');
 const path = require('path');
 const store = require('./store');
 const { generateScript } = require('./generator');
@@ -22,7 +21,7 @@ async function listProjects() {
 async function createProject(payload = {}) {
   const project = await store.createProject({
     name: payload.name,
-    fileName: payload.fileName
+    fileName: ''
   });
   await logger.info(`Scripted Schedule criado: ${project.name}.`, { projectId: project.id });
   return project;
@@ -60,7 +59,14 @@ async function previewDraft(id, draft) {
   return { project, script: await generateScript(project) };
 }
 
+function derivedStateKey(projectName, link, index) {
+  const base = slugKey(projectName, 'schedule').toLowerCase();
+  const channel = String(link && link.channelNumber || '').trim();
+  return `${base}_${channel || index + 1}`;
+}
+
 function normalizeDraft(current, draft = {}) {
+  const firstPublication = !current.publishedAt;
   const project = {
     ...current,
     ...draft,
@@ -73,7 +79,17 @@ function normalizeDraft(current, draft = {}) {
     publishedPath: current.publishedPath || null
   };
   project.name = String(project.name || '').trim();
-  project.fileName = String(project.fileName || slugFile(project.name)).trim();
+  project.channelLinks = Array.isArray(project.channelLinks) ? project.channelLinks.map((link) => ({ ...link })) : [];
+
+  if (firstPublication) {
+    project.fileName = slugFile(project.name);
+    project.channelLinks = project.channelLinks.map((link, index) => ({
+      ...link,
+      stateKey: derivedStateKey(project.name, link, index)
+    }));
+  } else {
+    project.fileName = String(project.fileName || current.fileName || slugFile(project.name)).trim();
+  }
   return project;
 }
 
@@ -103,33 +119,25 @@ async function updateAndPublish(id, draft = {}, options = {}) {
 
 async function duplicateProject(id) {
   const source = await store.getProject(id);
-  const duplicate = await store.createProject({ name: `${source.name} - Copia`, fileName: suffixFile(source.fileName, '-copia') });
+  const duplicate = await store.createProject({ name: `${source.name} - Copia`, fileName: '' });
   const next = {
     ...structuredClone(source),
     id: duplicate.id,
     name: duplicate.name,
-    fileName: duplicate.fileName,
+    fileName: '',
     createdAt: duplicate.createdAt,
     updatedAt: duplicate.updatedAt,
     publishedAt: null,
     publishedHash: null,
     publishedPath: null,
-    channelLinks: (source.channelLinks || []).map((link, index) => ({
-      ...link,
-      stateKey: `${slugKey(link.stateKey || duplicate.name, 'schedule').toLowerCase()}_${index + 1}`
-    }))
+    channelLinks: []
   };
   return store.saveProject(next);
 }
 
-function suffixFile(fileName, suffix) {
-  const value = String(fileName || 'scripted-schedule.py');
-  return value.toLowerCase().endsWith('.py') ? `${value.slice(0, -3)}${suffix}.py` : `${value}${suffix}.py`;
-}
-
 async function deleteProject(id, options = {}) {
   const project = await store.getProject(id);
-  if (options.removePublished) {
+  if (options.removePublished && project.publishedAt && project.fileName) {
     const settings = await store.getSettings();
     const expected = publisher.safePublishedPath(settings.outputRoot, project.fileName).finalPath;
     if (project.publishedPath && path.resolve(project.publishedPath) !== expected) {
@@ -176,6 +184,7 @@ async function saveSettings(payload = {}) {
 
 async function getLinkAssistant(id) {
   const project = await store.getProject(id);
+  if (!project.publishedAt) return { path: null, links: [] };
   const settings = await store.getSettings();
   const filePath = project.publishedPath || publisher.safePublishedPath(settings.outputRoot, project.fileName).finalPath;
   return {

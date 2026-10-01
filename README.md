@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.11
+# ErsatzTV YouTube Downloader 3.4.12
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.11 completa a integração da data de publicação com o perfil **Clipes musicais (Seriados)**: a numeração S01E01, S01E02... passa a seguir a cronologia de publicação de cada artista. O botão temporário de migração agora também corrige temporada/episódio e renomeia os arquivos correspondentes, preservando título, plot, gênero e as demais edições manuais do NFO.
+A versão 3.4.12 corrige a identidade de publicação dos **Scripted Schedules**: projetos novos e duplicados só recebem nome de arquivo `.py` e `state_key` definitivos na primeira publicação, usando o nome atual da configuração e o canal escolhido. Assim, uma cópia pode ser renomeada antes de publicar sem herdar o nome/state do canal original.
 
 ## Arquitetura
 
@@ -215,7 +215,7 @@ O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão**
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.4.11:
+Módulos disponíveis na v3.4.12:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -248,9 +248,9 @@ Os eventos com horário marcado compatíveis com o Universal v1.3.1 têm a opç�
 
 A API de Scripted Schedule do ErsatzTV Legacy v26.10.0 oferece controle item a item para operações de **Quantidade**. Já **Duração**, **Todos os itens** e preenchimentos de **faixa de horário** são operações inteiras; não existe um ponto seguro para inserir Filler entre os itens sem mudar o significado dessas funções. Por isso o campo de Pad não aparece nesses casos. Em módulos com modo variável, ele aparece somente em **Quantidade**; em Sequência, somente quando os passos de conteúdo não usam Duração nem Todos os itens. O Filler não recebe Pad porque ele próprio é o conteúdo usado pelo alinhamento.
 
-A pasta de saída é configurada na própria área. O backend aceita apenas arquivos `.py` dentro dessa raiz. Ao publicar, o aplicativo valida as referências, gera o script de forma determinística, tenta executar `python3 <script> --validate-config`, cria backup do arquivo anterior, troca o arquivo de forma atômica e registra hash/histórico.
+A pasta de saída é configurada na própria área. Projetos novos e duplicados ficam como rascunho sem identidade de arquivo definitiva. Na **primeira publicação**, o aplicativo usa o nome atual da configuração para criar o nome do `.py`, gera o `state_key` a partir desse nome e do canal escolhido, valida as referências, gera o script de forma determinística, tenta executar `python3 <script> --validate-config`, publica de forma atômica e registra hash/histórico. Depois dessa primeira publicação, arquivo e `state_key` permanecem estáveis para não quebrar um Playout já configurado.
 
-Smart Collections e Canais são carregados pelo nome quando a API do ErsatzTV está disponível. Cada vínculo de canal possui um `state_key` próprio. O primeiro cadastro do caminho do Scripted Schedule no Playout continua manual, porque a API pública da v26.10.0 não expõe esse cadastro. Depois do primeiro vínculo, novas publicações mantêm o mesmo arquivo atualizado.
+Ao duplicar um Scripted Schedule, Recursos, Programação e opções são copiados, mas o vínculo com o canal original não é levado para a cópia. Renomeie a configuração, escolha o novo canal e publique; só então o caminho e o `state_key` passam a aparecer no Assistente de vínculo. O primeiro cadastro do caminho do Scripted Schedule no Playout continua manual, porque a API pública da v26.10.0 não expõe esse cadastro.
 
 **Reset Playout** é uma ação separada e destrutiva. Publicar um script nunca dispara reset automaticamente.
 
@@ -367,7 +367,7 @@ A normalização de nomes continua conservadora: casing claramente ruidoso é co
 
 ## Atualização temporária de datas e episódios
 
-Na v3.4.11, cada biblioteca mantém temporariamente a ação **Atualizar datas e episódios**. Ela migra o acervo anterior para a nova numeração cronológica sem recriar os NFOs.
+Na v3.4.12, cada biblioteca ainda mantém temporariamente a ação **Atualizar datas e episódios**. Ela migra o acervo anterior para a nova numeração cronológica sem recriar os NFOs.
 
 A operação é conservadora:
 
@@ -381,7 +381,7 @@ A operação é conservadora:
 - para evitar renomear arquivos enquanto o worker os manipula, a ação só inicia quando não há download ou legenda em andamento;
 - quando houver Library ID configurado e algum NFO/arquivo for alterado, solicita um scan da biblioteca no ErsatzTV ao final.
 
-O botão continua temporário nesta versão porque agora também executa a migração da numeração existente. A remoção fica prevista para a versão seguinte, depois da homologação desta nova etapa. Downloads novos já recebem a numeração cronológica automaticamente.
+O botão continua temporário enquanto a homologação da migração de mídia estiver aberta. Esta versão altera somente Scripted Schedules, portanto ele não é removido aqui para não misturar uma mudança já consolidada de downloads com este ajuste. Downloads novos já recebem a numeração cronológica automaticamente.
 
 ## Compatibilidade de mídia
 

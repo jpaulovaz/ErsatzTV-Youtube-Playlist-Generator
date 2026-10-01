@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.11/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.11/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.12/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.12/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -177,8 +177,8 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.1 modul
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.4\.11/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.11/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.4\.12/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.12/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -343,7 +343,7 @@ test('Scripted Schedules Help stays inside the Programacao sidebar group and is 
   assert.match(programacaoGroup, /data-view="help"/);
   assert.doesNotMatch(sistemaGroup, /data-view="help"/);
   assert.match(html, /id="view-help"/);
-  assert.match(html, /helpView\.js\?v=3\.4\.11/);
+  assert.match(html, /helpView\.js\?v=3\.4\.12/);
   assert.match(help, /Programação · Scripted Schedules/);
   assert.match(help, /Assuntos da ajuda de Scripted Schedules/);
   for (const tab of ['Começando', 'Recursos', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));
@@ -481,4 +481,15 @@ test('Libraries expose the temporary NFO date and episode migration with a prese
   assert.match(app, /reorganizará temporada\/episódio pela data/);
   assert.match(app, /demais edições manuais do NFO serão preservados/);
   assert.match(app, /Uma data já preenchida no NFO será preservada e terá prioridade/);
+});
+
+
+test('unpublished Scripted Schedules defer file and state identity until the first publication', () => {
+  const view = read('js/scriptedSchedulesView.js');
+  assert.match(view, /Será criado ao publicar/);
+  assert.match(view, /Será definido ao publicar/);
+  assert.match(view, /Publique esta configuração para criar o arquivo/);
+  assert.match(view, /O arquivo e o identificador do canal serão criados na primeira publicação/);
+  assert.match(view, /Renomeie e escolha o novo canal antes de publicar/);
+  assert.match(view, /if \(!state\.current\.publishedAt\)/);
 });

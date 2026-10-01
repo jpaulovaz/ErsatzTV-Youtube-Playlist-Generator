@@ -42,11 +42,11 @@
     settingsOutputRoot: 'Pasta onde os arquivos .py serão salvos. Exemplo: /srv/ersatztv/scripts. O ErsatzTV precisa conseguir acessar esse mesmo caminho.',
     historyLimit: 'Quantas versões antigas você quer guardar para poder voltar atrás. Exemplo: 10 mantém as 10 publicações mais recentes.',
     projectName: 'Nome que você verá no aplicativo. Pode ser algo simples, como JohnFlix Filmes.',
-    fileName: 'Nome do arquivo Python gerado. Depois de cadastrar esse arquivo no ErsatzTV, evite trocar o nome sem atualizar o Playout. Exemplo: johnflix-filmes.py.',
+    fileName: 'O nome do arquivo é criado automaticamente na primeira publicação usando o nome atual desta configuração. Depois disso, ele fica estável para não quebrar o vínculo com o ErsatzTV.',
     templateVersion: 'Versão do motor usada por este projeto. Projetos antigos só mudam de versão quando você pedir.',
     outputRootReadOnly: 'Pasta onde este projeto será publicado. Ela é definida na tela inicial de Scripted Schedules.',
     channel: 'Canal do ErsatzTV que vai usar este script. O aplicativo guarda o número do canal para fazer o vínculo.',
-    stateKey: 'Chave usada pelo script para lembrar rotação, saldos e eventos pendentes. Use uma diferente em cada Playout. Exemplo: filmes_420.',
+    stateKey: 'Identificador usado pelo script para lembrar rotação, saldos e eventos pendentes. Ele é criado automaticamente na primeira publicação usando o nome atual e o canal escolhido.',
     friendlyName: 'Nome fácil de reconhecer na tela. Pode ter espaços e não precisa ser igual à chave interna.',
     key: 'Nome interno usado pelo script para encontrar este item. Deve ser único e, de preferência, não mudar depois. Exemplo: MOVIES_PRIME.',
     graphicsElements: 'Arquivos YAML de Graphics Elements que fazem parte deste grupo, um por linha. Use image/icon.yml; se colocar / no início, o aplicativo corrige automaticamente.',
@@ -395,7 +395,7 @@
       const selected = target.selectedOptions?.[0];
       link.channelNumber = target.value;
       link.channelName = selected?.dataset.name || '';
-      if (!link.stateKey || /^schedule(?:_\d+)?$/.test(link.stateKey)) link.stateKey = `${slug(state.current.name)}_${String(target.value || index + 1)}`;
+      if (state.current.publishedAt && (!link.stateKey || /^schedule(?:_\d+)?$/.test(link.stateKey))) link.stateKey = `${slug(state.current.name)}_${String(target.value || index + 1)}`;
       render();
     }
 
@@ -433,7 +433,7 @@
     }
     if (action === 'duplicate') {
       const response = await state.deps.api(`/api/scripted-schedules/${encodeURIComponent(button.dataset.id)}/duplicate`, { method: 'POST', body: '{}' });
-      state.deps.showToast('Projeto duplicado.'); await openProject(response.project.id); return;
+      state.deps.showToast('Projeto duplicado. Renomeie e escolha o novo canal antes de publicar.'); await openProject(response.project.id); return;
     }
     if (action === 'delete') {
       const item = state.projects.find((p) => p.id === button.dataset.id);
@@ -459,7 +459,7 @@
     if (!state.current) return;
     if (action === 'upgrade-template') { state.current.templateVersion = LATEST_TEMPLATE_VERSION; state.validation = null; state.deps.showToast(`Motor atualizado para ${LATEST_TEMPLATE_VERSION}. A alteração será efetivada ao salvar e publicar.`); render(); return; }
     if (action === 'add-channel') {
-      state.current.channelLinks.push({ channelNumber: '', channelName: '', stateKey: `${slug(state.current.name)}_${state.current.channelLinks.length + 1}`, status: 'local' }); render(); return;
+      state.current.channelLinks.push({ channelNumber: '', channelName: '', stateKey: '', status: 'local' }); render(); return;
     }
     if (action === 'remove-channel') { state.current.channelLinks.splice(Number(button.dataset.index), 1); render(); return; }
     if (action === 'add-resource') { const kind = button.dataset.kind; const index = addResource(kind); openAccordion(`resources:${kind}`); if (index >= 0) openAccordion(`resource:${kind}:${index}`); render(); return; }
@@ -667,7 +667,7 @@
           <span class="status-pill ${project.publishedAt ? 'ok' : 'warn'}">${project.publishedAt ? 'Publicado' : 'Rascunho'}</span>
         </div>
         <div class="ss-card-meta">
-          <span><strong>Arquivo</strong>${esc(project.fileName || '-')}</span>
+          <span><strong>Arquivo</strong>${project.publishedAt ? esc(project.fileName || '-') : 'Será criado na publicação'}</span>
           <span><strong>Motor</strong>${esc(project.templateVersion || '1.1.1')}</span>
           <span><strong>Atualizado</strong>${esc(formatDate(project.updatedAt))}</span>
         </div>
@@ -717,10 +717,13 @@
         <div class="section-heading"><div><span class="eyebrow">01 · Geral</span><h3>Projeto</h3></div></div>
         <div class="form-grid two">
           <label>${labelTitle('Nome do projeto', 'projectName')}<input data-bind="name" value="${esc(p.name)}"></label>
-          <label>${labelTitle('Arquivo Python', 'fileName')}<input data-bind="fileName" value="${esc(p.fileName)}" placeholder="johnflix-music.py"></label>
+          ${p.publishedAt
+            ? `<label>${labelTitle('Arquivo Python', 'fileName')}<input data-bind="fileName" value="${esc(p.fileName)}" placeholder="johnflix-music.py"></label>`
+            : `<label>${labelTitle('Arquivo Python', 'fileName')}<input value="Será criado ao publicar" disabled></label>`}
           <label>${labelTitle('Motor', 'templateVersion')}<input value="${esc(p.templateVersion)}" disabled></label>
           <label>${labelTitle('Pasta de saída', 'outputRootReadOnly')}<input value="${esc(state.settings?.outputRoot || '')}" disabled></label>
         </div>
+        ${!p.publishedAt ? '<div class="ss-callout">Renomeie e escolha o canal normalmente. O arquivo e o identificador do canal serão criados na primeira publicação usando esses dados.</div>' : ''}
         ${p.templateVersion !== LATEST_TEMPLATE_VERSION ? `<div class="ss-callout">Este projeto usa o motor ${esc(p.templateVersion)}. Os novos módulos e recursos estão disponíveis no motor ${LATEST_TEMPLATE_VERSION}. <button type="button" data-ss-action="upgrade-template">Atualizar motor</button></div>` : ''}
       </section>
       <section class="card ss-section-card">
@@ -736,7 +739,9 @@
     return `
       <div class="ss-row-card ss-channel-link">
         <label>${labelTitle('Canal no ErsatzTV', 'channel')}<select data-channel-index="${index}">${channelOptions(link.channelNumber)}</select></label>
-        <label>${labelTitle('state_key', 'stateKey')}<input data-bind="channelLinks.${index}.stateKey" value="${esc(link.stateKey || '')}" placeholder="music_420"></label>
+        ${state.current.publishedAt
+          ? `<label>${labelTitle('state_key', 'stateKey')}<input data-bind="channelLinks.${index}.stateKey" value="${esc(link.stateKey || '')}" placeholder="music_420"></label>`
+          : `<label>${labelTitle('state_key', 'stateKey')}<input value="Será definido ao publicar" disabled></label>`}
         <button type="button" class="danger ghost" data-ss-action="remove-channel" data-index="${index}">Remover</button>
       </div>`;
   }
@@ -1143,19 +1148,22 @@
 
   function renderPublish() {
     const p = state.current;
-    const computedPath = `${String(state.settings?.outputRoot || '').replace(/\/+$/, '')}/${p.fileName}`;
-    const pathChanged = Boolean(p.publishedPath && p.publishedPath !== computedPath);
+    const published = Boolean(p.publishedAt && p.fileName);
+    const computedPath = published ? `${String(state.settings?.outputRoot || '').replace(/\/+$/, '')}/${p.fileName}` : '';
+    const pathChanged = Boolean(published && p.publishedPath && p.publishedPath !== computedPath);
     return `
       <section class="card ss-section-card">
         <div class="section-heading"><div><span class="eyebrow">05 · Publicar</span><h3>Arquivo Python</h3></div><div class="header-actions"><button type="button" data-ss-action="preview">Pré-visualizar script</button><button type="button" class="primary" data-ss-action="publish">Salvar e publicar</button></div></div>
-        <div class="ss-publish-path"><div><span>Caminho final</span><code>${esc(computedPath)}</code></div><button type="button" data-ss-action="copy-path" data-value="${esc(computedPath)}">Copiar</button></div>
+        ${published
+          ? `<div class="ss-publish-path"><div><span>Caminho final</span><code>${esc(computedPath)}</code></div><button type="button" data-ss-action="copy-path" data-value="${esc(computedPath)}">Copiar</button></div>`
+          : '<div class="ss-callout">Publique esta configuração para criar o arquivo. O nome será formado a partir do nome atual da configuração.</div>'}
         <div class="ss-card-meta">
-          <span><strong>Estado</strong>${p.publishedAt ? 'Publicado' : 'Ainda não publicado'}</span>
-          <span><strong>Última publicação</strong>${p.publishedAt ? esc(formatDate(p.publishedAt)) : '-'}</span>
+          <span><strong>Estado</strong>${published ? 'Publicado' : 'Ainda não publicado'}</span>
+          <span><strong>Última publicação</strong>${published ? esc(formatDate(p.publishedAt)) : '-'}</span>
           <span><strong>SHA-256</strong>${p.publishedHash ? `<code>${esc(p.publishedHash.slice(0, 16))}…</code>` : '-'}</span>
         </div>
         ${pathChanged ? `<div class="ss-callout warning"><strong>O caminho mudou.</strong> O arquivo já publicado continua em <code>${esc(p.publishedPath)}</code>. Depois de publicar com o novo nome/caminho, atualize também o Scripted Schedule no ErsatzTV.</div>` : ''}
-        <div class="ss-callout">Na primeira vez, cadastre este caminho no Scripted Schedule do Playout no ErsatzTV. Depois, é só salvar por aqui para manter o mesmo arquivo atualizado.</div>
+        ${published ? '<div class="ss-callout">Na primeira vez, cadastre este caminho no Scripted Schedule do Playout no ErsatzTV. Depois, é só salvar por aqui para manter o mesmo arquivo atualizado.</div>' : ''}
       </section>
       ${renderLinksAssistant(computedPath)}
       <section class="card ss-section-card">
@@ -1169,6 +1177,8 @@
   }
 
   function renderLinksAssistant(filePath) {
+    if (!state.current.publishedAt) return `
+      <section class="card ss-section-card"><div class="section-heading"><div><h3>Assistente de vínculo</h3><p>Depois da primeira publicação, o caminho do script e o identificador do canal aparecerão aqui.</p></div></div></section>`;
     if (!state.current.channelLinks.length) return `
       <section class="card ss-section-card"><div class="section-heading"><div><h3>Assistente de vínculo</h3><p>Adicione um canal na etapa Geral para preparar os dados de vínculo.</p></div></div></section>`;
     return `

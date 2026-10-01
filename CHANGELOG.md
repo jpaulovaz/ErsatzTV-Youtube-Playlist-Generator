@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.4.12
+
+- A identidade de publicação de um Scripted Schedule deixa de ser definida no momento em que o rascunho é criado. Projetos novos e duplicados ficam sem `fileName` e `state_key` definitivos até a primeira publicação.
+- Na primeira publicação, o nome do arquivo `.py` é derivado do **nome atual da configuração** e cada `state_key` é derivado desse nome + canal escolhido. Assim, renomear uma cópia antes de publicar não mantém mais o nome do canal original nem o sufixo `-copia` no arquivo/state.
+- Depois da primeira publicação, `fileName` e `state_key` permanecem estáveis nas publicações seguintes para não quebrar um Playout já configurado. O nome visual do projeto pode continuar sendo alterado sem renomear silenciosamente a identidade já publicada.
+- Ao duplicar uma configuração, programação, Recursos e opções são copiados, mas o vínculo com o canal original é limpo. Isso evita que uma cópia destinada a outro canal carregue por engano o canal/state da origem.
+- Rascunhos anteriores à v3.4.12 que ainda não foram publicados ignoram a identidade provisória antiga ao abrir: o arquivo e o `state_key` serão definidos somente na primeira publicação.
+- A interface mostra uma mensagem curta enquanto o projeto é rascunho e só exibe caminho final/state_key depois que o arquivo realmente foi publicado. A mensagem desaparece após a primeira publicação.
+- Nenhuma alteração no Universal v1.3.1, `configVersion` 8, schema de Scripted Schedules 1, estado da fila 4 ou módulo consolidado de downloads. O botão temporário **Atualizar datas e episódios** permanece disponível enquanto a homologação da migração de mídia não for encerrada.
+
 ## 3.4.11
 
 - **Clipes musicais (Seriados)** passam a numerar episódios pela cronologia de publicação de cada artista, em vez da ordem em que os vídeos foram descobertos. O mais antigo recebe E01, o seguinte E02 e assim por diante.

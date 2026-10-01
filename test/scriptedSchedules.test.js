@@ -748,15 +748,86 @@ test('publisher restricts filenames to the configured root and performs atomic r
 });
 
 
-test('projects cannot publish or validate the same output filename', async () => {
-  const first = await store.createProject({ name: 'Projeto A', fileName: 'mesmo-script.py' });
-  const second = await store.createProject({ name: 'Projeto B', fileName: 'outro-script.py' });
+test('first publication derives fileName and state_key from the final draft identity and keeps them stable later', async () => {
+  const created = await service.createProject({ name: 'Rascunho antigo' });
+  let publishedPath = '';
   try {
-    const draft = { ...second, fileName: 'mesmo-script.py' };
+    assert.equal(created.fileName, '');
+    const draft = {
+      ...created,
+      name: '420 - JOHNFLIX NOVO',
+      fileName: 'canal-antigo-copia.py',
+      channelLinks: [{ channelNumber: '999', channelName: 'Canal Novo', stateKey: 'canal_antigo_copia' }]
+    };
+    const validation = await service.validateDraft(created.id, draft);
+    assert.equal(validation.ok, true);
+    const stillDraft = await service.getProject(created.id);
+    assert.equal(stillDraft.fileName, '');
+    assert.equal(stillDraft.channelLinks.length, 0);
+
+    const first = await service.updateAndPublish(created.id, draft, { skipHistory: true });
+
+    publishedPath = first.project.publishedPath;
+    assert.equal(first.project.fileName, '420-johnflix-novo.py');
+    assert.equal(first.project.channelLinks[0].stateKey, '420_johnflix_novo_999');
+    assert.equal(path.basename(first.project.publishedPath), '420-johnflix-novo.py');
+    assert.equal(fs.existsSync(first.project.publishedPath), true);
+
+    const second = await service.updateAndPublish(created.id, {
+      ...first.project,
+      name: 'Nome visual alterado depois',
+      channelLinks: first.project.channelLinks
+    }, { skipHistory: true });
+    assert.equal(second.project.fileName, '420-johnflix-novo.py');
+    assert.equal(second.project.channelLinks[0].stateKey, '420_johnflix_novo_999');
+  } finally {
+    if (publishedPath) await fsp.rm(publishedPath, { force: true });
+    await store.deleteProject(created.id);
+  }
+});
+
+test('duplicating a Scripted Schedule copies programming but resets publication identity and channel binding', async () => {
+  const source = await service.createProject({ name: 'Canal Original' });
+  let sourcePath = '';
+  let duplicateId = '';
+  try {
+    const published = await service.updateAndPublish(source.id, {
+      ...source,
+      name: 'Canal Original',
+      channelLinks: [{ channelNumber: '415', channelName: '415 - Original', stateKey: '' }],
+      options: { ...source.options, defaultFixedPriority: 222 }
+    }, { skipHistory: true });
+    sourcePath = published.project.publishedPath;
+
+    const duplicate = await service.duplicateProject(source.id);
+    duplicateId = duplicate.id;
+    assert.equal(duplicate.name, 'Canal Original - Copia');
+    assert.equal(duplicate.fileName, '');
+    assert.equal(duplicate.publishedAt, null);
+    assert.equal(duplicate.publishedHash, null);
+    assert.equal(duplicate.publishedPath, null);
+    assert.deepEqual(duplicate.channelLinks, []);
+    assert.equal(duplicate.options.defaultFixedPriority, 222);
+  } finally {
+    if (sourcePath) await fsp.rm(sourcePath, { force: true });
+    if (duplicateId) await store.deleteProject(duplicateId);
+    await store.deleteProject(source.id);
+  }
+});
+
+test('projects cannot validate a first-publication filename already owned by a published project', async () => {
+  const first = await service.createProject({ name: 'Projeto A' });
+  const second = await service.createProject({ name: 'Projeto B' });
+  let firstPath = '';
+  try {
+    const published = await service.updateAndPublish(first.id, first, { skipHistory: true });
+    firstPath = published.project.publishedPath;
+    const draft = { ...second, name: 'Projeto A' };
     const result = await service.validateDraft(second.id, draft);
     assert.equal(result.ok, false);
     assert.ok(result.errors.some((item) => item.path === 'fileName' && /Projeto A/.test(item.message)));
   } finally {
+    if (firstPath) await fsp.rm(firstPath, { force: true });
     await store.deleteProject(first.id);
     await store.deleteProject(second.id);
   }

@@ -162,7 +162,7 @@ function defaultProject(id, options = {}) {
     schemaVersion: MODULE_SCHEMA_VERSION,
     id,
     name,
-    fileName: options.fileName ? String(options.fileName).trim() : slugFile(name),
+    fileName: Object.prototype.hasOwnProperty.call(options, 'fileName') ? String(options.fileName || '').trim() : slugFile(name),
     templateVersion: TEMPLATE_VERSION,
     createdAt,
     updatedAt: createdAt,
