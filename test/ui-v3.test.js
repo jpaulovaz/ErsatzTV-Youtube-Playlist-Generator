@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.13/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.13/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.14/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.14/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -177,8 +177,8 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.1 modul
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.4\.13/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.13/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.4\.14/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.14/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -343,7 +343,7 @@ test('Scripted Schedules Help stays inside the Programacao sidebar group and is 
   assert.match(programacaoGroup, /data-view="help"/);
   assert.doesNotMatch(sistemaGroup, /data-view="help"/);
   assert.match(html, /id="view-help"/);
-  assert.match(html, /helpView\.js\?v=3\.4\.13/);
+  assert.match(html, /helpView\.js\?v=3\.4\.14/);
   assert.match(help, /Programação · Scripted Schedules/);
   assert.match(help, /Assuntos da ajuda de Scripted Schedules/);
   for (const tab of ['Começando', 'Recursos', 'Queries', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));
@@ -372,8 +372,7 @@ test('Query Help documents every official ErsatzTV Legacy search field in cohere
   assert.match(help, /library_name:\"21 - JOHNFLIX MUSIC\" AND artist:\"Madonna\"/);
   assert.match(help, /title:\*banana\*/);
   assert.match(help, /release_date:\[20000101 TO 20091231\]/);
-  assert.match(help, /Remote Streams/);
-  assert.match(help, /não publica uma lista própria de campos/);
+  assert.doesNotMatch(help, /Remote Streams/);
   assert.match(view, /Ajuda → Queries/);
   assert.match(css, /\.help-query-field/);
 });
@@ -517,4 +516,19 @@ test('unpublished Scripted Schedules defer file and state identity until the fir
   assert.match(view, /O arquivo e o identificador do canal serão criados na primeira publicação/);
   assert.match(view, /Renomeie e escolha o novo canal antes de publicar/);
   assert.match(view, /if \(!state\.current\.publishedAt\)/);
+});
+
+
+test('library content browser is read-only, paginated and separated from library configuration', () => {
+  const html = read('index.html');
+  const app = read('app.js');
+  const css = read('styles.css');
+  assert.match(html, /id="libraryContentBrowser"/);
+  assert.match(html, /id="libraryContentSearch"/);
+  assert.match(app, /data-library-action="view-content"/);
+  assert.match(app, /LIBRARY_CONTENT_PAGE_SIZE = 60/);
+  assert.match(app, /content-thumbnail\?id=/);
+  assert.match(app, /relativeFile/);
+  assert.match(css, /\.library-content-grid/);
+  assert.match(css, /\.library-content-details/);
 });

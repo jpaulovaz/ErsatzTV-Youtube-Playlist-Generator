@@ -3,6 +3,7 @@ const downloadManager = require('../downloadManager');
 const scheduler = require('../scheduler');
 const channelScheduler = require('../channelScheduler');
 const discoveryLock = require('../discovery/discoveryLock');
+const { listLibraryContent, getLibraryThumbnail } = require('../libraryContentService');
 const {
   runSync,
   runPlaylistApiAction,
@@ -16,7 +17,7 @@ function sanitizeEntryName(value) {
 
 async function handleLibraryRoutes(req, res, url, deps) {
   const parts = url.pathname.split('/').filter(Boolean);
-  if (req.method !== 'POST' || parts.length !== 4 || parts[0] !== 'api' || parts[1] !== 'playlists') return false;
+  if (parts.length !== 4 || parts[0] !== 'api' || parts[1] !== 'playlists') return false;
 
   const playlistName = parts[2];
   const action = parts[3];
@@ -26,6 +27,39 @@ async function handleLibraryRoutes(req, res, url, deps) {
     deps.sendJson(res, 404, { ok: false, error: 'Biblioteca nao encontrada na configuracao.' });
     return true;
   }
+
+  if (req.method === 'GET' && action === 'content') {
+    const result = await listLibraryContent({
+      config,
+      playlist,
+      downloadManager,
+      browserPath: url.searchParams.get('path'),
+      query: url.searchParams.get('q'),
+      offset: url.searchParams.get('offset'),
+      limit: url.searchParams.get('limit')
+    });
+    deps.sendJson(res, 200, { ok: true, result });
+    return true;
+  }
+
+  if (req.method === 'GET' && action === 'content-thumbnail') {
+    const thumbnail = await getLibraryThumbnail({
+      config,
+      playlist,
+      downloadManager,
+      itemId: url.searchParams.get('id')
+    });
+    if (!thumbnail) {
+      deps.sendJson(res, 404, { ok: false, error: 'Thumbnail nao encontrada.' });
+      return true;
+    }
+    deps.sendBuffer(res, 200, thumbnail.content, thumbnail.contentType, {
+      'Cache-Control': 'private, max-age=60'
+    });
+    return true;
+  }
+
+  if (req.method !== 'POST') return false;
 
   if (action === 'run') {
     const lock = discoveryLock.getStatus();

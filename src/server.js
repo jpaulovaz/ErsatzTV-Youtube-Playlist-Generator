@@ -70,6 +70,17 @@ function sendText(res, statusCode, text, contentType = 'text/plain; charset=utf-
   res.end(text);
 }
 
+function sendBuffer(res, statusCode, content, contentType = 'application/octet-stream', headers = {}) {
+  const body = Buffer.isBuffer(content) ? content : Buffer.from(content || '');
+  res.writeHead(statusCode, {
+    'Content-Type': contentType,
+    'Content-Length': body.length,
+    'X-Content-Type-Options': 'nosniff',
+    ...headers
+  });
+  res.end(body);
+}
+
 function redirect(res, location) {
   res.writeHead(302, {
     Location: location,
@@ -199,14 +210,14 @@ async function handleAuthApi(req, res, url) {
 async function getVersion() {
   try {
     const pkg = JSON.parse(await fs.readFile(PACKAGE_PATH, 'utf8'));
-    return pkg.version || '3.4.13';
+    return pkg.version || '3.4.14';
   } catch {
-    return '3.4.13';
+    return '3.4.14';
   }
 }
 
 async function handleApi(req, res, url) {
-  const routeDeps = { readJson, sendJson, loadConfig, saveConfig, downloadManager, channelScheduler, libraryScheduler: scheduler };
+  const routeDeps = { readJson, sendJson, sendBuffer, loadConfig, saveConfig, downloadManager, channelScheduler, libraryScheduler: scheduler };
   if (url.pathname.startsWith('/api/playlists/')) {
     if (await handleLibraryRoutes(req, res, url, routeDeps)) return;
   }

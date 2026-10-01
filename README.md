@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.13
+# ErsatzTV YouTube Downloader 3.4.14
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.13 amplia a **Ajuda de Scripted Schedules** com uma aba dedicada a Queries do ErsatzTV. Ela reúne, em grupos coerentes, todos os campos de pesquisa documentados para Movies, Shows, Seasons, Episodes, Artists, Music Videos, Other Videos, Songs e Images, além dos campos especiais de data e exemplos de sintaxe. O Universal permanece v1.3.1 e não há alteração no comportamento de geração/publicação dos scripts.
+A versão 3.4.14 acrescenta um **navegador somente de leitura para o acervo de cada Biblioteca**, acessado por **Bibliotecas -> Conteúdo -> Ver conteúdo**. A visualização respeita a estrutura real de pastas, usa NFOs existentes como fonte preferencial de metadata, pesquisa por título/artista/episódio/Video ID e carrega os vídeos em páginas de 60 itens. A Ajuda -> Queries também deixa de exibir a observação interna sobre Remote Streams. O Universal permanece v1.3.1.
 
 ## Arquitetura
 
@@ -25,6 +25,7 @@ Biblioteca local do ErsatzTV
 ## Principais recursos
 
 - Uma ou mais bibliotecas, cada uma com várias fontes.
+- Navegador read-only do acervo de cada Biblioteca, com pastas reais, thumbnails, pesquisa, metadata de NFO e paginação.
 - Fontes do tipo playlist e vídeo individual.
 - YouTube Data API como modo preferencial, com fallback automático para `yt-dlp`.
 - Fila persistente em JSON; reiniciar o aplicativo não perde os itens pendentes.
@@ -146,6 +147,24 @@ Em caso de colisão de nome, o ID do YouTube é acrescentado ao arquivo. O índi
 
 O nome da biblioteca também é sua identidade interna e define a pasta física. Renomeá-la depois que a fila já possui itens é tratado como a criação de outra biblioteca; não use uma simples renomeação para mover arquivos existentes. Mudanças de `paths.baseDir` também devem ser feitas com a fila parada e com migração planejada dos arquivos e do estado.
 
+## Navegador de conteúdo das Bibliotecas
+
+Em **Bibliotecas -> Conteúdo -> Ver conteúdo**, a tela de configuração dá lugar temporariamente a um navegador do acervo local. A sanfona original não recebe thumbnails nem listas extensas; o usuário volta para ela com **Voltar para Bibliotecas**.
+
+A navegação é derivada do caminho real de cada vídeo relativo à raiz da Biblioteca. Por isso os três layouts existentes aparecem naturalmente, sem categorias artificiais:
+
+```text
+Clipes musicais: Artista -> Season 01 -> vídeos
+Filmes:          Artista -> pasta do filme -> vídeo
+Genérico:         Artista -> vídeos
+```
+
+Somente itens concluídos/com mídia local conhecida entram no acervo. A listagem usa o estado persistente para identidade, duração, tamanho, Video ID e localização, mas **prefere o NFO existente** para título, artista do Show, temporada/episódio e data quando esses campos estiverem presentes. Assim, correções manuais de NFO aparecem na interface sem que o navegador regrave o arquivo.
+
+A pesquisa percorre toda a Biblioteca e aceita título, artista, `SxxExx`, Video ID e caminho relativo. Os cards são entregues em páginas de 60 itens e as thumbnails usam `loading=lazy`. Ao clicar num card, um painel read-only mostra título, artista, data, episódio, duração, caminho **relativo** do arquivo, tamanho, legendas registradas e Video ID.
+
+Por segurança, o navegador nunca recebe caminhos absolutos do servidor. A rota de thumbnail aceita apenas um ID conhecido pelo estado, resolve o arquivo internamente e rejeita qualquer caminho que saia da raiz da Biblioteca. Esta versão não edita, renomeia, exclui, reproduz nem regrava NFOs.
+
 ## Canais
 
 A área **Canais** é separada de **Bibliotecas**. O fluxo começa por **Adicionar canal → Analisar**. A análise apenas identifica o canal, fontes globais e playlists; ela não cria downloads.
@@ -215,7 +234,7 @@ O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão**
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.4.13:
+Módulos disponíveis na v3.4.14:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -367,7 +386,7 @@ A normalização de nomes continua conservadora: casing claramente ruidoso é co
 
 ## Atualização temporária de datas e episódios
 
-Na v3.4.13, cada biblioteca ainda mantém temporariamente a ação **Atualizar datas e episódios**. Ela migra o acervo anterior para a nova numeração cronológica sem recriar os NFOs.
+Na v3.4.14, cada biblioteca ainda mantém temporariamente a ação **Atualizar datas e episódios**. Ela migra o acervo anterior para a nova numeração cronológica sem recriar os NFOs.
 
 A operação é conservadora:
 

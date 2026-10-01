@@ -12,7 +12,21 @@ let ersatzTvCatalog = { channels: [], smartCollections: [], smartCollectionSelec
 let ersatzTvVersionTimer = null;
 let ersatzTvVersionRequest = 0;
 const DOWNLOAD_PAGE_SIZE = 100;
+const LIBRARY_CONTENT_PAGE_SIZE = 60;
 const ERSATZTV_VERSION_DEBOUNCE_MS = 650;
+let libraryContentRequestId = 0;
+let libraryContentSearchTimer = null;
+let libraryContentState = {
+  active: false,
+  libraryName: '',
+  library: null,
+  path: '',
+  query: '',
+  directories: [],
+  items: [],
+  itemMap: new Map(),
+  pagination: { total: 0, offset: 0, limit: LIBRARY_CONTENT_PAGE_SIZE, hasMore: false }
+};
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -167,6 +181,8 @@ async function goToViewHome(view) {
     if ($('#downloadFilter')) $('#downloadFilter').value = 'all';
     if ($('#downloadLibraryFilter')) $('#downloadLibraryFilter').value = '';
   } else if (nextView === 'libraries') {
+    libraryContentRequestId += 1;
+    setLibraryContentMode(false);
     $$('.library-accordion').forEach((item) => { item.open = false; });
   } else if (nextView === 'channels') {
     await window.ChannelView?.home?.();
@@ -666,6 +682,7 @@ function renderLibraries() {
             <span class="library-action-group-title">Conteúdo</span>
             <div class="library-actions">
               <button class="small primary" type="button" data-library-action="run">Buscar novidades</button>
+              <button class="small" type="button" data-library-action="view-content">Ver conteúdo</button>
               <button class="small" type="button" data-library-action="test-cookies">Testar cookies</button>
               <button class="small" type="button" data-library-action="refresh-thumbnails">Atualizar thumbnails</button>
               <button class="small" type="button" data-library-action="refresh-release-dates" title="Temporário: completa datas e, em Clipes musicais, reorganiza temporada/episódio pela cronologia sem regravar os demais campos do NFO.">Atualizar datas e episódios</button>
@@ -693,6 +710,182 @@ function renderLibraries() {
     window.DestinationForm.syncErsatzTvControls(row);
   });
   updateLibraryFilters();
+}
+
+function libraryContentEpisodeLabel(item) {
+  if (item.seasonNumber == null || item.episodeNumber == null) return '';
+  return `S${String(item.seasonNumber).padStart(2, '0')}E${String(item.episodeNumber).padStart(2, '0')}`;
+}
+
+function libraryContentSubtitleLabel(item) {
+  const subtitles = item.subtitles || {};
+  if (Array.isArray(subtitles.languages) && subtitles.languages.length > 0) return subtitles.languages.join(', ');
+  const labels = {
+    complete: 'Configuradas, sem idioma registrado',
+    pending: 'Pendentes',
+    checking: 'Em verificação',
+    failed: 'Falha',
+    unavailable: 'Indisponíveis',
+    disabled: 'Desativadas'
+  };
+  return labels[subtitles.status] || 'Nenhuma registrada';
+}
+
+function setLibraryContentMode(active) {
+  libraryContentState.active = Boolean(active);
+  $('#librariesConfigView').classList.toggle('hidden', libraryContentState.active);
+  $('#libraryContentBrowser').classList.toggle('hidden', !libraryContentState.active);
+  if (!libraryContentState.active) {
+    $('#libraryContentDetails').classList.add('hidden');
+  }
+}
+
+function renderLibraryContentBreadcrumbs() {
+  const container = $('#libraryContentBreadcrumbs');
+  const library = libraryContentState.library || {};
+  const parts = libraryContentState.path ? libraryContentState.path.split('/') : [];
+  const crumbs = [`<button type="button" data-library-content-path="">${escapeHtml(library.name || libraryContentState.libraryName || 'Biblioteca')}</button>`];
+  let current = '';
+  for (const part of parts) {
+    current = current ? `${current}/${part}` : part;
+    crumbs.push('<span class="separator" aria-hidden="true">/</span>');
+    crumbs.push(`<button type="button" data-library-content-path="${escapeHtml(current)}">${escapeHtml(part)}</button>`);
+  }
+  if (libraryContentState.query) {
+    crumbs.push('<span class="separator" aria-hidden="true">/</span>');
+    crumbs.push('<span class="muted">Pesquisa</span>');
+  }
+  container.innerHTML = crumbs.join('');
+}
+
+function renderLibraryContent() {
+  const library = libraryContentState.library || {};
+  $('#libraryContentTitle').textContent = library.name || libraryContentState.libraryName || 'Conteúdo';
+  $('#libraryContentCount').textContent = `${Number(library.totalVideos) || 0} vídeo(s) no acervo local`;
+  renderLibraryContentBreadcrumbs();
+
+  const folders = $('#libraryContentFolders');
+  folders.innerHTML = libraryContentState.query ? '' : libraryContentState.directories.map((folder) => `
+    <button type="button" class="library-content-folder" data-library-content-folder="${escapeHtml(folder.path)}">
+      <span class="library-content-folder-copy"><strong>${escapeHtml(folder.name)}</strong><small>${Number(folder.totalVideos) || 0} vídeo(s)</small></span>
+      <span class="library-content-folder-arrow" aria-hidden="true">›</span>
+    </button>
+  `).join('');
+
+  const pagination = libraryContentState.pagination || {};
+  const status = libraryContentState.query
+    ? `${pagination.total || 0} resultado(s) em toda a biblioteca`
+    : `${libraryContentState.directories.length} pasta(s) · ${pagination.total || 0} vídeo(s) diretamente neste nível`;
+  $('#libraryContentStatus').textContent = status;
+
+  const items = $('#libraryContentItems');
+  items.innerHTML = libraryContentState.items.map((item) => {
+    const episode = libraryContentEpisodeLabel(item);
+    const duration = item.durationSeconds ? formatDuration(item.durationSeconds) : '';
+    const details = [episode, duration, item.releaseDate].filter(Boolean);
+    const thumbnailUrl = `/api/playlists/${encodeURIComponent(libraryContentState.libraryName)}/content-thumbnail?id=${encodeURIComponent(item.id)}`;
+    return `
+      <button type="button" class="library-content-card" data-library-content-item="${escapeHtml(item.id)}">
+        <span class="library-content-thumb">
+          <span class="library-content-thumb-placeholder">Sem imagem</span>
+          ${item.hasThumbnail ? `<img loading="lazy" alt="" src="${thumbnailUrl}">` : ''}
+        </span>
+        <span class="library-content-card-copy">
+          <strong>${escapeHtml(item.title || item.videoId)}</strong>
+          <small>${escapeHtml(item.artist || item.relativeDirectory || '')}</small>
+          <span class="library-content-card-meta">${details.map((value) => `<span>${escapeHtml(value)}</span>`).join('')}</span>
+        </span>
+      </button>
+    `;
+  }).join('');
+
+  items.querySelectorAll('.library-content-thumb img').forEach((image) => {
+    image.addEventListener('error', () => image.classList.add('is-missing'), { once: true });
+  });
+
+  const hasAnything = libraryContentState.items.length > 0 || (!libraryContentState.query && libraryContentState.directories.length > 0);
+  $('#libraryContentEmpty').classList.toggle('hidden', hasAnything);
+  $('#libraryContentLoadMoreBtn').classList.toggle('hidden', !pagination.hasMore);
+}
+
+function closeLibraryContentDetails() {
+  $('#libraryContentDetails').classList.add('hidden');
+}
+
+function showLibraryContentDetails(item) {
+  if (!item) return;
+  const episode = libraryContentEpisodeLabel(item) || '-';
+  const rows = [
+    ['Título', item.title || '-'],
+    ['Artista', item.artist || '-'],
+    ['Data', item.releaseDate || '-'],
+    ['Episódio', episode],
+    ['Duração', item.durationSeconds ? formatDuration(item.durationSeconds) : '-'],
+    ['Arquivo', item.relativeFile || '-'],
+    ['Tamanho', item.fileSizeBytes ? formatBytes(item.fileSizeBytes) : '-'],
+    ['Legendas', libraryContentSubtitleLabel(item)],
+    ['Video ID', item.videoId || '-']
+  ];
+  $('#libraryContentDetailsTitle').textContent = item.title || item.videoId || 'Vídeo';
+  $('#libraryContentDetailsList').innerHTML = rows.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join('');
+  const panel = $('#libraryContentDetails');
+  panel.classList.remove('hidden');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function loadLibraryContent(options = {}) {
+  const append = Boolean(options.append);
+  if (!libraryContentState.active || !libraryContentState.libraryName) return;
+  const requestId = ++libraryContentRequestId;
+  const browser = $('#libraryContentBrowser');
+  browser.classList.add('library-content-loading');
+  if (!append) closeLibraryContentDetails();
+
+  const params = new URLSearchParams();
+  params.set('limit', String(LIBRARY_CONTENT_PAGE_SIZE));
+  params.set('offset', String(append ? libraryContentState.items.length : 0));
+  if (libraryContentState.path) params.set('path', libraryContentState.path);
+  if (libraryContentState.query) params.set('q', libraryContentState.query);
+
+  try {
+    const response = await api(`/api/playlists/${encodeURIComponent(libraryContentState.libraryName)}/content?${params.toString()}`);
+    if (requestId !== libraryContentRequestId) return;
+    const result = response.result || {};
+    libraryContentState.library = result.library || libraryContentState.library;
+    libraryContentState.path = result.path || '';
+    libraryContentState.directories = result.directories || [];
+    const nextItems = result.items || [];
+    if (append) {
+      const byId = new Map(libraryContentState.items.map((item) => [item.id, item]));
+      nextItems.forEach((item) => byId.set(item.id, item));
+      libraryContentState.items = [...byId.values()];
+    } else {
+      libraryContentState.items = nextItems;
+    }
+    libraryContentState.itemMap = new Map(libraryContentState.items.map((item) => [item.id, item]));
+    libraryContentState.pagination = result.pagination || { total: libraryContentState.items.length, offset: 0, limit: LIBRARY_CONTENT_PAGE_SIZE, hasMore: false };
+    renderLibraryContent();
+  } finally {
+    if (requestId === libraryContentRequestId) browser.classList.remove('library-content-loading');
+  }
+}
+
+async function openLibraryContent(playlist) {
+  libraryContentState = {
+    active: true,
+    libraryName: String(playlist.name || ''),
+    library: null,
+    path: '',
+    query: '',
+    directories: [],
+    items: [],
+    itemMap: new Map(),
+    pagination: { total: 0, offset: 0, limit: LIBRARY_CONTENT_PAGE_SIZE, hasMore: false }
+  };
+  $('#libraryContentSearch').value = '';
+  setLibraryContentMode(true);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  await loadLibraryContent();
 }
 
 async function saveConfiguration(showMessage = true) {
@@ -789,7 +982,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '3.4.13'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '3.4.14'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -1042,6 +1235,11 @@ async function handleLibraryAction(button) {
   if (!playlist) throw new Error('Biblioteca não encontrada após salvar.');
   const name = playlist.name;
   const action = button.dataset.libraryAction;
+
+  if (action === 'view-content') {
+    await openLibraryContent(playlist);
+    return;
+  }
 
   if (action === 'remove-config') {
     const decision = await showAppDialog({
@@ -1368,6 +1566,49 @@ function bindEvents() {
     const button = event.target.closest('[data-library-action]');
     if (!button) return;
     handleLibraryAction(button).catch((error) => showToast(error.message, true));
+  });
+
+  $('#libraryContentBackBtn').addEventListener('click', () => {
+    libraryContentRequestId += 1;
+    setLibraryContentMode(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  $('#libraryContentDetailsClose').addEventListener('click', closeLibraryContentDetails);
+
+  $('#libraryContentBrowser').addEventListener('click', (event) => {
+    const folder = event.target.closest('[data-library-content-folder]');
+    if (folder) {
+      libraryContentState.path = folder.dataset.libraryContentFolder || '';
+      libraryContentState.query = '';
+      $('#libraryContentSearch').value = '';
+      loadLibraryContent().catch((error) => showToast(error.message, true));
+      return;
+    }
+
+    const crumb = event.target.closest('[data-library-content-path]');
+    if (crumb) {
+      libraryContentState.path = crumb.dataset.libraryContentPath || '';
+      libraryContentState.query = '';
+      $('#libraryContentSearch').value = '';
+      loadLibraryContent().catch((error) => showToast(error.message, true));
+      return;
+    }
+
+    const card = event.target.closest('[data-library-content-item]');
+    if (card) showLibraryContentDetails(libraryContentState.itemMap.get(card.dataset.libraryContentItem));
+  });
+
+  $('#libraryContentSearch').addEventListener('input', (event) => {
+    libraryContentState.query = event.currentTarget.value.trim();
+    if (libraryContentSearchTimer) clearTimeout(libraryContentSearchTimer);
+    libraryContentSearchTimer = setTimeout(() => {
+      loadLibraryContent().catch((error) => showToast(error.message, true));
+    }, 350);
+  });
+
+  $('#libraryContentLoadMoreBtn').addEventListener('click', () => {
+    loadLibraryContent({ append: true }).catch((error) => showToast(error.message, true));
   });
 
   $('#downloadsBody').addEventListener('click', (event) => {

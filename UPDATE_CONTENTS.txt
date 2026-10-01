@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.4.13 - pacote de atualização
+ErsatzTV YouTube Downloader 3.4.14 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.4.12.
+Extraia este ZIP sobre uma instalação v3.4.13.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -8,13 +8,14 @@ Preservado deliberadamente (não incluído):
 - data/
 - arquivos de mídia das bibliotecas e canais
 
-Principal alteração:
-- nova aba Ajuda -> Queries para Sources Search;
-- todos os campos de busca documentados pelo ErsatzTV Legacy foram organizados por assunto;
-- cada campo informa para que serve e em quais tipos de mídia é aceito;
-- campos especiais de data e exemplos de sintaxe foram incluídos;
-- o tooltip do campo Query aponta para a nova ajuda completa;
-- nenhum comportamento do motor Universal ou do módulo de downloads foi alterado.
+Principais alterações:
+- novo **Bibliotecas -> Conteúdo -> Ver conteúdo**;
+- navegador read-only organizado pela estrutura real de pastas;
+- metadata de NFO preferida sobre o estado quando disponível, sem qualquer regravação;
+- pesquisa global por título, artista, episódio, Video ID e caminho relativo;
+- paginação de 60 vídeos, thumbnails lazy e painel de detalhes;
+- thumbnails servidas por rota autenticada baseada no ID do item, sem expor caminhos absolutos;
+- remoção do bloco Remote Streams da Ajuda -> Queries.
 
 Universal permanece v1.3.1, configVersion permanece 8, schema de Scripted Schedules permanece 1 e estado da fila permanece 4.
 Consulte UPGRADE.md antes da atualização.

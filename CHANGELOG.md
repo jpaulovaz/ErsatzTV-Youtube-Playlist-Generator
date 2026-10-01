@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.4.14
+
+- Bibliotecas passam a ter **Conteúdo -> Ver conteúdo**, abrindo um navegador de acervo dentro da própria área sem misturar thumbnails com a sanfona de configuração.
+- A navegação usa o caminho real de cada vídeo relativo à raiz da Biblioteca. Assim, Clipes musicais aparecem como Artista -> Season 01 -> vídeos, Filmes como Artista -> pasta do filme -> vídeo e o perfil Genérico como Artista -> vídeos, sem criar categorias paralelas.
+- O acervo mostra apenas itens concluídos/com mídia local conhecida e usa o estado persistente para identidade, duração, tamanho e Video ID.
+- Quando existe NFO, o navegador o lê em modo somente de leitura e prefere seus campos para título, artista do Show, temporada/episódio e data. Correções manuais aparecem na interface sem reconstruir ou alterar o NFO.
+- A pesquisa percorre toda a Biblioteca por título, artista, `SxxExx`, Video ID e caminho relativo. A listagem usa páginas de 60 vídeos e thumbnails com `loading=lazy`.
+- Os cards abrem um painel de detalhes read-only com título, artista, data, episódio, duração, caminho relativo, tamanho, legendas registradas e Video ID.
+- A nova rota de thumbnail recebe apenas o ID de um item conhecido, resolve o arquivo internamente e rejeita caminhos que escapem da raiz da Biblioteca. Caminhos absolutos do servidor não são enviados ao navegador.
+- A Ajuda -> Queries deixa de exibir o bloco **Remote Streams**, removendo uma observação de desenvolvimento que não era útil ao usuário final. Os 46 campos documentados e os exemplos de Query permanecem.
+- Nenhuma alteração no Universal v1.3.1, `configVersion` 8, schema de Scripted Schedules 1, estado da fila 4 ou mecanismo de download.
+
 ## 3.4.13
 
 - A Ajuda de Scripted Schedules ganha a aba **Queries**, dedicada às Sources do tipo Search.

@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>ErsatzTV YouTube Downloader</title>
-  <link rel="icon" href="/brand-mark.svg?v=3.4.13" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=3.4.13&amp;rev=scripted-schedules-2">
-  <link rel="stylesheet" href="/scripted-schedules.css?v=3.4.13">
+  <link rel="icon" href="/brand-mark.svg?v=3.4.14" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=3.4.14&amp;rev=scripted-schedules-2">
+  <link rel="stylesheet" href="/scripted-schedules.css?v=3.4.14">
 </head>
 <body class="app-page">
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.4.13" alt=""></span>
+        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.4.14" alt=""></span>
         <div class="brand-copy">
           <div class="title-line">
             <h1>ErsatzTV YouTube Downloader</h1>
-            <span id="versionBadge" class="version-badge">v3.4.13</span>
+            <span id="versionBadge" class="version-badge">v3.4.14</span>
           </div>
         </div>
       </div>
@@ -304,17 +304,56 @@
       </section>
 
       <section id="view-libraries" class="view-panel" data-view-panel="libraries">
-        <div class="page-header">
-          <div>
-            <span class="page-kicker">Catálogo</span>
-            <h2>Bibliotecas</h2>
+        <div id="librariesConfigView">
+          <div class="page-header">
+            <div>
+              <span class="page-kicker">Catálogo</span>
+              <h2>Bibliotecas</h2>
+            </div>
+            <button id="addPlaylistBtn" type="button" class="primary">Adicionar biblioteca</button>
           </div>
-          <button id="addPlaylistBtn" type="button" class="primary">Adicionar biblioteca</button>
+
+          <section class="card libraries-card">
+            <div id="playlistList" class="playlist-list"></div>
+            <div class="section-actions"><button id="saveBtnBottom" type="button" class="primary">Salvar bibliotecas</button></div>
+          </section>
         </div>
 
-        <section class="card libraries-card">
-          <div id="playlistList" class="playlist-list"></div>
-          <div class="section-actions"><button id="saveBtnBottom" type="button" class="primary">Salvar bibliotecas</button></div>
+        <section id="libraryContentBrowser" class="library-content-browser hidden" aria-live="polite">
+          <div class="page-header library-content-page-header">
+            <div>
+              <span class="page-kicker">Acervo da biblioteca</span>
+              <h2 id="libraryContentTitle">Conteúdo</h2>
+              <p id="libraryContentCount" class="library-content-count"></p>
+            </div>
+            <button id="libraryContentBackBtn" type="button">Voltar para Bibliotecas</button>
+          </div>
+
+          <section class="card library-content-shell">
+            <div class="library-content-toolbar">
+              <label class="library-content-search">Pesquisar vídeos
+                <input id="libraryContentSearch" type="search" autocomplete="off" placeholder="Título, artista, episódio ou Video ID">
+              </label>
+            </div>
+
+            <nav id="libraryContentBreadcrumbs" class="library-content-breadcrumbs" aria-label="Caminho da biblioteca"></nav>
+            <div id="libraryContentStatus" class="library-content-status"></div>
+            <div id="libraryContentFolders" class="library-content-folders"></div>
+            <div id="libraryContentItems" class="library-content-grid"></div>
+            <div id="libraryContentEmpty" class="empty-state hidden">Nenhum vídeo encontrado.</div>
+            <div class="pagination-actions"><button id="libraryContentLoadMoreBtn" type="button" class="hidden">Carregar mais</button></div>
+
+            <aside id="libraryContentDetails" class="library-content-details hidden" aria-labelledby="libraryContentDetailsTitle">
+              <div class="library-content-details-head">
+                <div>
+                  <span class="page-kicker">Detalhes</span>
+                  <h3 id="libraryContentDetailsTitle">Vídeo</h3>
+                </div>
+                <button id="libraryContentDetailsClose" type="button" class="small">Fechar</button>
+              </div>
+              <dl id="libraryContentDetailsList"></dl>
+            </aside>
+          </section>
         </section>
       </section>
 
@@ -590,10 +629,10 @@
   </dialog>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="/js/destinationForm.js?v=3.4.13"></script>
-  <script src="/js/channelsView.js?v=3.4.13&amp;rev=ersatztv-catalog-1"></script>
-  <script src="/js/scriptedSchedulesView.js?v=3.4.13"></script>
-  <script src="/js/helpView.js?v=3.4.13"></script>
-  <script src="/app.js?v=3.4.13"></script>
+  <script src="/js/destinationForm.js?v=3.4.14"></script>
+  <script src="/js/channelsView.js?v=3.4.14&amp;rev=ersatztv-catalog-1"></script>
+  <script src="/js/scriptedSchedulesView.js?v=3.4.14"></script>
+  <script src="/js/helpView.js?v=3.4.14"></script>
+  <script src="/app.js?v=3.4.14"></script>
 </body>
 </html>
