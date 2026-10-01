@@ -3,7 +3,7 @@ const downloadManager = require('../downloadManager');
 const scheduler = require('../scheduler');
 const channelScheduler = require('../channelScheduler');
 const discoveryLock = require('../discovery/discoveryLock');
-const { listLibraryContent, getLibraryThumbnail } = require('../libraryContentService');
+const { listLibraryContent, getLibraryThumbnail, getLibraryFolderPoster } = require('../libraryContentService');
 const {
   runSync,
   runPlaylistApiAction,
@@ -54,6 +54,23 @@ async function handleLibraryRoutes(req, res, url, deps) {
       return true;
     }
     deps.sendBuffer(res, 200, thumbnail.content, thumbnail.contentType, {
+      'Cache-Control': 'private, max-age=60'
+    });
+    return true;
+  }
+
+  if (req.method === 'GET' && action === 'content-folder-poster') {
+    const poster = await getLibraryFolderPoster({
+      config,
+      playlist,
+      downloadManager,
+      itemId: url.searchParams.get('id')
+    });
+    if (!poster) {
+      deps.sendJson(res, 404, { ok: false, error: 'Poster nao encontrado.' });
+      return true;
+    }
+    deps.sendBuffer(res, 200, poster.content, poster.contentType, {
       'Cache-Control': 'private, max-age=60'
     });
     return true;

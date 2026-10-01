@@ -226,8 +226,16 @@ function directoryListing(entries, currentPath) {
     }
     const childName = remainder.split('/')[0];
     const childPath = currentPath ? `${currentPath}/${childName}` : childName;
-    const current = directories.get(childPath) || { name: childName, path: childPath, totalVideos: 0 };
+    const current = directories.get(childPath) || {
+      name: childName,
+      path: childPath,
+      totalVideos: 0,
+      posterItemId: ''
+    };
     current.totalVideos += 1;
+    if (!currentPath && !current.posterItemId && entry.item.showPosterPath) {
+      current.posterItemId = entry.item.id;
+    }
     directories.set(childPath, current);
   }
 
@@ -327,6 +335,26 @@ async function getLibraryThumbnail({ config, playlist, downloadManager, itemId }
   }
 }
 
+async function getLibraryFolderPoster({ config, playlist, downloadManager, itemId }) {
+  const destination = libraryDestination(config, playlist);
+  if (!destination) return null;
+  const id = String(itemId || '').trim();
+  if (!id) return null;
+  const item = getAllLibraryItems(downloadManager, destination.id).find((entry) => entry.id === id);
+  if (!item || !isStoredItem(item) || !item.showPosterPath) return null;
+  if (!safeRelativeFile(destination.rootPath, item.showPosterPath)) return null;
+  try {
+    const content = await fs.readFile(item.showPosterPath);
+    if (!content.length) return null;
+    const ext = path.extname(item.showPosterPath).toLowerCase();
+    const contentType = ext === '.png' ? 'image/png' : (ext === '.webp' ? 'image/webp' : 'image/jpeg');
+    return { content, contentType };
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'EACCES') return null;
+    throw error;
+  }
+}
+
 module.exports = {
   DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
@@ -335,5 +363,6 @@ module.exports = {
   normalizeBrowserPath,
   isStoredItem,
   listLibraryContent,
-  getLibraryThumbnail
+  getLibraryThumbnail,
+  getLibraryFolderPoster
 };

@@ -758,6 +758,27 @@ function renderLibraryContentBreadcrumbs() {
   container.innerHTML = crumbs.join('');
 }
 
+function bindLibraryContentImages(container) {
+  container.querySelectorAll('[data-library-content-image] img').forEach((image) => {
+    const frame = image.closest('[data-library-content-image]');
+    if (!frame) return;
+    const markLoaded = () => {
+      frame.classList.add('has-image');
+      image.classList.remove('is-missing');
+    };
+    const markMissing = () => {
+      frame.classList.remove('has-image');
+      image.classList.add('is-missing');
+    };
+    image.addEventListener('load', markLoaded, { once: true });
+    image.addEventListener('error', markMissing, { once: true });
+    if (image.complete) {
+      if (image.naturalWidth > 0) markLoaded();
+      else markMissing();
+    }
+  });
+}
+
 function renderLibraryContent() {
   const library = libraryContentState.library || {};
   $('#libraryContentTitle').textContent = library.name || libraryContentState.libraryName || 'Conteúdo';
@@ -765,12 +786,22 @@ function renderLibraryContent() {
   renderLibraryContentBreadcrumbs();
 
   const folders = $('#libraryContentFolders');
-  folders.innerHTML = libraryContentState.query ? '' : libraryContentState.directories.map((folder) => `
-    <button type="button" class="library-content-folder" data-library-content-folder="${escapeHtml(folder.path)}">
-      <span class="library-content-folder-copy"><strong>${escapeHtml(folder.name)}</strong><small>${Number(folder.totalVideos) || 0} vídeo(s)</small></span>
-      <span class="library-content-folder-arrow" aria-hidden="true">›</span>
-    </button>
-  `).join('');
+  folders.innerHTML = libraryContentState.query ? '' : libraryContentState.directories.map((folder) => {
+    const posterUrl = folder.posterItemId
+      ? `/api/playlists/${encodeURIComponent(libraryContentState.libraryName)}/content-folder-poster?id=${encodeURIComponent(folder.posterItemId)}`
+      : '';
+    return `
+      <button type="button" class="library-content-folder" data-library-content-folder="${escapeHtml(folder.path)}">
+        ${posterUrl ? `<span class="library-content-folder-poster" data-library-content-image>
+          <span class="library-content-folder-poster-placeholder" aria-hidden="true">Sem poster</span>
+          <img loading="lazy" alt="" src="${posterUrl}">
+        </span>` : ''}
+        <span class="library-content-folder-copy"><strong>${escapeHtml(folder.name)}</strong><small>${Number(folder.totalVideos) || 0} vídeo(s)</small></span>
+        <span class="library-content-folder-arrow" aria-hidden="true">›</span>
+      </button>
+    `;
+  }).join('');
+  bindLibraryContentImages(folders);
 
   const pagination = libraryContentState.pagination || {};
   const status = libraryContentState.query
@@ -786,22 +817,19 @@ function renderLibraryContent() {
     const thumbnailUrl = `/api/playlists/${encodeURIComponent(libraryContentState.libraryName)}/content-thumbnail?id=${encodeURIComponent(item.id)}`;
     return `
       <button type="button" class="library-content-card" data-library-content-item="${escapeHtml(item.id)}">
-        <span class="library-content-thumb">
+        <span class="library-content-thumb" data-library-content-image>
           <span class="library-content-thumb-placeholder">Sem imagem</span>
           ${item.hasThumbnail ? `<img loading="lazy" alt="" src="${thumbnailUrl}">` : ''}
         </span>
         <span class="library-content-card-copy">
-          <strong>${escapeHtml(item.title || item.videoId)}</strong>
+          <strong class="library-content-card-title">${escapeHtml(item.title || item.videoId)}</strong>
           <small>${escapeHtml(item.artist || item.relativeDirectory || '')}</small>
           <span class="library-content-card-meta">${details.map((value) => `<span>${escapeHtml(value)}</span>`).join('')}</span>
         </span>
       </button>
     `;
   }).join('');
-
-  items.querySelectorAll('.library-content-thumb img').forEach((image) => {
-    image.addEventListener('error', () => image.classList.add('is-missing'), { once: true });
-  });
+  bindLibraryContentImages(items);
 
   const hasAnything = libraryContentState.items.length > 0 || (!libraryContentState.query && libraryContentState.directories.length > 0);
   $('#libraryContentEmpty').classList.toggle('hidden', hasAnything);
@@ -982,7 +1010,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '3.4.14'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '3.4.15'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);

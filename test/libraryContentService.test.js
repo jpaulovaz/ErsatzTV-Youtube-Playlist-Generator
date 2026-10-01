@@ -7,7 +7,8 @@ const {
   normalizeBrowserPath,
   safeRelativeFile,
   listLibraryContent,
-  getLibraryThumbnail
+  getLibraryThumbnail,
+  getLibraryFolderPoster
 } = require('../src/libraryContentService');
 
 function makeManager(items) {
@@ -42,8 +43,10 @@ async function fixture() {
   const firstNfo = path.join(madonnaSeason, 'Madonna - S01E07 - Holiday.nfo');
   const firstThumb = path.join(madonnaSeason, 'Madonna - S01E07 - Holiday-thumb.jpg');
   const showNfo = path.join(madonna, 'tvshow.nfo');
+  const showPoster = path.join(madonna, 'poster.jpg');
   await fs.writeFile(firstTarget, 'video');
   await fs.writeFile(firstThumb, Buffer.from([1, 2, 3, 4]));
+  await fs.writeFile(showPoster, Buffer.from([5, 6, 7, 8]));
   await fs.writeFile(firstNfo, [
     '<episodedetails>',
     '  <title>Holiday &amp; Friends - corrigido</title>',
@@ -68,6 +71,7 @@ async function fixture() {
       thumbnailPath: firstThumb,
       nfoPath: firstNfo,
       showNfoPath: showNfo,
+      showPosterPath: showPoster,
       mediaProfile: 'music_clips',
       mediaLayout: 'show-season',
       title: 'Madonna - Holiday',
@@ -125,6 +129,8 @@ test('library content follows the real directory tree and excludes pending queue
   const root = await listLibraryContent({ config: fx.config, playlist: fx.playlist, downloadManager: fx.manager });
   assert.equal(root.library.totalVideos, 2);
   assert.deepEqual(root.directories.map((entry) => entry.name), ['A-ha', 'Madonna']);
+  assert.equal(root.directories.find((entry) => entry.name === 'Madonna').posterItemId, 'Music:holiday');
+  assert.equal(root.directories.find((entry) => entry.name === 'A-ha').posterItemId, '');
   assert.equal(root.items.length, 0);
 
   const artist = await listLibraryContent({
@@ -134,6 +140,7 @@ test('library content follows the real directory tree and excludes pending queue
     browserPath: 'Madonna'
   });
   assert.deepEqual(artist.directories.map((entry) => entry.name), ['Season 01']);
+  assert.equal(artist.directories[0].posterItemId, '');
 
   const season = await listLibraryContent({
     config: fx.config,
@@ -148,6 +155,31 @@ test('library content follows the real directory tree and excludes pending queue
   assert.equal(season.items[0].releaseDate, '1983-09-07');
   assert.equal(season.items[0].relativeFile, 'Madonna/Season 01/Madonna - S01E07 - Holiday.mp4');
   assert.deepEqual(season.items[0].subtitles.languages, ['pt-BR', 'en']);
+});
+
+test('artist poster delivery resolves only stored show poster paths inside the library root', async (t) => {
+  const fx = await fixture();
+  t.after(() => fs.rm(fx.baseDir, { recursive: true, force: true }));
+
+  const poster = await getLibraryFolderPoster({
+    config: fx.config,
+    playlist: fx.playlist,
+    downloadManager: fx.manager,
+    itemId: 'Music:holiday'
+  });
+  assert.equal(poster.contentType, 'image/jpeg');
+  assert.deepEqual([...poster.content], [5, 6, 7, 8]);
+
+  const outside = path.join(fx.baseDir, 'outside-poster.jpg');
+  await fs.writeFile(outside, 'outside');
+  fx.items[0].showPosterPath = outside;
+  const blocked = await getLibraryFolderPoster({
+    config: fx.config,
+    playlist: fx.playlist,
+    downloadManager: makeManager(fx.items),
+    itemId: 'Music:holiday'
+  });
+  assert.equal(blocked, null);
 });
 
 test('library search uses manual NFO metadata and episode identity', async (t) => {

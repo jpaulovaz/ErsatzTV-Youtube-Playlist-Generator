@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.4.15
+
+- O navegador de conteúdo passa a exibir explicitamente o **título de cada vídeo logo abaixo da thumbnail**, mantendo o painel de detalhes no clique como complemento.
+- A lista de pastas de primeiro nível passa a aproveitar o `showPosterPath` já conhecido pelo estado dos Clipes musicais e exibe o poster disponível ao lado do nome do artista.
+- Posters de artistas são servidos por uma rota read-only baseada no ID de um item conhecido. O backend resolve `showPosterPath` internamente e rejeita arquivos fora da raiz da Biblioteca, sem expor caminhos absolutos ao navegador.
+- Corrigida a sobreposição do placeholder **Sem imagem**: o texto desaparece assim que a thumbnail ou poster conclui o carregamento e permanece somente quando não existe imagem válida ou o carregamento falha.
+- Nenhuma alteração no Universal v1.3.1, `configVersion` 8, schema de Scripted Schedules 1, estado da fila 4 ou mecanismo de download.
+
 ## 3.4.14
 
 - Bibliotecas passam a ter **Conteúdo -> Ver conteúdo**, abrindo um navegador de acervo dentro da própria área sem misturar thumbnails com a sanfona de configuração.

@@ -1875,19 +1875,44 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
 .library-content-folders { display: grid; gap: 7px; margin-bottom: 12px; }
 .library-content-folder {
   width: 100%;
-  min-height: 50px;
+  min-height: 62px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 9px 11px;
   text-align: left;
   background: rgba(8, 17, 30, .42);
 }
-.library-content-folder-copy { min-width: 0; display: grid; gap: 2px; }
+.library-content-folder-poster {
+  position: relative;
+  flex: 0 0 76px;
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  background: #09111d;
+}
+.library-content-folder-poster img { position: relative; z-index: 1; width: 100%; height: 100%; display: block; object-fit: cover; }
+.library-content-folder-poster img.is-missing { display: none; }
+.library-content-folder-poster-placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: grid;
+  place-items: center;
+  color: #667b96;
+  font-size: 7.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.library-content-folder-poster.has-image .library-content-folder-poster-placeholder { display: none; }
+.library-content-folder-copy { min-width: 0; flex: 1 1 auto; display: grid; gap: 2px; }
 .library-content-folder-copy strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .library-content-folder-copy small { font-size: 9.5px; }
-.library-content-folder-arrow { flex: 0 0 auto; color: var(--muted); font-size: 16px; }
+.library-content-folder-arrow { flex: 0 0 auto; margin-left: auto; color: var(--muted); font-size: 16px; }
 .library-content-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
 .library-content-card {
   min-width: 0;
@@ -1907,11 +1932,12 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
   background: #09111d;
   border-bottom: 1px solid var(--line-soft);
 }
-.library-content-thumb img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.library-content-thumb img { position: relative; z-index: 1; width: 100%; height: 100%; display: block; object-fit: cover; }
 .library-content-thumb img.is-missing { display: none; }
 .library-content-thumb-placeholder {
   position: absolute;
   inset: 0;
+  z-index: 0;
   display: grid;
   place-items: center;
   color: #667b96;
@@ -1920,8 +1946,9 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
   letter-spacing: .08em;
   text-transform: uppercase;
 }
+.library-content-thumb.has-image .library-content-thumb-placeholder { display: none; }
 .library-content-card-copy { display: grid; gap: 4px; padding: 9px 10px 10px; }
-.library-content-card-copy strong { min-height: 32px; overflow: hidden; color: var(--text); font-size: 11.5px; line-height: 1.35; }
+.library-content-card-title { min-height: 32px; overflow: hidden; color: var(--text); font-size: 11.5px; line-height: 1.35; }
 .library-content-card-copy small { min-width: 0; overflow: hidden; font-size: 9.5px; text-overflow: ellipsis; white-space: nowrap; }
 .library-content-card-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
 .library-content-card-meta span { color: var(--muted); font-size: 9px; }
@@ -1947,7 +1974,7 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
   .library-content-search { width: 100%; }
   .library-content-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .library-content-card-copy { padding: 8px; }
-  .library-content-card-copy strong { min-height: 30px; font-size: 10.5px; }
+  .library-content-card-title { min-height: 30px; font-size: 10.5px; }
   .library-content-details dl { grid-template-columns: 1fr; gap: 3px; }
   .library-content-details dd { margin-bottom: 7px; }
 }
@@ -1956,4 +1983,5 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
   .library-content-grid { grid-template-columns: minmax(0, 1fr); }
   .library-content-card { display: grid; grid-template-columns: 132px minmax(0, 1fr); }
   .library-content-thumb { height: 100%; min-height: 86px; aspect-ratio: auto; border-right: 1px solid var(--line-soft); border-bottom: 0; }
+  .library-content-folder-poster { flex-basis: 66px; }
 }

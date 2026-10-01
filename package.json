@@ -1,6 +1,6 @@
 {
   "name": "ersatztv-youtube-downloader",
-  "version": "3.4.14",
+  "version": "3.4.15",
   "description": "Gerenciador privado de bibliotecas e canais do YouTube para ErsatzTV, com fila persistente, perfis de mídia/NFO, legendas SRT e gerador visual de Scripted Schedules.",
   "main": "src/main.js",
   "type": "commonjs",
