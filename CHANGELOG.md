@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.4.17
+
+- **Título customizado** nos Scripted Schedules ganha a opção **Agrupar itens no EPG usando este título**.
+- Com a opção desligada, o comportamento anterior é preservado: `customTitle` apenas substitui o título de cada entrada individual.
+- Com a opção ligada, o gerador não envia `customTitle` por item e converte a intenção para o agrupamento nativo já suportado pelo Universal: `epg_group=True`, `epg_title=<Título customizado>` e `epg_advance=True`.
+- O agrupamento existente em **Presentation Profiles -> Agrupar no EPG** permanece disponível e independente.
+- A validação rejeita o novo agrupamento quando o campo Título customizado está vazio.
+- Universal permanece v1.3.1; `configVersion` permanece 8; schema de Scripted Schedules permanece 1; estado da fila permanece 4.
+
 ## 3.4.16
 
 - Corrigida a regressão visual da v3.4.15 em que o título, embora presente no HTML, podia não aparecer abaixo da thumbnail. O card deixa de ser um único botão: somente a imagem é clicável e o bloco de título/metadados fica estruturalmente separado logo abaixo.

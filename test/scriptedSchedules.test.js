@@ -66,6 +66,109 @@ test('Scripted Schedule golden music project generates a valid Universal v1.3.1 
   assert.match(output, /FIXED_EVENTS=2/);
 });
 
+
+test('custom title can rename individual EPG entries without grouping', () => {
+  const project = musicProject();
+  project.modules.rotation[0].customTitle = 'MINHAS FAVORITAS';
+  project.modules.rotation[0].customTitleGroup = false;
+
+  const engine = projectToEngine(project);
+  const item = engine.modules.rotation[0];
+  assert.equal(item.custom_title, 'MINHAS FAVORITAS');
+  assert.equal(item.epg_group, undefined);
+  assert.equal(item.epg_title, undefined);
+  assert.equal(item.epg_advance, undefined);
+});
+
+test('custom title grouping uses native EPG group and does not rename each item', async () => {
+  const project = musicProject();
+  project.modules.rotation[0].customTitle = 'MINHAS FAVORITAS';
+  project.modules.rotation[0].customTitleGroup = true;
+
+  const validation = validateProject(project);
+  assert.deepEqual(validation.errors, []);
+
+  const engine = projectToEngine(project);
+  const item = engine.modules.rotation[0];
+  assert.equal(item.custom_title, undefined);
+  assert.equal(item.epg_group, true);
+  assert.equal(item.epg_title, 'MINHAS FAVORITAS');
+  assert.equal(item.epg_advance, true);
+
+  const script = await generateScript(project);
+  assert.match(script, /"epg_group": True/);
+  assert.match(script, /"epg_title": "MINHAS FAVORITAS"/);
+  assert.match(script, /"epg_advance": True/);
+  assert.doesNotMatch(script, /"custom_title": "MINHAS FAVORITAS"/);
+  const output = await validateWithPython(script);
+  assert.match(output, /configuracao valida/);
+});
+
+test('custom title grouping requires a title', () => {
+  const project = musicProject();
+  project.modules.rotation[0].customTitle = '   ';
+  project.modules.rotation[0].customTitleGroup = true;
+  const validation = validateProject(project);
+  assert.equal(validation.ok, false);
+  assert.ok(validation.errors.some((item) => item.path === 'modules.rotation[0].customTitle'));
+});
+
+
+test('custom title grouping reaches PresentationController while playback omits per-item customTitle', async () => {
+  const project = musicProject();
+  project.modules.rotation = [{ source: 'TOP', order: 'shuffle', presentation: 'music', durationMinutes: 60, customTitle: 'MINHAS FAVORITAS', customTitleGroup: true }];
+  const script = await generateScript(project);
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'scripted-custom-title-group-runtime-'));
+  const scheduleFile = path.join(dir, 'schedule.py');
+  const probeFile = path.join(dir, 'probe.py');
+  await fsp.writeFile(scheduleFile, script, 'utf8');
+  await fsp.writeFile(probeFile, `
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("schedule", sys.argv[1])
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+class Api:
+    def __init__(self): self.calls = []
+    def graphics_off(self, graphics): self.calls.append(["graphics_off", graphics])
+    def watermark_off(self, watermarks): self.calls.append(["watermark_off", watermarks])
+    def pre_roll_off(self): self.calls.append(["pre_roll_off"])
+    def graphics_on(self, graphics, variables=None): self.calls.append(["graphics_on", graphics, variables])
+    def watermark_on(self, watermarks): self.calls.append(["watermark_on", watermarks])
+    def pre_roll_on(self, playlist): self.calls.append(["pre_roll_on", playlist])
+    def start_epg_group(self, advance=True, custom_title=None): self.calls.append(["start_epg_group", advance, custom_title])
+    def stop_epg_group(self): self.calls.append(["stop_epg_group"])
+api = Api()
+controller = m.PresentationController(api)
+item = m.ROTATION[0]
+presentation = m.resolve_presentation(item, item["source"])
+controller.set(presentation, "rotation:test")
+print(json.dumps({"calls": api.calls, "options": m.playback_options(item), "presentation": presentation}))
+`, 'utf8');
+  try {
+    const result = JSON.parse(execFileSync('python3', [probeFile, scheduleFile], { encoding: 'utf8' }).trim().split('\n').pop());
+    assert.ok(result.calls.some((call) => call[0] === 'start_epg_group' && call[1] === true && call[2] === 'MINHAS FAVORITAS'));
+    assert.equal(result.options.custom_title, null);
+    assert.equal(result.presentation.epg_group, true);
+    assert.equal(result.presentation.epg_title, 'MINHAS FAVORITAS');
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Presentation EPG grouping remains available independently from custom title grouping', () => {
+  const project = musicProject();
+  const profile = project.presentationProfiles.find((item) => item.key === 'music');
+  profile.epgGroup = true;
+  profile.epgTitle = 'BLOCO DA PRESENTATION';
+  profile.epgAdvance = false;
+
+  const engine = projectToEngine(project);
+  assert.equal(engine.profiles.music.epg_group, true);
+  assert.equal(engine.profiles.music.epg_title, 'BLOCO DA PRESENTATION');
+  assert.equal(engine.profiles.music.epg_advance, false);
+  assert.equal(engine.modules.rotation[0].epg_group, undefined);
+});
+
 test('playback order is defined per programming use and the compiler derives independent ErsatzTV Sources', async () => {
   const project = musicProject();
   project.sources[0].order = 'chronological';

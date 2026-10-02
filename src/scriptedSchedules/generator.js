@@ -112,8 +112,16 @@ function normalizeFillerKind(value, fallback = undefined) {
 
 function playbackFields(input = {}, resolveSource = (key) => key) {
   const trim = input.trim === true;
+  const customTitle = cleanString(input.customTitle);
+  const groupCustomTitle = input.customTitleGroup === true && Boolean(customTitle);
   return compact({
-    custom_title: input.customTitle,
+    // Quando o usuario escolhe agrupar pelo Titulo customizado, o titulo passa a nomear
+    // o grupo EPG. Nao enviamos customTitle por item, pois isso apenas renomearia cada
+    // entrada individual e duplicaria a intencao do agrupamento.
+    custom_title: groupCustomTitle ? undefined : input.customTitle,
+    epg_group: groupCustomTitle ? true : undefined,
+    epg_title: groupCustomTitle ? customTitle : undefined,
+    epg_advance: groupCustomTitle ? true : undefined,
     filler_kind: input.fillerKind,
     disable_watermarks: input.disableWatermarks === true ? true : undefined,
     fallback: input.fallback ? resolveSource(input.fallback, input.fallbackOrder) : undefined,

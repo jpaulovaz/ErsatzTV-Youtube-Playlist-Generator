@@ -397,6 +397,9 @@ function validatePadToNearest(item, base, project, addError) {
 }
 
 function validatePlayback(item, sourceMap, base, addError) {
+  if (item && item.customTitleGroup === true && !String(item.customTitle || '').trim()) {
+    addError(`${base}.customTitle`, 'Informe o Titulo customizado para agrupar estes itens no EPG.');
+  }
   if (item && item.fallback) {
     requireSource(item.fallback, sourceMap, `${base}.fallback`, addError);
     validateSourceOrder(item, sourceMap, base, addError, 'fallback', 'fallbackOrder');

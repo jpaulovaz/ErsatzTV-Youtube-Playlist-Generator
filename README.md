@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.16
+# ErsatzTV YouTube Downloader 3.4.17
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.16 corrige a apresentação do **navegador somente de leitura das Bibliotecas**: o título passa a ocupar um bloco próprio abaixo da thumbnail 16:9, separado do botão da imagem, e os posters do nível de artista passam a usar proporção vertical 2:3. O Universal permanece v1.3.1.
+A versão 3.4.17 corrige o comportamento de **Título customizado** nos Scripted Schedules: além de continuar podendo apenas renomear entradas individuais do EPG, o mesmo campo agora pode ativar o agrupamento nativo do ErsatzTV e usar esse título como nome de uma única entrada para todo o bloco. O agrupamento configurável em **Presentation Profiles** permanece disponível e independente. O Universal permanece v1.3.1.
 
 ## Arquitetura
 
@@ -234,7 +234,7 @@ O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão**
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.4.16:
+Módulos disponíveis na v3.4.17:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -256,6 +256,8 @@ Módulos disponíveis na v3.4.16:
 - **Janela offline**.
 
 O **Filler** permanece separado dos módulos e é opcional. O **Tipo de Filler** pode ser escolhido entre Post-roll, Pre-roll, Mid-roll e Nenhum. **Post-roll** é o padrão e a opção recomendada para preencher lacunas e para o Pad; projetos antigos sem essa escolha salva continuam sendo tratados como Post-roll. Programações de fundo como rotações, Bloco contínuo e Inserções após X itens são alternativas de programação-base; o validador avisa quando várias bases são configuradas ao mesmo tempo. Eventos fixos podem ser colocados por cima da base usando prioridade e horários.
+
+Em **Reprodução avançada**, **Título customizado** possui dois modos. Com **Agrupar itens no EPG usando este título** desligado, o aplicativo continua enviando `customTitle` para cada operação de conteúdo e cada item permanece uma entrada separada no guia. Com a opção ligada, o gerador não envia `customTitle` por item: ele converte a configuração para o agrupamento nativo do ErsatzTV (`epg_group`, `epg_title` e `epg_advance`), criando uma única entrada de EPG para o bloco. O campo só pode ser agrupado quando há um título preenchido. O agrupamento de **Presentation Profiles -> Agrupar no EPG** continua existindo como mecanismo independente; quando o agrupamento do Título customizado está ligado no próprio bloco, o título desse bloco é o que deve nomear o grupo.
 
 Os filtros de dias e datas também suportam **recorrência avançada**, incluindo primeira/segunda/terceira/quarta/última ocorrência de um dia da semana no mês e repetição a cada N dias.
 
@@ -386,7 +388,7 @@ A normalização de nomes continua conservadora: casing claramente ruidoso é co
 
 ## Atualização temporária de datas e episódios
 
-Na v3.4.16, cada biblioteca ainda mantém temporariamente a ação **Atualizar datas e episódios**. Ela migra o acervo anterior para a nova numeração cronológica sem recriar os NFOs.
+Na v3.4.17, cada biblioteca ainda mantém temporariamente a ação **Atualizar datas e episódios**. Ela migra o acervo anterior para a nova numeração cronológica sem recriar os NFOs.
 
 A operação é conservadora:
 

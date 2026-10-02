@@ -1,43 +1,46 @@
-# Atualização para 3.4.16
+# Atualização para 3.4.17
 
-A versão 3.4.16 corrige a apresentação do navegador de conteúdo da v3.4.15. O título passa a ficar em um bloco próprio abaixo da thumbnail, fora do botão usado para abrir os detalhes. As imagens de vídeos/episódios permanecem widescreen em 16:9, enquanto os posters do primeiro nível de artistas passam a ser apresentados verticalmente em 2:3. O Universal permanece v1.3.1 e não há mudança no schema principal, na fila de downloads nem no formato dos projetos.
+A versão 3.4.17 corrige a integração entre **Título customizado** e o EPG dos Scripted Schedules. O campo continua podendo apenas renomear cada entrada individual, mas agora possui a opção **Agrupar itens no EPG usando este título**. Quando ligada, o aplicativo usa o agrupamento nativo do ErsatzTV para criar uma única entrada de EPG para o bloco e não envia `customTitle` individualmente para cada item.
+
+O agrupamento existente em **Presentation Profiles -> Agrupar no EPG** permanece disponível e independente. O Universal continua em **v1.3.1**: a correção é feita na configuração gerada pelo aplicativo, aproveitando recursos que o motor já possuía.
 
 ## O que muda
 
-- somente a thumbnail é o botão que abre os detalhes do vídeo; título, artista e metadados ficam em um bloco separado imediatamente abaixo;
-- a estrutura evita que o texto seja cortado pela renderização do próprio botão, corrigindo o comportamento observado na v3.4.15;
-- thumbnails de vídeos/episódios usam proporção fixa **16:9** também no celular;
-- posters do primeiro nível da Biblioteca usam proporção vertical **2:3**, própria de capa de artista/Show;
-- a alteração é somente de apresentação: nenhuma thumbnail ou poster é recortado/regravado no disco e o `showPosterPath` existente continua sendo usado;
-- o comportamento read-only, pesquisa, paginação, NFO como fonte preferencial, segurança das imagens e painel de detalhes permanecem inalterados.
+- **Título customizado** ganha o checkbox **Agrupar itens no EPG usando este título** em Reprodução avançada;
+- checkbox desligado: mantém o comportamento anterior, com `customTitle` aplicado individualmente aos itens;
+- checkbox ligado: o gerador remove `custom_title` por item e produz `epg_group=true`, `epg_title=<Título customizado>` e `epg_advance=true` para o bloco;
+- o agrupamento ligado ao Título customizado exige que o título esteja preenchido;
+- **Presentation Profiles -> Agrupar no EPG** continua disponível para agrupamentos independentes do campo Título customizado;
+- nenhuma alteração no mecanismo de downloads, bibliotecas, navegador read-only, fila, NFOs ou autenticação.
 
 ## Compatibilidade
 
-- aplicação: **v3.4.16**;
+- aplicação: **v3.4.17**;
 - Universal: **v1.3.1**;
 - `configVersion`: **8**;
 - schema de Scripted Schedules: **1**;
 - estado da fila de downloads: **4**.
 
-Configuração, autenticação, dados, downloads, NFOs, thumbnails, posters e projetos existentes não precisam de migração.
+Não existe migração obrigatória. Projetos que não usarem o novo checkbox continuam gerando o mesmo comportamento de Título customizado da versão anterior.
 
 ## Atualização
 
 1. Pare o aplicativo.
 2. Faça backup da instalação atual, como de costume.
-3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.16-update.zip` sobre uma instalação v3.4.15.
+3. Extraia `ErsatzTV-YouTube-Downloader-v3.4.17-update.zip` sobre uma instalação v3.4.16.
 4. Inicie o aplicativo novamente.
-5. Faça um recarregamento completo do navegador (`Ctrl+F5`) para descartar JavaScript/CSS em cache.
+5. Faça um recarregamento completo do navegador (`Ctrl+F5`) para descartar JavaScript em cache.
+6. Abra o Scripted Schedule desejado e publique novamente somente os projetos em que quiser usar o novo agrupamento.
 
 ## Verificação rápida
 
-1. Abra **Bibliotecas** e entre em **Conteúdo -> Ver conteúdo**.
-2. No primeiro nível, confirme que os posters dos artistas aparecem em formato vertical 2:3.
-3. Entre em uma temporada/pasta e confirme que as thumbnails dos episódios permanecem widescreen 16:9.
-4. Confirme que o título está sempre visível imediatamente abaixo de cada thumbnail, antes de clicar no vídeo.
-5. Clique somente na imagem e confirme que o painel de detalhes continua abrindo normalmente.
-6. Teste uma busca no acervo e confirme que os cards preservam o mesmo formato.
+1. Abra **Scripted Schedules -> Programação**.
+2. Em um bloco, abra **Reprodução avançada**.
+3. Preencha **Título customizado**, por exemplo `MINHAS FAVORITAS`.
+4. Com **Agrupar itens no EPG usando este título** desligado, valide a prévia: deve aparecer `custom_title: "MINHAS FAVORITAS"` e não deve haver agrupamento criado por esse campo.
+5. Ligue o checkbox e valide novamente: o bloco deve conter `epg_group: True`, `epg_title: "MINHAS FAVORITAS"` e `epg_advance: True`, sem `custom_title: "MINHAS FAVORITAS"` naquele bloco.
+6. Em **Recursos -> Presentation Profiles**, confirme que **Agrupar no EPG** continua disponível normalmente.
 
-- upgrade esperado: **v3.4.15 -> v3.4.16**;
-- nenhuma republicação dos Scripted Schedules é necessária;
-- nenhum Reset Playout é necessário.
+- upgrade esperado: **v3.4.16 -> v3.4.17**;
+- projetos só precisam ser republicados quando você quiser que o `.py` publicado passe a refletir a nova opção;
+- nenhum Reset Playout é necessário apenas para atualizar o aplicativo.
