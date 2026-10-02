@@ -154,28 +154,6 @@ function patchMusicClipEpisodeSequenceContent(content, item, options = {}) {
   return { content: next, changed: updated.length > 0, updated };
 }
 
-function patchNfoReleaseMetadataContent(content, profile, item) {
-  const metadata = getReleaseMetadata(item);
-  let next = String(content || '');
-  const added = [];
-  const normalizedProfile = normalizeMediaProfile(profile || item && item.mediaProfile);
-
-  if (normalizedProfile === MEDIA_PROFILES.MUSIC_CLIPS) {
-    const result = insertMissingXmlTag(next, 'episodedetails', 'aired', metadata.releaseDate);
-    next = result.content;
-    if (result.changed) added.push('aired');
-  } else if (!hasXmlTag(next, 'year') && !hasXmlTag(next, 'premiered')) {
-    let result = insertMissingXmlTag(next, 'movie', 'year', metadata.year);
-    next = result.content;
-    if (result.changed) added.push('year');
-    result = insertMissingXmlTag(next, 'movie', 'premiered', metadata.releaseDate);
-    next = result.content;
-    if (result.changed) added.push('premiered');
-  }
-
-  return { content: next, changed: added.length > 0, added };
-}
-
 function resolveMediaIdentity(item) {
   const extracted = extractArtistAndTitle(item && (item.title || item.trackTitle) || 'Sem Titulo');
   const itemArtist = cleanArtist(item && item.artist);
@@ -330,19 +308,6 @@ async function writeEpisodeNfo(item, nfoPath) {
   return target;
 }
 
-async function patchNfoReleaseMetadata(item, nfoPath, profile) {
-  const target = String(nfoPath || item && item.nfoPath || '').trim();
-  if (!target) throw new Error('Caminho do NFO nao informado para atualizar a data.');
-  const current = await fs.readFile(target, 'utf8');
-  const stat = await fs.stat(target);
-  const result = patchNfoReleaseMetadataContent(current, profile, item);
-  if (result.changed) {
-    await atomicWriteText(target, result.content);
-    await fs.chmod(target, stat.mode & 0o777);
-  }
-  return { target, changed: result.changed, added: result.added };
-}
-
 async function patchMusicClipEpisodeSequence(item, nfoPath, options = {}) {
   const target = String(nfoPath || item && item.nfoPath || '').trim();
   if (!target) throw new Error('Caminho do NFO do episodio nao informado para renumeracao.');
@@ -367,7 +332,6 @@ module.exports = {
   getReleaseMetadata,
   getXmlTagText,
   getEpisodeNfoSequenceMetadata,
-  patchNfoReleaseMetadataContent,
   patchMusicClipEpisodeSequenceContent,
   resolveMediaIdentity,
   getGenericMetadata,
@@ -381,6 +345,5 @@ module.exports = {
   writeMovieNfo,
   writeTvShowNfo,
   writeEpisodeNfo,
-  patchNfoReleaseMetadata,
   patchMusicClipEpisodeSequence
 };

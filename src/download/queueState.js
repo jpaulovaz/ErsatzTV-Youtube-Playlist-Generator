@@ -1,8 +1,9 @@
 const fs = require('fs/promises');
 const path = require('path');
 const { DESTINATION_TYPES } = require('../destinationService');
+const { USER_DISPOSITIONS, STORAGE_STATES, normalizeUserDisposition, normalizeStorageState } = require('../orphans/orphanPolicy');
 
-const STATE_VERSION = 4;
+const STATE_VERSION = 5;
 
 function nowIso() {
   return new Date().toISOString();
@@ -77,6 +78,14 @@ function normalizeState(raw) {
     item.sourceActive = item.sourceActive !== false;
     item.orphaned = Boolean(item.orphaned || item.sourceActive === false);
     item.suppressed = Boolean(item.suppressed);
+    item.userDisposition = normalizeUserDisposition(item.userDisposition);
+    item.storageState = normalizeStorageState(item.storageState, item);
+    item.dispositionUpdatedAt = item.dispositionUpdatedAt || null;
+    item.quarantine = item.quarantine && typeof item.quarantine === 'object' ? item.quarantine : null;
+    if (item.userDisposition === USER_DISPOSITIONS.IGNORED && item.storageState === STORAGE_STATES.ACTIVE) {
+      // Legacy states never used ignored; this only protects malformed future state.
+      item.storageState = item.targetPath ? STORAGE_STATES.ACTIVE : STORAGE_STATES.ABSENT;
+    }
     item.subtitles = normalizeSubtitleState(item.subtitles);
     normalized.items[id] = item;
   }

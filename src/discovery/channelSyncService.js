@@ -94,6 +94,8 @@ function summarizeDestination(destination) {
     orphaned: 0,
     readMode: null,
     quotaUnitsUsed: 0,
+    authoritative: true,
+    partialReasons: [],
     failed: false,
     error: null
   };
@@ -109,7 +111,12 @@ async function processDestination(config, destination, summary, options = {}) {
     entry.videosDuplicate = (result.duplicates || []).length;
     entry.readMode = result.readMode || 'ytdlp';
     entry.quotaUnitsUsed = Number(result.quotaUnitsUsed) || 0;
-    const queue = await downloadManager.reconcileDestination(config, destination, result.videos || []);
+    entry.authoritative = result.authoritative !== false;
+    entry.partialReasons = result.partialReasons || [];
+    const queue = await downloadManager.reconcileDestination(config, destination, result.videos || [], {
+      authoritative: entry.authoritative,
+      partialReasons: entry.partialReasons
+    });
     entry.downloadsQueued = queue.queued;
     entry.alreadyCompleted = queue.alreadyCompleted;
     entry.alreadyKnown = queue.alreadyKnown;

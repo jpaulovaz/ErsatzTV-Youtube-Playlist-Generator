@@ -2,6 +2,7 @@ const path = require('path');
 const { sanitizeName, isDangerousBaseDir } = require('./utils');
 const { DEFAULT_SUBTITLE_LANGUAGES, normalizeSubtitleLanguages } = require('./subtitleService');
 const { MEDIA_PROFILES, normalizeMediaProfile } = require('./mediaProfileService');
+const { normalizeOrphanPolicy, normalizeRetentionDays, ORPHAN_POLICIES } = require('./orphans/orphanPolicy');
 
 const CHANNEL_SOURCE_KINDS = Object.freeze(['uploads', 'videos', 'shorts', 'streams']);
 const CHANNEL_SOURCE_SET = new Set(CHANNEL_SOURCE_KINDS);
@@ -35,7 +36,7 @@ function normalizeSubtitles(rawValue, options = {}) {
   };
 }
 
-function normalizeChannelPlaylist(rawPlaylist, allowedHeights) {
+function normalizeChannelPlaylist(rawPlaylist, allowedHeights, options = {}) {
   const playlist = rawPlaylist && typeof rawPlaylist === 'object' ? rawPlaylist : {};
   const playlistId = String(playlist.playlistId || '').trim();
   const name = String(playlist.name || '').trim();
@@ -52,7 +53,9 @@ function normalizeChannelPlaylist(rawPlaylist, allowedHeights) {
     channelName: String(playlist.channelName || '').trim(),
     maxHeight: normalizeOptionalMaxHeight(playlist.maxHeight, allowedHeights),
     cookiesPath: String(playlist.cookiesPath || '').trim(),
-    subtitles: normalizeSubtitles(playlist.subtitles)
+    subtitles: normalizeSubtitles(playlist.subtitles),
+    orphanPolicy: normalizeOrphanPolicy(playlist.orphanPolicy, options.legacyOrphanPolicy || null),
+    quarantineRetentionDays: normalizeRetentionDays(playlist.quarantineRetentionDays, null)
   };
 }
 
@@ -67,14 +70,14 @@ function normalizeGlobalSources(rawGlobal) {
   };
 }
 
-function normalizeChannel(rawChannel, allowedHeights) {
+function normalizeChannel(rawChannel, allowedHeights, options = {}) {
   const channel = rawChannel && typeof rawChannel === 'object' ? rawChannel : {};
   const channelId = String(channel.channelId || '').trim();
   const name = String(channel.name || '').trim();
   const handle = String(channel.handle || '').trim();
   const folderName = sanitizeName(String(channel.folderName || name || handle || channelId).trim());
   const playlists = Array.isArray(channel.playlists)
-    ? channel.playlists.map((item) => normalizeChannelPlaylist(item, allowedHeights)).filter((item) => item.playlistId && item.name && item.folderName)
+    ? channel.playlists.map((item) => normalizeChannelPlaylist(item, allowedHeights, options)).filter((item) => item.playlistId && item.name && item.folderName)
     : [];
 
   return {
@@ -91,9 +94,9 @@ function normalizeChannel(rawChannel, allowedHeights) {
   };
 }
 
-function normalizeChannels(rawChannels, allowedHeights) {
+function normalizeChannels(rawChannels, allowedHeights, options = {}) {
   return (Array.isArray(rawChannels) ? rawChannels : [])
-    .map((channel) => normalizeChannel(channel, allowedHeights))
+    .map((channel) => normalizeChannel(channel, allowedHeights, options))
     .filter((channel) => channel.channelId && channel.name && channel.folderName);
 }
 
@@ -135,6 +138,12 @@ function validateChannels(config) {
       playlistFolders.set(playlistFolderKey, playlist.name);
       if (playlist.subtitles && playlist.subtitles.enabled && playlist.subtitles.languages.length === 0) {
         throw new Error(`A playlist "${playlist.name}" esta com legendas ativas, mas sem idioma selecionado.`);
+      }
+      if (!normalizeOrphanPolicy(playlist.orphanPolicy, null)) {
+        throw new Error(`Selecione como tratar arquivos orfaos na playlist "${playlist.name}".`);
+      }
+      if (playlist.orphanPolicy === ORPHAN_POLICIES.QUARANTINE && playlist.quarantineRetentionDays !== null && ![30, 90, 180].includes(Number(playlist.quarantineRetentionDays))) {
+        throw new Error(`Retencao de quarentena invalida na playlist "${playlist.name}".`);
       }
     }
   }

@@ -3,10 +3,13 @@ const path = require('path');
 const { libraryDestination } = require('./destinationService');
 const { getXmlTagText, normalizeMediaProfile, MEDIA_PROFILES } = require('./mediaProfileService');
 const { normalizeDateOnly } = require('./releaseMetadataUtils');
+const { USER_DISPOSITIONS, STORAGE_STATES } = require('./orphans/orphanPolicy');
+const { quarantineThumbnailPath } = require('./orphans/quarantineService');
 
 const DEFAULT_PAGE_SIZE = 60;
 const MAX_PAGE_SIZE = 120;
 const STATE_PAGE_SIZE = 500;
+const CONTENT_VIEWS = new Set(['content', 'orphans', 'quarantine', 'ignored']);
 
 function decodeXmlEntities(value) {
   return String(value || '')
@@ -40,8 +43,32 @@ function normalizeBrowserPath(value) {
   return parts.join('/');
 }
 
+function normalizeContentView(value) {
+  const normalized = String(value || 'content').trim().toLowerCase();
+  return CONTENT_VIEWS.has(normalized) ? normalized : 'content';
+}
+
 function isStoredItem(item) {
   return Boolean(item && item.targetPath && (item.status === 'completed' || item.mediaPath || Number(item.fileSizeBytes) > 0));
+}
+
+function isActiveContentItem(item) {
+  return Boolean(
+    item
+    && (item.userDisposition || USER_DISPOSITIONS.MANAGED) !== USER_DISPOSITIONS.IGNORED
+    && (item.storageState || STORAGE_STATES.ACTIVE) === STORAGE_STATES.ACTIVE
+    && isStoredItem(item)
+  );
+}
+
+function matchesView(item, view) {
+  const disposition = item.userDisposition || USER_DISPOSITIONS.MANAGED;
+  const storage = item.storageState || (isStoredItem(item) ? STORAGE_STATES.ACTIVE : STORAGE_STATES.ABSENT);
+  if (view === 'content') return isActiveContentItem(item);
+  if (view === 'orphans') return item.sourceActive === false && disposition === USER_DISPOSITIONS.MANAGED && storage === STORAGE_STATES.ACTIVE;
+  if (view === 'quarantine') return storage === STORAGE_STATES.QUARANTINED && disposition !== USER_DISPOSITIONS.IGNORED;
+  if (view === 'ignored') return disposition === USER_DISPOSITIONS.IGNORED;
+  return false;
 }
 
 function stateSort(a, b) {
@@ -64,16 +91,14 @@ function metadataSort(a, b) {
   return String(a.title || a.videoId || '').localeCompare(String(b.title || b.videoId || ''), 'pt-BR', { sensitivity: 'base' });
 }
 
-function getAllLibraryItems(downloadManager, libraryFolder) {
+function getAllDestinationItems(downloadManager, destinationId) {
+  if (downloadManager && typeof downloadManager.getDestinationItems === 'function') {
+    return downloadManager.getDestinationItems(destinationId).map((item) => ({ ...item }));
+  }
   const items = [];
   let offset = 0;
   while (true) {
-    const page = downloadManager.getItemsPage({
-      library: libraryFolder,
-      status: 'all',
-      offset,
-      limit: STATE_PAGE_SIZE
-    });
+    const page = downloadManager.getItemsPage({ library: destinationId, status: 'all', offset, limit: STATE_PAGE_SIZE });
     items.push(...(page.items || []));
     if (!page.hasMore || !page.items || page.items.length === 0) break;
     offset += page.items.length;
@@ -101,16 +126,31 @@ function stateReleaseDate(item) {
 function subtitleSummary(item) {
   const raw = item && item.subtitles && typeof item.subtitles === 'object' ? item.subtitles : {};
   const languages = Array.isArray(raw.foundLanguages) ? raw.foundLanguages.map((value) => String(value || '').trim()).filter(Boolean) : [];
-  return {
-    status: String(raw.status || '').trim(),
-    languages
-  };
+  return { status: String(raw.status || '').trim(), languages };
 }
 
-async function resolveMetadata(entry, destination, nfoCache = null) {
+function relativeFromState(item, destination) {
+  const active = safeRelativeFile(destination.rootPath, item.targetPath);
+  if (active) return active;
+  const original = item.quarantine && item.quarantine.originalPaths && item.quarantine.originalPaths.targetPath;
+  return safeRelativeFile(destination.rootPath, original) || '';
+}
+
+function stateLabel(item) {
+  const disposition = item.userDisposition || USER_DISPOSITIONS.MANAGED;
+  const storage = item.storageState || STORAGE_STATES.ACTIVE;
+  if (disposition === USER_DISPOSITIONS.IGNORED) return storage === STORAGE_STATES.QUARANTINED ? 'Ignorado · recuperável' : 'Ignorado';
+  if (disposition === USER_DISPOSITIONS.KEEP && item.sourceActive === false) return 'Mantido fora da fonte';
+  if (storage === STORAGE_STATES.QUARANTINED) return 'Quarentena';
+  if (item.sourceActive === false) return 'Órfão';
+  return 'Ativo';
+}
+
+async function resolveMetadata(entry, destination, nfoCache = null, options = {}) {
   const item = entry.item;
   const profile = normalizeMediaProfile(item.mediaProfile || destination.mediaProfile);
-  const nfo = await readTextIfSafe(destination.rootPath, item.nfoPath, nfoCache);
+  const canReadActiveNfo = (item.storageState || STORAGE_STATES.ACTIVE) === STORAGE_STATES.ACTIVE;
+  const nfo = canReadActiveNfo ? await readTextIfSafe(destination.rootPath, item.nfoPath, nfoCache) : '';
   const nfoTitle = decodeXmlEntities(getXmlTagText(nfo, 'title'));
   const nfoOutline = decodeXmlEntities(getXmlTagText(nfo, 'outline'));
   const nfoPremiere = normalizeDateOnly(getXmlTagText(nfo, 'premiered'));
@@ -124,44 +164,29 @@ async function resolveMetadata(entry, destination, nfoCache = null) {
   let metadataSource = 'state';
 
   if (profile === MEDIA_PROFILES.MUSIC_CLIPS) {
-    if (nfoTitle) {
-      title = nfoTitle;
-      metadataSource = 'nfo';
-    }
+    if (nfoTitle) { title = nfoTitle; metadataSource = 'nfo'; }
     const season = Number(getXmlTagText(nfo, 'season'));
     const episode = Number(getXmlTagText(nfo, 'episode'));
     if (Number.isInteger(season) && season >= 0) seasonNumber = season;
     if (Number.isInteger(episode) && episode >= 0) episodeNumber = episode;
     if (nfoAired) releaseDate = nfoAired;
-    const showNfo = await readTextIfSafe(destination.rootPath, item.showNfoPath, nfoCache);
+    const showNfo = canReadActiveNfo ? await readTextIfSafe(destination.rootPath, item.showNfoPath, nfoCache) : '';
     const showTitle = decodeXmlEntities(getXmlTagText(showNfo, 'title'));
-    if (showTitle) {
-      artist = showTitle;
-      metadataSource = 'nfo';
-    }
+    if (showTitle) { artist = showTitle; metadataSource = 'nfo'; }
   } else if (profile === MEDIA_PROFILES.MOVIE) {
-    if (nfoOutline) {
-      title = nfoOutline;
-      metadataSource = 'nfo';
-    } else if (nfoTitle && !artist) {
-      title = nfoTitle;
-      metadataSource = 'nfo';
-    }
-    if (nfoTitle) {
-      artist = nfoTitle;
-      metadataSource = 'nfo';
-    }
+    if (nfoOutline) { title = nfoOutline; metadataSource = 'nfo'; }
+    else if (nfoTitle && !artist) { title = nfoTitle; metadataSource = 'nfo'; }
+    if (nfoTitle) { artist = nfoTitle; metadataSource = 'nfo'; }
     if (nfoPremiere) releaseDate = nfoPremiere;
     else if (nfoYear) releaseDate = nfoYear;
   } else {
-    if (nfoTitle) {
-      title = nfoTitle;
-      metadataSource = 'nfo';
-    }
+    if (nfoTitle) { title = nfoTitle; metadataSource = 'nfo'; }
     if (nfoPremiere) releaseDate = nfoPremiere;
     else if (nfoYear) releaseDate = nfoYear;
   }
 
+  const quarantineThumb = quarantineThumbnailPath(item);
+  const activeThumb = item.thumbnailPath && safeRelativeFile(destination.rootPath, item.thumbnailPath) ? item.thumbnailPath : '';
   return {
     id: item.id,
     videoId: String(item.videoId || '').trim(),
@@ -176,10 +201,19 @@ async function resolveMetadata(entry, destination, nfoCache = null) {
     relativeDirectory: entry.directory,
     mediaProfile: profile,
     mediaLayout: String(item.mediaLayout || '').trim(),
-    orphaned: Boolean(item.orphaned),
-    hasThumbnail: Boolean(item.thumbnailPath && safeRelativeFile(destination.rootPath, item.thumbnailPath)),
+    sourceActive: item.sourceActive !== false,
+    orphaned: Boolean(item.orphaned || item.sourceActive === false),
+    userDisposition: item.userDisposition || USER_DISPOSITIONS.MANAGED,
+    storageState: item.storageState || STORAGE_STATES.ACTIVE,
+    orphanedAt: item.orphanedAt || null,
+    quarantineMovedAt: item.quarantine && item.quarantine.movedAt || null,
+    quarantineExpiresAt: item.quarantine && item.quarantine.expiresAt || null,
+    quarantineReason: item.quarantine && item.quarantine.reason || '',
+    stateLabel: stateLabel(item),
+    hasThumbnail: Boolean(activeThumb || quarantineThumb),
     subtitles: subtitleSummary(item),
-    metadataSource
+    metadataSource,
+    selectable: options.view === 'quarantine' || options.view === 'ignored'
   };
 }
 
@@ -198,12 +232,11 @@ async function mapLimit(values, limit, worker) {
   return result;
 }
 
-function buildEntries(downloadManager, destination) {
-  return getAllLibraryItems(downloadManager, destination.id)
-    .filter(isStoredItem)
+function buildEntries(downloadManager, destination, view = 'content') {
+  return getAllDestinationItems(downloadManager, destination.id)
+    .filter((item) => matchesView(item, view))
     .map((item) => {
-      const relativeFile = safeRelativeFile(destination.rootPath, item.targetPath);
-      if (!relativeFile) return null;
+      const relativeFile = relativeFromState(item, destination) || String(item.title || item.videoId || 'Video');
       const directory = relativeFile.includes('/') ? relativeFile.slice(0, relativeFile.lastIndexOf('/')) : '';
       return { item, relativeFile, directory };
     })
@@ -214,31 +247,17 @@ function directoryListing(entries, currentPath) {
   const directories = new Map();
   const direct = [];
   const prefix = currentPath ? `${currentPath}/` : '';
-
   for (const entry of entries) {
-    if (currentPath) {
-      if (entry.directory !== currentPath && !entry.directory.startsWith(prefix)) continue;
-    }
+    if (currentPath && entry.directory !== currentPath && !entry.directory.startsWith(prefix)) continue;
     const remainder = currentPath ? entry.directory.slice(prefix.length) : entry.directory;
-    if (!remainder) {
-      direct.push(entry);
-      continue;
-    }
+    if (!remainder) { direct.push(entry); continue; }
     const childName = remainder.split('/')[0];
     const childPath = currentPath ? `${currentPath}/${childName}` : childName;
-    const current = directories.get(childPath) || {
-      name: childName,
-      path: childPath,
-      totalVideos: 0,
-      posterItemId: ''
-    };
+    const current = directories.get(childPath) || { name: childName, path: childPath, totalVideos: 0, posterItemId: '' };
     current.totalVideos += 1;
-    if (!currentPath && !current.posterItemId && entry.item.showPosterPath) {
-      current.posterItemId = entry.item.id;
-    }
+    if (!currentPath && !current.posterItemId && entry.item.showPosterPath) current.posterItemId = entry.item.id;
     directories.set(childPath, current);
   }
-
   return {
     directories: [...directories.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })),
     direct: direct.sort(stateSort)
@@ -250,40 +269,45 @@ function breadcrumbsFor(currentPath) {
   return parts.map((name, index) => ({ name, path: parts.slice(0, index + 1).join('/') }));
 }
 
-async function listLibraryContent({ config, playlist, downloadManager, browserPath = '', query = '', offset = 0, limit = DEFAULT_PAGE_SIZE }) {
-  const destination = libraryDestination(config, playlist);
+function specialCounts(items) {
+  return items.reduce((acc, item) => {
+    if (matchesView(item, 'orphans')) acc.orphans += 1;
+    if (matchesView(item, 'quarantine')) acc.quarantine += 1;
+    if (matchesView(item, 'ignored')) acc.ignored += 1;
+    return acc;
+  }, { orphans: 0, quarantine: 0, ignored: 0 });
+}
+
+async function listDestinationContent({ destination, downloadManager, browserPath = '', query = '', offset = 0, limit = DEFAULT_PAGE_SIZE, view = 'content' }) {
   if (!destination) {
-    const error = new Error('Biblioteca invalida.');
+    const error = new Error('Destino invalido.');
     error.statusCode = 404;
     throw error;
   }
-
-  const currentPath = normalizeBrowserPath(browserPath);
+  const selectedView = normalizeContentView(view);
+  const currentPath = selectedView === 'content' ? normalizeBrowserPath(browserPath) : '';
   const q = String(query || '').trim().toLocaleLowerCase('pt-BR');
   const safeOffset = Math.max(0, Math.floor(Number(offset) || 0));
   const safeLimit = Math.max(1, Math.min(Number(limit) || DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE));
-  const entries = buildEntries(downloadManager, destination);
+  const allItems = getAllDestinationItems(downloadManager, destination.id);
+  const entries = buildEntries(downloadManager, destination, selectedView);
   let directories = [];
   let metadata = [];
   const nfoCache = new Map();
   let total = 0;
 
-  if (q) {
-    const allMetadata = await mapLimit(entries, 16, (entry) => resolveMetadata(entry, destination, nfoCache));
-    const matches = allMetadata.filter((item) => {
+  if (selectedView !== 'content' || q) {
+    const allMetadata = await mapLimit(entries, 16, (entry) => resolveMetadata(entry, destination, nfoCache, { view: selectedView }));
+    const matches = q ? allMetadata.filter((item) => {
       const haystack = [
-        item.title,
-        item.artist,
-        item.videoId,
-        item.relativeFile,
+        item.title, item.artist, item.videoId, item.relativeFile, item.stateLabel,
         item.seasonNumber != null ? `s${String(item.seasonNumber).padStart(2, '0')}` : '',
         item.episodeNumber != null ? `e${String(item.episodeNumber).padStart(2, '0')}` : '',
-        item.seasonNumber != null && item.episodeNumber != null
-          ? `s${String(item.seasonNumber).padStart(2, '0')}e${String(item.episodeNumber).padStart(2, '0')}`
-          : ''
+        item.seasonNumber != null && item.episodeNumber != null ? `s${String(item.seasonNumber).padStart(2, '0')}e${String(item.episodeNumber).padStart(2, '0')}` : ''
       ].join(' ').toLocaleLowerCase('pt-BR');
       return haystack.includes(q);
-    }).sort(metadataSort);
+    }) : allMetadata;
+    matches.sort(metadataSort);
     total = matches.length;
     metadata = matches.slice(safeOffset, safeOffset + safeLimit);
   } else {
@@ -291,42 +315,38 @@ async function listLibraryContent({ config, playlist, downloadManager, browserPa
     directories = listing.directories;
     total = listing.direct.length;
     const pageEntries = listing.direct.slice(safeOffset, safeOffset + safeLimit);
-    metadata = await mapLimit(pageEntries, 12, (entry) => resolveMetadata(entry, destination, nfoCache));
+    metadata = await mapLimit(pageEntries, 12, (entry) => resolveMetadata(entry, destination, nfoCache, { view: selectedView }));
   }
 
   return {
     library: {
-      name: String(playlist.name || destination.displayName || destination.id),
+      name: String(destination.displayName || destination.name || destination.id),
       folderName: destination.id,
       mediaProfile: destination.mediaProfile,
-      totalVideos: entries.length
+      totalVideos: buildEntries(downloadManager, destination, 'content').length,
+      specialCounts: specialCounts(allItems)
     },
+    view: selectedView,
     path: currentPath,
     breadcrumbs: breadcrumbsFor(currentPath),
     query: String(query || '').trim(),
     directories,
     items: metadata,
-    pagination: {
-      total,
-      offset: safeOffset,
-      limit: safeLimit,
-      hasMore: safeOffset + metadata.length < total
-    }
+    pagination: { total, offset: safeOffset, limit: safeLimit, hasMore: safeOffset + metadata.length < total }
   };
 }
 
-async function getLibraryThumbnail({ config, playlist, downloadManager, itemId }) {
+async function listLibraryContent({ config, playlist, downloadManager, ...options }) {
   const destination = libraryDestination(config, playlist);
-  if (!destination) return null;
-  const id = String(itemId || '').trim();
-  if (!id) return null;
-  const item = getAllLibraryItems(downloadManager, destination.id).find((entry) => entry.id === id);
-  if (!item || !isStoredItem(item) || !item.thumbnailPath) return null;
-  if (!safeRelativeFile(destination.rootPath, item.thumbnailPath)) return null;
+  return listDestinationContent({ destination, downloadManager, ...options });
+}
+
+async function readImage(filePath) {
+  if (!filePath) return null;
   try {
-    const content = await fs.readFile(item.thumbnailPath);
+    const content = await fs.readFile(filePath);
     if (!content.length) return null;
-    const ext = path.extname(item.thumbnailPath).toLowerCase();
+    const ext = path.extname(filePath).toLowerCase();
     const contentType = ext === '.png' ? 'image/png' : (ext === '.webp' ? 'image/webp' : 'image/jpeg');
     return { content, contentType };
   } catch (error) {
@@ -335,34 +355,55 @@ async function getLibraryThumbnail({ config, playlist, downloadManager, itemId }
   }
 }
 
-async function getLibraryFolderPoster({ config, playlist, downloadManager, itemId }) {
-  const destination = libraryDestination(config, playlist);
+async function getDestinationThumbnail({ destination, downloadManager, itemId }) {
   if (!destination) return null;
   const id = String(itemId || '').trim();
   if (!id) return null;
-  const item = getAllLibraryItems(downloadManager, destination.id).find((entry) => entry.id === id);
-  if (!item || !isStoredItem(item) || !item.showPosterPath) return null;
-  if (!safeRelativeFile(destination.rootPath, item.showPosterPath)) return null;
-  try {
-    const content = await fs.readFile(item.showPosterPath);
-    if (!content.length) return null;
-    const ext = path.extname(item.showPosterPath).toLowerCase();
-    const contentType = ext === '.png' ? 'image/png' : (ext === '.webp' ? 'image/webp' : 'image/jpeg');
-    return { content, contentType };
-  } catch (error) {
-    if (error.code === 'ENOENT' || error.code === 'EACCES') return null;
-    throw error;
+  const item = getAllDestinationItems(downloadManager, destination.id).find((entry) => entry.id === id);
+  if (!item) return null;
+  if ((item.storageState || STORAGE_STATES.ACTIVE) === STORAGE_STATES.QUARANTINED) {
+    const candidate = quarantineThumbnailPath(item);
+    const quarantineRoot = item.quarantine && item.quarantine.rootPath;
+    if (!candidate || !quarantineRoot || !safeRelativeFile(quarantineRoot, candidate)) return null;
+    return readImage(candidate);
   }
+  if (!item.thumbnailPath || !safeRelativeFile(destination.rootPath, item.thumbnailPath)) return null;
+  return readImage(item.thumbnailPath);
+}
+
+async function getDestinationFolderPoster({ destination, downloadManager, itemId }) {
+  if (!destination) return null;
+  const id = String(itemId || '').trim();
+  if (!id) return null;
+  const item = getAllDestinationItems(downloadManager, destination.id).find((entry) => entry.id === id);
+  if (!item || !isActiveContentItem(item) || !item.showPosterPath) return null;
+  if (!safeRelativeFile(destination.rootPath, item.showPosterPath)) return null;
+  return readImage(item.showPosterPath);
+}
+
+async function getLibraryThumbnail({ config, playlist, downloadManager, itemId }) {
+  return getDestinationThumbnail({ destination: libraryDestination(config, playlist), downloadManager, itemId });
+}
+
+async function getLibraryFolderPoster({ config, playlist, downloadManager, itemId }) {
+  return getDestinationFolderPoster({ destination: libraryDestination(config, playlist), downloadManager, itemId });
 }
 
 module.exports = {
   DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
+  CONTENT_VIEWS,
   decodeXmlEntities,
   safeRelativeFile,
   normalizeBrowserPath,
+  normalizeContentView,
   isStoredItem,
+  isActiveContentItem,
+  matchesView,
+  listDestinationContent,
   listLibraryContent,
+  getDestinationThumbnail,
+  getDestinationFolderPoster,
   getLibraryThumbnail,
   getLibraryFolderPoster
 };

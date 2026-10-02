@@ -12,7 +12,6 @@ const {
   buildMovieNfo,
   buildTvShowNfo,
   buildEpisodeNfo,
-  patchNfoReleaseMetadataContent,
   getEpisodeNfoSequenceMetadata,
   patchMusicClipEpisodeSequenceContent
 } = require('../src/mediaProfileService');
@@ -127,39 +126,6 @@ test('new NFOs include YouTube release dates without changing existing profile m
   });
   assert.match(episode, /<aired>2023-06-09<\/aired>/);
 });
-
-test('temporary NFO migration adds only missing date fields and preserves manual edits byte-for-byte otherwise', () => {
-  const original = [
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-    '<episodedetails>',
-    '  <title>Meu título corrigido manualmente</title>',
-    '  <plot>Descrição que não veio do YouTube</plot>',
-    '  <genre>Especial</genre>',
-    '</episodedetails>',
-    ''
-  ].join('\n');
-  const result = patchNfoReleaseMetadataContent(original, 'music_clips', { releaseDate: '2025-06-12' });
-  assert.equal(result.changed, true);
-  assert.deepEqual(result.added, ['aired']);
-  assert.match(result.content, /<aired>2025-06-12<\/aired>/);
-  assert.equal(result.content.replace('  <aired>2025-06-12</aired>\n', ''), original);
-});
-
-test('temporary NFO migration never overwrites an existing manual release date', () => {
-  const original = [
-    '<movie>',
-    '  <title>Filme corrigido</title>',
-    '  <premiered>1999-01-02</premiered>',
-    '  <plot>Texto manual</plot>',
-    '</movie>',
-    ''
-  ].join('\n');
-  const result = patchNfoReleaseMetadataContent(original, 'movie', { releaseDate: '2025-06-12', year: 2025 });
-  assert.equal(result.changed, false);
-  assert.equal(result.content, original);
-  assert.doesNotMatch(result.content, /<year>2025<\/year>/);
-});
-
 
 test('music clip sequence patch changes only season and episode while preserving the rest of the NFO', () => {
   const original = [

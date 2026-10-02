@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.5.0
+
+- Bibliotecas e Playlists selecionadas em Canais ganham a política **Arquivos órfãos** com três modos: **Excluir automaticamente**, **Marcar como órfão** e **Mover para quarentena recuperável**.
+- Destinos existentes são migrados para **Marcar como órfão**, preservando o comportamento da v3.4.17; destinos novos exigem escolha explícita antes de salvar.
+- O modo de quarentena oferece retenção **Nunca / 30 / 90 / 180 dias** e move MP4, NFO, artwork e SRTs como um pacote para fora da raiz ativa do ErsatzTV. Movimentos usam rename no mesmo filesystem e fallback copy/validação/delete em `EXDEV`, sem sobrescrever conflitos de restauração.
+- A reconciliação passa a distinguir descoberta **autoritativa** de resultado parcial. Timeout, saída parcial do yt-dlp, `ERROR:` em stderr, fonte/paginação incompleta ou falha em uma das fontes de um destino multi-fonte nunca podem inferir ausência, excluir ou mover conteúdo naquele ciclo.
+- O estado persistente separa presença na fonte, intenção do usuário e armazenamento por meio de `sourceActive`, `userDisposition` (`managed`/`keep`/`ignored`) e `storageState` (`active`/`quarantined`/`absent`). `suppressed` continua reservado ao comportamento da fila.
+- **Ver conteúdo** deixa de ser somente leitura e passa a oferecer visões **Conteúdo**, **Órfãos**, **Quarentena** e **Ignorados**, com ações contextuais como **Excluir e ignorar**, **Reativar**, **Restaurar e manter**, **Enviar para quarentena** e **Excluir definitivamente**.
+- Itens ignorados mantêm um tombstone lógico mesmo depois de os bytes da quarentena expirarem, impedindo redownload até **Reativar**. Se reativados fora da fonte, podem voltar como `keep`; quando um item `keep` reaparece na fonte, retorna automaticamente a `managed`.
+- **Limpar órfãos** passa para o grupo Conteúdo e só aparece em política `mark` quando existem órfãos; **Recuperar órfãos** só aparece em política `quarantine` quando há itens recuperáveis.
+- Playlists de Canal reutilizam o mesmo gerenciador **Ver conteúdo** e os mesmos serviços internos; fontes globais do Canal permanecem fora da política configurável nesta versão.
+- Clipes musicais preservam `tvshow.nfo`/`poster.jpg` enquanto ainda houver episódio ativo/mantido. Restaurações tratam colisões de `SxxExx` com caminho temporário seguro e resequenciamento cronológico posterior.
+- A ação temporária **Atualizar datas e episódios** é removida da interface, rota e código de migração. `releaseDateService` e o resequenciamento normal de Clipes continuam no pipeline de descoberta/download e nas restaurações.
+- `configVersion` sobe para **9** e o estado persistente para **5**. Universal permanece **v1.3.1** e o schema de Scripted Schedules permanece **1**.
+
 ## 3.4.17
 
 - **Título customizado** nos Scripted Schedules ganha a opção **Agrupar itens no EPG usando este título**.

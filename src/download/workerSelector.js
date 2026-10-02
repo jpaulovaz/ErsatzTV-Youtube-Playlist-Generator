@@ -1,10 +1,19 @@
 const { getSubtitleSettings } = require('../subtitleService');
+const { USER_DISPOSITIONS, STORAGE_STATES } = require('../orphans/orphanPolicy');
+
+function isRunnableByDisposition(item) {
+  const disposition = item.userDisposition || USER_DISPOSITIONS.MANAGED;
+  if (disposition === USER_DISPOSITIONS.IGNORED) return false;
+  if (item.storageState === STORAGE_STATES.QUARANTINED) return false;
+  if (disposition === USER_DISPOSITIONS.KEEP) return true;
+  return item.sourceActive !== false && !item.orphaned;
+}
 
 function findNextRunnableItem(state, destinations, nowMs = Date.now()) {
   const enabled = new Set(destinations.filter((destination) => destination.enabled !== false).map((destination) => destination.id));
   const candidates = Object.values(state.items || {}).filter((item) => {
     if (item.status !== 'pending') return false;
-    if (item.sourceActive === false || item.orphaned) return false;
+    if (!isRunnableByDisposition(item)) return false;
     if (!enabled.has(item.destinationId || item.libraryFolder)) return false;
     if (item.nextAttemptAt && new Date(item.nextAttemptAt).getTime() > nowMs) return false;
     return true;
@@ -20,7 +29,10 @@ function findNextRunnableItem(state, destinations, nowMs = Date.now()) {
 function findNextSubtitleRunnableItem(state, destinations, nowMs = Date.now()) {
   const configured = new Map(destinations.map((destination) => [destination.id, destination]));
   const candidates = Object.values(state.items || {}).filter((item) => {
-    if (item.status !== 'completed' || item.orphaned || item.sourceActive === false) return false;
+    if (item.status !== 'completed') return false;
+    if (item.storageState && item.storageState !== STORAGE_STATES.ACTIVE) return false;
+    if ((item.userDisposition || USER_DISPOSITIONS.MANAGED) === USER_DISPOSITIONS.IGNORED) return false;
+    if ((item.userDisposition || USER_DISPOSITIONS.MANAGED) !== USER_DISPOSITIONS.KEEP && (item.orphaned || item.sourceActive === false)) return false;
     const destination = configured.get(item.destinationId || item.libraryFolder);
     if (!destination || !getSubtitleSettings(destination).enabled) return false;
     const subtitleState = item.subtitles || {};
@@ -36,4 +48,4 @@ function findNextSubtitleRunnableItem(state, destinations, nowMs = Date.now()) {
   return candidates[0] || null;
 }
 
-module.exports = { findNextRunnableItem, findNextSubtitleRunnableItem };
+module.exports = { findNextRunnableItem, findNextSubtitleRunnableItem, isRunnableByDisposition };

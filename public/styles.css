@@ -1999,3 +1999,10 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
   .library-content-grid { grid-template-columns: minmax(0, 1fr); }
   .library-content-folder-poster { flex-basis: 56px; }
 }
+.library-content-toolbar > label:not(.library-content-search) { min-width: 170px; }
+.library-content-batch-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.library-content-card { position: relative; }
+.library-content-card.is-selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-border); }
+.library-content-select { position: absolute; top: 7px; left: 7px; z-index: 3; display: grid; place-items: center; width: 28px; height: 28px; margin: 0; border: 1px solid var(--line); border-radius: 8px; background: rgba(4, 10, 19, .9); }
+.library-content-select input { margin: 0; }
+.library-content-details .library-actions { margin-top: 13px; }

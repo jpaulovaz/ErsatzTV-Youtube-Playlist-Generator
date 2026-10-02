@@ -31,7 +31,6 @@ const {
   writeMovieNfo,
   writeTvShowNfo,
   writeEpisodeNfo,
-  patchNfoReleaseMetadata,
   getEpisodeNfoSequenceMetadata,
   patchMusicClipEpisodeSequence
 } = require('./mediaProfileService');
@@ -40,6 +39,20 @@ const {
   releaseMetadataFromVideo,
   mergeReleaseMetadata
 } = require('./releaseMetadataUtils');
+const {
+  ORPHAN_POLICIES,
+  USER_DISPOSITIONS,
+  STORAGE_STATES,
+  normalizeOrphanPolicy
+} = require('./orphans/orphanPolicy');
+const {
+  moveItemToQuarantine,
+  restoreItemFromQuarantine,
+  deleteQuarantinedFiles,
+  deleteActivePackage,
+  getQuarantineRoot
+} = require('./orphans/quarantineService');
+const { sweepExpiredQuarantine } = require('./orphans/orphanMaintenance');
 const { fetchReleaseMetadataForItems } = require('./releaseDateService');
 const {
   sanitizeName,
@@ -57,6 +70,7 @@ const TICK_INTERVAL_MS = 1000;
 const PROGRESS_SAVE_DELAY_MS = 1500;
 const STORAGE_REFRESH_MS = 30000;
 const RETRY_IDLE_ACTION_MS = 5 * 60 * 1000;
+const ORPHAN_MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -64,6 +78,19 @@ function clone(value) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function addSpecialItemStats(stats, item) {
+  const disposition = item.userDisposition || USER_DISPOSITIONS.MANAGED;
+  const storage = item.storageState || (item.targetPath ? STORAGE_STATES.ACTIVE : STORAGE_STATES.ABSENT);
+  if (disposition === USER_DISPOSITIONS.IGNORED) stats.ignored = (stats.ignored || 0) + 1;
+  if (storage === STORAGE_STATES.QUARANTINED && disposition !== USER_DISPOSITIONS.IGNORED) stats.quarantined = (stats.quarantined || 0) + 1;
+  if (item.sourceActive === false && disposition === USER_DISPOSITIONS.KEEP && storage === STORAGE_STATES.ACTIVE) {
+    stats.keptOutsideSource = (stats.keptOutsideSource || 0) + 1;
+  }
+  if (item.sourceActive === false && disposition === USER_DISPOSITIONS.MANAGED && storage === STORAGE_STATES.ACTIVE && item.status !== 'orphaned') {
+    stats.orphaned = (stats.orphaned || 0) + 1;
+  }
 }
 
 function makeItemId(destinationId, videoId) {
@@ -444,6 +471,7 @@ class DownloadManager {
     this.idleSinceMs = null;
     this.idleActionRunning = false;
     this.nextIdleActionAtMs = 0;
+    this.lastOrphanMaintenanceAtMs = 0;
   }
 
   async init(config) {
@@ -465,6 +493,7 @@ class DownloadManager {
 
     this.configure(config);
     this.initialized = true;
+    await this.runOrphanMaintenance({ force: true });
     await this.saveNow();
   }
 
@@ -538,6 +567,8 @@ class DownloadManager {
         this.saveSoon();
       }
 
+      await this.runOrphanMaintenance();
+
       const nextItem = this.findNextRunnableItem();
       if (nextItem) {
         this.idleSinceMs = null;
@@ -578,6 +609,47 @@ class DownloadManager {
     const item = selectNextSubtitleRunnableItem(this.state, getAllDestinations(this.config, { includeDisabled: true }));
     if (item) item.subtitles = normalizeSubtitleState(item.subtitles);
     return item;
+  }
+
+  getDestinationItems(destinationId) {
+    const id = String(destinationId || '').trim();
+    return Object.values(this.state.items).filter((item) => (item.destinationId || item.libraryFolder) === id);
+  }
+
+  async runOrphanMaintenance(options = {}) {
+    const now = Date.now();
+    if (!options.force && now - this.lastOrphanMaintenanceAtMs < ORPHAN_MAINTENANCE_INTERVAL_MS) {
+      return { skipped: true };
+    }
+    this.lastOrphanMaintenanceAtMs = now;
+    const summary = await sweepExpiredQuarantine(this.state);
+    if (summary.expired > 0 || summary.recordsRemoved > 0) {
+      await logger.info('Manutencao da quarentena concluida.', summary);
+      await this.saveNow();
+    }
+    return summary;
+  }
+
+  async probeVideoAvailable(item) {
+    const url = String(item && (item.url || (item.videoId ? `https://www.youtube.com/watch?v=${item.videoId}` : '')) || '').trim();
+    if (!url) return { ok: false, error: 'URL do video nao esta disponivel no estado.' };
+    const source = findPlaylistByFolder(this.config, item.destinationId || item.libraryFolder);
+    const cookiesPath = getEffectiveCookiesPath(this.config, source);
+    const args = [];
+    const runtimeArg = getJsRuntimeArg(this.config);
+    const ejsComponents = runtimeArg ? String(this.config.downloads && this.config.downloads.ejsComponents || '').trim() : '';
+    if (runtimeArg) args.push('--js-runtimes', runtimeArg);
+    if (ejsComponents && ejsComponents !== 'none') args.push('--remote-components', ejsComponents);
+    if (cookiesPath) args.push('--cookies', cookiesPath);
+    if (this.config.downloads && this.config.downloads.userAgent) args.push('--add-header', `User-Agent: ${this.config.downloads.userAgent}`);
+    args.push('--skip-download', '--no-playlist', '--print', '%(id)s', url);
+    try {
+      const result = await runCommand(this.config.paths.ytDlpPath, args, { timeoutMs: 60 * 1000 });
+      if (result.code === 0 && String(result.stdout || '').trim()) return { ok: true };
+      return { ok: false, error: String(result.stderr || '').trim() || `yt-dlp terminou com codigo ${result.code}` };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
   }
 
   async scheduleSubtitlesForItem(item, playlist, options = {}) {
@@ -1059,11 +1131,14 @@ class DownloadManager {
       await this.validateMedia(compatibleMedia);
       if (await this.applyInterruption(item, context)) return;
       await this.finalizeDownload(item, compatibleMedia, workDir);
-      try {
-        await this.scheduleSubtitlesForItem(item, playlist, { resetAttempts: true });
-        await this.saveNow();
-      } catch (error) {
-        await logger.warn(`Video concluido, mas a preparacao das legendas falhou: ${item.title} (${item.videoId}): ${error.message}`);
+      const deferredOrphanAction = await this.applyDeferredOrphanPolicy(item, playlist);
+      if (!deferredOrphanAction.applied) {
+        try {
+          await this.scheduleSubtitlesForItem(item, playlist, { resetAttempts: true });
+          await this.saveNow();
+        } catch (error) {
+          await logger.warn(`Video concluido, mas a preparacao das legendas falhou: ${item.title} (${item.videoId}): ${error.message}`);
+        }
       }
       await logger.info(`Download concluido: ${item.title} (${item.videoId})`, {
         playlist: item.libraryFolder,
@@ -1444,6 +1519,7 @@ class DownloadManager {
     item.completedAt = nowIso();
     item.updatedAt = item.completedAt;
     item.mediaPath = item.targetPath;
+    item.storageState = STORAGE_STATES.ACTIVE;
     item.fileSizeBytes = stats.size;
     item.nextAttemptAt = null;
     item.lastError = null;
@@ -1483,6 +1559,7 @@ class DownloadManager {
     item.status = 'completed';
     item.phase = null;
     item.mediaPath = item.targetPath;
+    item.storageState = STORAGE_STATES.ACTIVE;
     item.fileSizeBytes = stats.size;
     item.completedAt = item.completedAt || nowIso();
     item.updatedAt = nowIso();
@@ -1687,9 +1764,14 @@ class DownloadManager {
 
     const candidates = Object.values(this.state.items).filter((item) => {
       if (!item || (item.destinationId || item.libraryFolder) !== destinationId) return false;
+      const disposition = item.userDisposition || USER_DISPOSITIONS.MANAGED;
+      const storage = item.storageState || (item.targetPath ? STORAGE_STATES.ACTIVE : STORAGE_STATES.ABSENT);
+      if (disposition === USER_DISPOSITIONS.IGNORED) return false;
+      if (storage === STORAGE_STATES.QUARANTINED) return false;
       if (item.status === 'removed' && item.suppressed) return false;
-      if (item.status === 'completed') return true;
-      return item.sourceActive !== false && item.status !== 'orphaned';
+      if (disposition === USER_DISPOSITIONS.KEEP) return storage === STORAGE_STATES.ACTIVE;
+      if (item.sourceActive !== false) return item.status !== 'orphaned';
+      return storage === STORAGE_STATES.ACTIVE && item.status === 'completed';
     });
     if (candidates.length === 0) return summary;
 
@@ -1931,7 +2013,7 @@ class DownloadManager {
     };
   }
 
-  async reconcileDestination(config, destinationInput, videos) {
+  async reconcileDestination(config, destinationInput, videos, reconcileOptions = {}) {
     await this.init(config);
     this.configure(config);
     const destination = destinationInput && destinationInput.id && destinationInput.rootPath
@@ -1940,17 +2022,26 @@ class DownloadManager {
     if (!destination || !destination.id || !destination.rootPath) throw new Error('Destino invalido.');
 
     const destinationId = destination.id;
+    const authoritative = reconcileOptions.authoritative !== false;
+    const partialReasons = Array.isArray(reconcileOptions.partialReasons) ? reconcileOptions.partialReasons : [];
     const discoveredIds = new Set();
     const summary = {
       destinationId,
       destinationType: destination.type,
       library: destination.folderName,
+      authoritative,
+      partialReasons,
       discovered: 0,
       queued: 0,
       alreadyCompleted: 0,
       alreadyKnown: 0,
       reactivated: 0,
+      restoredFromQuarantine: 0,
+      restoreFailed: 0,
       orphaned: 0,
+      quarantined: 0,
+      deleted: 0,
+      destructiveDeferred: 0,
       skipped: 0
     };
 
@@ -1980,8 +2071,8 @@ class DownloadManager {
         thumbnailUrl: String(video.thumbnailUrl || video.thumbnail || existing && existing.thumbnailUrl || '').trim(),
         channelTitle: String(video.channelTitle || existing && existing.channelTitle || '').trim(),
         url: String(video.webpage_url || video.url || `https://www.youtube.com/watch?v=${videoId}`).trim(),
-        sourceUrl: String(video.sourceUrl || '').trim(),
-        sourceIndex: Number.isFinite(Number(video.sourceIndex)) ? Number(video.sourceIndex) : null,
+        sourceUrl: String(video.sourceUrl || existing && existing.sourceUrl || '').trim(),
+        sourceIndex: Number.isFinite(Number(video.sourceIndex)) ? Number(video.sourceIndex) : (existing && existing.sourceIndex != null ? existing.sourceIndex : null),
         sourceKind: String(video.sourceKind || destination.sourceKind || '').trim(),
         maxHeight: getEffectiveMaxHeight(config, destination)
       };
@@ -1999,8 +2090,8 @@ class DownloadManager {
       };
 
       if (existing) {
+        const wasSourceActive = existing.sourceActive !== false;
         const wasOrphaned = existing.orphaned || existing.sourceActive === false || existing.status === 'orphaned';
-        const previousPathExists = Boolean(existing.targetPath && await pathExists(existing.targetPath));
         Object.assign(existing, metadata, destinationFields, {
           sourceActive: true,
           orphaned: false,
@@ -2008,13 +2099,52 @@ class DownloadManager {
           lastSeenAt: nowIso(),
           updatedAt: nowIso()
         });
+        delete existing.orphanPolicyPending;
+        existing.userDisposition = existing.userDisposition || USER_DISPOSITIONS.MANAGED;
+        existing.storageState = existing.storageState || (existing.targetPath && await pathExists(existing.targetPath) ? STORAGE_STATES.ACTIVE : STORAGE_STATES.ABSENT);
 
-        if (!previousPathExists && !(existing.status === 'removed' && existing.suppressed)) {
-          Object.assign(existing, this.chooseTargetPaths(destination, video, id));
+        if (existing.userDisposition === USER_DISPOSITIONS.IGNORED) {
+          summary.alreadyKnown += 1;
+          continue;
         }
 
-        if (existing.status === 'completed' && existing.targetPath && !(await pathExists(existing.targetPath))) {
+        if (existing.userDisposition === USER_DISPOSITIONS.KEEP) {
+          existing.userDisposition = USER_DISPOSITIONS.MANAGED;
+          existing.dispositionUpdatedAt = nowIso();
+        }
+
+        if (existing.status === 'removed' && existing.suppressed) {
+          summary.alreadyKnown += 1;
+          continue;
+        }
+
+        if (existing.storageState === STORAGE_STATES.QUARANTINED && existing.quarantine) {
+          try {
+            await restoreItemFromQuarantine(existing, destination, Object.values(this.state.items));
+            existing.status = 'completed';
+            existing.suppressed = false;
+            existing.attempts = 0;
+            existing.nextAttemptAt = null;
+            existing.phase = null;
+            summary.restoredFromQuarantine += 1;
+            summary.reactivated += 1;
+            this.ensureLibraryState(destinationId).dirty = true;
+          } catch (error) {
+            summary.restoreFailed += 1;
+            existing.lastError = `Falha ao restaurar automaticamente da quarentena: ${error.message}`;
+            await logger.warn(`${existing.lastError} (${existing.videoId})`);
+          }
+          continue;
+        }
+
+        const pathExistsNow = Boolean(existing.targetPath && await pathExists(existing.targetPath));
+        if (pathExistsNow) existing.storageState = STORAGE_STATES.ACTIVE;
+        else if (existing.storageState === STORAGE_STATES.ACTIVE) existing.storageState = STORAGE_STATES.ABSENT;
+
+        if (!pathExistsNow && !(existing.status === 'removed' && existing.suppressed)) {
+          Object.assign(existing, this.chooseTargetPaths(destination, video, id));
           existing.status = 'pending';
+          existing.storageState = STORAGE_STATES.ABSENT;
           existing.mediaPath = null;
           existing.fileSizeBytes = 0;
           existing.attempts = 0;
@@ -2022,19 +2152,18 @@ class DownloadManager {
           existing.phase = null;
           summary.reactivated += 1;
         } else if (existing.status === 'orphaned' || (existing.status === 'removed' && !existing.suppressed)) {
-          existing.status = existing.targetPath && await pathExists(existing.targetPath) ? 'completed' : 'pending';
+          existing.status = pathExistsNow ? 'completed' : 'pending';
           existing.suppressed = false;
           existing.attempts = 0;
           existing.nextAttemptAt = null;
           existing.phase = null;
           summary.reactivated += 1;
-        } else if (existing.status === 'removed' && existing.suppressed) {
-          summary.alreadyKnown += 1;
         } else if (existing.status === 'completed') {
           summary.alreadyCompleted += 1;
+          if (!wasSourceActive || wasOrphaned) summary.reactivated += 1;
         } else {
           summary.alreadyKnown += 1;
-          if (wasOrphaned) summary.reactivated += 1;
+          if (!wasSourceActive || wasOrphaned) summary.reactivated += 1;
         }
         continue;
       }
@@ -2053,6 +2182,10 @@ class DownloadManager {
         sourceActive: true,
         orphaned: false,
         orphanedAt: null,
+        userDisposition: USER_DISPOSITIONS.MANAGED,
+        storageState: exists ? STORAGE_STATES.ACTIVE : STORAGE_STATES.ABSENT,
+        dispositionUpdatedAt: null,
+        quarantine: null,
         queueOrder: this.state.nextSequence++,
         priority: 0,
         attempts: 0,
@@ -2071,20 +2204,82 @@ class DownloadManager {
       else summary.queued += 1;
     }
 
-    for (const item of Object.values(this.state.items)) {
-      if ((item.destinationId || item.libraryFolder) !== destinationId || discoveredIds.has(item.videoId)) continue;
-      if (item.sourceActive === false && item.orphaned) continue;
+    if (!authoritative) {
+      await logger.warn(`Descoberta parcial em ${destination.displayName}; acoes de orfaos foram preservadas.`, { partialReasons });
+    } else {
+      const entries = Object.entries(this.state.items);
+      for (const [id, item] of entries) {
+        if ((item.destinationId || item.libraryFolder) !== destinationId || discoveredIds.has(item.videoId)) continue;
 
-      item.sourceActive = false;
-      item.orphaned = true;
-      item.orphanedAt = nowIso();
-      item.updatedAt = item.orphanedAt;
-      const keepSuppressedRemoval = item.status === 'removed' && item.suppressed;
-      if (!keepSuppressedRemoval && ['pending', 'failed', 'cancelled', 'removed'].includes(item.status)) {
-        item.status = 'orphaned';
-        item.nextAttemptAt = null;
+        const wasSourceActive = item.sourceActive !== false;
+        item.sourceActive = false;
+        item.updatedAt = nowIso();
+        item.userDisposition = item.userDisposition || USER_DISPOSITIONS.MANAGED;
+        item.storageState = item.storageState || (item.targetPath && await pathExists(item.targetPath) ? STORAGE_STATES.ACTIVE : STORAGE_STATES.ABSENT);
+
+        if (item.userDisposition === USER_DISPOSITIONS.IGNORED) {
+          item.orphaned = false;
+          item.orphanedAt = null;
+          continue;
+        }
+        if (item.userDisposition === USER_DISPOSITIONS.KEEP) {
+          item.orphaned = true;
+          item.orphanedAt = item.orphanedAt || nowIso();
+          continue;
+        }
+
+        item.orphaned = true;
+        item.orphanedAt = item.orphanedAt || nowIso();
+        if (wasSourceActive) summary.orphaned += 1;
+
+        // A quarantine requested explicitly by the user has precedence over the
+        // automatic orphan policy until it is restored, expires or is deleted.
+        if (item.storageState === STORAGE_STATES.QUARANTINED && item.quarantine && item.quarantine.reason === 'manual') {
+          continue;
+        }
+
+        const policy = normalizeOrphanPolicy(destination.orphanPolicy, ORPHAN_POLICIES.MARK);
+        const isCurrent = Boolean(this.current && this.current.itemId === id);
+        if (isCurrent && policy !== ORPHAN_POLICIES.MARK) {
+          item.orphanPolicyPending = policy;
+          summary.destructiveDeferred += 1;
+          continue;
+        }
+
+        if (policy === ORPHAN_POLICIES.DELETE) {
+          if (item.storageState === STORAGE_STATES.QUARANTINED) await deleteQuarantinedFiles(item);
+          else if (item.storageState === STORAGE_STATES.ACTIVE) await deleteActivePackage(item, destination, Object.values(this.state.items));
+          await fs.rm(this.getWorkDir(item), { recursive: true, force: true });
+          delete this.state.items[id];
+          summary.deleted += 1;
+          this.ensureLibraryState(destinationId).dirty = true;
+          continue;
+        }
+
+        if (policy === ORPHAN_POLICIES.QUARANTINE) {
+          if (item.storageState === STORAGE_STATES.ACTIVE && item.targetPath && await pathExists(item.targetPath)) {
+            await moveItemToQuarantine(item, destination, Object.values(this.state.items), {
+              reason: 'orphan',
+              retentionDays: destination.quarantineRetentionDays
+            });
+            item.status = 'orphaned';
+            item.mediaPath = null;
+            summary.quarantined += 1;
+            this.ensureLibraryState(destinationId).dirty = true;
+          } else if (item.storageState === STORAGE_STATES.ABSENT) {
+            await fs.rm(this.getWorkDir(item), { recursive: true, force: true });
+            delete this.state.items[id];
+            summary.deleted += 1;
+          }
+          continue;
+        }
+
+        const keepSuppressedRemoval = item.status === 'removed' && item.suppressed;
+        if (!keepSuppressedRemoval && ['pending', 'failed', 'cancelled', 'removed'].includes(item.status)) {
+          item.status = 'orphaned';
+          item.nextAttemptAt = null;
+        }
       }
-      summary.orphaned += 1;
     }
 
     if (getMediaProfileSettings(destination).musicClips) {
@@ -2105,14 +2300,15 @@ class DownloadManager {
     const destinationState = this.ensureLibraryState(destinationId);
     destinationState.lastDiscoveryAt = nowIso();
     destinationState.lastDiscoverySummary = summary;
+    await this.runOrphanMaintenance({ force: true });
     await this.saveNow();
     this.kick();
     return summary;
   }
 
-  async reconcileLibrary(config, playlistInput, videos) {
+  async reconcileLibrary(config, playlistInput, videos, reconcileOptions = {}) {
     const destination = libraryDestination(config, normalizePlaylist(playlistInput));
-    return this.reconcileDestination(config, destination, videos);
+    return this.reconcileDestination(config, destination, videos, reconcileOptions);
   }
 
   async pause(reason = 'Fila pausada pelo usuario.') {
@@ -2305,6 +2501,9 @@ class DownloadManager {
       failed: 0,
       cancelled: 0,
       orphaned: 0,
+      quarantined: 0,
+      ignored: 0,
+      keptOutsideSource: 0,
       removed: 0
     };
     let totalBytes = 0;
@@ -2316,7 +2515,7 @@ class DownloadManager {
 
     for (const item of items) {
       if (counts[item.status] !== undefined) counts[item.status] += 1;
-      if (item.orphaned && item.status === 'completed') counts.orphaned += 1;
+      addSpecialItemStats(counts, item);
       totalBytes += Number(item.fileSizeBytes) || 0;
 
       if (item.status === 'pending' || item.status === 'downloading') {
@@ -2440,6 +2639,9 @@ class DownloadManager {
         failed: 0,
         cancelled: 0,
         orphaned: 0,
+        quarantined: 0,
+        ignored: 0,
+        keptOutsideSource: 0,
         removed: 0,
         totalBytes: 0,
         lastDiscoveryAt: null,
@@ -2458,7 +2660,7 @@ class DownloadManager {
         if (item.libraryFolder !== playlist.folderName) continue;
         stats.total += 1;
         if (stats[item.status] !== undefined) stats[item.status] += 1;
-        if (item.orphaned && item.status === 'completed') stats.orphaned += 1;
+        addSpecialItemStats(stats, item);
         stats.totalBytes += Number(item.fileSizeBytes) || 0;
         if (item.subtitles && item.status === 'completed') {
           if (['pending', 'checking'].includes(item.subtitles.status)) stats.subtitlePending += 1;
@@ -2496,6 +2698,9 @@ class DownloadManager {
       failed: 0,
       cancelled: 0,
       orphaned: 0,
+      quarantined: 0,
+      ignored: 0,
+      keptOutsideSource: 0,
       removed: 0,
       totalBytes: 0,
       lastDiscoveryAt: null,
@@ -2513,7 +2718,7 @@ class DownloadManager {
       if ((item.destinationId || item.libraryFolder) !== destination.id) continue;
       stats.total += 1;
       if (stats[item.status] !== undefined) stats[item.status] += 1;
-      if (item.orphaned && item.status === 'completed') stats.orphaned += 1;
+      addSpecialItemStats(stats, item);
       stats.totalBytes += Number(item.fileSizeBytes) || 0;
       if (item.subtitles && item.status === 'completed') {
         if (['pending', 'checking'].includes(item.subtitles.status)) stats.subtitlePending += 1;
@@ -2543,7 +2748,17 @@ class DownloadManager {
 
   previewOrphans(libraryFolder) {
     const folder = resolveDestinationId(this.config, libraryFolder);
-    const items = Object.values(this.state.items).filter((item) => item.libraryFolder === folder && item.orphaned);
+    const destination = findDestinationById(this.config, folder, { includeDisabled: true });
+    if (!destination) throw this.notFoundError();
+    if (normalizeOrphanPolicy(destination.orphanPolicy, ORPHAN_POLICIES.MARK) !== ORPHAN_POLICIES.MARK) {
+      throw new Error('A limpeza manual de orfaos so esta disponivel na politica Marcar como orfao.');
+    }
+    const items = Object.values(this.state.items).filter((item) => (
+      (item.destinationId || item.libraryFolder) === folder &&
+      item.sourceActive === false &&
+      (item.userDisposition || USER_DISPOSITIONS.MANAGED) === USER_DISPOSITIONS.MANAGED &&
+      (item.storageState || STORAGE_STATES.ACTIVE) === STORAGE_STATES.ACTIVE
+    ));
     return {
       playlist: folder,
       count: items.length,
@@ -2553,7 +2768,6 @@ class DownloadManager {
         id: item.id,
         title: item.title,
         status: item.status,
-        targetPath: item.targetPath,
         fileSizeBytes: item.fileSizeBytes || 0
       }))
     };
@@ -2561,193 +2775,275 @@ class DownloadManager {
 
   async cleanupOrphans(libraryFolder) {
     const folder = resolveDestinationId(this.config, libraryFolder);
-    if (this.current && this.state.items[this.current.itemId] && this.state.items[this.current.itemId].libraryFolder === folder && this.state.items[this.current.itemId].orphaned) {
+    const destination = findDestinationById(this.config, folder, { includeDisabled: true });
+    if (!destination) throw this.notFoundError();
+    if (normalizeOrphanPolicy(destination.orphanPolicy, ORPHAN_POLICIES.MARK) !== ORPHAN_POLICIES.MARK) {
+      throw new Error('A limpeza manual de orfaos so esta disponivel na politica Marcar como orfao.');
+    }
+
+    const candidates = this.getDestinationItems(folder).filter((item) => (
+      item.sourceActive === false &&
+      (item.userDisposition || USER_DISPOSITIONS.MANAGED) === USER_DISPOSITIONS.MANAGED &&
+      (item.storageState || STORAGE_STATES.ACTIVE) === STORAGE_STATES.ACTIVE
+    ));
+    if (this.current && candidates.some((item) => item.id === this.current.itemId)) {
       throw new Error('Existe um item orfao em download. Cancele-o antes da limpeza.');
     }
 
-    const summary = { playlist: folder, itemsRemoved: 0, videosRemoved: 0, thumbnailsRemoved: 0, subtitlesRemoved: 0, nfoRemoved: 0, showMetadataRemoved: 0, bytesRemoved: 0 };
-    const idsToDelete = [];
-    const showDirsToReview = new Set();
-    for (const [id, item] of Object.entries(this.state.items)) {
-      if (item.libraryFolder !== folder || !item.orphaned) continue;
-      if (item.targetPath && await pathExists(item.targetPath)) {
-        const stats = await fs.stat(item.targetPath);
-        await fs.rm(item.targetPath, { force: true });
-        summary.videosRemoved += 1;
-        summary.bytesRemoved += stats.size;
-      }
-      if (item.thumbnailPath && await pathExists(item.thumbnailPath)) {
-        await fs.rm(item.thumbnailPath, { force: true });
-        summary.thumbnailsRemoved += 1;
-      }
-      if (item.targetPath) {
-        for (const subtitlePath of await listSubtitleSidecars(item.targetPath)) {
-          await fs.rm(subtitlePath, { force: true });
-          summary.subtitlesRemoved += 1;
-        }
-      }
-      if (item.nfoPath && await pathExists(item.nfoPath)) {
-        await fs.rm(item.nfoPath, { force: true });
-        summary.nfoRemoved += 1;
-      }
-      if (item.mediaLayout === 'show-season') {
-        const showDir = item.showNfoPath
-          ? path.dirname(item.showNfoPath)
-          : (item.targetPath ? path.dirname(path.dirname(item.targetPath)) : null);
-        if (showDir) showDirsToReview.add(path.resolve(showDir));
-      }
+    const summary = { playlist: folder, itemsRemoved: 0, filesRemoved: 0, bytesRemoved: 0 };
+    for (const item of candidates) {
+      const removed = await deleteActivePackage(item, destination, Object.values(this.state.items));
       await fs.rm(this.getWorkDir(item), { recursive: true, force: true });
-      idsToDelete.push(id);
       summary.itemsRemoved += 1;
-    }
-    for (const id of idsToDelete) delete this.state.items[id];
-
-    for (const showDir of showDirsToReview) {
-      const hasRemainingEpisode = Object.values(this.state.items).some((item) => (
-        item.libraryFolder === folder &&
-        item.targetPath &&
-        isPathInside(showDir, item.targetPath)
-      ));
-      if (hasRemainingEpisode) continue;
-      for (const showFile of ['tvshow.nfo', 'poster.jpg']) {
-        const filePath = path.join(showDir, showFile);
-        if (await pathExists(filePath)) {
-          await fs.rm(filePath, { force: true });
-          summary.showMetadataRemoved += 1;
-        }
-      }
+      summary.filesRemoved += removed.filesRemoved;
+      summary.bytesRemoved += removed.bytesRemoved;
+      delete this.state.items[item.id];
     }
 
-    const destination = findPlaylistByFolder(this.config, folder);
-    const playlistDir = destination && destination.rootPath ? destination.rootPath : path.join(this.config.paths.baseDir, folder);
     if (this.config.cleanup.removeEmptyArtistFolders) {
-      await removeEmptyDirectories(playlistDir, playlistDir, logger);
+      await removeEmptyDirectories(destination.rootPath, destination.rootPath, logger);
     }
     const libraryState = this.ensureLibraryState(folder);
-    libraryState.dirty = true;
+    libraryState.dirty = candidates.length > 0 || libraryState.dirty;
     await this.saveNow();
     this.kick();
     return summary;
   }
 
-  async refreshReleaseDates(libraryFolder) {
-    const folder = resolveDestinationId(this.config, libraryFolder);
-    const destination = findPlaylistByFolder(this.config, folder);
-    if (!destination) throw new Error('Biblioteca nao encontrada para atualizar datas.');
-    if (this.current || this.currentPromise) {
-      throw new Error('Aguarde o download ou a legenda em andamento terminar (ou pause a fila e espere o item atual concluir) antes de atualizar datas e episodios.');
-    }
 
-    const items = Object.values(this.state.items).filter((item) =>
-      (item.destinationId || item.libraryFolder) === folder && item.status === 'completed'
-    );
-    const summary = {
-      playlist: folder,
-      checked: items.length,
-      metadataUpdated: 0,
-      nfoUpdated: 0,
-      nfoPreserved: 0,
-      episodesRenumbered: 0,
-      episodeNfoUpdated: 0,
-      filesRenamed: 0,
-      missingNfo: 0,
-      missingDate: 0,
-      failed: 0,
-      apiFetched: 0,
-      apiCached: 0,
-      ytDlpFetched: 0,
-      scan: null
-    };
 
-    const needsFetch = items.filter((item) => !normalizeDateOnly(item.releaseDate || item.publishedAt || item.uploadDate));
-    let fetched = { byVideoId: new Map(), failed: [], apiFetched: 0, apiCached: 0, ytDlpFetched: 0 };
-    if (needsFetch.length > 0) {
-      fetched = await fetchReleaseMetadataForItems(this.config, destination, needsFetch);
-      summary.apiFetched = fetched.apiFetched;
-      summary.apiCached = fetched.apiCached;
-      summary.ytDlpFetched = fetched.ytDlpFetched;
-    }
+  getContentActionItems(destinationId, itemIds) {
+    const destination = findDestinationById(this.config, destinationId, { includeDisabled: true });
+    if (!destination) throw this.notFoundError();
+    const requested = [...new Set((Array.isArray(itemIds) ? itemIds : [itemIds]).map((value) => String(value || '').trim()).filter(Boolean))];
+    if (requested.length === 0) throw new Error('Selecione pelo menos um item.');
+    const items = requested.map((id) => {
+      const item = this.state.items[id];
+      if (!item || (item.destinationId || item.libraryFolder) !== destination.id) throw this.notFoundError();
+      if (this.current && this.current.itemId === id) throw new Error('Aguarde/cancele o processamento atual deste item antes de altera-lo.');
+      return item;
+    });
+    return { destination, items };
+  }
+
+  async runContentAction(destinationId, action, itemIds) {
+    const { destination, items } = this.getContentActionItems(destinationId, itemIds);
+    const summary = { action, destinationId: destination.id, requested: items.length, changed: 0, restored: 0, quarantined: 0, deleted: 0, queued: 0 };
+    let resequenceNeeded = false;
 
     for (const item of items) {
-      const remote = fetched.byVideoId.get(String(item.videoId));
-      if (remote) {
-        const before = JSON.stringify({
-          publishedAt: item.publishedAt || null,
-          uploadDate: item.uploadDate || null,
-          releaseDate: item.releaseDate || null,
-          releaseDateSource: item.releaseDateSource || null,
-          year: item.year || null
-        });
-        Object.assign(item, mergeReleaseMetadata(item, remote));
-        const after = JSON.stringify({
-          publishedAt: item.publishedAt || null,
-          uploadDate: item.uploadDate || null,
-          releaseDate: item.releaseDate || null,
-          releaseDateSource: item.releaseDateSource || null,
-          year: item.year || null
-        });
-        if (before !== after) summary.metadataUpdated += 1;
-      }
+      item.userDisposition = item.userDisposition || USER_DISPOSITIONS.MANAGED;
+      item.storageState = item.storageState || (item.targetPath && await pathExists(item.targetPath) ? STORAGE_STATES.ACTIVE : STORAGE_STATES.ABSENT);
 
-      const releaseDate = normalizeDateOnly(item.releaseDate || item.publishedAt || item.uploadDate);
-      if (!releaseDate) {
-        summary.missingDate += 1;
-        continue;
-      }
-
-      const nfoPath = String(item.nfoPath || (item.targetPath ? item.targetPath.replace(/\.[^.]+$/, '.nfo') : '')).trim();
-      if (!nfoPath || !(await pathExists(nfoPath))) {
-        summary.missingNfo += 1;
-        continue;
-      }
-
-      try {
-        const profile = item.mediaProfile || getMediaProfileSettings(destination).profile;
-        const patch = await patchNfoReleaseMetadata(item, nfoPath, profile);
-        if (patch.changed) {
-          summary.nfoUpdated += 1;
-        } else {
-          summary.nfoPreserved += 1;
+      if (action === 'ignore') {
+        if (item.userDisposition === USER_DISPOSITIONS.IGNORED) continue;
+        if (item.storageState !== STORAGE_STATES.ACTIVE || !item.targetPath || !(await pathExists(item.targetPath))) {
+          throw new Error('Excluir e ignorar exige um arquivo ativo no acervo.');
         }
-        item.releaseMetadataUpdatedAt = nowIso();
-        item.updatedAt = item.releaseMetadataUpdatedAt;
-      } catch (error) {
-        summary.failed += 1;
-        await logger.warn(`Falha ao acrescentar data ao NFO de ${item.videoId}: ${error.message}`);
+        const retentionDays = destination.orphanPolicy === ORPHAN_POLICIES.QUARANTINE
+          ? destination.quarantineRetentionDays
+          : 30;
+        await moveItemToQuarantine(item, destination, Object.values(this.state.items), {
+          reason: 'manual-ignore',
+          retentionDays
+        });
+        item.userDisposition = USER_DISPOSITIONS.IGNORED;
+        item.dispositionUpdatedAt = nowIso();
+        item.orphaned = false;
+        item.orphanedAt = null;
+        item.status = 'removed';
+        item.suppressed = false;
+        item.nextAttemptAt = null;
+        item.updatedAt = nowIso();
+        summary.changed += 1;
+        summary.quarantined += 1;
+        resequenceNeeded = true;
+        continue;
       }
+
+      if (action === 'restore-keep') {
+        if (item.storageState !== STORAGE_STATES.QUARANTINED) throw new Error('O item selecionado nao esta na quarentena.');
+        await restoreItemFromQuarantine(item, destination, Object.values(this.state.items));
+        item.userDisposition = item.sourceActive === false ? USER_DISPOSITIONS.KEEP : USER_DISPOSITIONS.MANAGED;
+        item.dispositionUpdatedAt = nowIso();
+        item.orphaned = item.sourceActive === false;
+        item.orphanedAt = item.orphaned ? (item.orphanedAt || nowIso()) : null;
+        item.status = 'completed';
+        item.suppressed = false;
+        item.lastError = null;
+        item.updatedAt = nowIso();
+        summary.changed += 1;
+        summary.restored += 1;
+        resequenceNeeded = true;
+        continue;
+      }
+
+      if (action === 'quarantine') {
+        if (item.sourceActive !== false) throw new Error('Enviar para quarentena esta disponivel para itens mantidos fora da fonte.');
+        if (item.storageState !== STORAGE_STATES.ACTIVE) throw new Error('O item selecionado nao possui arquivo ativo para mover.');
+        const retentionDays = destination.orphanPolicy === ORPHAN_POLICIES.QUARANTINE
+          ? destination.quarantineRetentionDays
+          : 30;
+        await moveItemToQuarantine(item, destination, Object.values(this.state.items), {
+          reason: 'manual',
+          retentionDays
+        });
+        item.userDisposition = USER_DISPOSITIONS.MANAGED;
+        item.dispositionUpdatedAt = nowIso();
+        item.orphaned = true;
+        item.orphanedAt = item.orphanedAt || nowIso();
+        item.status = 'orphaned';
+        item.updatedAt = nowIso();
+        summary.changed += 1;
+        summary.quarantined += 1;
+        resequenceNeeded = true;
+        continue;
+      }
+
+      if (action === 'delete-permanently') {
+        if (item.storageState === STORAGE_STATES.QUARANTINED) {
+          await deleteQuarantinedFiles(item);
+        } else if (item.storageState === STORAGE_STATES.ACTIVE) {
+          await deleteActivePackage(item, destination, Object.values(this.state.items));
+        }
+        await fs.rm(this.getWorkDir(item), { recursive: true, force: true });
+        if (item.userDisposition === USER_DISPOSITIONS.IGNORED) {
+          item.storageState = STORAGE_STATES.ABSENT;
+          item.quarantine = null;
+          item.status = 'removed';
+          item.updatedAt = nowIso();
+        } else {
+          delete this.state.items[item.id];
+        }
+        summary.changed += 1;
+        summary.deleted += 1;
+        resequenceNeeded = true;
+        continue;
+      }
+
+      if (action === 'reactivate') {
+        if (item.userDisposition !== USER_DISPOSITIONS.IGNORED) throw new Error('Somente itens ignorados podem ser reativados por esta acao.');
+        if (item.storageState === STORAGE_STATES.QUARANTINED) {
+          await restoreItemFromQuarantine(item, destination, Object.values(this.state.items));
+          item.userDisposition = item.sourceActive === false ? USER_DISPOSITIONS.KEEP : USER_DISPOSITIONS.MANAGED;
+          item.dispositionUpdatedAt = nowIso();
+          item.orphaned = item.sourceActive === false;
+          item.orphanedAt = item.orphaned ? nowIso() : null;
+          item.status = 'completed';
+          item.suppressed = false;
+          item.lastError = null;
+          item.updatedAt = nowIso();
+          summary.restored += 1;
+          summary.changed += 1;
+          resequenceNeeded = true;
+          continue;
+        }
+
+        if (item.sourceActive === false) {
+          const probe = await this.probeVideoAvailable(item);
+          if (!probe.ok) throw new Error(`Nao foi possivel reativar ${item.title || item.videoId}: ${probe.error}`);
+        }
+        if (!item.targetPath) Object.assign(item, this.chooseTargetPaths(destination, { ...item, id: item.videoId, title: item.title }, item.id));
+        item.userDisposition = item.sourceActive === false ? USER_DISPOSITIONS.KEEP : USER_DISPOSITIONS.MANAGED;
+        item.dispositionUpdatedAt = nowIso();
+        item.storageState = STORAGE_STATES.ABSENT;
+        item.orphaned = item.sourceActive === false;
+        item.orphanedAt = item.orphaned ? nowIso() : null;
+        item.status = 'pending';
+        item.suppressed = false;
+        item.attempts = 0;
+        item.nextAttemptAt = null;
+        item.lastError = null;
+        item.phase = null;
+        item.updatedAt = nowIso();
+        summary.queued += 1;
+        summary.changed += 1;
+        continue;
+      }
+
+      throw new Error('Acao de conteudo nao suportada.');
     }
 
-    summary.failed += fetched.failed.filter((entry) => entry.videoId).length;
+    if (resequenceNeeded && getMediaProfileSettings(destination).musicClips) {
+      await this.resequenceMusicClipEpisodes(destination, { renameFiles: true, patchNfos: true, addMissingDate: false });
+    }
+    if (summary.changed > 0) this.ensureLibraryState(destination.id).dirty = true;
+    if (this.config.cleanup.removeEmptyArtistFolders) {
+      await removeEmptyDirectories(destination.rootPath, destination.rootPath, logger).catch(() => {});
+    }
+    await this.saveNow();
+    this.kick();
+    return summary;
+  }
 
-    if (getMediaProfileSettings(destination).musicClips) {
-      try {
-        const sequence = await this.resequenceMusicClipEpisodes(destination, {
-          renameFiles: true,
-          patchNfos: true,
-          addMissingDate: false
+  async applyDeferredOrphanPolicy(item, destinationInput) {
+    const rawPolicy = item && item.orphanPolicyPending;
+    if (!rawPolicy) return { applied: false };
+    delete item.orphanPolicyPending;
+
+    if (item.sourceActive !== false || (item.userDisposition || USER_DISPOSITIONS.MANAGED) !== USER_DISPOSITIONS.MANAGED) {
+      await this.saveNow();
+      return { applied: false };
+    }
+
+    const destination = destinationInput && destinationInput.id && destinationInput.rootPath
+      ? destinationInput
+      : findDestinationById(this.config, item.destinationId || item.libraryFolder, { includeDisabled: true });
+    if (!destination) {
+      await this.saveNow();
+      return { applied: false };
+    }
+
+    const policy = normalizeOrphanPolicy(rawPolicy, ORPHAN_POLICIES.MARK);
+    if (policy === ORPHAN_POLICIES.MARK) {
+      item.status = 'orphaned';
+      item.orphaned = true;
+      item.orphanedAt = item.orphanedAt || nowIso();
+      await this.saveNow();
+      return { applied: false };
+    }
+
+    item.orphaned = true;
+    item.orphanedAt = item.orphanedAt || nowIso();
+    if (policy === ORPHAN_POLICIES.DELETE) {
+      if (item.storageState === STORAGE_STATES.QUARANTINED) await deleteQuarantinedFiles(item);
+      else if (item.storageState === STORAGE_STATES.ACTIVE) await deleteActivePackage(item, destination, Object.values(this.state.items));
+      await fs.rm(this.getWorkDir(item), { recursive: true, force: true });
+      delete this.state.items[item.id];
+      this.ensureLibraryState(destination.id).dirty = true;
+      if (getMediaProfileSettings(destination).musicClips) {
+        await this.resequenceMusicClipEpisodes(destination, { renameFiles: true, patchNfos: true, addMissingDate: false });
+      }
+      await this.saveNow();
+      await logger.info(`Politica de orfao aplicada apos concluir download: arquivo excluido (${item.videoId}).`);
+      return { applied: true, action: 'delete' };
+    }
+
+    if (policy === ORPHAN_POLICIES.QUARANTINE) {
+      if (item.storageState === STORAGE_STATES.ACTIVE && item.targetPath && await pathExists(item.targetPath)) {
+        await moveItemToQuarantine(item, destination, Object.values(this.state.items), {
+          reason: 'orphan',
+          retentionDays: destination.quarantineRetentionDays
         });
-        summary.episodesRenumbered = sequence.itemsRenumbered;
-        summary.episodeNfoUpdated = sequence.nfoSequenceUpdated;
-        summary.filesRenamed = sequence.filesRenamed;
-      } catch (error) {
-        summary.failed += 1;
-        await logger.warn(`Falha ao renumerar episodios por data em ${folder}: ${error.message}`);
+        item.status = 'orphaned';
+        item.updatedAt = nowIso();
+        this.ensureLibraryState(destination.id).dirty = true;
+        if (getMediaProfileSettings(destination).musicClips) {
+          await this.resequenceMusicClipEpisodes(destination, { renameFiles: true, patchNfos: true, addMissingDate: false });
+        }
+        await this.saveNow();
+        await logger.info(`Politica de orfao aplicada apos concluir download: item movido para quarentena (${item.videoId}).`);
+        return { applied: true, action: 'quarantine' };
+      }
+      if (item.storageState === STORAGE_STATES.ABSENT) {
+        delete this.state.items[item.id];
+        await this.saveNow();
+        return { applied: true, action: 'delete' };
       }
     }
 
     await this.saveNow();
-
-    if ((summary.nfoUpdated > 0 || summary.episodeNfoUpdated > 0 || summary.filesRenamed > 0) && destination.libraryId) {
-      try {
-        summary.scan = await runLibraryAction(this.config, destination, 'scan');
-      } catch (error) {
-        summary.scan = { ok: false, statusText: error.message };
-        await logger.warn(`Metadados dos NFOs foram atualizados, mas o scan do ErsatzTV falhou para ${folder}: ${error.message}`);
-      }
-    }
-
-    await logger.info(`Atualizacao temporaria de datas e episodios concluida para ${folder}.`, summary);
-    return summary;
+    return { applied: false };
   }
 
   async refreshThumbnails(libraryFolder) {
@@ -2813,6 +3109,7 @@ class DownloadManager {
     delete this.state.libraries[destinationId];
 
     await fs.rm(destinationDir, { recursive: true, force: true });
+    await fs.rm(getQuarantineRoot(destination), { recursive: true, force: true }).catch(() => {});
     if (destination.workRootPath) await fs.rm(destination.workRootPath, { recursive: true, force: true });
     await this.saveNow();
     return { destinationId, itemsRemoved: ids.length, directoryRemoved: destinationDir };
@@ -2847,6 +3144,9 @@ class DownloadManager {
     }
 
     await fs.rm(channelRoot, { recursive: true, force: true });
+    for (const destination of getAllDestinations(config, { includeDisabled: true }).filter((entry) => entry.channelId === channelId)) {
+      await fs.rm(getQuarantineRoot(destination), { recursive: true, force: true }).catch(() => {});
+    }
     await fs.rm(path.join(config.paths.channelsBaseDir, '.youtube-downloader-work', channelId), { recursive: true, force: true });
     await this.saveNow();
     return { channelId, itemsRemoved: ids.length, directoryRemoved: channelRoot };

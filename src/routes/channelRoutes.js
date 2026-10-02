@@ -11,9 +11,11 @@ const {
   removePlaylistConfig,
   deletePlaylistWithFiles,
   removeChannelConfig,
-  deleteChannelWithFiles
+  deleteChannelWithFiles,
+  getPlaylistDestination
 } = require('../channelActionsService');
 const { findChannel } = require('../destinationService');
+const { listDestinationContent, getDestinationThumbnail, getDestinationFolderPoster } = require('../libraryContentService');
 
 function parseParts(pathname) {
   return pathname.split('/').filter(Boolean).map((part) => decodeURIComponent(part));
@@ -108,6 +110,40 @@ async function handleChannelRoutes(req, res, url, deps) {
 
   if (parts.length >= 5 && parts[3] === 'playlists') {
     const playlistId = parts[4];
+    if (req.method === 'GET' && parts.length === 6 && parts[5] === 'content') {
+      const { destination } = getPlaylistDestination(config, channelId, playlistId);
+      const result = await listDestinationContent({
+        destination,
+        downloadManager,
+        browserPath: url.searchParams.get('path'),
+        query: url.searchParams.get('q'),
+        offset: url.searchParams.get('offset'),
+        limit: url.searchParams.get('limit'),
+        view: url.searchParams.get('view')
+      });
+      deps.sendJson(res, 200, { ok: true, result });
+      return true;
+    }
+    if (req.method === 'GET' && parts.length === 6 && parts[5] === 'content-thumbnail') {
+      const { destination } = getPlaylistDestination(config, channelId, playlistId);
+      const thumbnail = await getDestinationThumbnail({ destination, downloadManager, itemId: url.searchParams.get('id') });
+      if (!thumbnail) {
+        deps.sendJson(res, 404, { ok: false, error: 'Thumbnail nao encontrada.' });
+        return true;
+      }
+      deps.sendBuffer(res, 200, thumbnail.content, thumbnail.contentType, { 'Cache-Control': 'private, max-age=60' });
+      return true;
+    }
+    if (req.method === 'GET' && parts.length === 6 && parts[5] === 'content-folder-poster') {
+      const { destination } = getPlaylistDestination(config, channelId, playlistId);
+      const poster = await getDestinationFolderPoster({ destination, downloadManager, itemId: url.searchParams.get('id') });
+      if (!poster) {
+        deps.sendJson(res, 404, { ok: false, error: 'Poster nao encontrado.' });
+        return true;
+      }
+      deps.sendBuffer(res, 200, poster.content, poster.contentType, { 'Cache-Control': 'private, max-age=60' });
+      return true;
+    }
     if (req.method === 'POST' && parts.length === 6 && parts[5] === 'run') {
       ensureIdle();
       runChannelPlaylist(config, channelId, playlistId, { trigger: 'manual-channel-playlist' })
@@ -130,6 +166,13 @@ async function handleChannelRoutes(req, res, url, deps) {
     }
     if (req.method === 'POST' && parts.length === 6) {
       const action = parts[5];
+      if (action === 'content-action') {
+        const payload = await deps.readJson(req);
+        const { destination } = getPlaylistDestination(config, channelId, playlistId);
+        const result = await downloadManager.runContentAction(destination.id, payload.action, payload.itemIds);
+        deps.sendJson(res, 200, { ok: true, result });
+        return true;
+      }
       const payload = action === 'orphans-cleanup' ? await deps.readJson(req) : {};
       const result = await runPlaylistAction(config, channelId, playlistId, action, payload);
       deps.sendJson(res, 200, { ok: true, result });

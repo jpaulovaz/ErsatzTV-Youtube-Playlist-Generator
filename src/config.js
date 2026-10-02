@@ -4,11 +4,12 @@ const { sanitizeName, isDangerousBaseDir } = require('./utils');
 const { DEFAULT_SUBTITLE_LANGUAGES, normalizeSubtitleLanguages } = require('./subtitleService');
 const { MEDIA_PROFILES, normalizeMediaProfile } = require('./mediaProfileService');
 const { normalizeChannels, validateChannels } = require('./channelConfig');
+const { normalizeOrphanPolicy, normalizeRetentionDays, ORPHAN_POLICIES } = require('./orphans/orphanPolicy');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const CONFIG_DIR = path.join(ROOT_DIR, 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
-const CONFIG_VERSION = 8;
+const CONFIG_VERSION = 9;
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const DEFAULT_MAX_HEIGHT = 1080;
@@ -263,6 +264,8 @@ function normalizeConfig(raw) {
   const rawScheduler = rawConfig.scheduler && typeof rawConfig.scheduler === 'object' ? rawConfig.scheduler : {};
   const rawChannelScheduler = rawConfig.channelScheduler && typeof rawConfig.channelScheduler === 'object' ? rawConfig.channelScheduler : {};
   const rawCleanup = rawConfig.cleanup && typeof rawConfig.cleanup === 'object' ? rawConfig.cleanup : {};
+  const sourceConfigVersion = Number(rawConfig.configVersion || 1);
+  const legacyOrphanPolicy = sourceConfigVersion < 9 ? ORPHAN_POLICIES.MARK : null;
 
   const legacyLibraryId = toOptionalPositiveInteger(rawErsatz.libraryId);
   const legacyChannelNumber = toOptionalPositiveInteger(rawErsatz.channelNumber);
@@ -301,7 +304,7 @@ function normalizeConfig(raw) {
       smartCollectionSelections: normalizeSmartCollectionSelections(rawErsatz.smartCollectionSelections)
     },
     playlists: [],
-    channels: normalizeChannels(rawConfig.channels, ALLOWED_MAX_HEIGHTS),
+    channels: normalizeChannels(rawConfig.channels, ALLOWED_MAX_HEIGHTS, { legacyOrphanPolicy }),
     scheduler: {
       enabled: Boolean(rawScheduler.enabled),
       intervalMinutes: Math.max(1, Number(rawScheduler.intervalMinutes) || DEFAULT_CONFIG.scheduler.intervalMinutes),
@@ -332,7 +335,9 @@ function normalizeConfig(raw) {
         cookiesPath: String(playlist && playlist.cookiesPath || '').trim(),
         maxHeight: normalizeOptionalMaxHeight(playlist && playlist.maxHeight),
         subtitles: normalizePlaylistSubtitles(playlist),
-        mediaProfile: normalizePlaylistMediaProfile(playlist)
+        mediaProfile: normalizePlaylistMediaProfile(playlist),
+        orphanPolicy: normalizeOrphanPolicy(playlist && playlist.orphanPolicy, legacyOrphanPolicy),
+        quarantineRetentionDays: normalizeRetentionDays(playlist && playlist.quarantineRetentionDays, null)
       };
     })
     .filter((playlist) => playlist.name && playlist.urls.length > 0);
@@ -373,6 +378,12 @@ function validateConfig(config) {
     seenFolders.set(folder, playlist.name);
     if (playlist.subtitles && playlist.subtitles.enabled && (!Array.isArray(playlist.subtitles.languages) || playlist.subtitles.languages.length === 0)) {
       throw new Error(`A biblioteca "${playlist.name}" esta com legendas ativas, mas nenhum idioma foi selecionado.`);
+    }
+    if (!normalizeOrphanPolicy(playlist.orphanPolicy, null)) {
+      throw new Error(`Selecione como tratar arquivos orfaos na biblioteca "${playlist.name}".`);
+    }
+    if (playlist.orphanPolicy === ORPHAN_POLICIES.QUARANTINE && playlist.quarantineRetentionDays !== null && ![30, 90, 180].includes(Number(playlist.quarantineRetentionDays))) {
+      throw new Error(`Retencao de quarentena invalida na biblioteca "${playlist.name}".`);
     }
   }
 

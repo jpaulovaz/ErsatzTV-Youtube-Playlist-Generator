@@ -1,5 +1,10 @@
 (function destinationFormModule(global) {
   const DEFAULT_LANGUAGES = ['pt-BR', 'pt', 'en', 'es'];
+  const ORPHAN_POLICY_LABELS = {
+    delete: 'Excluir automaticamente',
+    mark: 'Marcar como órfão',
+    quarantine: 'Mover para quarentena recuperável'
+  };
   const PROFILE_LABELS = {
     generic: 'Genérico',
     movie: 'Show / vídeo completo (Filmes)',
@@ -144,6 +149,8 @@
     const libraryId = entity && entity.libraryId || '';
     const currentChannelNumber = entity && entity.channelNumber || '';
     const currentChannelName = entity && entity.channelName || '';
+    const orphanPolicy = entity && entity.orphanPolicy || '';
+    const quarantineRetentionDays = entity && entity.quarantineRetentionDays == null ? '' : String(entity.quarantineRetentionDays);
 
     return `
       <div class="form-grid three destination-fields" data-destination-mode="${escapeHtml(mode)}">
@@ -178,6 +185,18 @@
             ${Object.entries(PROFILE_LABELS).map(([value, label]) => `<option value="${value}" ${mediaProfile === value ? 'selected' : ''}>${label}</option>`).join('')}
           </select>
         </label>
+        <label>Arquivos órfãos
+          <select data-field="orphanPolicy">
+            <option value="" ${orphanPolicy === '' ? 'selected' : ''}>Selecione...</option>
+            ${Object.entries(ORPHAN_POLICY_LABELS).map(([value, label]) => `<option value="${value}" ${orphanPolicy === value ? 'selected' : ''}>${label}</option>`).join('')}
+          </select>
+        </label>
+        <label class="${orphanPolicy === 'quarantine' ? '' : 'hidden'}" data-quarantine-retention>Retenção da quarentena
+          <select data-field="quarantineRetentionDays">
+            <option value="" ${quarantineRetentionDays === '' ? 'selected' : ''}>Nunca</option>
+            ${[30, 90, 180].map((days) => `<option value="${days}" ${quarantineRetentionDays === String(days) ? 'selected' : ''}>${days} dias</option>`).join('')}
+          </select>
+        </label>
         <label class="check-row"><input data-field="enabled" type="checkbox" ${enabled ? 'checked' : ''}><span>${escapeHtml(enabledLabel)}</span></label>
         <label class="wide">cookies.txt, opcional<input data-field="cookiesPath" type="text" value="${escapeHtml(entity && entity.cookiesPath || '')}" placeholder="Vazio usa a configuração global"></label>
         ${renderSubtitleSettings(entity && entity.subtitles)}
@@ -204,6 +223,8 @@
     if (read('cookiesPath')) result.cookiesPath = read('cookiesPath').value.trim();
     if (read('maxHeight')) result.maxHeight = numberOrNull(read('maxHeight').value);
     if (read('mediaProfile')) result.mediaProfile = read('mediaProfile').value;
+    if (read('orphanPolicy')) result.orphanPolicy = read('orphanPolicy').value;
+    if (read('quarantineRetentionDays')) result.quarantineRetentionDays = numberOrNull(read('quarantineRetentionDays').value);
     if (read('enabled')) result.enabled = read('enabled').checked;
     if (read('subtitlesEnabled')) {
       result.subtitles = {
@@ -229,6 +250,26 @@
       if (!checkbox.dataset.boundSubtitleToggle) {
         checkbox.addEventListener('change', apply);
         checkbox.dataset.boundSubtitleToggle = '1';
+      }
+      apply();
+    });
+  }
+
+
+  function syncOrphanControls(container) {
+    container.querySelectorAll('.destination-fields').forEach((fields) => {
+      const policy = fields.querySelector('[data-field="orphanPolicy"]');
+      const retention = fields.querySelector('[data-quarantine-retention]');
+      if (!policy || !retention) return;
+      const apply = () => {
+        const visible = policy.value === 'quarantine';
+        retention.classList.toggle('hidden', !visible);
+        const select = retention.querySelector('[data-field="quarantineRetentionDays"]');
+        if (select) select.disabled = !visible;
+      };
+      if (!policy.dataset.boundOrphanToggle) {
+        policy.addEventListener('change', apply);
+        policy.dataset.boundOrphanToggle = '1';
       }
       apply();
     });
@@ -273,16 +314,19 @@
       if (last) last.textContent = lastSmartCollectionName(libraryInput && libraryInput.value) || '—';
     });
     syncErsatzTvControls(scope);
+    syncOrphanControls(scope);
   }
 
   global.DestinationForm = {
     DEFAULT_LANGUAGES,
     PROFILE_LABELS,
+    ORPHAN_POLICY_LABELS,
     normalizedSubtitles,
     renderSubtitleSettings,
     renderFields,
     collect,
     syncSubtitleControls,
+    syncOrphanControls,
     syncErsatzTvControls,
     setErsatzTvCatalog,
     getErsatzTvCatalog,

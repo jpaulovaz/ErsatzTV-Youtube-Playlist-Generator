@@ -631,219 +631,304 @@ test('discovery persists YouTube publication metadata for future NFO generation'
   assert.equal(item.year, 2025);
 });
 
-test('temporary NFO refresh adds the missing date, renumbers season/episode and preserves all other manual fields', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-release-nfo-'));
+
+async function prepareCompletedItem(manager, config, playlist, video, options = {}) {
+  await manager.reconcileLibrary(config, playlist, [video]);
+  const item = manager.state.items[makeItemId(playlist.folderName || playlist.name, video.id)];
+  await fs.mkdir(path.dirname(item.targetPath), { recursive: true });
+  await fs.writeFile(item.targetPath, options.content || `video-${video.id}`);
+  if (options.nfoContent) {
+    await fs.mkdir(path.dirname(item.nfoPath), { recursive: true });
+    await fs.writeFile(item.nfoPath, options.nfoContent);
+  }
+  if (options.thumbnail) {
+    await fs.mkdir(path.dirname(item.thumbnailPath), { recursive: true });
+    await fs.writeFile(item.thumbnailPath, 'thumb');
+  }
+  if (options.subtitle) await fs.writeFile(item.targetPath.replace(/\.mp4$/, '.pt-BR.srt'), 'subtitle');
+  item.status = 'completed';
+  item.sourceActive = true;
+  item.orphaned = false;
+  item.mediaPath = item.targetPath;
+  item.storageState = 'active';
+  item.fileSizeBytes = (await fs.stat(item.targetPath)).size;
+  return item;
+}
+
+test('non-authoritative discovery never infers absence or applies destructive orphan policy', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-orphan-partial-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const config = makeConfig(path.join(root, 'media'));
+  config.playlists[0].orphanPolicy = 'delete';
+  const playlist = { ...config.playlists[0], folderName: 'Teste' };
+  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
+  await manager.init(config);
+  const item = await prepareCompletedItem(manager, config, playlist, { id: 'partial00001', title: 'Artist - Safe' });
+
+  const result = await manager.reconcileLibrary(config, playlist, [], { authoritative: false, partialReasons: ['ytdlp_exit_1'] });
+  assert.equal(result.authoritative, false);
+  assert.ok(manager.state.items[item.id]);
+  assert.equal(manager.state.items[item.id].sourceActive, true);
+  assert.equal(await fs.readFile(item.targetPath, 'utf8'), 'video-partial00001');
+});
+
+test('delete orphan policy removes a completed media package on the first authoritative absence', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-orphan-delete-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const config = makeConfig(path.join(root, 'media'));
+  config.playlists[0].orphanPolicy = 'delete';
+  const playlist = { ...config.playlists[0], folderName: 'Teste' };
+  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
+  await manager.init(config);
+  const item = await prepareCompletedItem(manager, config, playlist, { id: 'delete00001', title: 'Artist - Delete' }, { subtitle: true });
+  const subtitlePath = item.targetPath.replace(/\.mp4$/, '.pt-BR.srt');
+
+  const result = await manager.reconcileLibrary(config, playlist, [], { authoritative: true });
+  assert.equal(result.deleted, 1);
+  assert.equal(manager.state.items[item.id], undefined);
+  await assert.rejects(fs.access(item.targetPath));
+  await assert.rejects(fs.access(subtitlePath));
+});
+
+test('quarantine orphan policy moves a completed package and auto-restores it without redownload when it reappears', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-orphan-quarantine-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const config = makeConfig(path.join(root, 'media'));
+  config.playlists[0].orphanPolicy = 'quarantine';
+  config.playlists[0].quarantineRetentionDays = null;
+  const playlist = { ...config.playlists[0], folderName: 'Teste' };
+  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
+  await manager.init(config);
+  const video = { id: 'quarant0001', title: 'Artist - Recover' };
+  const item = await prepareCompletedItem(manager, config, playlist, video, { subtitle: true });
+  const originalPath = item.targetPath;
+
+  const removed = await manager.reconcileLibrary(config, playlist, [], { authoritative: true });
+  assert.equal(removed.quarantined, 1);
+  assert.equal(item.storageState, 'quarantined');
+  assert.ok(item.quarantine && item.quarantine.files.length >= 2);
+  await assert.rejects(fs.access(originalPath));
+
+  const returned = await manager.reconcileLibrary(config, playlist, [video], { authoritative: true });
+  assert.equal(returned.restoredFromQuarantine, 1);
+  assert.equal(item.storageState, 'active');
+  assert.equal(item.status, 'completed');
+  assert.equal(await fs.readFile(originalPath, 'utf8'), 'video-quarant0001');
+});
+
+test('Excluir e ignorar blocks rediscovery until Reativar and preserves the logical tombstone after quarantine expiry', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-ignore-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const config = makeConfig(path.join(root, 'media'));
+  config.playlists[0].orphanPolicy = 'mark';
+  const playlist = { ...config.playlists[0], folderName: 'Teste' };
+  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
+  await manager.init(config);
+  const video = { id: 'ignored00001', title: 'Artist - Ignored' };
+  const item = await prepareCompletedItem(manager, config, playlist, video);
+
+  await manager.runContentAction('Teste', 'ignore', [item.id]);
+  assert.equal(item.userDisposition, 'ignored');
+  assert.equal(item.storageState, 'quarantined');
+  const quarantinePath = item.quarantine.files.find((file) => file.kind === 'video').quarantine;
+
+  const rediscovery = await manager.reconcileLibrary(config, playlist, [video], { authoritative: true });
+  assert.equal(rediscovery.queued, 0);
+  assert.equal(item.userDisposition, 'ignored');
+  assert.equal(item.storageState, 'quarantined');
+
+  item.quarantine.expiresAt = new Date(Date.now() - 1000).toISOString();
+  await manager.runOrphanMaintenance({ force: true });
+  assert.equal(item.userDisposition, 'ignored');
+  assert.equal(item.storageState, 'absent');
+  assert.ok(manager.state.items[item.id]);
+  await assert.rejects(fs.access(quarantinePath));
+
+  // Source is still active, so reactivation queues a fresh download without a remote probe.
+  await manager.runContentAction('Teste', 'reactivate', [item.id]);
+  assert.equal(item.userDisposition, 'managed');
+  assert.equal(item.storageState, 'absent');
+  assert.equal(item.status, 'pending');
+});
+
+test('manual quarantine of a kept item has precedence over a delete orphan policy until retention resolves it', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-manual-q-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const config = makeConfig(path.join(root, 'media'));
+  config.playlists[0].orphanPolicy = 'quarantine';
+  const playlistQ = { ...config.playlists[0], folderName: 'Teste' };
+  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
+  await manager.init(config);
+  const video = { id: 'manualq0001', title: 'Artist - Keep' };
+  const item = await prepareCompletedItem(manager, config, playlistQ, video);
+
+  await manager.reconcileLibrary(config, playlistQ, [], { authoritative: true });
+  await manager.runContentAction('Teste', 'restore-keep', [item.id]);
+  assert.equal(item.userDisposition, 'keep');
+  assert.equal(item.storageState, 'active');
+  assert.equal(item.sourceActive, false);
+
+  config.playlists[0].orphanPolicy = 'delete';
+  manager.configure(config);
+  await manager.runContentAction('Teste', 'quarantine', [item.id]);
+  assert.equal(item.userDisposition, 'managed');
+  assert.equal(item.storageState, 'quarantined');
+  assert.equal(item.quarantine.reason, 'manual');
+
+  const playlistDelete = { ...config.playlists[0], folderName: 'Teste' };
+  const result = await manager.reconcileLibrary(config, playlistDelete, [], { authoritative: true });
+  assert.equal(result.deleted, 0);
+  assert.ok(manager.state.items[item.id]);
+  assert.equal(item.storageState, 'quarantined');
+});
+
+test('restoring an older quarantined music clip through content actions avoids SxxExx collisions and resequences atomically', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-clip-restore-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const config = makeConfig(path.join(root, 'media'));
   config.playlists[0].mediaProfile = 'music_clips';
+  config.playlists[0].orphanPolicy = 'quarantine';
   const playlist = { ...config.playlists[0], folderName: 'Teste' };
   const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
   await manager.init(config);
 
-  const id = makeItemId('Teste', 'releasedate02');
-  const target = manager.chooseTargetPaths(playlist, {
-    id: 'releasedate02',
-    title: 'Artist - Song'
-  }, id);
-  await fs.mkdir(path.dirname(target.nfoPath), { recursive: true });
-  const manualNfo = [
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-    '<episodedetails>',
-    '  <title>Título corrigido pelo usuário</title>',
-    '  <season>9</season>',
-    '  <episode>99</episode>',
-    '  <plot>Descrição manual importante</plot>',
-    '  <genre>Personalizado</genre>',
-    '</episodedetails>',
-    ''
-  ].join('\n');
-  await fs.writeFile(target.nfoPath, manualNfo, 'utf8');
+  const older = await prepareCompletedItem(manager, config, playlist, {
+    id: 'oldclip0001', title: 'Artist - Old Song', publishedAt: '2020-01-01T00:00:00Z', releaseDate: '2020-01-01'
+  }, { nfoContent: '<episodedetails><title>Old Song</title><season>1</season><episode>1</episode><aired>2020-01-01</aired></episodedetails>', thumbnail: true });
+  older.showNfoPath && await fs.writeFile(older.showNfoPath, '<tvshow><title>Artist</title></tvshow>');
+  older.showPosterPath && await fs.writeFile(older.showPosterPath, 'poster');
 
-  manager.state.items[id] = {
-    id,
-    destinationId: 'Teste',
-    libraryFolder: 'Teste',
-    destinationType: 'library',
-    videoId: 'releasedate02',
-    title: 'Artist - Song',
-    status: 'completed',
-    releaseDate: '2025-06-12',
-    releaseDateSource: 'youtube',
-    year: 2025,
-    mediaProfile: 'music_clips',
-    nfoPath: target.nfoPath,
-    targetPath: target.targetPath,
-    progress: {},
-    subtitles: {}
-  };
+  await manager.reconcileLibrary(config, playlist, [], { authoritative: true });
+  assert.equal(older.storageState, 'quarantined');
 
-  const summary = await manager.refreshReleaseDates('Teste');
-  assert.equal(summary.checked, 1);
-  assert.equal(summary.nfoUpdated, 1);
-  assert.equal(summary.failed, 0);
-  const updated = await fs.readFile(target.nfoPath, 'utf8');
-  assert.match(updated, /<aired>2025-06-12<\/aired>/);
-  assert.match(updated, /<title>Título corrigido pelo usuário<\/title>/);
-  assert.match(updated, /<season>1<\/season>/);
-  assert.match(updated, /<episode>1<\/episode>/);
-  assert.match(updated, /<plot>Descrição manual importante<\/plot>/);
-  assert.match(updated, /<genre>Personalizado<\/genre>/);
-  assert.equal(summary.episodesRenumbered, 1);
-  assert.equal(summary.episodeNfoUpdated, 1);
-  const normalized = updated
-    .replace('  <season>1</season>', '  <season>9</season>')
-    .replace('  <episode>1</episode>', '  <episode>99</episode>')
-    .replace('  <aired>2025-06-12</aired>\n', '');
-  assert.equal(normalized, manualNfo);
+  // A newer source item is created while the old clip is outside the active set.
+  const newer = await prepareCompletedItem(manager, config, playlist, {
+    id: 'newclip0001', title: 'Artist - New Song', publishedAt: '2021-01-01T00:00:00Z', releaseDate: '2021-01-01'
+  }, { nfoContent: '<episodedetails><title>New Song</title><season>1</season><episode>1</episode><aired>2021-01-01</aired></episodedetails>', thumbnail: true });
+  await manager.resequenceMusicClipEpisodes(playlist, { renameFiles: true, patchNfos: true, addMissingDate: false });
+
+  // Force the historical path to collide with the current clip, which is the hard restore case.
+  const qVideo = older.quarantine.files.find((file) => file.kind === 'video');
+  const currentTarget = newer.targetPath;
+  qVideo.original = currentTarget;
+  for (const file of older.quarantine.files) {
+    if (file.kind === 'nfo') file.original = newer.nfoPath;
+    if (file.kind === 'thumbnail') file.original = newer.thumbnailPath;
+  }
+  older.targetPath = currentTarget;
+  older.nfoPath = newer.nfoPath;
+  older.thumbnailPath = newer.thumbnailPath;
+
+  await manager.runContentAction('Teste', 'restore-keep', [older.id]);
+  assert.equal(older.userDisposition, 'keep');
+  assert.equal(older.storageState, 'active');
+  assert.equal(newer.storageState, 'active');
+  assert.notEqual(path.resolve(older.targetPath), path.resolve(newer.targetPath));
+  assert.match(path.basename(older.targetPath), /S01E01/);
+  assert.match(path.basename(newer.targetPath), /S01E02/);
+  assert.equal(await fs.readFile(older.targetPath, 'utf8'), 'video-oldclip0001');
+  assert.equal(await fs.readFile(newer.targetPath, 'utf8'), 'video-newclip0001');
 });
 
-
-test('temporary music-clip migration renames media sidecars when chronology changes without touching manual NFO text', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-episode-rename-'));
+test('destructive orphan policy is deferred while an item is current and applied only after completion', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-orphan-deferred-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const config = makeConfig(path.join(root, 'media'));
-  config.playlists[0].mediaProfile = 'music_clips';
+  config.playlists[0].orphanPolicy = 'quarantine';
+  config.playlists[0].quarantineRetentionDays = null;
   const playlist = { ...config.playlists[0], folderName: 'Teste' };
   const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
   await manager.init(config);
+  const item = await prepareCompletedItem(manager, config, playlist, { id: 'deferred001', title: 'Artist - Deferred' });
+  const originalPath = item.targetPath;
 
-  await manager.reconcileLibrary(config, playlist, [
-    { id: 'rename-newer1', title: 'Artist - Newer', publishedAt: '2025-01-02T10:00:00Z' },
-    { id: 'rename-older1', title: 'Artist - Older', publishedAt: '2024-01-02T10:00:00Z' }
-  ]);
-  const newer = manager.state.items[makeItemId('Teste', 'rename-newer1')];
-  const older = manager.state.items[makeItemId('Teste', 'rename-older1')];
+  manager.current = { itemId: item.id };
+  const result = await manager.reconcileLibrary(config, playlist, [], { authoritative: true });
+  assert.equal(result.destructiveDeferred, 1);
+  assert.equal(item.orphanPolicyPending, 'quarantine');
+  assert.equal(item.storageState, 'active');
+  assert.equal(await fs.readFile(originalPath, 'utf8'), 'video-deferred001');
 
-  // Simulate an old library whose file numbering was discovery-based, opposite to chronology.
-  const seasonDir = path.dirname(newer.targetPath);
-  const newerOldBase = 'Artist - S01E01 - Nome manual do arquivo novo';
-  const olderOldBase = 'Artist - S01E02 - Nome manual do arquivo antigo';
-  Object.assign(newer, {
-    showEpisodeNumber: 1,
-    status: 'completed',
-    targetPath: path.join(seasonDir, `${newerOldBase}.mp4`),
-    mediaPath: path.join(seasonDir, `${newerOldBase}.mp4`),
-    nfoPath: path.join(seasonDir, `${newerOldBase}.nfo`),
-    thumbnailPath: path.join(seasonDir, `${newerOldBase}-thumb.jpg`)
-  });
-  Object.assign(older, {
-    showEpisodeNumber: 2,
-    status: 'completed',
-    targetPath: path.join(seasonDir, `${olderOldBase}.mp4`),
-    mediaPath: path.join(seasonDir, `${olderOldBase}.mp4`),
-    nfoPath: path.join(seasonDir, `${olderOldBase}.nfo`),
-    thumbnailPath: path.join(seasonDir, `${olderOldBase}-thumb.jpg`)
-  });
-  await fs.mkdir(seasonDir, { recursive: true });
-  await fs.writeFile(newer.targetPath, 'newer-video');
-  await fs.writeFile(older.targetPath, 'older-video');
-  await fs.writeFile(newer.thumbnailPath, 'newer-thumb');
-  await fs.writeFile(older.thumbnailPath, 'older-thumb');
-  await fs.writeFile(path.join(seasonDir, `${newerOldBase}.pt-BR.srt`), 'newer-sub');
-  await fs.writeFile(path.join(seasonDir, `${olderOldBase}.pt-BR.srt`), 'older-sub');
-  await fs.writeFile(newer.nfoPath, [
-    '<episodedetails>',
-    '  <title>Título manual mais novo</title>',
-    '  <season>1</season>',
-    '  <episode>1</episode>',
-    '  <plot>Não alterar este texto</plot>',
-    '  <aired>2025-01-02</aired>',
-    '</episodedetails>',
-    ''
-  ].join('\n'));
-  await fs.writeFile(older.nfoPath, [
-    '<episodedetails>',
-    '  <title>Título manual mais antigo</title>',
-    '  <season>1</season>',
-    '  <episode>2</episode>',
-    '  <plot>Também preservar</plot>',
-    '  <aired>2024-01-02</aired>',
-    '</episodedetails>',
-    ''
-  ].join('\n'));
-
-  const summary = await manager.refreshReleaseDates('Teste');
-  assert.equal(summary.episodesRenumbered, 2);
-  assert.ok(summary.filesRenamed >= 8);
-  assert.equal(older.showEpisodeNumber, 1);
-  assert.equal(newer.showEpisodeNumber, 2);
-  assert.equal(path.basename(older.targetPath), 'Artist - S01E01 - Nome manual do arquivo antigo.mp4');
-  assert.equal(path.basename(newer.targetPath), 'Artist - S01E02 - Nome manual do arquivo novo.mp4');
-  assert.equal(await fs.readFile(older.targetPath, 'utf8'), 'older-video');
-  assert.equal(await fs.readFile(newer.targetPath, 'utf8'), 'newer-video');
-  assert.equal(await fs.readFile(path.join(seasonDir, 'Artist - S01E01 - Nome manual do arquivo antigo.pt-BR.srt'), 'utf8'), 'older-sub');
-  assert.equal(await fs.readFile(path.join(seasonDir, 'Artist - S01E02 - Nome manual do arquivo novo.pt-BR.srt'), 'utf8'), 'newer-sub');
-  const olderNfo = await fs.readFile(older.nfoPath, 'utf8');
-  const newerNfo = await fs.readFile(newer.nfoPath, 'utf8');
-  assert.match(olderNfo, /<title>Título manual mais antigo<\/title>/);
-  assert.match(olderNfo, /<plot>Também preservar<\/plot>/);
-  assert.match(olderNfo, /<episode>1<\/episode>/);
-  assert.match(newerNfo, /<title>Título manual mais novo<\/title>/);
-  assert.match(newerNfo, /<plot>Não alterar este texto<\/plot>/);
-  assert.match(newerNfo, /<episode>2<\/episode>/);
+  manager.current = null;
+  const applied = await manager.applyDeferredOrphanPolicy(item, playlist);
+  assert.deepEqual(applied, { applied: true, action: 'quarantine' });
+  assert.equal(item.orphanPolicyPending, undefined);
+  assert.equal(item.storageState, 'quarantined');
+  await assert.rejects(fs.access(originalPath));
 });
 
-test('temporary music-clip migration leaves manual filenames without an episode token unchanged', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-episode-manual-name-'));
+test('deferred delete policy removes a completed item only after the current operation releases it', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-delete-deferred-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const config = makeConfig(path.join(root, 'media'));
-  config.playlists[0].mediaProfile = 'music_clips';
+  config.playlists[0].orphanPolicy = 'delete';
   const playlist = { ...config.playlists[0], folderName: 'Teste' };
   const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
   await manager.init(config);
+  const item = await prepareCompletedItem(manager, config, playlist, { id: 'deferred002', title: 'Artist - Delete Later' });
+  const originalPath = item.targetPath;
 
-  await manager.reconcileLibrary(config, playlist, [
-    { id: 'manual-name-1', title: 'Artist - Track', publishedAt: '2024-01-02T10:00:00Z' }
-  ]);
-  const item = manager.state.items[makeItemId('Teste', 'manual-name-1')];
-  const seasonDir = path.dirname(item.targetPath);
-  const manualBase = 'Artist - Nome totalmente manual';
-  Object.assign(item, {
-    showEpisodeNumber: 7,
-    status: 'completed',
-    targetPath: path.join(seasonDir, `${manualBase}.mp4`),
-    mediaPath: path.join(seasonDir, `${manualBase}.mp4`),
-    nfoPath: path.join(seasonDir, `${manualBase}.nfo`),
-    thumbnailPath: path.join(seasonDir, `${manualBase}-thumb.jpg`)
-  });
-  await fs.mkdir(seasonDir, { recursive: true });
-  await fs.writeFile(item.targetPath, 'video');
-  await fs.writeFile(item.thumbnailPath, 'thumb');
-  await fs.writeFile(path.join(seasonDir, `${manualBase}.pt-BR.srt`), 'subtitle');
-  await fs.writeFile(item.nfoPath, [
-    '<episodedetails>',
-    '  <title>Título manual</title>',
-    '  <season>9</season>',
-    '  <episode>7</episode>',
-    '  <aired>2024-01-02</aired>',
-    '</episodedetails>',
-    ''
-  ].join('\n'));
+  manager.current = { itemId: item.id };
+  const result = await manager.reconcileLibrary(config, playlist, [], { authoritative: true });
+  assert.equal(result.destructiveDeferred, 1);
+  assert.equal(item.orphanPolicyPending, 'delete');
+  assert.equal(await fs.readFile(originalPath, 'utf8'), 'video-deferred002');
 
-  const summary = await manager.refreshReleaseDates('Teste');
-  assert.equal(summary.episodesRenumbered, 1);
-  assert.equal(summary.filesRenamed, 0);
-  assert.equal(path.basename(item.targetPath), `${manualBase}.mp4`);
-  assert.equal(path.basename(item.nfoPath), `${manualBase}.nfo`);
-  assert.equal(path.basename(item.thumbnailPath), `${manualBase}-thumb.jpg`);
-  assert.equal(await fs.readFile(path.join(seasonDir, `${manualBase}.pt-BR.srt`), 'utf8'), 'subtitle');
-  const nfo = await fs.readFile(item.nfoPath, 'utf8');
-  assert.match(nfo, /<title>Título manual<\/title>/);
-  assert.match(nfo, /<season>1<\/season>/);
-  assert.match(nfo, /<episode>1<\/episode>/);
+  manager.current = null;
+  const applied = await manager.applyDeferredOrphanPolicy(item, playlist);
+  assert.deepEqual(applied, { applied: true, action: 'delete' });
+  assert.equal(manager.state.items[item.id], undefined);
+  await assert.rejects(fs.access(originalPath));
 });
 
-test('temporary metadata migration refuses to rename libraries while a worker item is active', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-episode-active-worker-'));
+test('Reativar can queue an ignored item that already left the source as keep after a successful direct probe', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-reactivate-outside-source-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const config = makeConfig(path.join(root, 'media'));
-  config.playlists[0].mediaProfile = 'music_clips';
+  config.playlists[0].orphanPolicy = 'mark';
+  const playlist = { ...config.playlists[0], folderName: 'Teste' };
   const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
   await manager.init(config);
-  manager.current = { itemId: 'synthetic-active-item' };
+  const video = { id: 'outside00001', title: 'Artist - Outside' };
+  const item = await prepareCompletedItem(manager, config, playlist, video);
 
-  await assert.rejects(
-    () => manager.refreshReleaseDates('Teste'),
-    /Aguarde o download ou a legenda em andamento terminar/
-  );
+  await manager.runContentAction('Teste', 'ignore', [item.id]);
+  item.quarantine.expiresAt = new Date(Date.now() - 1000).toISOString();
+  await manager.runOrphanMaintenance({ force: true });
+  await manager.reconcileLibrary(config, playlist, [], { authoritative: true });
+  assert.equal(item.sourceActive, false);
+  assert.equal(item.userDisposition, 'ignored');
+  assert.equal(item.storageState, 'absent');
+
+  manager.probeVideoAvailable = async () => ({ ok: true });
+  const result = await manager.runContentAction('Teste', 'reactivate', [item.id]);
+  assert.equal(result.queued, 1);
+  assert.equal(item.userDisposition, 'keep');
+  assert.equal(item.sourceActive, false);
+  assert.equal(item.storageState, 'absent');
+  assert.equal(item.status, 'pending');
+});
+
+test('a kept item automatically returns to managed when it reappears in an authoritative discovery', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-keep-return-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const config = makeConfig(path.join(root, 'media'));
+  config.playlists[0].orphanPolicy = 'quarantine';
+  const playlist = { ...config.playlists[0], folderName: 'Teste' };
+  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
+  await manager.init(config);
+  const video = { id: 'keepreturn01', title: 'Artist - Return' };
+  const item = await prepareCompletedItem(manager, config, playlist, video);
+
+  await manager.reconcileLibrary(config, playlist, [], { authoritative: true });
+  await manager.runContentAction('Teste', 'restore-keep', [item.id]);
+  assert.equal(item.userDisposition, 'keep');
+  assert.equal(item.sourceActive, false);
+
+  const result = await manager.reconcileLibrary(config, playlist, [video], { authoritative: true });
+  assert.equal(result.reactivated, 1);
+  assert.equal(item.userDisposition, 'managed');
+  assert.equal(item.sourceActive, true);
+  assert.equal(item.storageState, 'active');
+  assert.equal(item.status, 'completed');
 });

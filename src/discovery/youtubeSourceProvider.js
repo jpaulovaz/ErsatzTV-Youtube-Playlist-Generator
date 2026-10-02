@@ -156,12 +156,26 @@ async function fetchVideosFromSourceViaYtDlp(config, source, sourceUrl, sourceIn
   const label = source.displayName || source.folderName || source.name || 'destino';
   if (result.stderr && result.stderr.trim()) await logger.warn(`yt-dlp informou avisos ao ler ${label}: ${result.stderr.trim().slice(-2000)}`);
   for (const error of parsed.errors) await logger.warn(`Linha JSON ignorada em ${label}: ${error.error}`);
-  if (parsed.videos.length === 0) {
-    const detail = result.stderr.trim() || `codigo ${result.code}`;
-    throw new Error(`Nenhum video foi retornado para a fonte ${sourceIndex + 1} de ${label}: ${detail}`);
+
+  const partialReasons = [];
+  if (result.timedOut) partialReasons.push('timeout');
+  if (result.code !== 0) partialReasons.push(`ytdlp_exit_${result.code}`);
+  if (/(^|\n)\s*ERROR:/i.test(String(result.stderr || ''))) partialReasons.push('ytdlp_reported_error');
+  if (parsed.errors.length > 0) partialReasons.push('invalid_json_lines');
+  const authoritative = partialReasons.length === 0;
+  if (!authoritative) {
+    await logger.warn(`A fonte ${sourceIndex + 1} de ${label} retornou conteudo parcial; ausencias nao serao reconciliadas.`);
   }
-  if (result.code !== 0) await logger.warn(`A fonte ${sourceIndex + 1} de ${label} retornou conteudo parcial (codigo ${result.code}).`);
-  return parsed.videos.map((video) => normalizeYtDlpVideo(video, sourceUrl, sourceIndex, source.sourceKind || kind)).filter((video) => video.id);
+
+  return {
+    videos: parsed.videos
+      .map((video) => normalizeYtDlpVideo(video, sourceUrl, sourceIndex, source.sourceKind || kind))
+      .filter((video) => video.id),
+    authoritative,
+    partialReasons,
+    exitCode: result.code,
+    timedOut: Boolean(result.timedOut)
+  };
 }
 
 async function fetchViaYtDlp(config, source, options = {}) {
@@ -170,9 +184,16 @@ async function fetchViaYtDlp(config, source, options = {}) {
   const byVideoId = new Map();
   const duplicates = [];
   const sourceResults = [];
+  const partialReasons = [];
+  let authoritative = true;
   for (let index = 0; index < urls.length; index += 1) {
     const sourceUrl = urls[index];
-    const sourceVideos = await fetchVideosFromSourceViaYtDlp(config, source, sourceUrl, index, options);
+    const sourceFetch = await fetchVideosFromSourceViaYtDlp(config, source, sourceUrl, index, options);
+    const sourceVideos = sourceFetch.videos || [];
+    if (!sourceFetch.authoritative) {
+      authoritative = false;
+      for (const reason of sourceFetch.partialReasons || []) partialReasons.push(`source_${index + 1}:${reason}`);
+    }
     let unique = 0;
     let duplicateCount = 0;
     for (const video of sourceVideos) {
@@ -186,12 +207,24 @@ async function fetchViaYtDlp(config, source, options = {}) {
       byVideoId.set(video.id, video);
       unique += 1;
     }
-    sourceResults.push({ index, url: sourceUrl, kind: source.sourceKind || getSourceKind(sourceUrl), fetched: sourceVideos.length, unique, duplicates: duplicateCount });
+    sourceResults.push({
+      index,
+      url: sourceUrl,
+      kind: source.sourceKind || getSourceKind(sourceUrl),
+      fetched: sourceVideos.length,
+      unique,
+      duplicates: duplicateCount,
+      authoritative: sourceFetch.authoritative,
+      partialReasons: sourceFetch.partialReasons || [],
+      exitCode: sourceFetch.exitCode,
+      timedOut: sourceFetch.timedOut
+    });
   }
   return {
     videos: [...byVideoId.values()], duplicates, sourceResults, sourceCount: urls.length,
     fetchedCount: sourceResults.reduce((total, entry) => total + entry.fetched, 0),
-    readMode: 'ytdlp', quotaUnitsUsed: 0, missingSourceIds: []
+    readMode: 'ytdlp', quotaUnitsUsed: 0, missingSourceIds: [],
+    authoritative, partialReasons
   };
 }
 
@@ -200,7 +233,22 @@ async function fetchDestinationVideos(config, destination, options = {}) {
   const canUseApi = destination.type !== DESTINATION_TYPES.CHANNEL_GLOBAL && shouldUseYouTubeApi(config);
   if (canUseApi) {
     try {
-      return await fetchSourcesViaApi(config, source);
+      const apiResult = await fetchSourcesViaApi(config, source);
+      const videos = [...(apiResult.videos || [])];
+      for (const missingId of apiResult.missingSourceIds || []) {
+        if (!videos.some((video) => video && video.id === missingId)) {
+          videos.push({
+            id: missingId,
+            title: '',
+            description: '',
+            duration: null,
+            thumbnailUrl: '',
+            webpage_url: canonicalWatchUrl(missingId),
+            sourceKind: destination.sourceKind || 'playlist'
+          });
+        }
+      }
+      return { ...apiResult, videos, authoritative: true, partialReasons: [] };
     } catch (error) {
       await logger.warn(`YouTube API falhou para ${destination.displayName}; usando yt-dlp como fallback: ${error.message}`);
     }

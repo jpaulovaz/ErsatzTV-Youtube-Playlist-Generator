@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>ErsatzTV YouTube Downloader</title>
-  <link rel="icon" href="/brand-mark.svg?v=3.4.17" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=3.4.17&amp;rev=scripted-schedules-2">
-  <link rel="stylesheet" href="/scripted-schedules.css?v=3.4.17">
+  <link rel="icon" href="/brand-mark.svg?v=3.5.0" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=3.5.0&amp;rev=scripted-schedules-2">
+  <link rel="stylesheet" href="/scripted-schedules.css?v=3.5.0">
 </head>
 <body class="app-page">
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.4.17" alt=""></span>
+        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.5.0" alt=""></span>
         <div class="brand-copy">
           <div class="title-line">
             <h1>ErsatzTV YouTube Downloader</h1>
-            <span id="versionBadge" class="version-badge">v3.4.17</span>
+            <span id="versionBadge" class="version-badge">v3.5.0</span>
           </div>
         </div>
       </div>
@@ -331,9 +331,21 @@
 
           <section class="card library-content-shell">
             <div class="library-content-toolbar">
+              <label>Exibir
+                <select id="libraryContentView">
+                  <option value="content">Conteúdo</option>
+                  <option value="orphans">Órfãos</option>
+                  <option value="quarantine">Quarentena</option>
+                  <option value="ignored">Ignorados</option>
+                </select>
+              </label>
               <label class="library-content-search">Pesquisar vídeos
                 <input id="libraryContentSearch" type="search" autocomplete="off" placeholder="Título, artista, episódio ou Video ID">
               </label>
+              <div id="libraryContentBatchActions" class="library-content-batch-actions hidden">
+                <button id="libraryContentBatchPrimary" type="button" class="small"></button>
+                <button id="libraryContentBatchDelete" type="button" class="small danger">Excluir definitivamente</button>
+              </div>
             </div>
 
             <nav id="libraryContentBreadcrumbs" class="library-content-breadcrumbs" aria-label="Caminho da biblioteca"></nav>
@@ -352,6 +364,7 @@
                 <button id="libraryContentDetailsClose" type="button" class="small">Fechar</button>
               </div>
               <dl id="libraryContentDetailsList"></dl>
+              <div id="libraryContentDetailsActions" class="library-actions"></div>
             </aside>
           </section>
         </section>
@@ -629,10 +642,10 @@
   </dialog>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="/js/destinationForm.js?v=3.4.17"></script>
-  <script src="/js/channelsView.js?v=3.4.17&amp;rev=ersatztv-catalog-1"></script>
-  <script src="/js/scriptedSchedulesView.js?v=3.4.17"></script>
-  <script src="/js/helpView.js?v=3.4.17"></script>
-  <script src="/app.js?v=3.4.17"></script>
+  <script src="/js/destinationForm.js?v=3.5.0"></script>
+  <script src="/js/channelsView.js?v=3.5.0&amp;rev=ersatztv-catalog-1"></script>
+  <script src="/js/scriptedSchedulesView.js?v=3.5.0"></script>
+  <script src="/js/helpView.js?v=3.5.0"></script>
+  <script src="/app.js?v=3.5.0"></script>
 </body>
 </html>

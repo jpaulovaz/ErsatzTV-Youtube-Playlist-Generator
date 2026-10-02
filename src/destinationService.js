@@ -2,6 +2,7 @@ const path = require('path');
 const { sanitizeName, isPathInside } = require('./utils');
 const { MEDIA_PROFILES, normalizeMediaProfile } = require('./mediaProfileService');
 const { CHANNEL_SOURCE_KINDS } = require('./channelConfig');
+const { ORPHAN_POLICIES, normalizeOrphanPolicy, normalizeRetentionDays } = require('./orphans/orphanPolicy');
 
 const DESTINATION_TYPES = Object.freeze({
   LIBRARY: 'library',
@@ -47,7 +48,9 @@ function libraryDestination(config, playlist) {
     playlistId: null,
     sourceKind: 'library',
     urls: Array.isArray(playlist.urls) ? playlist.urls : (playlist.url ? [playlist.url] : []),
-    sourceConfig: playlist
+    sourceConfig: playlist,
+    orphanPolicy: normalizeOrphanPolicy(playlist.orphanPolicy, ORPHAN_POLICIES.MARK),
+    quarantineRetentionDays: normalizeRetentionDays(playlist.quarantineRetentionDays, null)
   };
 }
 
@@ -78,7 +81,9 @@ function channelGlobalDestination(config, channel, sourceKind) {
     playlistId: null,
     sourceKind,
     urls: sourceUrl ? [sourceUrl] : [],
-    sourceConfig: channel
+    sourceConfig: channel,
+    orphanPolicy: ORPHAN_POLICIES.MARK,
+    quarantineRetentionDays: null
   };
 }
 
@@ -107,7 +112,9 @@ function channelPlaylistDestination(config, channel, playlist) {
     sourceKind: 'playlist',
     urls: url ? [url] : [],
     sourceConfig: playlist,
-    channelConfig: channel
+    channelConfig: channel,
+    orphanPolicy: normalizeOrphanPolicy(playlist.orphanPolicy, ORPHAN_POLICIES.MARK),
+    quarantineRetentionDays: normalizeRetentionDays(playlist.quarantineRetentionDays, null)
   };
 }
 

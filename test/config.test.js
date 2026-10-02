@@ -30,7 +30,7 @@ test('migrates useful v1 settings without enabling legacy cookies', () => {
     scheduler: { enabled: false, intervalMinutes: 60 }
   });
 
-  assert.equal(config.configVersion, 8);
+  assert.equal(config.configVersion, 9);
   assert.equal(config.paths.baseDir, '/srv/media/youtube');
   assert.equal(config.paths.cookiesPath, '');
   assert.equal(config.paths.ffmpegPath, '/usr/bin/ffmpeg');
@@ -41,6 +41,8 @@ test('migrates useful v1 settings without enabling legacy cookies', () => {
   assert.equal(Object.hasOwn(config.playlists[0], 'playoutId'), false);
   assert.equal(config.scheduler.intervalMinutes, 60);
   assert.equal(config.ersatztv.apiKey, '');
+  assert.equal(config.playlists[0].orphanPolicy, 'mark');
+  assert.equal(config.playlists[0].quarantineRetentionDays, null);
 });
 
 test('preserves explicitly configured cookies', () => {
@@ -192,4 +194,23 @@ test('preserves the last Smart Collection used for each Library ID', () => {
   assert.deepEqual(config.ersatztv.smartCollectionSelections, {
     '47': { id: 31, name: '420 - BASTILLE' }
   });
+});
+
+
+test('v9 requires an explicit orphan policy for newly saved libraries', () => {
+  const missing = normalizeConfig({
+    configVersion: 9,
+    paths: { baseDir: '/srv/media/youtube', channelsBaseDir: '/srv/media/youtube-channels' },
+    playlists: [{ name: 'Nova', urls: ['https://www.youtube.com/playlist?list=PLNEW'] }]
+  });
+  assert.throws(() => validateConfig(missing), /arquivos orfaos/);
+
+  const configured = normalizeConfig({
+    configVersion: 9,
+    paths: { baseDir: '/srv/media/youtube', channelsBaseDir: '/srv/media/youtube-channels' },
+    playlists: [{ name: 'Nova', urls: ['https://www.youtube.com/playlist?list=PLNEW'], orphanPolicy: 'quarantine', quarantineRetentionDays: 90 }]
+  });
+  assert.doesNotThrow(() => validateConfig(configured));
+  assert.equal(configured.playlists[0].orphanPolicy, 'quarantine');
+  assert.equal(configured.playlists[0].quarantineRetentionDays, 90);
 });

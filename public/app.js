@@ -19,12 +19,16 @@ let libraryContentSearchTimer = null;
 let libraryContentState = {
   active: false,
   libraryName: '',
+  endpointBase: '',
+  returnView: 'libraries',
+  view: 'content',
   library: null,
   path: '',
   query: '',
   directories: [],
   items: [],
   itemMap: new Map(),
+  selectedIds: new Set(),
   pagination: { total: 0, offset: 0, limit: LIBRARY_CONTENT_PAGE_SIZE, hasMore: false }
 };
 
@@ -555,7 +559,8 @@ function collectConfigForm() {
     const playlist = window.DestinationForm.collect(row, {});
     return playlist;
   }).filter((playlist) => playlist.name && Array.isArray(playlist.urls) && playlist.urls.length > 0);
-
+  const missingOrphanPolicy = next.playlists.find((playlist) => !playlist.orphanPolicy);
+  if (missingOrphanPolicy) throw new Error(`Selecione como tratar Arquivos órfãos em "${missingOrphanPolicy.name}".`);
 
   return next;
 }
@@ -573,6 +578,8 @@ function libraryBadgesHtml(stats) {
     `<span class="badge ok">${stats.completed || 0} concluídos</span>`,
     `<span class="badge danger">${stats.failed || 0} falhas</span>`,
     `<span class="badge">${stats.orphaned || 0} órfãos</span>`,
+    stats.quarantined ? `<span class="badge warn">${stats.quarantined} quarentena</span>` : '',
+    stats.ignored ? `<span class="badge">${stats.ignored} ignorado(s)</span>` : '',
     `<span class="badge">${formatBytes(stats.totalBytes || 0)}</span>`
   ];
   if (stats.subtitlesEnabled) {
@@ -592,7 +599,15 @@ function updateLibraryStats() {
     const nameField = row.querySelector('[data-field="name"]');
     const statsBox = row.querySelector('.library-stats');
     if (!nameField || !statsBox) return;
-    statsBox.innerHTML = libraryBadgesHtml(libraryStatsFor({ name: nameField.value.trim() }));
+    const stats = libraryStatsFor({ name: nameField.value.trim() });
+    statsBox.innerHTML = libraryBadgesHtml(stats);
+    const policy = row.querySelector('[data-field="orphanPolicy"]')?.value || '';
+    const slot = row.querySelector('[data-library-orphan-action-slot]');
+    if (slot) {
+      if (policy === 'mark' && Number(stats && stats.orphaned) > 0) slot.innerHTML = '<button class="small" type="button" data-library-action="orphans-cleanup">Limpar órfãos</button>';
+      else if (policy === 'quarantine' && Number(stats && stats.quarantined) > 0) slot.innerHTML = '<button class="small" type="button" data-library-action="orphans-recover">Recuperar órfãos</button>';
+      else slot.innerHTML = '';
+    }
   });
 }
 
@@ -658,6 +673,11 @@ function renderLibraries() {
     const mediaProfile = playlist.mediaProfile || 'generic';
     const profileLabels = window.DestinationForm.PROFILE_LABELS;
     const metadataText = ` · ${profileLabels[mediaProfile] || profileLabels.generic}`;
+    const orphanAction = playlist.orphanPolicy === 'mark' && Number(stats && stats.orphaned) > 0
+      ? '<button class="small" type="button" data-library-action="orphans-cleanup">Limpar órfãos</button>'
+      : (playlist.orphanPolicy === 'quarantine' && Number(stats && stats.quarantined) > 0
+        ? '<button class="small" type="button" data-library-action="orphans-recover">Recuperar órfãos</button>'
+        : '');
 
     row.innerHTML = `
       <summary>
@@ -685,8 +705,8 @@ function renderLibraries() {
               <button class="small" type="button" data-library-action="view-content">Ver conteúdo</button>
               <button class="small" type="button" data-library-action="test-cookies">Testar cookies</button>
               <button class="small" type="button" data-library-action="refresh-thumbnails">Atualizar thumbnails</button>
-              <button class="small" type="button" data-library-action="refresh-release-dates" title="Temporário: completa datas e, em Clipes musicais, reorganiza temporada/episódio pela cronologia sem regravar os demais campos do NFO.">Atualizar datas e episódios</button>
               <button class="small" type="button" data-library-action="refresh-subtitles">Buscar legendas ausentes</button>
+              <span data-library-orphan-action-slot>${orphanAction}</span>
             </div>
           </div>
           <div class="library-action-group">
@@ -695,7 +715,6 @@ function renderLibraries() {
               <button class="small" type="button" data-library-action="scan">Executar scan</button>
               <button class="small" type="button" data-library-action="empty-trash">Limpar lixo</button>
               <button class="small" type="button" data-library-action="reset-playout">Reset Playout</button>
-              <button class="small" type="button" data-library-action="orphans-cleanup">Limpar órfãos</button>
             </div>
           </div>
           <div class="library-actions library-danger-actions">
@@ -708,6 +727,7 @@ function renderLibraries() {
     container.appendChild(row);
     window.DestinationForm.syncSubtitleControls(row);
     window.DestinationForm.syncErsatzTvControls(row);
+    window.DestinationForm.syncOrphanControls(row);
   });
   updateLibraryFilters();
 }
@@ -779,16 +799,56 @@ function bindLibraryContentImages(container) {
   });
 }
 
+function updateLibraryContentViewControls() {
+  const select = $('#libraryContentView');
+  if (!select) return;
+  const counts = libraryContentState.library && libraryContentState.library.specialCounts || {};
+  for (const option of select.options) {
+    if (option.value === 'content') {
+      option.disabled = false;
+      option.textContent = 'Conteúdo';
+    } else {
+      const count = Number(counts[option.value]) || 0;
+      option.disabled = count === 0 && option.value !== libraryContentState.view;
+      const labels = { orphans: 'Órfãos', quarantine: 'Quarentena', ignored: 'Ignorados' };
+      option.textContent = `${labels[option.value]}${count ? ` (${count})` : ''}`;
+    }
+  }
+  select.value = libraryContentState.view;
+}
+
+function updateLibraryContentBatchActions() {
+  const box = $('#libraryContentBatchActions');
+  const primary = $('#libraryContentBatchPrimary');
+  const remove = $('#libraryContentBatchDelete');
+  if (!box || !primary || !remove) return;
+  const count = libraryContentState.selectedIds.size;
+  const allowed = ['quarantine', 'ignored'].includes(libraryContentState.view);
+  box.classList.toggle('hidden', !allowed || count === 0);
+  if (!allowed || count === 0) return;
+  if (libraryContentState.view === 'quarantine') {
+    primary.textContent = `Restaurar selecionados (${count})`;
+    primary.dataset.contentBatchAction = 'restore-keep';
+  } else {
+    primary.textContent = `Reativar selecionados (${count})`;
+    primary.dataset.contentBatchAction = 'reactivate';
+  }
+  remove.textContent = `Excluir definitivamente (${count})`;
+}
+
 function renderLibraryContent() {
   const library = libraryContentState.library || {};
-  $('#libraryContentTitle').textContent = library.name || libraryContentState.libraryName || 'Conteúdo';
-  $('#libraryContentCount').textContent = `${Number(library.totalVideos) || 0} vídeo(s) no acervo local`;
+  const viewLabels = { content: 'Conteúdo', orphans: 'Órfãos', quarantine: 'Quarentena', ignored: 'Ignorados' };
+  $('#libraryContentTitle').textContent = `${library.name || libraryContentState.libraryName || 'Conteúdo'} · ${viewLabels[libraryContentState.view] || 'Conteúdo'}`;
+  $('#libraryContentCount').textContent = `${Number(library.totalVideos) || 0} vídeo(s) no acervo ativo`;
+  updateLibraryContentViewControls();
   renderLibraryContentBreadcrumbs();
+  $('#libraryContentBreadcrumbs').classList.toggle('hidden', libraryContentState.view !== 'content');
 
   const folders = $('#libraryContentFolders');
-  folders.innerHTML = libraryContentState.query ? '' : libraryContentState.directories.map((folder) => {
+  folders.innerHTML = libraryContentState.view !== 'content' || libraryContentState.query ? '' : libraryContentState.directories.map((folder) => {
     const posterUrl = folder.posterItemId
-      ? `/api/playlists/${encodeURIComponent(libraryContentState.libraryName)}/content-folder-poster?id=${encodeURIComponent(folder.posterItemId)}`
+      ? `${libraryContentState.endpointBase}/content-folder-poster?id=${encodeURIComponent(folder.posterItemId)}`
       : '';
     return `
       <button type="button" class="library-content-folder" data-library-content-folder="${escapeHtml(folder.path)}">
@@ -804,20 +864,24 @@ function renderLibraryContent() {
   bindLibraryContentImages(folders);
 
   const pagination = libraryContentState.pagination || {};
-  const status = libraryContentState.query
-    ? `${pagination.total || 0} resultado(s) em toda a biblioteca`
-    : `${libraryContentState.directories.length} pasta(s) · ${pagination.total || 0} vídeo(s) diretamente neste nível`;
+  let status;
+  if (libraryContentState.view !== 'content') status = `${pagination.total || 0} item(ns) em ${String(viewLabels[libraryContentState.view] || '').toLowerCase()}`;
+  else if (libraryContentState.query) status = `${pagination.total || 0} resultado(s) em toda a biblioteca`;
+  else status = `${libraryContentState.directories.length} pasta(s) · ${pagination.total || 0} vídeo(s) diretamente neste nível`;
   $('#libraryContentStatus').textContent = status;
 
   const items = $('#libraryContentItems');
   items.innerHTML = libraryContentState.items.map((item) => {
     const episode = libraryContentEpisodeLabel(item);
     const duration = item.durationSeconds ? formatDuration(item.durationSeconds) : '';
-    const details = [episode, duration, item.releaseDate].filter(Boolean);
-    const thumbnailUrl = `/api/playlists/${encodeURIComponent(libraryContentState.libraryName)}/content-thumbnail?id=${encodeURIComponent(item.id)}`;
+    const details = [item.stateLabel && libraryContentState.view !== 'content' ? item.stateLabel : '', episode, duration, item.releaseDate].filter(Boolean);
+    const thumbnailUrl = `${libraryContentState.endpointBase}/content-thumbnail?id=${encodeURIComponent(item.id)}`;
     const visibleTitle = item.title || item.videoId;
+    const selectable = item.selectable && ['quarantine', 'ignored'].includes(libraryContentState.view);
+    const selected = libraryContentState.selectedIds.has(item.id);
     return `
-      <article class="library-content-card">
+      <article class="library-content-card ${selected ? 'is-selected' : ''}">
+        ${selectable ? `<label class="library-content-select"><input type="checkbox" data-library-content-select="${escapeHtml(item.id)}" ${selected ? 'checked' : ''} aria-label="Selecionar ${escapeHtml(visibleTitle)}"></label>` : ''}
         <button type="button" class="library-content-thumb-button" data-library-content-item="${escapeHtml(item.id)}" aria-label="Abrir detalhes de ${escapeHtml(visibleTitle)}">
           <span class="library-content-thumb" data-library-content-image>
             <span class="library-content-thumb-placeholder">Sem imagem</span>
@@ -834,19 +898,46 @@ function renderLibraryContent() {
   }).join('');
   bindLibraryContentImages(items);
 
-  const hasAnything = libraryContentState.items.length > 0 || (!libraryContentState.query && libraryContentState.directories.length > 0);
+  const hasAnything = libraryContentState.items.length > 0 || (libraryContentState.view === 'content' && !libraryContentState.query && libraryContentState.directories.length > 0);
   $('#libraryContentEmpty').classList.toggle('hidden', hasAnything);
   $('#libraryContentLoadMoreBtn').classList.toggle('hidden', !pagination.hasMore);
+  updateLibraryContentBatchActions();
 }
 
 function closeLibraryContentDetails() {
   $('#libraryContentDetails').classList.add('hidden');
 }
 
+function contentDetailActions(item) {
+  if (!item) return [];
+  if (item.userDisposition === 'ignored') {
+    const actions = [{ action: 'reactivate', label: 'Reativar', danger: false }];
+    if (item.storageState === 'quarantined') actions.push({ action: 'delete-permanently', label: 'Excluir definitivamente agora', danger: true });
+    return actions;
+  }
+  if (item.storageState === 'quarantined') {
+    return [
+      { action: 'restore-keep', label: 'Restaurar e manter', danger: false },
+      { action: 'delete-permanently', label: 'Excluir definitivamente', danger: true }
+    ];
+  }
+  if (item.userDisposition === 'keep' && item.sourceActive === false && item.storageState === 'active') {
+    return [
+      { action: 'quarantine', label: 'Enviar para quarentena', danger: false },
+      { action: 'delete-permanently', label: 'Excluir definitivamente', danger: true }
+    ];
+  }
+  if (item.sourceActive !== false && item.storageState === 'active') {
+    return [{ action: 'ignore', label: 'Excluir e ignorar', danger: true }];
+  }
+  return [];
+}
+
 function showLibraryContentDetails(item) {
   if (!item) return;
   const episode = libraryContentEpisodeLabel(item) || '-';
   const rows = [
+    ['Estado', item.stateLabel || 'Ativo'],
     ['Título', item.title || '-'],
     ['Artista', item.artist || '-'],
     ['Data', item.releaseDate || '-'],
@@ -855,18 +946,50 @@ function showLibraryContentDetails(item) {
     ['Arquivo', item.relativeFile || '-'],
     ['Tamanho', item.fileSizeBytes ? formatBytes(item.fileSizeBytes) : '-'],
     ['Legendas', libraryContentSubtitleLabel(item)],
-    ['Video ID', item.videoId || '-']
+    ['Video ID', item.videoId || '-'],
+    ['Expira', item.quarantineExpiresAt ? formatDate(item.quarantineExpiresAt) : '-']
   ];
   $('#libraryContentDetailsTitle').textContent = item.title || item.videoId || 'Vídeo';
   $('#libraryContentDetailsList').innerHTML = rows.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join('');
+  $('#libraryContentDetailsActions').innerHTML = contentDetailActions(item).map((entry) => (
+    `<button type="button" class="small ${entry.danger ? 'danger' : ''}" data-content-item-action="${entry.action}" data-item-id="${escapeHtml(item.id)}">${escapeHtml(entry.label)}</button>`
+  )).join('');
   const panel = $('#libraryContentDetails');
   panel.classList.remove('hidden');
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+async function runLibraryContentAction(action, itemIds) {
+  const ids = [...new Set((itemIds || []).filter(Boolean))];
+  if (!ids.length) return;
+  const destructive = ['ignore', 'delete-permanently'].includes(action);
+  if (destructive) {
+    const labels = { ignore: 'Excluir e ignorar', 'delete-permanently': 'Excluir definitivamente' };
+    const decision = await showAppDialog({
+      eyebrow: 'Conteúdo',
+      title: labels[action] || 'Confirmar ação',
+      message: action === 'ignore'
+        ? `Mover ${ids.length} item(ns) para a quarentena e impedir novo download até reativação?`
+        : `Excluir definitivamente ${ids.length} item(ns) selecionado(s)?`,
+      danger: true
+    });
+    if (!decision.confirmed) return;
+  }
+  const response = await api(`${libraryContentState.endpointBase}/content-action`, {
+    method: 'POST',
+    body: JSON.stringify({ action, itemIds: ids })
+  });
+  libraryContentState.selectedIds.clear();
+  closeLibraryContentDetails();
+  await loadLibraryContent();
+  await refreshAll();
+  const result = response.result || {};
+  showToast(`${result.changed || 0} item(ns) atualizado(s).`);
+}
+
 async function loadLibraryContent(options = {}) {
   const append = Boolean(options.append);
-  if (!libraryContentState.active || !libraryContentState.libraryName) return;
+  if (!libraryContentState.active || !libraryContentState.endpointBase) return;
   const requestId = ++libraryContentRequestId;
   const browser = $('#libraryContentBrowser');
   browser.classList.add('library-content-loading');
@@ -875,14 +998,16 @@ async function loadLibraryContent(options = {}) {
   const params = new URLSearchParams();
   params.set('limit', String(LIBRARY_CONTENT_PAGE_SIZE));
   params.set('offset', String(append ? libraryContentState.items.length : 0));
-  if (libraryContentState.path) params.set('path', libraryContentState.path);
+  params.set('view', libraryContentState.view);
+  if (libraryContentState.view === 'content' && libraryContentState.path) params.set('path', libraryContentState.path);
   if (libraryContentState.query) params.set('q', libraryContentState.query);
 
   try {
-    const response = await api(`/api/playlists/${encodeURIComponent(libraryContentState.libraryName)}/content?${params.toString()}`);
+    const response = await api(`${libraryContentState.endpointBase}/content?${params.toString()}`);
     if (requestId !== libraryContentRequestId) return;
     const result = response.result || {};
     libraryContentState.library = result.library || libraryContentState.library;
+    libraryContentState.view = result.view || libraryContentState.view;
     libraryContentState.path = result.path || '';
     libraryContentState.directories = result.directories || [];
     const nextItems = result.items || [];
@@ -892,6 +1017,7 @@ async function loadLibraryContent(options = {}) {
       libraryContentState.items = [...byId.values()];
     } else {
       libraryContentState.items = nextItems;
+      libraryContentState.selectedIds.clear();
     }
     libraryContentState.itemMap = new Map(libraryContentState.items.map((item) => [item.id, item]));
     libraryContentState.pagination = result.pagination || { total: libraryContentState.items.length, offset: 0, limit: LIBRARY_CONTENT_PAGE_SIZE, hasMore: false };
@@ -901,22 +1027,47 @@ async function loadLibraryContent(options = {}) {
   }
 }
 
-async function openLibraryContent(playlist) {
+async function openDestinationContent({ name, endpointBase, view = 'content', returnView = 'libraries' }) {
   libraryContentState = {
     active: true,
-    libraryName: String(playlist.name || ''),
+    libraryName: String(name || ''),
+    endpointBase,
+    returnView,
+    view,
     library: null,
     path: '',
     query: '',
     directories: [],
     items: [],
     itemMap: new Map(),
+    selectedIds: new Set(),
     pagination: { total: 0, offset: 0, limit: LIBRARY_CONTENT_PAGE_SIZE, hasMore: false }
   };
   $('#libraryContentSearch').value = '';
+  $('#libraryContentView').value = view;
+  if (activeView !== 'libraries') setActiveView('libraries', { persist: false });
   setLibraryContentMode(true);
+  $('#libraryContentBackBtn').textContent = returnView === 'channels' ? 'Voltar para Canais' : 'Voltar para Bibliotecas';
   window.scrollTo({ top: 0, behavior: 'smooth' });
   await loadLibraryContent();
+}
+
+async function openLibraryContent(playlist, view = 'content') {
+  return openDestinationContent({
+    name: playlist.name,
+    endpointBase: `/api/playlists/${encodeURIComponent(playlist.name)}`,
+    view,
+    returnView: 'libraries'
+  });
+}
+
+async function openChannelPlaylistContent(channelId, playlistId, name, view = 'content') {
+  return openDestinationContent({
+    name,
+    endpointBase: `/api/channels/${encodeURIComponent(channelId)}/playlists/${encodeURIComponent(playlistId)}`,
+    view,
+    returnView: 'channels'
+  });
 }
 
 async function saveConfiguration(showMessage = true) {
@@ -1013,7 +1164,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '3.4.17'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '3.5.0'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -1271,6 +1422,10 @@ async function handleLibraryAction(button) {
     await openLibraryContent(playlist);
     return;
   }
+  if (action === 'orphans-recover') {
+    await openLibraryContent(playlist, 'quarantine');
+    return;
+  }
 
   if (action === 'remove-config') {
     const decision = await showAppDialog({
@@ -1358,16 +1513,6 @@ async function handleLibraryAction(button) {
     if (!decision.confirmed) return;
   }
 
-  if (action === 'refresh-release-dates') {
-    const decision = await showAppDialog({
-      eyebrow: 'Migração temporária',
-      title: 'Atualizar datas e episódios',
-      message: 'O aplicativo buscará datas ausentes. Em Clipes musicais, também reorganizará temporada/episódio pela data e renomeará os arquivos para acompanhar a nova numeração. Títulos, descrições, artistas, gêneros e as demais edições manuais do NFO serão preservados.',
-      warning: 'Uma data já preenchida no NFO será preservada e terá prioridade na ordem cronológica. Somente temporada/episódio podem ser corrigidos nesse perfil. Para evitar disputa com o worker, a ação só inicia quando não há download ou legenda em andamento.',
-      confirmLabel: 'Atualizar metadados'
-    });
-    if (!decision.confirmed) return;
-  }
 
   const result = await api(`/api/playlists/${encodeURIComponent(name)}/${action}`, { method: 'POST', body: '{}' });
   if (action === 'test-cookies') {
@@ -1375,9 +1520,6 @@ async function handleLibraryAction(button) {
     showToast(`${details.message}${details.ytDlp && details.ytDlp.stderr ? `\n${details.ytDlp.stderr.slice(-800)}` : ''}`, !details.ok && details.status !== 'not-configured');
   } else if (action === 'refresh-thumbnails') {
     showToast(`Thumbnails: ${result.result.created || 0} criadas, ${result.result.updated || 0} atualizadas, ${result.result.failed || 0} falhas.`);
-  } else if (action === 'refresh-release-dates') {
-    const details = result.result;
-    showToast(`NFOs: ${details.nfoUpdated || 0} data(s) preenchida(s), ${details.episodesRenumbered || 0} episódio(s) renumerado(s), ${details.filesRenamed || 0} arquivo(s) renomeado(s), ${details.nfoPreserved || 0} preservado(s) e ${details.failed || 0} falha(s).`);
   } else if (action === 'refresh-subtitles') {
     const details = result.result;
     showToast(details.queued > 0
@@ -1553,7 +1695,9 @@ function bindEvents() {
         includeAuto: true,
         languages: ['pt-BR', 'pt', 'en', 'es']
       },
-      mediaProfile: 'generic'
+      mediaProfile: 'generic',
+      orphanPolicy: '',
+      quarantineRetentionDays: null
     });
     renderLibraries();
     requestAnimationFrame(() => {
@@ -1591,6 +1735,11 @@ function bindEvents() {
       options.classList.toggle('is-disabled', !input.checked);
       options.querySelectorAll('input').forEach((control) => { control.disabled = !input.checked; });
     }
+
+    if (input.dataset.field === 'orphanPolicy') {
+      window.DestinationForm.syncOrphanControls(row);
+      updateLibraryStats();
+    }
   });
 
   $('#playlistList').addEventListener('click', (event) => {
@@ -1601,13 +1750,29 @@ function bindEvents() {
 
   $('#libraryContentBackBtn').addEventListener('click', () => {
     libraryContentRequestId += 1;
+    const returnView = libraryContentState.returnView || 'libraries';
     setLibraryContentMode(false);
+    if (returnView !== 'libraries') setActiveView(returnView, { persist: false });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
   $('#libraryContentDetailsClose').addEventListener('click', closeLibraryContentDetails);
 
   $('#libraryContentBrowser').addEventListener('click', (event) => {
+    const itemAction = event.target.closest('[data-content-item-action]');
+    if (itemAction) {
+      runLibraryContentAction(itemAction.dataset.contentItemAction, [itemAction.dataset.itemId])
+        .catch((error) => showToast(error.message, true));
+      return;
+    }
+    const selector = event.target.closest('[data-library-content-select]');
+    if (selector) {
+      const id = selector.dataset.libraryContentSelect;
+      if (selector.checked) libraryContentState.selectedIds.add(id);
+      else libraryContentState.selectedIds.delete(id);
+      updateLibraryContentBatchActions();
+      return;
+    }
     const folder = event.target.closest('[data-library-content-folder]');
     if (folder) {
       libraryContentState.path = folder.dataset.libraryContentFolder || '';
@@ -1628,6 +1793,24 @@ function bindEvents() {
 
     const card = event.target.closest('[data-library-content-item]');
     if (card) showLibraryContentDetails(libraryContentState.itemMap.get(card.dataset.libraryContentItem));
+  });
+
+  $('#libraryContentView').addEventListener('change', (event) => {
+    libraryContentState.view = event.currentTarget.value || 'content';
+    libraryContentState.path = '';
+    libraryContentState.query = '';
+    libraryContentState.selectedIds.clear();
+    $('#libraryContentSearch').value = '';
+    loadLibraryContent().catch((error) => showToast(error.message, true));
+  });
+
+  $('#libraryContentBatchPrimary').addEventListener('click', (event) => {
+    runLibraryContentAction(event.currentTarget.dataset.contentBatchAction, [...libraryContentState.selectedIds])
+      .catch((error) => showToast(error.message, true));
+  });
+  $('#libraryContentBatchDelete').addEventListener('click', () => {
+    runLibraryContentAction('delete-permanently', [...libraryContentState.selectedIds])
+      .catch((error) => showToast(error.message, true));
   });
 
   $('#libraryContentSearch').addEventListener('input', (event) => {
@@ -1694,6 +1877,7 @@ async function bootstrap() {
       showDialog: showAppDialog,
       formatBytes,
       formatDate,
+      openChannelPlaylistContent,
       refresh: () => refreshAll(false, { forceDownloads: $('#downloadsAccordion').open })
     });
   }

@@ -77,7 +77,7 @@ function makeConfig(root = '/srv/media') {
 
 test('v3 config normalizes Channels without changing embedded playlist identity', () => {
   const config = validateConfig(makeConfig());
-  assert.equal(config.configVersion, 8);
+  assert.equal(config.configVersion, 9);
   assert.equal(config.paths.channelsBaseDir, '/srv/media/channels');
   assert.equal(config.channels.length, 1);
   assert.equal(config.channels[0].uploadsPlaylistId, 'UU_TEST_CHANNEL');
@@ -85,6 +85,7 @@ test('v3 config normalizes Channels without changing embedded playlist identity'
   assert.equal(config.channels[0].playlists[0].mediaProfile, 'music_clips');
   assert.equal(config.channels[0].playlists[0].libraryId, 31);
   assert.equal(config.channels[0].playlists[1].channelNumber, 419);
+  assert.equal(config.channels[0].playlists[0].orphanPolicy, 'mark');
 });
 
 test('v3 config preserves an intentionally empty library list during migration', () => {

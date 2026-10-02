@@ -36,7 +36,8 @@ async function handleLibraryRoutes(req, res, url, deps) {
       browserPath: url.searchParams.get('path'),
       query: url.searchParams.get('q'),
       offset: url.searchParams.get('offset'),
-      limit: url.searchParams.get('limit')
+      limit: url.searchParams.get('limit'),
+      view: url.searchParams.get('view')
     });
     deps.sendJson(res, 200, { ok: true, result });
     return true;
@@ -96,10 +97,11 @@ async function handleLibraryRoutes(req, res, url, deps) {
     result = await testPlaylistCookies(config, playlistName);
   } else if (action === 'refresh-thumbnails') {
     result = await downloadManager.refreshThumbnails(playlist.folderName);
-  } else if (action === 'refresh-release-dates') {
-    result = await downloadManager.refreshReleaseDates(playlist.folderName);
   } else if (action === 'refresh-subtitles') {
     result = await downloadManager.queueMissingSubtitles(playlist.folderName);
+  } else if (action === 'content-action') {
+    const payload = await deps.readJson(req);
+    result = await downloadManager.runContentAction(playlist.folderName, payload.action, payload.itemIds);
   } else if (action === 'orphans-preview') {
     result = downloadManager.previewOrphans(playlist.folderName);
   } else if (action === 'orphans-cleanup') {

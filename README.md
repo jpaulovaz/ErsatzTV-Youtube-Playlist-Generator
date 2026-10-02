@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.17
+# ErsatzTV YouTube Downloader 3.5.0
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.17 corrige o comportamento de **Título customizado** nos Scripted Schedules: além de continuar podendo apenas renomear entradas individuais do EPG, o mesmo campo agora pode ativar o agrupamento nativo do ErsatzTV e usar esse título como nome de uma única entrada para todo o bloco. O agrupamento configurável em **Presentation Profiles** permanece disponível e independente. O Universal permanece v1.3.1.
+A versão 3.5.0 amplia o gerenciamento do acervo com políticas explícitas para arquivos órfãos, quarentena recuperável, ignorar/reativar itens e proteção contra exclusões causadas por descobertas parciais. **Ver conteúdo** passa a gerenciar também Órfãos, Quarentena e Ignorados, inclusive nas Playlists configuradas dentro de Canais. A ação temporária **Atualizar datas e episódios** foi removida; downloads novos continuam recebendo datas e sequenciamento cronológico normalmente. O Universal permanece v1.3.1.
 
 ## Arquitetura
 
@@ -25,7 +25,7 @@ Biblioteca local do ErsatzTV
 ## Principais recursos
 
 - Uma ou mais bibliotecas, cada uma com várias fontes.
-- Navegador read-only do acervo de cada Biblioteca, com pastas reais, thumbnails, pesquisa, metadata de NFO e paginação.
+- Gerenciador **Ver conteúdo** para Bibliotecas e Playlists de Canais, com pastas reais, thumbnails, pesquisa, metadata de NFO, paginação e visões de Órfãos, Quarentena e Ignorados.
 - Fontes do tipo playlist e vídeo individual.
 - YouTube Data API como modo preferencial, com fallback automático para `yt-dlp`.
 - Fila persistente em JSON; reiniciar o aplicativo não perde os itens pendentes.
@@ -36,7 +36,6 @@ Biblioteca local do ErsatzTV
 - Modo opcional para ErsatzTV/Shows com `Biblioteca/Artista/Season 01/`, `tvshow.nfo` e NFO por episódio.
 - Metadata temporal do YouTube preservada no estado (`publishedAt`/`uploadDate`, `releaseDate`, origem e ano) para novos downloads.
 - NFOs novos incluem `year` + `premiered` em Movies e `aired` em episódios de Clipes musicais.
-- Ação temporária **Atualizar datas e episódios** para completar datas ausentes e, em Clipes musicais, reorganizar S01E01, S01E02... pela cronologia sem reconstruir os demais metadados do NFO.
 - Thumbnail do vídeo como artwork de episódio (`-thumb.jpg`) e `poster.jpg` no nível do artista/Show.
 - Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
 - Seleção múltipla de idiomas: `pt-BR`, `pt`, `en` e `es`.
@@ -44,7 +43,7 @@ Biblioteca local do ErsatzTV
 - Deduplicação por ID do YouTube dentro de cada destino; o mesmo vídeo pode existir intencionalmente em destinos diferentes.
 - Retentativas automáticas após 1, 5 e 15 minutos.
 - Pausa automática quando o espaço livre fica abaixo da reserva configurada.
-- Itens removidos de uma fonte são marcados como órfãos e nunca apagados automaticamente.
+- Política de arquivos órfãos por Biblioteca/Playlist de Canal: excluir automaticamente, marcar como órfão ou mover para quarentena recuperável.
 - Controles de pausar, retomar, cancelar, priorizar, remover, limpar a fila e tentar novamente.
 - Resumo permanente da fila e listagem recolhível/paginada, fechada por padrão.
 - Interface profissional com navegação lateral no desktop e barra móvel inferior em carrossel horizontal, com ocultação automática e reaparecimento por interação.
@@ -58,7 +57,7 @@ Biblioteca local do ErsatzTV
 - Área **Scripted Schedules** com vários projetos independentes, **18 tipos de módulo**, Filler opcional, motor Universal versionado e geração de Python sem edição manual de código.
 - Publicação atômica dos scripts em pasta configurável, com validação, SHA-256, backup e histórico para restauração.
 - Menu **Ajuda** com explicações simples, exemplos de módulos, combinações sugeridas, glossário e um guia completo de Queries do ErsatzTV.
-- Limpeza manual de órfãos.
+- Ações manuais **Excluir e ignorar**, **Reativar**, **Restaurar e manter**, quarentena e exclusão definitiva, com bloqueio persistente contra redownload quando solicitado.
 - Migração automática da configuração da versão 1.
 
 ## Requisitos
@@ -147,11 +146,11 @@ Em caso de colisão de nome, o ID do YouTube é acrescentado ao arquivo. O índi
 
 O nome da biblioteca também é sua identidade interna e define a pasta física. Renomeá-la depois que a fila já possui itens é tratado como a criação de outra biblioteca; não use uma simples renomeação para mover arquivos existentes. Mudanças de `paths.baseDir` também devem ser feitas com a fila parada e com migração planejada dos arquivos e do estado.
 
-## Navegador de conteúdo das Bibliotecas
+## Ver conteúdo e gerenciamento do acervo
 
-Em **Bibliotecas -> Conteúdo -> Ver conteúdo**, a tela de configuração dá lugar temporariamente a um navegador do acervo local. A sanfona original não recebe thumbnails nem listas extensas; o usuário volta para ela com **Voltar para Bibliotecas**.
+Em **Bibliotecas -> Conteúdo -> Ver conteúdo**, a tela de configuração dá lugar temporariamente ao gerenciador do acervo. Playlists selecionadas dentro de **Canais** usam o mesmo navegador e as mesmas ações; não existe uma segunda implementação paralela.
 
-A navegação é derivada do caminho real de cada vídeo relativo à raiz da Biblioteca. Por isso os três layouts existentes aparecem naturalmente, sem categorias artificiais:
+A visão **Conteúdo** preserva a navegação derivada do caminho real de cada vídeo:
 
 ```text
 Clipes musicais: Artista -> Season 01 -> vídeos
@@ -159,11 +158,11 @@ Filmes:          Artista -> pasta do filme -> vídeo
 Genérico:         Artista -> vídeos
 ```
 
-Somente itens concluídos/com mídia local conhecida entram no acervo. A listagem usa o estado persistente para identidade, duração, tamanho, Video ID e localização, mas **prefere o NFO existente** para título, artista do Show, temporada/episódio e data quando esses campos estiverem presentes. Assim, correções manuais de NFO aparecem na interface sem que o navegador regrave o arquivo.
+A listagem usa o estado persistente para identidade, duração, tamanho, Video ID e localização, mas **prefere o NFO existente** para título, artista do Show, temporada/episódio e data quando esses campos estiverem presentes. Assim, correções manuais de NFO continuam aparecendo sem que o navegador regrave o arquivo.
 
-A pesquisa percorre toda a Biblioteca e aceita título, artista, `SxxExx`, Video ID e caminho relativo. Os cards são entregues em páginas de 60 itens e as thumbnails usam `loading=lazy`. Ao clicar num card, um painel read-only mostra título, artista, data, episódio, duração, caminho **relativo** do arquivo, tamanho, legendas registradas e Video ID.
+O seletor **Exibir** também permite abrir **Órfãos**, **Quarentena** e **Ignorados** quando esses estados existem. Quarentena e Ignorados permanecem visíveis mesmo quando o item não faz mais parte da árvore ativa da biblioteca. Ações disponíveis dependem do estado: **Excluir e ignorar**, **Reativar**, **Restaurar e manter**, **Enviar para quarentena** e **Excluir definitivamente**. A quarentena aceita seleção múltipla para restauração/exclusão.
 
-Por segurança, o navegador nunca recebe caminhos absolutos do servidor. A rota de thumbnail aceita apenas um ID conhecido pelo estado, resolve o arquivo internamente e rejeita qualquer caminho que saia da raiz da Biblioteca. Esta versão não edita, renomeia, exclui, reproduz nem regrava NFOs.
+A pesquisa continua aceitando título, artista, `SxxExx`, Video ID e caminho relativo. Os cards são paginados e thumbnails usam `loading=lazy`. O painel de detalhes mostra somente informações seguras e caminhos **relativos**. Caminhos absolutos do servidor não são enviados ao navegador; thumbnails/posters ativos e de quarentena são resolvidos internamente e validados contra suas raízes permitidas.
 
 ## Canais
 
@@ -179,7 +178,7 @@ Fontes disponíveis:
 
 As fontes globais usam o perfil Genérico. Playlists selecionadas podem usar os mesmos três perfis de mídia de Bibliotecas e podem ter `Library ID`, **Canal no ErsatzTV** selecionado por nome, resolução, cookies e legendas próprios. Uma playlist é tratada como unidade editorial completa, inclusive quando contém vídeos publicados por outros canais.
 
-A identidade persistente é baseada em `channelId`, `playlistId` e `destinationId`. Renomes no YouTube atualizam o nome exibido, mas não movem automaticamente a pasta física. Itens removidos remotamente viram órfãos e só são excluídos após preview e confirmação manual.
+A identidade persistente é baseada em `channelId`, `playlistId` e `destinationId`. Renomes no YouTube atualizam o nome exibido, mas não movem automaticamente a pasta física. Cada Playlist selecionada recebe sua própria política de órfãos e o mesmo **Ver conteúdo** das Bibliotecas. As fontes globais do Canal (Todos os uploads, Vídeos, Shorts e Transmissões) permanecem fora dessa política configurável nesta versão.
 
 Por padrão, os arquivos de Canais ficam abaixo de `paths.channelsBaseDir`:
 
@@ -234,7 +233,7 @@ O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão**
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.4.17:
+Módulos disponíveis na v3.5.0:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -386,23 +385,11 @@ O artista vira o Show e a música vira o episódio. A partir da v3.4.11, a numer
 
 A normalização de nomes continua conservadora: casing claramente ruidoso é corrigido, enquanto grafias estilizadas como `AC/DC`, `P!NK`, `deadmau5`, `blink-182` e `CHVRCHES` são preservadas.
 
-## Atualização temporária de datas e episódios
+## Datas e sequenciamento de Clipes musicais
 
-Na v3.4.17, cada biblioteca ainda mantém temporariamente a ação **Atualizar datas e episódios**. Ela migra o acervo anterior para a nova numeração cronológica sem recriar os NFOs.
+Downloads novos continuam preservando metadata temporal do YouTube e escrevendo `year`/`premiered` ou `aired` conforme o perfil. Em **Clipes musicais (Seriados)**, o sequenciamento cronológico por artista continua fazendo parte do fluxo normal de descoberta/download e também é usado após restaurações da quarentena quando necessário.
 
-A operação é conservadora:
-
-- usa a YouTube Data API quando esse modo está ativo e tenta yt-dlp como fallback;
-- atualiza `publishedAt`/`uploadDate`, `releaseDate`, origem e ano no estado local;
-- em Clipes musicais, acrescenta `aired` somente quando ele não existe; se o NFO já possui um `aired` manual válido, essa data é preservada e passa a ter prioridade para definir a ordem;
-- em Clipes musicais, corrige somente `season` e `episode` para refletir a cronologia por artista; as demais tags do NFO são preservadas;
-- quando a numeração muda, renomeia MP4, NFO, thumbnail e legendas sidecar alterando apenas o trecho `SxxExx` do nome. O restante do nome do arquivo é mantido; se um nome manual não possui esse token, ele permanece intacto;
-- em Genérico/Filmes, continua acrescentando `year` e `premiered` somente quando o NFO não possui nenhum desses campos de data;
-- título, descrição, artista, gênero, tags e demais edições manuais não são reconstruídos nem substituídos;
-- para evitar renomear arquivos enquanto o worker os manipula, a ação só inicia quando não há download ou legenda em andamento;
-- quando houver Library ID configurado e algum NFO/arquivo for alterado, solicita um scan da biblioteca no ErsatzTV ao final.
-
-O botão continua temporário enquanto a homologação da migração de mídia estiver aberta. Esta versão altera somente Scripted Schedules, portanto ele não é removido aqui para não misturar uma mudança já consolidada de downloads com este ajuste. Downloads novos já recebem a numeração cronológica automaticamente.
+A antiga ação manual **Atualizar datas e episódios**, criada apenas para a migração dos acervos anteriores, foi removida na v3.5.0. A remoção não altera o enriquecimento de data nem o resequenciamento normal de novos downloads.
 
 ## Compatibilidade de mídia
 
@@ -424,16 +411,21 @@ A interface mostra total, usado e livre. Por padrão, novos downloads são bloqu
 
 A pausa por pouco espaço não exclui arquivos nem remove itens da fila. Depois de liberar espaço, o worker volta a prosseguir automaticamente.
 
-## Órfãos
+## Gestão de órfãos, quarentena e controle manual
 
-Quando um vídeo deixa de pertencer às fontes configuradas:
+Cada **Biblioteca** e cada **Playlist de Canal** possui a configuração **Arquivos órfãos**:
 
-- o arquivo local é preservado;
-- o item recebe marcação de órfão;
-- não há exclusão automática;
-- a interface permite visualizar e remover órfãos de forma explícita.
+- **Excluir automaticamente**: na primeira ausência confirmada por uma descoberta autoritativa, remove o pacote da mídia e o estado correspondente.
+- **Marcar como órfão**: mantém o arquivo no lugar. **Limpar órfãos** só aparece quando esta política está selecionada e existem órfãos.
+- **Mover para quarentena recuperável**: retira o pacote da biblioteca ativa e o preserva fora da raiz escaneada. A retenção pode ser **Nunca**, 30, 90 ou 180 dias.
 
-A limpeza de órfãos remove o MP4, a thumbnail, os SRT sidecar associados, o estado daquele item e pastas de artista que ficarem vazias.
+Destinos existentes atualizados para v3.5.0 recebem automaticamente **Marcar como órfão**, preservando o comportamento anterior. Novos destinos exigem escolha explícita da política.
+
+A quarentena fica em uma pasta irmã da base de mídia, preferencialmente no mesmo filesystem, para que movimentos sejam feitos por `rename` quando possível. Em filesystems diferentes o aplicativo usa cópia, validação e só então remove o original. Nunca sobrescreve silenciosamente um arquivo existente durante restauração. MP4, NFO, thumbnail/poster e SRTs são tratados como um pacote; em Clipes musicais, assets compartilhados do Show só são retirados quando não resta outro episódio ativo/mantido.
+
+**Excluir e ignorar** é uma decisão manual distinta de órfão: o conteúdo pode continuar presente na fonte, mas o aplicativo move a cópia para quarentena e mantém um bloqueio persistente contra redownload. **Reativar** restaura a cópia quando ainda existe ou reenfileira o vídeo quando os bytes já expiraram. Se um item restaurado continuar fora da fonte, ele passa a **manter fora da fonte**; se reaparecer naturalmente depois, volta ao gerenciamento normal.
+
+Antes de qualquer ação por ausência, a descoberta precisa ser **autoritativa**. Timeout, retorno parcial do yt-dlp, erro indicado em stderr, paginação/fonte incompleta ou falha de qualquer origem de um destino multi-fonte bloqueiam exclusão, marcação e quarentena naquele ciclo. Itens encontrados em um resultado parcial ainda podem ser adicionados/atualizados; apenas a inferência de ausência é desabilitada.
 
 ## Autenticação e proxy reverso
 

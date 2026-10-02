@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.4\.17/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.4\.17/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.5\.0/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.5\.0/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -177,8 +177,8 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.1 modul
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.4\.17/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.4\.17/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.5\.0/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.5\.0/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -346,7 +346,7 @@ test('Scripted Schedules Help stays inside the Programacao sidebar group and is 
   assert.match(programacaoGroup, /data-view="help"/);
   assert.doesNotMatch(sistemaGroup, /data-view="help"/);
   assert.match(html, /id="view-help"/);
-  assert.match(html, /helpView\.js\?v=3\.4\.17/);
+  assert.match(html, /helpView\.js\?v=3\.5\.0/);
   assert.match(help, /Programação · Scripted Schedules/);
   assert.match(help, /Assuntos da ajuda de Scripted Schedules/);
   for (const tab of ['Começando', 'Recursos', 'Queries', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));
@@ -501,13 +501,10 @@ test('Graphics Element fields normalize a leading slash when editing', () => {
   assert.match(view, /event\.type === 'change'/);
 });
 
-test('Libraries expose the temporary NFO date and episode migration with a preservation warning', () => {
+test('Libraries remove the temporary date and episode migration action', () => {
   const app = read('app.js');
-  assert.match(app, /data-library-action="refresh-release-dates"/);
-  assert.match(app, /Atualizar datas e episódios/);
-  assert.match(app, /reorganizará temporada\/episódio pela data/);
-  assert.match(app, /demais edições manuais do NFO serão preservados/);
-  assert.match(app, /Uma data já preenchida no NFO será preservada e terá prioridade/);
+  assert.doesNotMatch(app, /data-library-action="refresh-release-dates"/);
+  assert.doesNotMatch(app, /Atualizar datas e episódios/);
 });
 
 
@@ -522,7 +519,7 @@ test('unpublished Scripted Schedules defer file and state identity until the fir
 });
 
 
-test('library content browser is read-only, paginated and separated from library configuration', () => {
+test('library content browser manages active and special content states', () => {
   const html = read('index.html');
   const app = read('app.js');
   const css = read('styles.css');
@@ -532,11 +529,14 @@ test('library content browser is read-only, paginated and separated from library
   assert.match(app, /LIBRARY_CONTENT_PAGE_SIZE = 60/);
   assert.match(app, /content-thumbnail\?id=/);
   assert.match(app, /content-folder-poster\?id=/);
-  assert.match(app, /<article class="library-content-card">/);
+  assert.match(app, /<article class="library-content-card \$\{selected/);
   assert.match(app, /class="library-content-thumb-button" data-library-content-item=/);
-  assert.match(app, /<\/button>\s*<span class="library-content-card-copy">/);
+  assert.match(app, /library-content-card-copy/);
   assert.match(app, /library-content-card-title/);
-  assert.doesNotMatch(app, /<button type="button" class="library-content-card"/);
+  assert.match(app, /data-content-item-action/);
+  assert.match(app, /Excluir e ignorar/);
+  assert.match(app, /Restaurar e manter/);
+  assert.match(html, /id="libraryContentView"/);
   assert.match(app, /frame\.classList\.add\('has-image'\)/);
   assert.match(app, /relativeFile/);
   assert.match(css, /\.library-content-grid/);

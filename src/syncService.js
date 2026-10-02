@@ -120,6 +120,8 @@ async function processPlaylist(config, playlist, summary) {
     videosDuplicate: 0,
     readMode: null,
     quotaUnitsUsed: 0,
+    authoritative: true,
+    partialReasons: [],
     queue: null,
     failed: false,
     error: null
@@ -149,7 +151,12 @@ async function processPlaylist(config, playlist, summary) {
     playlistSummary.videosDuplicate = (fetchResult.duplicates || []).length;
     playlistSummary.readMode = fetchResult.readMode || 'ytdlp';
     playlistSummary.quotaUnitsUsed = Number(fetchResult.quotaUnitsUsed) || 0;
-    playlistSummary.queue = await downloadManager.reconcileDestination(config, destination, sourceVideos);
+    playlistSummary.authoritative = fetchResult.authoritative !== false;
+    playlistSummary.partialReasons = fetchResult.partialReasons || [];
+    playlistSummary.queue = await downloadManager.reconcileDestination(config, destination, sourceVideos, {
+      authoritative: playlistSummary.authoritative,
+      partialReasons: playlistSummary.partialReasons
+    });
 
     summary.playlistsProcessed += 1;
     summary.videosFound += playlistSummary.videosFound;

@@ -236,3 +236,40 @@ test('browser path validation blocks parent traversal and safeRelativeFile block
   assert.equal(safeRelativeFile('/srv/library', '/srv/library/Artist/video.mp4'), 'Artist/video.mp4');
   assert.equal(safeRelativeFile('/srv/library', '/srv/private/secret.jpg'), '');
 });
+
+test('special content views keep recoverable orphan quarantine separate from ignored tombstones', async (t) => {
+  const fx = await fixture();
+  t.after(() => fs.rm(fx.baseDir, { recursive: true, force: true }));
+
+  const orphanTarget = path.join(fx.root, 'Orphan', 'orphan.mp4');
+  await fs.mkdir(path.dirname(orphanTarget), { recursive: true });
+  await fs.writeFile(orphanTarget, 'orphan');
+  fx.items.push({
+    id: 'Music:orphan', videoId: 'orphan', libraryFolder: 'Music', status: 'completed',
+    targetPath: orphanTarget, mediaPath: orphanTarget, sourceActive: false, orphaned: true,
+    userDisposition: 'managed', storageState: 'active', title: 'Orphan'
+  });
+  fx.items.push({
+    id: 'Music:q', videoId: 'q', libraryFolder: 'Music', status: 'orphaned',
+    targetPath: path.join(fx.root, 'Quarantine', 'q.mp4'), sourceActive: false, orphaned: true,
+    userDisposition: 'managed', storageState: 'quarantined', title: 'Recoverable',
+    quarantine: { originalPaths: { targetPath: path.join(fx.root, 'Quarantine', 'q.mp4') }, movedAt: '2026-10-01T00:00:00Z', files: [] }
+  });
+  fx.items.push({
+    id: 'Music:ignored', videoId: 'ignored', libraryFolder: 'Music', status: 'removed',
+    targetPath: path.join(fx.root, 'Ignored', 'ignored.mp4'), sourceActive: true, orphaned: false,
+    userDisposition: 'ignored', storageState: 'quarantined', title: 'Ignored',
+    quarantine: { originalPaths: { targetPath: path.join(fx.root, 'Ignored', 'ignored.mp4') }, movedAt: '2026-10-01T00:00:00Z', files: [] }
+  });
+
+  const qView = await listLibraryContent({ config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items), view: 'quarantine' });
+  assert.deepEqual(qView.items.map((item) => item.videoId), ['q']);
+  assert.equal(qView.library.specialCounts.quarantine, 1);
+  assert.equal(qView.library.specialCounts.ignored, 1);
+
+  const ignoredView = await listLibraryContent({ config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items), view: 'ignored' });
+  assert.deepEqual(ignoredView.items.map((item) => item.videoId), ['ignored']);
+
+  const orphanView = await listLibraryContent({ config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items), view: 'orphans' });
+  assert.deepEqual(orphanView.items.map((item) => item.videoId), ['orphan']);
+});

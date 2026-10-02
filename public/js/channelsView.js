@@ -67,6 +67,8 @@
       `<span class="badge ok">${stats.completed || 0} concluídos</span>`,
       `<span class="badge danger">${stats.failed || 0} falhas</span>`,
       `<span class="badge">${stats.orphaned || 0} órfãos</span>`,
+      stats.quarantined ? `<span class="badge warn">${stats.quarantined} quarentena</span>` : '',
+      stats.ignored ? `<span class="badge">${stats.ignored} ignorado(s)</span>` : '',
       `<span class="badge">${ctx.formatBytes(stats.totalBytes || 0)}</span>`
     ];
     if (stats.subtitlesEnabled) {
@@ -322,12 +324,19 @@
       channelName: '',
       maxHeight: null,
       cookiesPath: '',
-      subtitles: { enabled: false, includeAuto: true, languages: ['pt-BR', 'pt', 'en', 'es'] }
+      subtitles: { enabled: false, includeAuto: true, languages: ['pt-BR', 'pt', 'en', 'es'] },
+      orphanPolicy: '',
+      quarantineRetentionDays: null
     };
     const checked = item.selected ? 'checked' : '';
     const count = Number.isFinite(Number(item.itemCount)) ? `${Number(item.itemCount)} itens` : '';
     const unavailable = item.unavailable ? '<span class="badge warn">Indisponível na análise</span>' : '';
     const stats = channel ? statsFor(channel.channelId, 'playlist', item.playlistId) : null;
+    const orphanAction = value.orphanPolicy === 'mark' && Number(stats && stats.orphaned) > 0
+      ? '<button class="small" type="button" data-channel-playlist-action="orphans-cleanup">Limpar órfãos</button>'
+      : (value.orphanPolicy === 'quarantine' && Number(stats && stats.quarantined) > 0
+        ? '<button class="small" type="button" data-channel-playlist-action="orphans-recover">Recuperar órfãos</button>'
+        : '');
     return `
       <details class="channel-playlist-card" data-channel-playlist="${escapeHtml(item.playlistId)}" ${item.selected ? 'open' : ''}>
         <summary>
@@ -356,9 +365,11 @@
                 <span class="library-action-group-title">Conteúdo</span>
                 <div class="library-actions">
                   <button class="small primary" type="button" data-channel-playlist-action="run">Buscar novidades</button>
+                  <button class="small" type="button" data-channel-playlist-action="view-content">Ver conteúdo</button>
                   <button class="small" type="button" data-channel-playlist-action="test-cookies">Testar cookies</button>
                   <button class="small" type="button" data-channel-playlist-action="refresh-thumbnails">Atualizar thumbnails</button>
                   <button class="small" type="button" data-channel-playlist-action="refresh-subtitles">Buscar legendas ausentes</button>
+                  ${orphanAction}
                 </div>
               </div>
               <div class="library-action-group">
@@ -367,7 +378,6 @@
                   <button class="small" type="button" data-channel-playlist-action="scan">Executar scan</button>
                   <button class="small" type="button" data-channel-playlist-action="empty-trash">Limpar lixo</button>
                   <button class="small" type="button" data-channel-playlist-action="reset-playout">Reset Playout</button>
-                  <button class="small" type="button" data-channel-playlist-action="orphans-cleanup">Limpar órfãos</button>
                 </div>
               </div>
               <div class="library-actions library-danger-actions">
@@ -423,6 +433,7 @@
       </div>`;
     global.DestinationForm.syncSubtitleControls(result);
     global.DestinationForm.syncErsatzTvControls(result);
+    global.DestinationForm.syncOrphanControls(result);
     syncPlaylistSelections(result);
   }
 
@@ -440,6 +451,7 @@
         if (checkbox.checked) {
           global.DestinationForm.syncSubtitleControls(body);
           global.DestinationForm.syncErsatzTvControls(body);
+          global.DestinationForm.syncOrphanControls(body);
         }
       };
       checkbox.addEventListener('change', apply);
@@ -493,6 +505,7 @@
       value.name = source.name || previous && previous.name || playlistId;
       value.folderName = previous && previous.folderName || source.folderName || value.name;
       value.url = source.url || previous && previous.url || `https://www.youtube.com/playlist?list=${playlistId}`;
+      if (!value.orphanPolicy) throw new Error(`Selecione como tratar Arquivos órfãos em "${value.name}".`);
       playlists.push(value);
     });
 
@@ -639,6 +652,12 @@
     if (editingChannelId === channelId && catalog) await persistEditor({ close: false, message: '' });
     const channel = getChannel(channelId);
     const playlist = channel && (channel.playlists || []).find((item) => item.playlistId === playlistId);
+
+    if (action === 'view-content' || action === 'orphans-recover') {
+      if (!playlist || !ctx.openChannelPlaylistContent) throw new Error('Playlist não encontrada para abrir o conteúdo.');
+      await ctx.openChannelPlaylistContent(channelId, playlistId, playlist.name, action === 'orphans-recover' ? 'quarantine' : 'content');
+      return;
+    }
 
     if (action === 'remove-config') {
       if (!playlist) return;
