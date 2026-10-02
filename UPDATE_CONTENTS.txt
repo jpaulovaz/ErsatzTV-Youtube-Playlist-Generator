@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.4.15 - pacote de atualização
+ErsatzTV YouTube Downloader 3.4.16 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.4.14.
+Extraia este ZIP sobre uma instalação v3.4.15.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,11 +9,10 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principais alterações:
-- título explicitamente visível abaixo das thumbnails dos vídeos;
-- poster armazenado do artista exibido na lista de pastas quando disponível;
-- nova rota read-only para poster de artista, baseada em item conhecido e validada dentro da raiz da Biblioteca;
-- correção do placeholder "Sem imagem", que agora desaparece ao concluir o carregamento;
-- navegador, pesquisa, paginação e painel de detalhes da v3.4.14 preservados.
+- correção estrutural do card para manter o título sempre fora do botão da thumbnail e visível abaixo da imagem;
+- thumbnails de vídeos/episódios em proporção widescreen 16:9, inclusive no layout móvel;
+- posters do primeiro nível de artistas/Shows em proporção vertical 2:3;
+- comportamento read-only, pesquisa, paginação, NFO, rotas seguras de imagem e painel de detalhes preservados.
 
 Universal permanece v1.3.1, configVersion permanece 8, schema de Scripted Schedules permanece 1 e estado da fila permanece 4.
 Consulte UPGRADE.md antes da atualização.

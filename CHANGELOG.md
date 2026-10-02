@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.4.16
+
+- Corrigida a regressão visual da v3.4.15 em que o título, embora presente no HTML, podia não aparecer abaixo da thumbnail. O card deixa de ser um único botão: somente a imagem é clicável e o bloco de título/metadados fica estruturalmente separado logo abaixo.
+- Thumbnails dos vídeos/episódios permanecem em proporção **16:9**, inclusive no layout móvel, refletindo o frame widescreen do conteúdo.
+- Posters exibidos no primeiro nível da Biblioteca passam a usar proporção vertical **2:3**, adequada ao artwork de artista/Show, sem alterar a imagem armazenada nem o `showPosterPath`.
+- A validação de interface passa a conferir a separação estrutural entre botão da thumbnail e título, além das proporções 16:9 e 2:3, evitando que esse tipo de regressão volte a passar apenas por teste textual.
+- Nenhuma alteração no Universal v1.3.1, `configVersion` 8, schema de Scripted Schedules 1, estado da fila 4, APIs read-only do navegador ou mecanismo de download.
+
 ## 3.4.15
 
 - O navegador de conteúdo passa a exibir explicitamente o **título de cada vídeo logo abaixo da thumbnail**, mantendo o painel de detalhes no clique como complemento.

@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.4.15
+# ErsatzTV YouTube Downloader 3.4.16
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.4.15 refina o **navegador somente de leitura das Bibliotecas**: o título fica sempre visível abaixo de cada thumbnail, a lista de artistas aproveita o poster já armazenado quando disponível e o placeholder **Sem imagem** desaparece corretamente após o carregamento. O Universal permanece v1.3.1.
+A versão 3.4.16 corrige a apresentação do **navegador somente de leitura das Bibliotecas**: o título passa a ocupar um bloco próprio abaixo da thumbnail 16:9, separado do botão da imagem, e os posters do nível de artista passam a usar proporção vertical 2:3. O Universal permanece v1.3.1.
 
 ## Arquitetura
 
@@ -234,7 +234,7 @@ O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão**
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.4.15:
+Módulos disponíveis na v3.4.16:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -386,7 +386,7 @@ A normalização de nomes continua conservadora: casing claramente ruidoso é co
 
 ## Atualização temporária de datas e episódios
 
-Na v3.4.15, cada biblioteca ainda mantém temporariamente a ação **Atualizar datas e episódios**. Ela migra o acervo anterior para a nova numeração cronológica sem recriar os NFOs.
+Na v3.4.16, cada biblioteca ainda mantém temporariamente a ação **Atualizar datas e episódios**. Ela migra o acervo anterior para a nova numeração cronológica sem recriar os NFOs.
 
 A operação é conservadora:
 

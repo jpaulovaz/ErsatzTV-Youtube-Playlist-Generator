@@ -815,18 +815,21 @@ function renderLibraryContent() {
     const duration = item.durationSeconds ? formatDuration(item.durationSeconds) : '';
     const details = [episode, duration, item.releaseDate].filter(Boolean);
     const thumbnailUrl = `/api/playlists/${encodeURIComponent(libraryContentState.libraryName)}/content-thumbnail?id=${encodeURIComponent(item.id)}`;
+    const visibleTitle = item.title || item.videoId;
     return `
-      <button type="button" class="library-content-card" data-library-content-item="${escapeHtml(item.id)}">
-        <span class="library-content-thumb" data-library-content-image>
-          <span class="library-content-thumb-placeholder">Sem imagem</span>
-          ${item.hasThumbnail ? `<img loading="lazy" alt="" src="${thumbnailUrl}">` : ''}
-        </span>
+      <article class="library-content-card">
+        <button type="button" class="library-content-thumb-button" data-library-content-item="${escapeHtml(item.id)}" aria-label="Abrir detalhes de ${escapeHtml(visibleTitle)}">
+          <span class="library-content-thumb" data-library-content-image>
+            <span class="library-content-thumb-placeholder">Sem imagem</span>
+            ${item.hasThumbnail ? `<img loading="lazy" alt="" src="${thumbnailUrl}">` : ''}
+          </span>
+        </button>
         <span class="library-content-card-copy">
-          <strong class="library-content-card-title">${escapeHtml(item.title || item.videoId)}</strong>
+          <strong class="library-content-card-title">${escapeHtml(visibleTitle)}</strong>
           <small>${escapeHtml(item.artist || item.relativeDirectory || '')}</small>
           <span class="library-content-card-meta">${details.map((value) => `<span>${escapeHtml(value)}</span>`).join('')}</span>
         </span>
-      </button>
+      </article>
     `;
   }).join('');
   bindLibraryContentImages(items);
@@ -1010,7 +1013,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '3.4.15'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '3.4.16'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);

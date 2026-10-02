@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.4.15
+ErsatzTV YouTube Downloader 3.4.16
 
-Arquivos alterados em relacao a v3.4.14:
+Arquivos alterados em relacao a v3.4.15:
 
 M	CHANGELOG.md
 M	MODIFIED_FILES.txt
@@ -12,8 +12,5 @@ M	public/app.js
 M	public/index.html
 M	public/login.html
 M	public/styles.css
-M	src/libraryContentService.js
-M	src/routes/libraryRoutes.js
 M	src/server.js
-M	test/libraryContentService.test.js
 M	test/ui-v3.test.js
