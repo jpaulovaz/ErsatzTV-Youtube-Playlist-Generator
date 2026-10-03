@@ -195,6 +195,10 @@ button.ghost { background: transparent; }
   gap: 8px;
   padding-top: 12px;
 }
+.ss-entry-actions {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
 .ss-resource-card,
 .ss-module-card,
 .ss-event-card { padding: 0; }

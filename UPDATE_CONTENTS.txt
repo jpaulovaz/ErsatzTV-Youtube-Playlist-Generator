@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.5.0 - pacote de atualização
+ErsatzTV YouTube Downloader 3.5.1 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.4.17.
+Extraia este ZIP sobre uma instalação v3.5.0.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,15 +9,13 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principais alterações:
-- política de órfãos por Biblioteca e Playlist de Canal: excluir, marcar ou mover para quarentena recuperável;
-- retenção de quarentena Nunca / 30 / 90 / 180 dias;
-- descoberta parcial deixa de poder inferir ausências ou executar ações destrutivas;
-- Ver conteúdo passa a gerenciar Conteúdo, Órfãos, Quarentena e Ignorados;
-- ações Excluir e ignorar, Reativar, Restaurar e manter, Enviar para quarentena e Excluir definitivamente;
-- tombstones de itens ignorados persistem mesmo depois da expiração dos bytes;
-- Playlists de Canais reutilizam o mesmo gerenciador de conteúdo;
-- remoção da ação temporária Atualizar datas e episódios sem remover o pipeline normal de datas/resequenciamento;
-- restauração de Clipes musicais trata colisões SxxExx e preserva assets compartilhados de Show.
+- ação Duplicar item em todos os itens principais dos módulos de Scripted Schedules;
+- clonagem profunda de campos e estruturas internas sem compartilhar referências com o original;
+- geração automática de ID único no projeto inteiro (`_copy`, `_copy_2`, ...);
+- Nome opcional recebe o sufixo (cópia), quando preenchido;
+- cópia inserida imediatamente depois do original e aberta automaticamente para edição;
+- Duplicar item como ação neutra à esquerda e Remover preservado como ação destrutiva à direita.
 
-Aplicação v3.5.0, Universal v1.3.1, configVersion 9, schema de Scripted Schedules 1 e estado persistente 5.
+Aplicação v3.5.1, Universal v1.3.1, configVersion 9, schema de Scripted Schedules 1 e estado persistente 5.
+Não há migração de dados ou mudança no formato salvo dos projetos.
 Consulte UPGRADE.md antes da atualização.

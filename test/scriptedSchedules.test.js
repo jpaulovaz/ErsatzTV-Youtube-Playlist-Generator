@@ -11,6 +11,7 @@ const { generateScript, projectToEngine } = require('../src/scriptedSchedules/ge
 const { safePublishedPath, publishScript } = require('../src/scriptedSchedules/publisher');
 const store = require('../src/scriptedSchedules/store');
 const service = require('../src/scriptedSchedules/service');
+const { duplicateModuleEntry } = require('../public/js/scriptedScheduleEditorUtils');
 
 function musicProject() {
   const project = defaultProject('11111111-1111-4111-8111-111111111111', { name: 'JohnFlix Music', fileName: 'johnflix-music.py' });
@@ -64,6 +65,24 @@ test('Scripted Schedule golden music project generates a valid Universal v1.3.1 
   assert.match(output, /configuracao valida/);
   assert.match(output, /ROTATION=2/);
   assert.match(output, /FIXED_EVENTS=2/);
+});
+
+
+test('duplicated module items remain valid normal entries for validator and generator', () => {
+  const project = musicProject();
+  project.modules.fixedEvents[0].label = 'Sessão de concertos';
+  const result = duplicateModuleEntry(project.modules, 'fixedEvents', 0);
+
+  assert.equal(result.index, 1);
+  assert.equal(project.modules.fixedEvents[1].id, 'concert_10_copy');
+  assert.equal(project.modules.fixedEvents[1].label, 'Sessão de concertos (cópia)');
+  assert.equal(project.modules.fixedEvents[1].time, '10:00');
+  assert.deepEqual(validateProject(project).errors, []);
+
+  const engine = projectToEngine(project);
+  assert.equal(engine.modules.fixedEvents.length, 3);
+  assert.equal(engine.modules.fixedEvents[1].id, 'concert_10_copy');
+  assert.equal(engine.modules.fixedEvents[1].time, '10:00');
 });
 
 

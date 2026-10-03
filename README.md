@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.5.0
+# ErsatzTV YouTube Downloader 3.5.1
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.5.0 amplia o gerenciamento do acervo com políticas explícitas para arquivos órfãos, quarentena recuperável, ignorar/reativar itens e proteção contra exclusões causadas por descobertas parciais. **Ver conteúdo** passa a gerenciar também Órfãos, Quarentena e Ignorados, inclusive nas Playlists configuradas dentro de Canais. A ação temporária **Atualizar datas e episódios** foi removida; downloads novos continuam recebendo datas e sequenciamento cronológico normalmente. O Universal permanece v1.3.1.
+A versão 3.5.1 mantém o gerenciamento de órfãos/quarentena introduzido na v3.5.0 e acrescenta **Duplicar item** aos módulos de Scripted Schedules. A cópia preserva toda a configuração do item, recebe ID único quando necessário e é inserida imediatamente depois do original para edição rápida. O Universal permanece v1.3.1; não há mudança de `configVersion`, schema de Scripted Schedules nem estado persistente.
 
 ## Arquitetura
 
@@ -233,7 +233,7 @@ O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão**
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.5.0:
+Módulos disponíveis na v3.5.1:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -253,6 +253,8 @@ Módulos disponíveis na v3.5.0:
 - **Programação especial temporária**: uma Source assume entre duas datas/horas e depois a grade normal volta.
 - **Evento em data específica**.
 - **Janela offline**.
+
+Cada item principal desses módulos possui **Duplicar item** na área de ações. A cópia é inserida imediatamente depois do original e já abre para edição. Todos os campos são clonados, inclusive estruturas internas complexas; somente o ID é ajustado automaticamente quando necessário (`_copy`, `_copy_2`, ...) e o **Nome opcional** recebe **(cópia)**. O horário não é alterado automaticamente, permitindo usar a duplicação tanto para repetir o mesmo bloco em outro horário quanto para manter horário/filtros e trocar apenas a Source ou outra configuração.
 
 O **Filler** permanece separado dos módulos e é opcional. O **Tipo de Filler** pode ser escolhido entre Post-roll, Pre-roll, Mid-roll e Nenhum. **Post-roll** é o padrão e a opção recomendada para preencher lacunas e para o Pad; projetos antigos sem essa escolha salva continuam sendo tratados como Post-roll. Programações de fundo como rotações, Bloco contínuo e Inserções após X itens são alternativas de programação-base; o validador avisa quando várias bases são configuradas ao mesmo tempo. Eventos fixos podem ser colocados por cima da base usando prioridade e horários.
 

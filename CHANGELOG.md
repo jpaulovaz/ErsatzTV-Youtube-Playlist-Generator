@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.5.1
+
+- Cada item principal dos módulos de **Scripted Schedules** passa a oferecer **Duplicar item** ao lado da ação de remoção, facilitando repetir blocos e alterar somente horário, Source, biblioteca, filtros ou outra característica necessária.
+- A duplicação é profunda: estruturas internas de **Sequência programada**, **Escolha entre fontes**, **Relógio de programação** e **Faixa de horário · rotação** são copiadas integralmente sem compartilhar arrays/objetos com o item original.
+- Itens que usam ID recebem automaticamente um identificador único no projeto inteiro: `id_copy`, depois `id_copy_2`, `id_copy_3` e assim por diante. Módulos simples que não possuem ID continuam sendo copiados literalmente.
+- Quando existe **Nome opcional**, a cópia recebe o sufixo **(cópia)**. Horários, Sources, prioridades, recorrências, Presentation, Pad, Trim, Filler, fallback, watermarks e demais campos permanecem iguais ao original.
+- A cópia é inserida imediatamente depois do item original, abre automaticamente para edição e mantém o módulo correspondente aberto. A ação **Duplicar item** é neutra à esquerda; **Remover** permanece separada como ação destrutiva à direita.
+- Nenhuma alteração no Universal v1.3.1, `configVersion` 9, schema de Scripted Schedules 1, estado persistente 5 ou formato salvo dos projetos.
+
 ## 3.5.0
 
 - Bibliotecas e Playlists selecionadas em Canais ganham a política **Arquivos órfãos** com três modos: **Excluir automaticamente**, **Marcar como órfão** e **Mover para quarentena recuperável**.

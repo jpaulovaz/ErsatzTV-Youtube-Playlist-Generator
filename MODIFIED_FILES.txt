@@ -1,43 +1,20 @@
-ErsatzTV YouTube Downloader 3.5.0
+ErsatzTV YouTube Downloader 3.5.1
 
-Arquivos alterados em relacao a v3.4.17:
+Arquivos alterados em relacao a v3.5.0:
 
 M	CHANGELOG.md
 M	MODIFIED_FILES.txt
 M	README.md
 M	UPDATE_CONTENTS.txt
 M	UPGRADE.md
-M	config/config.example.json
 M	package.json
 M	public/app.js
 M	public/index.html
-M	public/js/channelsView.js
-M	public/js/destinationForm.js
+A	public/js/scriptedScheduleEditorUtils.js
+M	public/js/scriptedSchedulesView.js
 M	public/login.html
-M	public/styles.css
-M	src/channelConfig.js
-M	src/config.js
-M	src/destinationService.js
-M	src/discovery/channelSyncService.js
-M	src/discovery/youtubeSourceProvider.js
-M	src/download/queueState.js
-M	src/download/workerSelector.js
-M	src/downloadManager.js
-M	src/libraryContentService.js
-M	src/mediaProfileService.js
-A	src/orphans/orphanMaintenance.js
-A	src/orphans/orphanPolicy.js
-A	src/orphans/quarantineService.js
-M	src/routes/channelRoutes.js
-M	src/routes/libraryRoutes.js
+M	public/scripted-schedules.css
 M	src/server.js
-M	src/syncService.js
-M	test/channels.test.js
-M	test/config.test.js
-M	test/downloadManager.test.js
-M	test/libraryContentService.test.js
-M	test/mediaProfileService.test.js
-A	test/orphanPolicy.test.js
-A	test/quarantineService.test.js
+A	test/scriptedScheduleEditorUtils.test.js
+M	test/scriptedSchedules.test.js
 M	test/ui-v3.test.js
-A	test/youtubeSourceProvider.test.js

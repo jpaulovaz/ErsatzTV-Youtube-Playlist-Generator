@@ -478,6 +478,19 @@
     if (action === 'add-module') { const type = button.dataset.module || state.modulePickerSelection; if (!type) return; addModule(type); state.modulePickerOpen = false; state.modulePickerSelection = ''; openAccordion(`module:${type}`); openAccordion(`module-entry:${type}:0`); render(); return; }
     if (action === 'remove-module') { const type = button.dataset.module; state.current.modules[type] = []; state.openAccordions.delete(`module:${type}`); clearAccordionPrefix(`module-entry:${type}:`); render(); return; }
     if (action === 'add-module-entry') { const type = button.dataset.module; const index = state.current.modules[type].length; state.current.modules[type].push(defaultModuleEntry(type)); openAccordion(`module:${type}`); openAccordion(`module-entry:${type}:${index}`); render(); return; }
+    if (action === 'duplicate-module-entry') {
+      const type = button.dataset.module;
+      const result = window.ScriptedScheduleEditorUtils?.duplicateModuleEntry(state.current.modules, type, Number(button.dataset.index));
+      if (!result) return;
+      state.validation = null;
+      openAccordion(`module:${type}`);
+      clearAccordionPrefix(`module-entry:${type}:`);
+      openAccordion(`module-entry:${type}:${result.index}`);
+      state.deps.showToast('Item duplicado. Ajuste horário, Source ou filtros conforme necessário.');
+      render();
+      window.requestAnimationFrame(() => root()?.querySelector(`details[data-ss-accordion="module-entry:${type}:${result.index}"] input, details[data-ss-accordion="module-entry:${type}:${result.index}"] select`)?.focus());
+      return;
+    }
     if (action === 'remove-module-entry') { const type = button.dataset.module; state.current.modules[type].splice(Number(button.dataset.index), 1); clearAccordionPrefix(`module-entry:${type}:`); render(); return; }
     if (action === 'add-window-item') { state.current.modules.windowRotations[Number(button.dataset.index)].items.push({ source: firstSource(), order: 'shuffle', presentation: '', durationMinutes: '' }); render(); return; }
     if (action === 'remove-window-item') { state.current.modules.windowRotations[Number(button.dataset.index)].items.splice(Number(button.dataset.itemIndex), 1); render(); return; }
@@ -971,7 +984,7 @@
   }
 
   function moduleEntryShell(type, index, title, body) {
-    return `<details class="ss-event-card ss-accordion-card ss-nested-accordion" ${accordionAttrs(`module-entry:${type}:${index}`)}><summary class="ss-accordion-summary ss-event-summary"><strong>${esc(title)}</strong><span>Editar</span></summary><div class="ss-accordion-body"><div class="ss-accordion-actions"><button type="button" class="danger ghost" data-ss-action="remove-module-entry" data-module="${type}" data-index="${index}">Remover</button></div>${body}</div></details>`;
+    return `<details class="ss-event-card ss-accordion-card ss-nested-accordion" ${accordionAttrs(`module-entry:${type}:${index}`)}><summary class="ss-accordion-summary ss-event-summary"><strong>${esc(title)}</strong><span>Editar</span></summary><div class="ss-accordion-body"><div class="ss-accordion-actions ss-entry-actions"><button type="button" data-ss-action="duplicate-module-entry" data-module="${type}" data-index="${index}">Duplicar item</button><button type="button" class="danger ghost" data-ss-action="remove-module-entry" data-module="${type}" data-index="${index}">Remover</button></div>${body}</div></details>`;
   }
   function commonIdFields(base, item) {
     return `<label>${labelTitle('ID', 'id')}<input data-bind="${base}.id" value="${esc(item.id || '')}"></label><label>${labelTitle('Nome opcional', 'optionalName')}<input data-bind="${base}.label" value="${esc(item.label || '')}" placeholder="Ex.: Especial da noite"></label>`;
