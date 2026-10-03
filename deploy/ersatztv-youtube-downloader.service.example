@@ -1,12 +1,13 @@
 [Unit]
-Description=ErsatzTV YouTube Downloader 2.2
+Description=ErsatzTV YouTube Downloader
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=joaopaulovaz
-Group=joaopaulovaz
+# Crie ou ajuste a conta de servico conforme o ambiente da instalacao.
+User=ersatztv-youtube
+Group=ersatztv-youtube
 WorkingDirectory=/opt/ersatztv-youtube-downloader
 ExecStart=/usr/bin/node src/main.js
 Restart=on-failure
@@ -14,8 +15,8 @@ RestartSec=5
 TimeoutStopSec=20
 Environment=NODE_ENV=production
 
-# Hardening moderado. Confirme que WorkingDirectory, paths.baseDir e cookies.txt
-# permanecem acessiveis antes de habilitar restricoes adicionais.
+# Hardening moderado. Confirme que WorkingDirectory, paths.baseDir e o arquivo
+# de cookies, quando usado, permanecem acessiveis antes de habilitar restricoes adicionais.
 NoNewPrivileges=true
 PrivateTmp=true
 

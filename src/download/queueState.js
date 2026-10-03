@@ -61,8 +61,8 @@ function normalizeState(raw) {
     item.id = id;
     item.destinationId = String(item.destinationId || item.libraryFolder || id.split('::')[0] || '').trim();
     item.destinationType = String(item.destinationType || DESTINATION_TYPES.LIBRARY);
-    // Compatibility alias used by the v2 UI/filter/state shape. For channel
-    // destinations it intentionally contains destinationId, not a filesystem folder.
+    // Public queue/UI label retained for both Libraries and Channel destinations.
+    // For Channel destinations this contains destinationId, not a filesystem folder.
     item.libraryFolder = String(item.libraryFolder || item.destinationId).trim();
     item.status = String(item.status || 'pending');
     if (item.status === 'downloading') {
@@ -83,7 +83,7 @@ function normalizeState(raw) {
     item.dispositionUpdatedAt = item.dispositionUpdatedAt || null;
     item.quarantine = item.quarantine && typeof item.quarantine === 'object' ? item.quarantine : null;
     if (item.userDisposition === USER_DISPOSITIONS.IGNORED && item.storageState === STORAGE_STATES.ACTIVE) {
-      // Legacy states never used ignored; this only protects malformed future state.
+      // Defensive normalization for malformed or hand-edited state.
       item.storageState = item.targetPath ? STORAGE_STATES.ACTIVE : STORAGE_STATES.ABSENT;
     }
     item.subtitles = normalizeSubtitleState(item.subtitles);

@@ -6,7 +6,9 @@ const { ROOT_DIR } = require('./config');
 class AppLogger extends EventEmitter {
   constructor() {
     super();
-    this.logDir = path.join(ROOT_DIR, 'data');
+    this.logDir = process.env.ERSATZTV_LOG_DIR
+      ? path.resolve(process.env.ERSATZTV_LOG_DIR)
+      : path.join(ROOT_DIR, 'data');
     this.logPath = path.join(this.logDir, 'app.log');
     this.buffer = [];
     this.maxBuffer = 800;

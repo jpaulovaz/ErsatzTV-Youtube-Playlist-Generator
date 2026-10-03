@@ -5,8 +5,6 @@ const { MEDIA_PROFILES, normalizeMediaProfile } = require('./mediaProfileService
 const { normalizeOrphanPolicy, normalizeRetentionDays, ORPHAN_POLICIES } = require('./orphans/orphanPolicy');
 
 const CHANNEL_SOURCE_KINDS = Object.freeze(['uploads', 'videos', 'shorts', 'streams']);
-const CHANNEL_SOURCE_SET = new Set(CHANNEL_SOURCE_KINDS);
-
 function hasOwn(object, key) {
   return Boolean(object && Object.prototype.hasOwnProperty.call(object, key));
 }
@@ -25,7 +23,7 @@ function normalizeOptionalMaxHeight(value, allowedHeights) {
   return Math.floor(height);
 }
 
-function normalizeSubtitles(rawValue, options = {}) {
+function normalizeSubtitles(rawValue) {
   const raw = rawValue && typeof rawValue === 'object' ? rawValue : {};
   const configuredLanguages = hasOwn(raw, 'languages');
   const languages = normalizeSubtitleLanguages(raw.languages);
@@ -36,7 +34,7 @@ function normalizeSubtitles(rawValue, options = {}) {
   };
 }
 
-function normalizeChannelPlaylist(rawPlaylist, allowedHeights, options = {}) {
+function normalizeChannelPlaylist(rawPlaylist, allowedHeights) {
   const playlist = rawPlaylist && typeof rawPlaylist === 'object' ? rawPlaylist : {};
   const playlistId = String(playlist.playlistId || '').trim();
   const name = String(playlist.name || '').trim();
@@ -54,7 +52,7 @@ function normalizeChannelPlaylist(rawPlaylist, allowedHeights, options = {}) {
     maxHeight: normalizeOptionalMaxHeight(playlist.maxHeight, allowedHeights),
     cookiesPath: String(playlist.cookiesPath || '').trim(),
     subtitles: normalizeSubtitles(playlist.subtitles),
-    orphanPolicy: normalizeOrphanPolicy(playlist.orphanPolicy, options.legacyOrphanPolicy || null),
+    orphanPolicy: normalizeOrphanPolicy(playlist.orphanPolicy, null),
     quarantineRetentionDays: normalizeRetentionDays(playlist.quarantineRetentionDays, null)
   };
 }
@@ -70,14 +68,14 @@ function normalizeGlobalSources(rawGlobal) {
   };
 }
 
-function normalizeChannel(rawChannel, allowedHeights, options = {}) {
+function normalizeChannel(rawChannel, allowedHeights) {
   const channel = rawChannel && typeof rawChannel === 'object' ? rawChannel : {};
   const channelId = String(channel.channelId || '').trim();
   const name = String(channel.name || '').trim();
   const handle = String(channel.handle || '').trim();
   const folderName = sanitizeName(String(channel.folderName || name || handle || channelId).trim());
   const playlists = Array.isArray(channel.playlists)
-    ? channel.playlists.map((item) => normalizeChannelPlaylist(item, allowedHeights, options)).filter((item) => item.playlistId && item.name && item.folderName)
+    ? channel.playlists.map((item) => normalizeChannelPlaylist(item, allowedHeights)).filter((item) => item.playlistId && item.name && item.folderName)
     : [];
 
   return {
@@ -94,9 +92,9 @@ function normalizeChannel(rawChannel, allowedHeights, options = {}) {
   };
 }
 
-function normalizeChannels(rawChannels, allowedHeights, options = {}) {
+function normalizeChannels(rawChannels, allowedHeights) {
   return (Array.isArray(rawChannels) ? rawChannels : [])
-    .map((channel) => normalizeChannel(channel, allowedHeights, options))
+    .map((channel) => normalizeChannel(channel, allowedHeights))
     .filter((channel) => channel.channelId && channel.name && channel.folderName);
 }
 
@@ -153,7 +151,6 @@ function validateChannels(config) {
 
 module.exports = {
   CHANNEL_SOURCE_KINDS,
-  CHANNEL_SOURCE_SET,
   normalizeSubtitles,
   normalizeChannels,
   validateChannels

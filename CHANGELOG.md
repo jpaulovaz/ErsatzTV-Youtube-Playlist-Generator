@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.5.3
+
+- Faxina estrutural da base sem remoção de recursos atuais: código morto, fallbacks e caminhos de compatibilidade já concluídos deixam de participar da aplicação.
+- A configuração passa a aceitar somente `configVersion` 9. Compatibilidades antigas de `movieMetadata`/`showMetadata` e a opção `updateExistingThumbnails` deixam de existir no código atual.
+- Scripted Schedules passa a suportar somente **Universal v1.3.1**; não há upgrade silencioso nem execução dos motores 1.1.1/1.2.0/1.3.0.
+- O enriquecimento de data continua ativo, mas passa para `discovery/releaseMetadataService.js`, eliminando a dependência do serviço de migração antigo.
+- Clipes musicais deixam de executar resequenciamento global. Novos episódios recebem números incrementais estáveis e, numa restauração com colisão de `SxxExx`, somente o item restaurado é remapeado para o próximo episódio livre.
+- Execução de processos externos é centralizada em `processUtils`; argumentos comuns do yt-dlp e movimentação entre filesystems deixam de ter implementações paralelas.
+- A montagem/parsing do download yt-dlp é separada do `downloadManager`, reduzindo responsabilidades do orquestrador da fila.
+- `npm run check` e `npm test` passam a descobrir automaticamente os arquivos atuais. A suíte usa diretório temporário para logs e o stub de yt-dlp não deixa mídia residual durante probes.
+- `npm run verify` deixa de alterar/apagar arquivos antes dos testes e passa a validar também a consistência de versão da release.
+- O exemplo systemd é generalizado e `config/config.json` passa a constar no `.gitignore`, sem alterar a configuração real da instalação.
+- O pacote completo de distribuição deixa de carregar `config/config.json` pessoal e metadados `.git`; numa instalação nova, o aplicativo cria automaticamente um `config.json` v9 no primeiro start.
+- Arquivos físicos que ficaram sem referências são listados em `MANUAL_CLEANUP_3.5.3.txt` para exclusão manual após a validação da nova versão.
+- Aplicação **v3.5.3**; Universal **v1.3.1**; `configVersion` **9**; schema de Scripted Schedules **1**; estado persistente **5**.
+
 ## 3.5.2
 
 - Em **Scripted Schedules**, as ações de cada item ficam agrupadas à direita: **Duplicar item** passa a ficar imediatamente ao lado de **Remover**, mantendo a duplicação como ação neutra e a remoção como destrutiva.

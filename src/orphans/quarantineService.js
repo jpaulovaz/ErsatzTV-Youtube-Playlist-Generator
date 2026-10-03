@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { pathExists, isPathInside, sanitizeFileComponent } = require('../utils');
 const { listSubtitleSidecars } = require('../subtitleService');
+const { patchEpisodeNfoNumber } = require('../mediaProfileService');
 const { STORAGE_STATES, USER_DISPOSITIONS, quarantineExpiresAt } = require('./orphanPolicy');
 
 function nowIso() { return new Date().toISOString(); }
@@ -275,12 +276,25 @@ async function prepareMusicClipRestore(item, destination, allItems = []) {
   }
 
   const seasonNumber = Number(item.showSeasonNumber) || 1;
-  let tempEpisode = 900000;
+  const itemShowDir = getShowDir(item);
+  let maxEpisode = 0;
+  for (const other of allItems || []) {
+    if (!other || other.id === item.id) continue;
+    if ((other.destinationId || other.libraryFolder) !== (item.destinationId || item.libraryFolder)) continue;
+    const otherShowDir = getShowDir(other);
+    if (itemShowDir && otherShowDir && !sameResolved(itemShowDir, otherShowDir)) continue;
+    const fromState = Number(other.showEpisodeNumber || other.mediaMetadata && other.mediaMetadata.episodeNumber);
+    const token = String(other.targetPath || '').match(/S\d+E(\d+)/i);
+    const episode = Number.isInteger(fromState) && fromState > 0 ? fromState : Number(token && token[1]);
+    if (Number.isInteger(episode) && episode > maxEpisode) maxEpisode = episode;
+  }
+
+  let episodeNumber = Math.max(1, maxEpisode + 1);
   let remappedFiles = null;
-  while (tempEpisode < 999999) {
+  while (episodeNumber < 1000000) {
     const candidates = episodeFiles.map((file) => ({
       file,
-      original: replaceEpisodeTokenInPath(file.original, seasonNumber, tempEpisode)
+      original: replaceEpisodeTokenInPath(file.original, seasonNumber, episodeNumber)
     }));
     let collision = false;
     for (const candidate of candidates) {
@@ -293,22 +307,30 @@ async function prepareMusicClipRestore(item, destination, allItems = []) {
       remappedFiles = candidates;
       break;
     }
-    tempEpisode += 1;
+    episodeNumber += 1;
   }
-  if (!remappedFiles) throw new Error('Restauracao cancelada: nao foi possivel reservar um caminho temporario seguro para o clipe.');
+  if (!remappedFiles) throw new Error('Restauracao cancelada: nao foi possivel reservar um episodio livre para o clipe.');
 
   for (const candidate of remappedFiles) candidate.file.original = candidate.original;
   rebuildQuarantineIndexes(quarantine);
 
+  item.showSeasonNumber = seasonNumber;
+  item.showEpisodeNumber = episodeNumber;
   const byKind = new Map(quarantine.files.filter((file) => file.kind !== 'subtitle').map((file) => [file.kind, file.original]));
   if (byKind.get('video')) item.targetPath = byKind.get('video');
   if (byKind.get('nfo')) item.nfoPath = byKind.get('nfo');
   if (byKind.get('thumbnail')) item.thumbnailPath = byKind.get('thumbnail');
   if (item.mediaMetadata && typeof item.mediaMetadata === 'object') {
+    item.mediaMetadata.seasonNumber = seasonNumber;
+    item.mediaMetadata.episodeNumber = episodeNumber;
     if (item.nfoPath) item.mediaMetadata.nfoPath = item.nfoPath;
     if (item.thumbnailPath) item.mediaMetadata.artworkPath = item.thumbnailPath;
   }
-  return { remapped: true, sharedDiscarded, temporaryEpisodeNumber: tempEpisode };
+  const quarantinedNfo = quarantine.files.find((file) => file.kind === 'nfo' && file.quarantine && file.original === item.nfoPath);
+  if (quarantinedNfo && await pathExists(quarantinedNfo.quarantine)) {
+    await patchEpisodeNfoNumber(item, quarantinedNfo.quarantine);
+  }
+  return { remapped: true, sharedDiscarded, episodeNumber };
 }
 
 async function restoreItemFromQuarantine(item, destination, allItems = []) {

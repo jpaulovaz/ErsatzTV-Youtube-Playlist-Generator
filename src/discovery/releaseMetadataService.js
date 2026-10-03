@@ -1,10 +1,8 @@
-const { fetchVideoDetails, shouldUseYouTubeApi, canonicalWatchUrl } = require('./youtubeApi');
-const {
-  runCommand,
-  buildYtDlpCommonArgs,
-  normalizeYtDlpVideo
-} = require('./discovery/youtubeSourceProvider');
-const { releaseMetadataFromVideo } = require('./releaseMetadataUtils');
+const { fetchVideoDetails, shouldUseYouTubeApi, canonicalWatchUrl } = require('../youtubeApi');
+const { runCommand } = require('../processUtils');
+const { normalizeYtDlpVideo } = require('./youtubeSourceProvider');
+const { buildYtDlpCommonArgs } = require('../ytDlpUtils');
+const { releaseMetadataFromVideo } = require('../releaseMetadataUtils');
 
 async function fetchOneViaYtDlp(config, source, item, options = {}) {
   const runner = options.runner || runCommand;
@@ -22,14 +20,14 @@ async function fetchOneViaYtDlp(config, source, item, options = {}) {
     const detail = String(result.stderr || result.stdout || `codigo ${result.code}`).trim().slice(-1600);
     throw new Error(`yt-dlp nao conseguiu ler a data de ${item.videoId}: ${detail}`);
   }
+
   let raw;
   try {
     raw = JSON.parse(String(result.stdout || '').trim());
   } catch (error) {
     throw new Error(`yt-dlp retornou metadata invalida para ${item.videoId}: ${error.message}`);
   }
-  const normalized = normalizeYtDlpVideo(raw, url, 0, 'video');
-  return releaseMetadataFromVideo(normalized);
+  return releaseMetadataFromVideo(normalizeYtDlpVideo(raw, url, 0, 'video'));
 }
 
 async function fetchReleaseMetadataForItems(config, source, items, options = {}) {
@@ -45,7 +43,6 @@ async function fetchReleaseMetadataForItems(config, source, items, options = {})
 
   const missing = new Map(requested.map((item) => [String(item.videoId), item]));
   const apiFetcher = options.fetchVideoDetails || fetchVideoDetails;
-
   if (shouldUseYouTubeApi(config)) {
     try {
       const apiResult = await apiFetcher(config, [...missing.keys()], { useCache: true });
@@ -53,10 +50,9 @@ async function fetchReleaseMetadataForItems(config, source, items, options = {})
       result.apiCached = Number(apiResult.fromCache) || 0;
       for (const [videoId, video] of apiResult.videosById || []) {
         const metadata = releaseMetadataFromVideo(video);
-        if (metadata.releaseDate) {
-          result.byVideoId.set(String(videoId), metadata);
-          missing.delete(String(videoId));
-        }
+        if (!metadata.releaseDate) continue;
+        result.byVideoId.set(String(videoId), metadata);
+        missing.delete(String(videoId));
       }
     } catch (error) {
       result.failed.push({ source: 'api', videoId: null, error: error.message });
@@ -81,7 +77,4 @@ async function fetchReleaseMetadataForItems(config, source, items, options = {})
   return result;
 }
 
-module.exports = {
-  fetchOneViaYtDlp,
-  fetchReleaseMetadataForItems
-};
+module.exports = { fetchOneViaYtDlp, fetchReleaseMetadataForItems };

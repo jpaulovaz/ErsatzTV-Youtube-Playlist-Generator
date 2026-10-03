@@ -4,7 +4,8 @@ const {
   fetchChannelCatalogViaApi
 } = require('../youtubeApi');
 const { normalizeChannelUrl } = require('../destinationService');
-const { runCommand, buildYtDlpCommonArgs } = require('./youtubeSourceProvider');
+const { runCommand } = require('../processUtils');
+const { buildYtDlpCommonArgs } = require('../ytDlpUtils');
 
 function parseSingleJson(stdout) {
   const text = String(stdout || '').trim();

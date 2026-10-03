@@ -23,7 +23,6 @@
     "jsRuntimeCustomName": "deno",
     "ejsComponents": "ejs:github",
     "writeThumbnails": true,
-    "updateExistingThumbnails": false,
     "pauseOnLowDisk": true,
     "minFreeSpaceGb": 20,
     "scanOnQueueIdle": true,

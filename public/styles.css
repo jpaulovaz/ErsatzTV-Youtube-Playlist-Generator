@@ -1641,7 +1641,7 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
 .sidebar-status-dot.danger { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
 .login-logo { border: 0; background: transparent; box-shadow: none; }
 
-/* v3.0 - Canais */
+/* Canais */
 .channels-card { padding: 14px; }
 .channel-list { display: grid; gap: 9px; }
 .channel-card {
@@ -1773,7 +1773,7 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
 .settings-subsection { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); display: grid; gap: 9px; }
 .settings-subsection > strong { font-size: 12px; }
 
-/* v3.0 - Login clean */
+/* Login */
 .login-clean .login-ambient { opacity: .72; }
 .login-clean-shell {
   position: relative;
@@ -1825,7 +1825,7 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
   .sidebar { transition: none; scroll-behavior: auto; }
 }
 
-/* v3.4.0 - Ajuda */
+/* Ajuda */
 .help-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 18px; }
 .help-tabs button.active { background: var(--accent, #477fe8); color: #fff; border-color: transparent; }
 .help-body { display: grid; gap: 16px; }

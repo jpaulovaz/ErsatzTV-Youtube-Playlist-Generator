@@ -89,32 +89,6 @@ function pathExists(targetPath) {
   return fs.access(targetPath).then(() => true).catch(() => false);
 }
 
-async function walkFiles(targetPath) {
-  const result = [];
-
-  async function walk(current) {
-    let entries = [];
-    try {
-      entries = await fs.readdir(current, { withFileTypes: true });
-    } catch (error) {
-      if (error.code === 'ENOENT') return;
-      throw error;
-    }
-
-    for (const entry of entries) {
-      const fullPath = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        await walk(fullPath);
-      } else if (entry.isFile()) {
-        result.push(fullPath);
-      }
-    }
-  }
-
-  await walk(targetPath);
-  return result;
-}
-
 async function removeEmptyDirectories(targetPath, stopAtPath, logger) {
   const normalizedStop = path.resolve(stopAtPath);
   const normalizedTarget = path.resolve(targetPath);
@@ -168,19 +142,6 @@ function isDangerousBaseDir(baseDir) {
   return parts.length < 2;
 }
 
-function formatBytes(value) {
-  const bytes = Number(value) || 0;
-  if (bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  const amount = bytes / (1024 ** exponent);
-  return `${amount >= 10 || exponent === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[exponent]}`;
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
-}
-
 module.exports = {
   sanitizeName,
   sanitizeFileComponent,
@@ -189,10 +150,7 @@ module.exports = {
   findCaseInsensitiveDirectoryName,
   extractArtistAndTitle,
   pathExists,
-  walkFiles,
   removeEmptyDirectories,
   isPathInside,
-  isDangerousBaseDir,
-  formatBytes,
-  sleep
+  isDangerousBaseDir
 };

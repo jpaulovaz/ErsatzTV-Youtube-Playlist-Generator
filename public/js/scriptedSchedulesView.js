@@ -23,7 +23,6 @@
   const DAY_OPTIONS = [
     ['seg', 'Seg'], ['ter', 'Ter'], ['qua', 'Qua'], ['qui', 'Qui'], ['sex', 'Sex'], ['sab', 'Sáb'], ['dom', 'Dom']
   ];
-  const LATEST_TEMPLATE_VERSION = '1.3.1';
   const PAD_TO_NEAREST_OPTIONS = [5, 10, 15, 30];
   const FILLER_KIND_OPTIONS = [
     ['postroll', 'Post-roll', 'Depois do conteúdo. É a opção recomendada para preencher lacunas e para o Pad.'],
@@ -43,7 +42,7 @@
     historyLimit: 'Quantas versões antigas você quer guardar para poder voltar atrás. Exemplo: 10 mantém as 10 publicações mais recentes.',
     projectName: 'Nome que você verá no aplicativo. Pode ser algo simples, como JohnFlix Filmes.',
     fileName: 'O nome do arquivo é criado automaticamente na primeira publicação usando o nome atual desta configuração. Depois disso, ele fica estável para não quebrar o vínculo com o ErsatzTV.',
-    templateVersion: 'Versão do motor usada por este projeto. Projetos antigos só mudam de versão quando você pedir.',
+    templateVersion: 'Versão do motor Universal usada por este projeto. Esta versão do aplicativo usa somente o Universal 1.3.1.',
     outputRootReadOnly: 'Pasta onde este projeto será publicado. Ela é definida na tela inicial de Scripted Schedules.',
     channel: 'Canal do ErsatzTV que vai usar este script. O aplicativo guarda o número do canal para fazer o vínculo.',
     stateKey: 'Identificador usado pelo script para lembrar rotação, saldos e eventos pendentes. Ele é criado automaticamente na primeira publicação usando o nome atual e o canal escolhido.',
@@ -458,7 +457,6 @@
     if (action === 'reset-playout') { await resetPlayout(button.dataset.channel); return; }
 
     if (!state.current) return;
-    if (action === 'upgrade-template') { state.current.templateVersion = LATEST_TEMPLATE_VERSION; state.validation = null; state.deps.showToast(`Motor atualizado para ${LATEST_TEMPLATE_VERSION}. A alteração será efetivada ao salvar e publicar.`); render(); return; }
     if (action === 'add-channel') {
       state.current.channelLinks.push({ channelNumber: '', channelName: '', stateKey: '', status: 'local' }); render(); return;
     }
@@ -682,7 +680,7 @@
         </div>
         <div class="ss-card-meta">
           <span><strong>Arquivo</strong>${project.publishedAt ? esc(project.fileName || '-') : 'Será criado na publicação'}</span>
-          <span><strong>Motor</strong>${esc(project.templateVersion || '1.1.1')}</span>
+          <span><strong>Motor</strong>${esc(project.templateVersion || '1.3.1')}</span>
           <span><strong>Atualizado</strong>${esc(formatDate(project.updatedAt))}</span>
         </div>
         <div class="ss-card-channels"><strong>Canais</strong><span>${links.length ? esc(links.join(', ')) : 'Nenhum vínculo local'}</span></div>
@@ -738,7 +736,6 @@
           <label>${labelTitle('Pasta de saída', 'outputRootReadOnly')}<input value="${esc(state.settings?.outputRoot || '')}" disabled></label>
         </div>
         ${!p.publishedAt ? '<div class="ss-callout">Renomeie e escolha o canal normalmente. O arquivo e o identificador do canal serão criados na primeira publicação usando esses dados.</div>' : ''}
-        ${p.templateVersion !== LATEST_TEMPLATE_VERSION ? `<div class="ss-callout">Este projeto usa o motor ${esc(p.templateVersion)}. Os novos módulos e recursos estão disponíveis no motor ${LATEST_TEMPLATE_VERSION}. <button type="button" data-ss-action="upgrade-template">Atualizar motor</button></div>` : ''}
       </section>
       <section class="card ss-section-card">
         <div class="section-heading">
@@ -1045,7 +1042,6 @@
   }
 
   function renderStartTiming(base, item) {
-    if (!versionAtLeast(state.current.templateVersion, '1.3.1')) return '';
     const policy = ['wait', 'closest'].includes(String(item.startPolicy || '').toLowerCase()) ? String(item.startPolicy).toLowerCase() : 'closest';
     const maxEarly = item.maxEarlyMinutes === '' || item.maxEarlyMinutes === undefined || item.maxEarlyMinutes === null ? 40 : item.maxEarlyMinutes;
     return `<div class="form-grid two ss-start-timing"><label>${labelTitle('Se o conteúdo passar do horário', 'startPolicy')}<select data-bind="${base}.startPolicy" data-rerender="true"><option value="closest" ${policy === 'closest' ? 'selected' : ''}>Usar o horário mais próximo</option><option value="wait" ${policy === 'wait' ? 'selected' : ''}>Esperar o conteúdo terminar</option></select></label>${policy === 'closest' ? `<label>${labelTitle('Pode adiantar até (min)', 'maxEarlyMinutes')}<input type="number" min="0" data-type="number" data-bind="${base}.maxEarlyMinutes" value="${esc(maxEarly)}"></label>` : ''}</div>`;
@@ -1082,8 +1078,6 @@
     return `<details class="ss-advanced"><summary><span>Reprodução avançada${help('fallback')}</span></summary><div class="ss-advanced-body form-grid three"><label>${labelTitle('Título customizado', 'customTitle')}<input data-bind="${base}.customTitle" value="${esc(item.customTitle || '')}"></label><label class="check-row"><input type="checkbox" data-bind="${base}.customTitleGroup" ${item.customTitleGroup ? 'checked' : ''}><span>Agrupar itens no EPG usando este título${help('customTitleGroup')}</span></label>${fillerKindField}<label>${labelTitle('Fallback Source', 'fallback')}<select data-bind="${base}.fallback" data-rerender="true">${sourceOptions(item.fallback)}</select></label>${sourceOrderSelect(`${base}.fallbackOrder`, item.fallback, item.fallbackOrder, false, 'Ordem do Fallback')}<label>${labelTitle('Tentativas descartadas', 'discardAttempts')}<input type="number" min="0" data-type="number" data-bind="${base}.discardAttempts" value="${esc(item.discardAttempts ?? '')}"></label><label class="check-row"><input type="checkbox" data-bind="${base}.disableWatermarks" ${item.disableWatermarks ? 'checked' : ''}><span>Desativar watermarks nativos${help('disableWatermarks')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.trim" data-rerender="true" ${item.trim ? 'checked' : ''}><span>Permitir trim${help('trim')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.offlineTail" ${item.offlineTail ? 'checked' : ''}><span>Offline tail${help('offlineTail')}</span></label><label class="check-row"><input type="checkbox" data-bind="${base}.allowOverrun" data-rerender="true" ${item.allowOverrun !== false ? 'checked' : ''}><span>Deixar o vídeo terminar${help('allowOverrun')}</span></label></div></details>`;
   }
 
-  function versionAtLeast(value, minimum) { const a = String(value || '').split('.').map(Number); const b = String(minimum).split('.').map(Number); for (let i = 0; i < 3; i += 1) { if ((a[i] || 0) > (b[i] || 0)) return true; if ((a[i] || 0) < (b[i] || 0)) return false; } return true; }
-
   function sequenceSupportsItemPad(steps = []) {
     const modes = (steps || []).map((step) => String(step?.mode || 'count'));
     return modes.includes('count') && modes.every((mode) => !['duration', 'all'].includes(mode));
@@ -1097,12 +1091,9 @@
 
   function renderPadToNearest(base, item) {
     const hasFiller = Boolean(state.current.filler && String(state.current.filler.source || '').trim());
-    const hasMotor = versionAtLeast(state.current.templateVersion, '1.2.0');
-    const enabled = hasFiller && hasMotor;
+    const enabled = hasFiller;
     const current = item.padToNearestMinutes === null || item.padToNearestMinutes === undefined ? '' : String(item.padToNearestMinutes);
-    const reason = !hasMotor
-      ? 'Atualize o motor para 1.2.0 ou mais recente para usar esta opção.'
-      : (!hasFiller ? 'Configure o Filler do projeto para liberar esta opção.' : 'Depois de cada item, o Filler completa até a próxima marca escolhida. Um evento com horário marcado continua entrando no horário dele.');
+    const reason = !hasFiller ? 'Configure o Filler do projeto para liberar esta opção.' : 'Depois de cada item, o Filler completa até a próxima marca escolhida. Um evento com horário marcado continua entrando no horário dele.';
     return `<details class="ss-advanced"><summary><span>Alinhamento entre itens${help('padToNearest')}</span></summary><div class="ss-advanced-body form-grid two"><label>${labelTitle('Pad To Nearest Minute', 'padToNearest')}<select data-type="number" data-bind="${base}.padToNearestMinutes" ${enabled ? '' : 'disabled'}><option value="" ${current === '' ? 'selected' : ''}>Desativado</option>${PAD_TO_NEAREST_OPTIONS.map((minutes) => `<option value="${minutes}" ${current === String(minutes) ? 'selected' : ''}>${minutes} ${minutes === 5 ? '(:00, :05, :10, :15...)' : minutes === 10 ? '(:00, :10, :20, :30, :40, :50)' : minutes === 15 ? '(:00, :15, :30, :45)' : '(:00, :30)'}</option>`).join('')}</select><small>${esc(reason)}</small></label></div></details>`;
   }
 

@@ -1,19 +1,19 @@
 const fs = require('fs/promises');
 const { constants: fsConstants } = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
 const logger = require('./logger');
+const { runCommand } = require('./processUtils');
 const { sanitizeName, pathExists } = require('./utils');
 const downloadManager = require('./downloadManager');
 const { runLibraryAction } = require('./ersatztvService');
 const { testYouTubeApi, canonicalWatchUrl } = require('./youtubeApi');
 const {
-  getEffectiveCookiesPath,
-  buildYtDlpCommonArgs,
+  getUrls,
   getSourceKind,
   parseYtDlpJsonLines,
   fetchDestinationVideos
 } = require('./discovery/youtubeSourceProvider');
+const { getEffectiveCookiesPath, buildYtDlpCommonArgs } = require('./ytDlpUtils');
 const { libraryDestination } = require('./destinationService');
 const discoveryLock = require('./discovery/discoveryLock');
 
@@ -26,50 +26,13 @@ const state = {
   lastError: null
 };
 
-function runCommand(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: options.cwd || process.cwd(),
-      env: process.env,
-      shell: false
-    });
-    let stdout = '';
-    let stderr = '';
-    let timedOut = false;
-    let killTimer = null;
-    const timeoutMs = Number(options.timeoutMs) || 0;
-    const timeout = timeoutMs > 0
-      ? setTimeout(() => {
-        timedOut = true;
-        child.kill('SIGTERM');
-        killTimer = setTimeout(() => child.kill('SIGKILL'), 3000);
-      }, timeoutMs)
-      : null;
-
-    child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
-    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
-    child.on('error', reject);
-    child.on('close', (code, signal) => {
-      if (timeout) clearTimeout(timeout);
-      if (killTimer) clearTimeout(killTimer);
-      resolve({ code, signal, stdout, stderr, timedOut });
-    });
-  });
-}
-
-function getPlaylistUrls(playlist) {
-  const values = [];
-  if (playlist && typeof playlist.url === 'string') values.push(playlist.url);
-  if (playlist && Array.isArray(playlist.urls)) values.push(...playlist.urls);
-  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
-}
 
 function getPlaylistsWithFolders(config, options = {}) {
   const includeDisabled = Boolean(options.includeDisabled);
   return (config.playlists || [])
     .filter((playlist) => includeDisabled || playlist.enabled !== false)
     .map((playlist) => {
-      const urls = getPlaylistUrls(playlist);
+      const urls = getUrls(playlist);
       return {
         ...playlist,
         url: urls[0] || '',

@@ -18,7 +18,7 @@ const { runPlaylistAction, deletePlaylistWithFiles, deleteChannelWithFiles } = r
 
 function makeConfig(root = '/srv/media') {
   return normalizeConfig({
-    configVersion: 7,
+    configVersion: 9,
     paths: {
       baseDir: path.join(root, 'libraries'),
       channelsBaseDir: path.join(root, 'channels'),
@@ -42,7 +42,9 @@ function makeConfig(root = '/srv/media') {
         videos: true,
         shorts: false,
         streams: false,
-        subtitles: { enabled: true, includeAuto: true, languages: ['pt-BR', 'en'] }
+        subtitles: { enabled: true, includeAuto: true, languages: ['pt-BR', 'en'] },
+        orphanPolicy: 'mark',
+        quarantineRetentionDays: null
       },
       playlists: [{
         playlistId: 'PL_CLIPS',
@@ -55,7 +57,9 @@ function makeConfig(root = '/srv/media') {
         channelNumber: 421,
         maxHeight: 1080,
         cookiesPath: '',
-        subtitles: { enabled: true, includeAuto: true, languages: ['pt-BR', 'en'] }
+        subtitles: { enabled: true, includeAuto: true, languages: ['pt-BR', 'en'] },
+        orphanPolicy: 'mark',
+        quarantineRetentionDays: null
       }, {
         playlistId: 'PL_SHOWS',
         name: 'Live Performances',
@@ -67,7 +71,9 @@ function makeConfig(root = '/srv/media') {
         channelNumber: 419,
         maxHeight: null,
         cookiesPath: '',
-        subtitles: { enabled: false, includeAuto: true, languages: ['pt-BR', 'pt', 'en', 'es'] }
+        subtitles: { enabled: false, includeAuto: true, languages: ['pt-BR', 'pt', 'en', 'es'] },
+        orphanPolicy: 'mark',
+        quarantineRetentionDays: null
       }]
     }],
     scheduler: { enabled: false },
@@ -75,7 +81,7 @@ function makeConfig(root = '/srv/media') {
   });
 }
 
-test('v3 config normalizes Channels without changing embedded playlist identity', () => {
+test('current config normalizes Channels without changing embedded playlist identity', () => {
   const config = validateConfig(makeConfig());
   assert.equal(config.configVersion, 9);
   assert.equal(config.paths.channelsBaseDir, '/srv/media/channels');
@@ -88,11 +94,12 @@ test('v3 config normalizes Channels without changing embedded playlist identity'
   assert.equal(config.channels[0].playlists[0].orphanPolicy, 'mark');
 });
 
-test('v3 config preserves an intentionally empty library list during migration', () => {
+test('current config preserves an intentionally empty library list', () => {
   const config = normalizeConfig({
-    configVersion: 4,
-    paths: { baseDir: '/srv/media/youtube' },
-    playlists: []
+    configVersion: 9,
+    paths: { baseDir: '/srv/media/youtube', channelsBaseDir: '/srv/media/youtube-channels' },
+    playlists: [],
+    channels: []
   });
   assert.deepEqual(config.playlists, []);
   assert.equal(config.paths.channelsBaseDir, '/srv/media/youtube-channels');

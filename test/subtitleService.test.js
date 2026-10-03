@@ -16,7 +16,7 @@ const { DownloadManager, makeItemId } = require('../src/downloadManager');
 
 function makeConfig(baseDir, extraPlaylist = {}) {
   return normalizeConfig({
-    configVersion: 2,
+    configVersion: 9,
     paths: {
       baseDir,
       ytDlpPath: '/usr/local/bin/yt-dlp',
@@ -46,6 +46,8 @@ function makeConfig(baseDir, extraPlaylist = {}) {
       channelNumber: null,
       cookiesPath: '',
       maxHeight: null,
+      orphanPolicy: 'mark',
+      quarantineRetentionDays: null,
       ...extraPlaylist
     }],
     scheduler: { enabled: false }
@@ -70,12 +72,14 @@ test('subtitle settings preserve multiple selected languages and reject an enabl
   assert.deepEqual(config.playlists[0].subtitles.languages, ['pt-BR', 'en', 'es']);
 
   const invalid = normalizeConfig({
-    configVersion: 2,
+    configVersion: 9,
     paths: { baseDir: '/tmp/ersatztv-subtitle-config-3' },
     playlists: [{
       name: 'Teste',
       urls: ['https://youtu.be/abcdefghijk'],
-      subtitles: { enabled: true, includeAuto: true, languages: [] }
+      subtitles: { enabled: true, includeAuto: true, languages: [] },
+      orphanPolicy: 'mark',
+      quarantineRetentionDays: null
     }]
   });
   assert.throws(() => validateConfig(invalid), /nenhum idioma/);

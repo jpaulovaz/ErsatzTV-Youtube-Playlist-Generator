@@ -84,7 +84,9 @@ test('music clip restore remaps an occupied SxxExx path and keeps current shared
 
   await restoreItemFromQuarantine(item, destination, [item, other]);
   assert.equal(item.storageState, STORAGE_STATES.ACTIVE);
-  assert.match(path.basename(item.targetPath), /S01E900\d+/);
+  assert.match(path.basename(item.targetPath), /S01E03/);
+  assert.equal(item.showEpisodeNumber, 3);
+  assert.match(await fs.readFile(item.nfoPath, 'utf8'), /<episode>3<\/episode>/);
   assert.equal(await fs.readFile(item.targetPath, 'utf8'), 'old-video');
   assert.equal(await fs.readFile(showNfoPath, 'utf8'), 'current-show');
   assert.equal(await fs.readFile(showPosterPath, 'utf8'), 'current-poster');

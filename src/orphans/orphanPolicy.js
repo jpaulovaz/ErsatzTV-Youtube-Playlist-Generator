@@ -54,14 +54,6 @@ function quarantineExpiresAt(retentionDays, movedAt = new Date()) {
   return date.toISOString();
 }
 
-function shouldManageFromSource(item) {
-  return normalizeUserDisposition(item && item.userDisposition) === USER_DISPOSITIONS.MANAGED;
-}
-
-function canRunWhileSourceInactive(item) {
-  return normalizeUserDisposition(item && item.userDisposition) === USER_DISPOSITIONS.KEEP;
-}
-
 module.exports = {
   ORPHAN_POLICIES,
   USER_DISPOSITIONS,
@@ -71,7 +63,5 @@ module.exports = {
   normalizeRetentionDays,
   normalizeUserDisposition,
   normalizeStorageState,
-  quarantineExpiresAt,
-  shouldManageFromSource,
-  canRunWhileSourceInactive
+  quarantineExpiresAt
 };

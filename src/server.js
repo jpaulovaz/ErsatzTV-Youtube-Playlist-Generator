@@ -210,9 +210,9 @@ async function handleAuthApi(req, res, url) {
 async function getVersion() {
   try {
     const pkg = JSON.parse(await fs.readFile(PACKAGE_PATH, 'utf8'));
-    return pkg.version || '3.5.2';
+    return pkg.version || 'desconhecida';
   } catch {
-    return '3.5.2';
+    return 'desconhecida';
   }
 }
 
@@ -402,7 +402,7 @@ async function startServer(config) {
   const host = config.server.host || '0.0.0.0';
   const port = Number(config.server.port) || 3099;
   await new Promise((resolve) => server.listen(port, host, resolve));
-  await logger.info(`Interface v3.2 iniciada em http://${host}:${port}`);
+  await logger.info(`Interface iniciada em http://${host}:${port}`, { version: await getVersion() });
   if (auth.setupRequired) {
     await logger.warn('A interface esta bloqueada ate que config/auth.json seja criado com npm run auth:set.');
   }

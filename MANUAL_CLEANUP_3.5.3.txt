@@ -1,0 +1,35 @@
+ErsatzTV YouTube Downloader 3.5.3 - limpeza manual de arquivos obsoletos
+
+IMPORTANTE
+Remova estes arquivos somente depois de instalar a v3.5.3, executar `npm run verify` e confirmar que o aplicativo iniciou normalmente.
+A v3.5.3 não referencia nenhum dos arquivos abaixo.
+O pacote completo v3.5.3 já é distribuído sem esses arquivos; esta lista é principalmente para quem aplica o pacote update sobre uma instalação v3.5.2 existente.
+
+Arquivos de codigo/testes que podem ser removidos:
+- src/cleanupLegacyFiles.js
+- src/movieMetadataService.js
+- src/showMetadataService.js
+- src/releaseDateService.js
+- test/movieMetadataService.test.js
+- test/showMetadataService.test.js
+- test/releaseDateService.test.js
+
+Templates Universal antigos que podem ser removidos:
+- src/scriptedSchedules/templates/universal-v1.1.1.py.tpl
+- src/scriptedSchedules/templates/universal-v1.2.0.py.tpl
+- src/scriptedSchedules/templates/universal-v1.3.0.py.tpl
+
+Arquivo de deploy antigo que pode ser removido:
+- deploy/ersatztv-yml-syncer.service.example
+
+Limpeza opcional da pasta de distribuicao:
+- .git/
+  Remova somente se esta pasta for uma instalacao/distribuicao e NAO for o seu repositorio Git de desenvolvimento.
+
+Nao remover:
+- config/config.json
+- config/auth.json
+- data/
+- src/scriptedSchedules/templates/universal-v1.3.1.py.tpl
+
+A opcao antiga updateExistingThumbnails pode ainda existir como uma chave dentro de um config.json vindo da v3.5.2. Nao e necessario editar esse arquivo manualmente: a v3.5.3 ignora a chave e ela deixa de ser gravada na proxima vez que a configuracao for salva pela aplicacao.

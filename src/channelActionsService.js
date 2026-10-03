@@ -1,5 +1,3 @@
-const fs = require('fs/promises');
-const path = require('path');
 const downloadManager = require('./downloadManager');
 const { saveConfig } = require('./config');
 const { runLibraryAction } = require('./ersatztvService');
@@ -12,7 +10,6 @@ const {
   DESTINATION_TYPES
 } = require('./destinationService');
 const channelState = require('./discovery/channelState');
-const { isPathInside } = require('./utils');
 
 function notFound(message) {
   const error = new Error(message);
@@ -140,13 +137,6 @@ async function deleteChannelWithFiles(config, channelId, confirmation) {
   return { ...deleted, config: removed.config };
 }
 
-async function removeUntrackedChannelDirectory(config, channel) {
-  const root = path.join(config.paths.channelsBaseDir, channel.folderName);
-  if (!isPathInside(config.paths.channelsBaseDir, root)) throw badRequest('Pasta do canal fora da raiz configurada.');
-  await fs.rm(root, { recursive: true, force: true });
-  return root;
-}
-
 module.exports = {
   getPlaylistDestination,
   getGlobalDestinations,
@@ -155,6 +145,5 @@ module.exports = {
   removePlaylistConfig,
   deletePlaylistWithFiles,
   removeChannelConfig,
-  deleteChannelWithFiles,
-  removeUntrackedChannelDirectory
+  deleteChannelWithFiles
 };

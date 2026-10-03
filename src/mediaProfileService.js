@@ -93,14 +93,23 @@ function hasXmlTag(content, tagName) {
 function insertMissingXmlTag(content, rootTag, tagName, value) {
   if (value == null || value === '') return { content, changed: false };
   if (hasXmlTag(content, tagName)) return { content, changed: false };
+  const source = String(content || '');
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
   const closePattern = new RegExp(`(^[ \\t]*)<\\/${rootTag}>`, 'im');
-  const match = content.match(closePattern);
-  if (!match) return { content, changed: false };
-  const newline = content.includes('\r\n') ? '\r\n' : '\n';
-  const indent = match[1] || '';
-  const childIndent = `${indent}  `;
-  const replacement = `${childIndent}<${tagName}>${xmlEscape(value)}</${tagName}>${newline}${match[0]}`;
-  return { content: content.replace(closePattern, replacement), changed: true };
+  const match = source.match(closePattern);
+  if (match) {
+    const indent = match[1] || '';
+    const childIndent = `${indent}  `;
+    const replacement = `${childIndent}<${tagName}>${xmlEscape(value)}</${tagName}>${newline}${match[0]}`;
+    return { content: source.replace(closePattern, replacement), changed: true };
+  }
+
+  const selfClosingPattern = new RegExp(`<${rootTag}\\b([^>]*)\\/\\s*>`, 'i');
+  const selfClosing = source.match(selfClosingPattern);
+  if (!selfClosing) return { content: source, changed: false };
+  const attrs = String(selfClosing[1] || '').replace(/\\s+$/, '');
+  const expanded = `<${rootTag}${attrs}>${newline}  <${tagName}>${xmlEscape(value)}</${tagName}>${newline}</${rootTag}>`;
+  return { content: source.replace(selfClosingPattern, expanded), changed: true };
 }
 
 function getXmlTagText(content, tagName) {
@@ -122,15 +131,7 @@ function replaceOrInsertXmlTag(content, rootTag, tagName, value) {
   return insertMissingXmlTag(source, rootTag, tagName, value);
 }
 
-function getEpisodeNfoSequenceMetadata(content) {
-  return {
-    aired: normalizeDateOnly(getXmlTagText(content, 'aired')),
-    seasonNumber: Math.max(0, Number(getXmlTagText(content, 'season')) || 0),
-    episodeNumber: Math.max(0, Number(getXmlTagText(content, 'episode')) || 0)
-  };
-}
-
-function patchMusicClipEpisodeSequenceContent(content, item, options = {}) {
+function patchEpisodeNfoNumberContent(content, item) {
   let next = String(content || '');
   const updated = [];
   const seasonNumber = Math.max(1, Number(item && item.showSeasonNumber) || 1);
@@ -144,12 +145,6 @@ function patchMusicClipEpisodeSequenceContent(content, item, options = {}) {
   next = result.content;
   if (result.changed) updated.push('episode');
 
-  if (options.addMissingDate !== false) {
-    const metadata = getReleaseMetadata(item);
-    result = insertMissingXmlTag(next, 'episodedetails', 'aired', metadata.releaseDate);
-    next = result.content;
-    if (result.changed) updated.push('aired');
-  }
 
   return { content: next, changed: updated.length > 0, updated };
 }
@@ -308,12 +303,12 @@ async function writeEpisodeNfo(item, nfoPath) {
   return target;
 }
 
-async function patchMusicClipEpisodeSequence(item, nfoPath, options = {}) {
+async function patchEpisodeNfoNumber(item, nfoPath) {
   const target = String(nfoPath || item && item.nfoPath || '').trim();
-  if (!target) throw new Error('Caminho do NFO do episodio nao informado para renumeracao.');
+  if (!target) throw new Error('Caminho do NFO do episodio nao informado para atualizacao.');
   const current = await fs.readFile(target, 'utf8');
   const stat = await fs.stat(target);
-  const result = patchMusicClipEpisodeSequenceContent(current, item, options);
+  const result = patchEpisodeNfoNumberContent(current, item);
   if (result.changed) {
     await atomicWriteText(target, result.content);
     await fs.chmod(target, stat.mode & 0o777);
@@ -331,8 +326,7 @@ module.exports = {
   xmlEscape,
   getReleaseMetadata,
   getXmlTagText,
-  getEpisodeNfoSequenceMetadata,
-  patchMusicClipEpisodeSequenceContent,
+  patchEpisodeNfoNumberContent,
   resolveMediaIdentity,
   getGenericMetadata,
   getMovieMetadata,
@@ -345,5 +339,5 @@ module.exports = {
   writeMovieNfo,
   writeTvShowNfo,
   writeEpisodeNfo,
-  patchMusicClipEpisodeSequence
+  patchEpisodeNfoNumber
 };

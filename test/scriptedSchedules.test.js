@@ -444,19 +444,7 @@ print(json.dumps({"time": result["currentTime"], "calls": api.calls, "tasks": le
   }
 });
 
-test('existing Universal v1.1.1 projects remain publishable without silent motor upgrade', async () => {
-  const project = musicProject();
-  project.templateVersion = '1.1.1';
-  const validation = validateProject(project);
-  assert.equal(validation.ok, true, JSON.stringify(validation.errors));
-  const script = await generateScript(project);
-  assert.match(script, /SCRIPT_VERSION = "1\.1\.1"/);
-  assert.doesNotMatch(script, /ALINHAMENTO POS-BLOCO/);
-  const output = await validateWithPython(script);
-  assert.match(output, /configuracao valida/);
-});
-
-test('Pad To Nearest Minute requires Filler, accepts only 5 10 15 30 and requires Universal v1.2.0', async () => {
+test('Pad To Nearest Minute requires Filler and accepts only 5 10 15 30', async () => {
   const project = musicProject();
   project.modules.fixedEvents[0].padToNearestMinutes = 15;
   let result = validateProject(project);
@@ -473,16 +461,11 @@ test('Pad To Nearest Minute requires Filler, accepts only 5 10 15 30 and require
   assert.equal(result.ok, false);
   assert.ok(result.errors.some((item) => /5, 10, 15 ou 30/.test(item.message)));
 
-  project.modules.fixedEvents[0].padToNearestMinutes = 30;
-  project.templateVersion = '1.1.1';
-  result = validateProject(project);
-  assert.equal(result.ok, false);
-  assert.ok(result.errors.some((item) => /motor 1\.2\.0/.test(item.message)));
 });
 
-test('Universal v1.3.0 serializes item Pad only for module modes that can align individual items', async () => {
+test('Universal v1.3.1 serializes item Pad only for module modes that can align individual items', async () => {
   const project = musicProject();
-  project.templateVersion = '1.3.0';
+  project.templateVersion = '1.3.1';
   project.modules.rotation[0].padToNearestMinutes = 5; // configuração antiga: deve ser ignorada no motor atual
   project.modules.countRotation = [{ source: 'TOP', presentation: 'music', count: 2, padToNearestMinutes: 5 }];
   project.modules.weightedRotation = [{ source: 'BASTILLE', presentation: 'music', weight: 1, avoidRepeat: true, padToNearestMinutes: 10 }];
@@ -531,7 +514,7 @@ test('Universal v1.3.0 serializes item Pad only for module modes that can align 
     assert.match(configBlock(name), /pad_to_nearest_minutes/, `${name} should keep at least one item-compatible Pad`);
   }
   for (const name of ['ROTATION', 'FIXED_DURATION_EVENTS', 'FIXED_ALL_EVENTS', 'FIXED_WINDOW_EVENTS', 'WINDOW_ROTATIONS', 'TEMPORARY_OVERRIDES', 'OFFLINE_WINDOWS']) {
-    assert.doesNotMatch(configBlock(name), /pad_to_nearest_minutes/, `${name} must not serialize item Pad in v1.3.0`);
+    assert.doesNotMatch(configBlock(name), /pad_to_nearest_minutes/, `${name} must not serialize item Pad in v1.3.1`);
   }
   assert.match(script, /def apply_item_pad\(/);
   assert.match(script, /ALINHAMENTO ENTRE ITENS/);
@@ -540,9 +523,9 @@ test('Universal v1.3.0 serializes item Pad only for module modes that can align 
   assert.match(output, /configuracao valida/);
 })
 
-test('Universal v1.3.0 item Pad uses ErsatzTV pad_to_next, yields to a scheduled event and does nothing on an exact mark', async () => {
+test('Universal v1.3.1 item Pad uses ErsatzTV pad_to_next, yields to a scheduled event and does nothing on an exact mark', async () => {
   const project = musicProject();
-  project.templateVersion = '1.3.0';
+  project.templateVersion = '1.3.1';
   project.modules.fixedEvents = [
     { id: 'next_event', time: '10:10', source: 'CONCERTS', count: 1, priority: 100, presentation: 'common', days: [] }
   ];
@@ -706,24 +689,6 @@ print(json.dumps(api.calls))
   }
 })
 
-test('Universal v1.2.0 keeps its historical post-block Pad behavior without silent conversion', async () => {
-  const project = musicProject();
-  project.templateVersion = '1.2.0';
-  project.modules.rotation[0].padToNearestMinutes = 5;
-  project.modules.fixedAllEvents = [{ id: 'legacy_all_pad', time: '14:00', source: 'CONCERTS', priority: 80, presentation: 'common', padToNearestMinutes: 15 }];
-  const validation = validateProject(project);
-  assert.equal(validation.ok, true, JSON.stringify(validation.errors));
-  const script = await generateScript(project);
-  const rotationBlock = script.slice(script.indexOf('ROTATION: list[dict[str, Any]] ='), script.indexOf('COUNT_ROTATION: list[dict[str, Any]] ='));
-  const allBlock = script.slice(script.indexOf('FIXED_ALL_EVENTS: list[dict[str, Any]] ='), script.indexOf('FIXED_WINDOW_EVENTS: list[dict[str, Any]] ='));
-  assert.match(rotationBlock, /pad_to_nearest_minutes/);
-  assert.match(allBlock, /pad_to_nearest_minutes/);
-  assert.match(script, /ALINHAMENTO POS-BLOCO/);
-  assert.match(script, /def apply_post_pad\(/);
-  const output = await validateWithPython(script);
-  assert.match(output, /configuracao valida/);
-});
-
 test('all ten scheduling modules can coexist and validate through the Python engine', async () => {
   const project = musicProject();
   project.modules.fixedDurationEvents = [{ id: 'duration_1', time: '20:00', source: 'TOP', durationMinutes: 60, priority: 120, presentation: 'music' }];
@@ -761,9 +726,9 @@ test('all modules are optional and an intentional gap is warning, not an error',
 });
 
 
-test('Universal v1.3.0 validates every new programming module together', async () => {
+test('Universal v1.3.1 validates every programming module together', async () => {
   const project = musicProject();
-  project.templateVersion = '1.3.0';
+  project.templateVersion = '1.3.1';
   project.modules.countRotation = [{ source: 'TOP', count: 3, presentation: 'music', padToNearestMinutes: 5 }];
   project.modules.weightedRotation = [
     { source: 'TOP', weight: 3, avoidRepeat: true, presentation: 'music' },
@@ -792,20 +757,6 @@ test('Universal v1.3.0 validates every new programming module together', async (
   assert.match(output, /configuracao valida/);
   assert.match(output, /CONTINUOUS_BLOCKS=1/);
   assert.match(output, /CLOCK_TEMPLATES=1/);
-});
-
-test('new v1.3.0 modules do not silently upgrade an older project', async () => {
-  const project = musicProject();
-  project.templateVersion = '1.2.0';
-  let validation = validateProject(project);
-  assert.equal(validation.ok, true, JSON.stringify(validation.errors));
-  let script = await generateScript(project);
-  assert.match(script, /SCRIPT_VERSION = "1\.2\.0"/);
-
-  project.modules.continuousBlocks = [{ id: 'base', startTime: '06:00', source: 'TOP', priority: 10, presentation: 'music', enabled: true, days: [] }];
-  validation = validateProject(project);
-  assert.equal(validation.ok, false);
-  assert.ok(validation.errors.some((item) => item.path === 'templateVersion' && /1\.3\.0/.test(item.message)));
 });
 
 test('continuous blocks find the latest start marker and Fit To Window targets the next scheduled event', async () => {
@@ -968,29 +919,6 @@ test('reserved none presentation stays internal while remaining available to the
   assert.match(script, /"epg_group": False/);
 });
 
-test('hydrateProject removes the old canonical none card and safely preserves a customized legacy none profile', async () => {
-  const canonical = defaultProject('44444444-4444-4444-8444-444444444444', { name: 'Canonico', fileName: 'canonico.py' });
-  canonical.presentationProfiles = [{ key: 'none', label: 'Nenhum', graphicsGroups: [], graphics: [], graphicsVariables: [], watermarks: [], preRoll: null, epgGroup: false, epgTitle: '', epgAdvance: true }];
-  assert.deepEqual(hydrateProject(canonical).presentationProfiles, []);
-
-  const legacy = defaultProject('55555555-5555-4555-8555-555555555555', { name: 'Legado', fileName: 'legado.py' });
-  legacy.presentationProfiles = [{ key: 'none', label: 'Nenhum', graphicsGroups: [], graphics: ['legacy.yml'], graphicsVariables: [{ key: 'message', value: 'Oi' }], watermarks: [], preRoll: null, epgGroup: false, epgTitle: '', epgAdvance: true }];
-  legacy.sources = [{ key: 'SRC', label: 'Source', type: 'smart_collection', name: 'Source', order: 'shuffle', presentation: 'none' }];
-  legacy.modules.fixedEvents = [{ id: 'event_1', time: '10:00', source: 'SRC', count: 1, priority: 100, presentation: 'none', days: [] }];
-  const hydrated = hydrateProject(legacy);
-  assert.equal(hydrated.presentationProfiles.some((profile) => profile.key === 'none'), false);
-  const migrated = hydrated.presentationProfiles.find((profile) => profile.key.startsWith('legacy_none'));
-  assert.ok(migrated);
-  assert.deepEqual(migrated.graphics, ['legacy.yml']);
-  assert.deepEqual(migrated.graphicsVariables, [{ key: 'message', value: 'Oi' }]);
-  assert.equal(hydrated.sources[0].presentation, migrated.key);
-  assert.equal(hydrated.modules.fixedEvents[0].presentation, migrated.key);
-  assert.deepEqual(validateProject(hydrated).errors, []);
-  const script = await generateScript(hydrated);
-  assert.match(script, new RegExp(`\"${migrated.key}\": \{`));
-  assert.match(script, /legacy\.yml/);
-  assert.match(script, /\"none\": \{/);
-});
 
 test('a user Presentation Profile cannot take the internal none key', () => {
   const project = defaultProject('66666666-6666-4666-8666-666666666666', { name: 'Chave reservada', fileName: 'chave-reservada.py' });

@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.5.2
+# ErsatzTV YouTube Downloader 3.5.3
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.5.2 refina a ação **Duplicar item** dos Scripted Schedules, mantendo as ações do item agrupadas à direita, e remove a manutenção manual obsoleta **Atualizar thumbnails** de Bibliotecas e Playlists de Canais. O fluxo normal de download continua salvando thumbnails/artwork e a opção global **Atualizar thumbnails existentes** permanece ativa. O Universal permanece v1.3.1; não há mudança de `configVersion`, schema de Scripted Schedules nem estado persistente.
+A versão 3.5.3 é uma faxina estrutural sobre a v3.5.2. Ela remove caminhos de compatibilidade já concluídos, centraliza utilitários repetidos, simplifica o pipeline de download e torna os comandos de verificação não destrutivos e automáticos. O comportamento atual de Bibliotecas, Canais, fila, órfãos, quarentena, legendas, metadata, ErsatzTV e Scripted Schedules é preservado. O aplicativo passa a aceitar somente `configVersion` 9 e projetos Scripted Schedule no Universal v1.3.1; não há mudança no schema de Scripted Schedules nem no estado persistente de downloads.
 
 ## Arquitetura
 
@@ -58,7 +58,6 @@ Biblioteca local do ErsatzTV
 - Publicação atômica dos scripts em pasta configurável, com validação, SHA-256, backup e histórico para restauração.
 - Menu **Ajuda** com explicações simples, exemplos de módulos, combinações sugeridas, glossário e um guia completo de Queries do ErsatzTV.
 - Ações manuais **Excluir e ignorar**, **Reativar**, **Restaurar e manter**, quarentena e exclusão definitiva, com bloqueio persistente contra redownload quando solicitado.
-- Migração automática da configuração da versão 1.
 
 ## Requisitos
 
@@ -86,8 +85,8 @@ node --version
 
 ## Instalação nova
 
-1. Extraia o pacote completo em uma pasta permanente.
-2. Ajuste `config/config.json` pela interface ou use `config/config.example.json` como referência.
+1. Extraia o pacote completo em uma pasta permanente. O pacote de distribuição não leva uma configuração pessoal.
+2. No primeiro `npm start`, o aplicativo cria automaticamente um `config/config.json` v9 com os padrões atuais. Se preferir pré-configurar caminhos antes da primeira inicialização, copie `config/config.example.json` para `config/config.json` e edite a cópia.
 3. Crie o único usuário administrativo local:
 
 ```bash
@@ -120,7 +119,7 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-Ao carregar uma configuração anterior, o aplicativo normaliza o schema atual e cria um backup do `config.json` antes de gravar a versão migrada. Consulte [UPGRADE.md](UPGRADE.md).
+A v3.5.3 trabalha somente com a configuração atual (`configVersion: 9`). Antes do update, conclua qualquer migração pendente ainda na v3.5.2 e confirme que os projetos de Scripted Schedules usam Universal v1.3.1. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Estrutura dos arquivos
 
@@ -227,13 +226,13 @@ Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando
 
 ## Scripted Schedules
 
-A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir de um motor Universal versionado. **Novos projetos usam Universal v1.3.1**. Projetos já salvos continuam na versão de motor escolhida até o usuário usar a opção de atualização; v1.1.1, v1.2.0 e v1.3.0 permanecem disponíveis.
+A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do **Universal v1.3.1**, único motor suportado pela v3.5.3.
 
-O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas. O valor **Nenhum** nos seletores de Presentation é interno e sempre vazio; ele não aparece como perfil editável. Projetos antigos que tinham o antigo `none` vazio são limpos automaticamente ao carregar.
+O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas. O valor **Nenhum** nos seletores de Presentation é interno e sempre vazio; ele não aparece como perfil editável.
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.5.2:
+Módulos disponíveis na v3.5.3:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -256,7 +255,7 @@ Módulos disponíveis na v3.5.2:
 
 Cada item principal desses módulos possui **Duplicar item** na área de ações. A cópia é inserida imediatamente depois do original e já abre para edição. Todos os campos são clonados, inclusive estruturas internas complexas; somente o ID é ajustado automaticamente quando necessário (`_copy`, `_copy_2`, ...) e o **Nome opcional** recebe **(cópia)**. O horário não é alterado automaticamente, permitindo usar a duplicação tanto para repetir o mesmo bloco em outro horário quanto para manter horário/filtros e trocar apenas a Source ou outra configuração.
 
-O **Filler** permanece separado dos módulos e é opcional. O **Tipo de Filler** pode ser escolhido entre Post-roll, Pre-roll, Mid-roll e Nenhum. **Post-roll** é o padrão e a opção recomendada para preencher lacunas e para o Pad; projetos antigos sem essa escolha salva continuam sendo tratados como Post-roll. Programações de fundo como rotações, Bloco contínuo e Inserções após X itens são alternativas de programação-base; o validador avisa quando várias bases são configuradas ao mesmo tempo. Eventos fixos podem ser colocados por cima da base usando prioridade e horários.
+O **Filler** permanece separado dos módulos e é opcional. O **Tipo de Filler** pode ser escolhido entre Post-roll, Pre-roll, Mid-roll e Nenhum. **Post-roll** é o padrão e a opção recomendada para preencher lacunas e para o Pad. Programações de fundo como rotações, Bloco contínuo e Inserções após X itens são alternativas de programação-base; o validador avisa quando várias bases são configuradas ao mesmo tempo. Eventos fixos podem ser colocados por cima da base usando prioridade e horários.
 
 Em **Reprodução avançada**, **Título customizado** possui dois modos. Com **Agrupar itens no EPG usando este título** desligado, o aplicativo continua enviando `customTitle` para cada operação de conteúdo e cada item permanece uma entrada separada no guia. Com a opção ligada, o gerador não envia `customTitle` por item: ele converte a configuração para o agrupamento nativo do ErsatzTV (`epg_group`, `epg_title` e `epg_advance`), criando uma única entrada de EPG para o bloco. O campo só pode ser agrupado quando há um título preenchido. O agrupamento de **Presentation Profiles -> Agrupar no EPG** continua existindo como mecanismo independente; quando o agrupamento do Título customizado está ligado no próprio bloco, o título desse bloco é o que deve nomear o grupo.
 
@@ -276,7 +275,7 @@ Ao duplicar um Scripted Schedule, Recursos, Programação e opções são copiad
 
 **Reset Playout** é uma ação separada e destrutiva. Publicar um script nunca dispara reset automaticamente.
 
-A opção lateral **Ajuda** possui explicações simples de Recursos, Queries, todos os módulos, combinações sugeridas, publicação e termos técnicos. A aba **Queries** organiza os campos oficiais por assunto (identidade, classificação, créditos, séries, música, idiomas, datas e características técnicas), indica em quais tipos de mídia cada campo é aceito e mostra exemplos com `AND`, `OR`, `NOT`, `*`, aspas e intervalos. Os `?` contextuais continuam disponíveis diretamente ao lado dos campos; a ajuda da Source Search aponta para essa aba completa. Em **Variáveis dos Graphics**, a Ajuda deixa claro que não existe uma lista fixa: a chave deve ser a mesma usada pelo YAML/Scriban. Dados que o ErsatzTV já fornece ao Graphics, como `MediaItem_Title`, `MediaItem_Artist`, `MediaItem_Path` e `MediaItem_Duration`, são usados diretamente no YAML e não precisam ser cadastrados como variáveis personalizadas. Para os próprios Graphics Elements, use caminhos relativos como `image/watermark.yml`; se um projeto antigo tiver salvo `/image/watermark.yml`, o aplicativo remove a barra inicial automaticamente.
+A opção lateral **Ajuda** possui explicações simples de Recursos, Queries, todos os módulos, combinações sugeridas, publicação e termos técnicos. A aba **Queries** organiza os campos oficiais por assunto (identidade, classificação, créditos, séries, música, idiomas, datas e características técnicas), indica em quais tipos de mídia cada campo é aceito e mostra exemplos com `AND`, `OR`, `NOT`, `*`, aspas e intervalos. Os `?` contextuais continuam disponíveis diretamente ao lado dos campos; a ajuda da Source Search aponta para essa aba completa. Em **Variáveis dos Graphics**, a Ajuda deixa claro que não existe uma lista fixa: a chave deve ser a mesma usada pelo YAML/Scriban. Dados que o ErsatzTV já fornece ao Graphics, como `MediaItem_Title`, `MediaItem_Artist`, `MediaItem_Path` e `MediaItem_Duration`, são usados diretamente no YAML e não precisam ser cadastrados como variáveis personalizadas. Para os próprios Graphics Elements, use caminhos relativos como `image/watermark.yml`; uma barra inicial em `/image/watermark.yml` é normalizada automaticamente.
 
 Os dados do builder ficam em `data/scripted-schedules/` e não alteram o `configVersion` principal da aplicação.
 
@@ -353,7 +352,7 @@ O NFO grava título, plot, `uniqueid` do YouTube e, quando disponível, `year` +
 
 ### Show / vídeo completo (Filmes)
 
-Preserva o modelo usado na v2.6.0:
+Usa o layout por pasta de filme:
 
 ```text
 Biblioteca/
@@ -369,7 +368,7 @@ O NFO coloca o artista em `title`, o nome do vídeo em `outline`/`plot` e, quand
 
 ### Clipes musicais (Seriados)
 
-Preserva o modelo usado na v2.7.0:
+Usa o layout de Show/episódio:
 
 ```text
 Biblioteca/
@@ -383,15 +382,13 @@ Biblioteca/
         └── Twenty One Pilots - S01E01 - City Walls.pt-BR.srt
 ```
 
-O artista vira o Show e a música vira o episódio. A partir da v3.4.11, a numeração por artista segue a data de publicação: o vídeo mais antigo recebe E01, o seguinte E02 e assim por diante. Quando dois vídeos têm a mesma data, o timestamp de publicação é usado quando disponível; sem data, a ordem anterior é mantida como desempate estável. O NFO do episódio recebe `aired` quando essa informação existe.
+O artista vira o Show e a música vira o episódio. Cada artista recebe numeração persistente e incremental: um vídeo novo recebe o próximo episódio livre sem renumerar os arquivos que já existem. O NFO do episódio recebe `aired` quando a data de publicação está disponível.
 
 A normalização de nomes continua conservadora: casing claramente ruidoso é corrigido, enquanto grafias estilizadas como `AC/DC`, `P!NK`, `deadmau5`, `blink-182` e `CHVRCHES` são preservadas.
 
-## Datas e sequenciamento de Clipes musicais
+## Datas e numeração de Clipes musicais
 
-Downloads novos continuam preservando metadata temporal do YouTube e escrevendo `year`/`premiered` ou `aired` conforme o perfil. Em **Clipes musicais (Seriados)**, o sequenciamento cronológico por artista continua fazendo parte do fluxo normal de descoberta/download e também é usado após restaurações da quarentena quando necessário.
-
-A antiga ação manual **Atualizar datas e episódios**, criada apenas para a migração dos acervos anteriores, foi removida na v3.5.0. A remoção não altera o enriquecimento de data nem o resequenciamento normal de novos downloads.
+Downloads novos continuam preservando metadata temporal do YouTube e escrevendo `year`/`premiered` ou `aired` conforme o perfil. Em **Clipes musicais (Seriados)**, a numeração é estável: itens novos recebem o próximo número livre e a biblioteca não é renumerada em massa. Se uma restauração da quarentena encontrar um `SxxExx` já ocupado, somente o item restaurado é remapeado para o próximo episódio livre; os demais arquivos permanecem intactos. O enriquecimento de data continua ativo no serviço atual de descoberta.
 
 ## Compatibilidade de mídia
 
@@ -421,7 +418,7 @@ Cada **Biblioteca** e cada **Playlist de Canal** possui a configuração **Arqui
 - **Marcar como órfão**: mantém o arquivo no lugar. **Limpar órfãos** só aparece quando esta política está selecionada e existem órfãos.
 - **Mover para quarentena recuperável**: retira o pacote da biblioteca ativa e o preserva fora da raiz escaneada. A retenção pode ser **Nunca**, 30, 90 ou 180 dias.
 
-Destinos existentes atualizados para v3.5.0 recebem automaticamente **Marcar como órfão**, preservando o comportamento anterior. Novos destinos exigem escolha explícita da política.
+Cada destino atual precisa ter uma política de órfãos válida. A v3.5.3 não executa migração automática de destinos antigos; configurações já atualizadas para `configVersion` 9 continuam preservadas.
 
 A quarentena fica em uma pasta irmã da base de mídia, preferencialmente no mesmo filesystem, para que movimentos sejam feitos por `rename` quando possível. Em filesystems diferentes o aplicativo usa cópia, validação e só então remove o original. Nunca sobrescreve silenciosamente um arquivo existente durante restauração. MP4, NFO, thumbnail/poster e SRTs são tratados como um pacote; em Clipes musicais, assets compartilhados do Show só são retirados quando não resta outro episódio ativo/mantido.
 
@@ -505,8 +502,10 @@ A segunda ação é destrutiva e não possui restauração automática.
 config/config.json                  configuração ativa
 config/auth.json                    credencial derivada e parâmetros de sessão
 data/download-state.json            fila, histórico e índice por videoId
+data/channel-state.json             estado de descoberta/sincronização dos Canais
+data/youtube-cache.json             cache da YouTube Data API
 data/app.log                        log operacional
-data/scripted-schedules/             projetos, histórico e metadados do gerador de Scripted Schedules
+data/scripted-schedules/            projetos, histórico e metadados do gerador de Scripted Schedules
 .youtube-downloader-work/           arquivos temporários dentro da pasta base
 ```
 
@@ -520,7 +519,7 @@ npm run auth:set   # criar ou trocar usuário/senha local
 npm run sync       # uma descoberta pelo terminal
 npm run check      # valida sintaxe JavaScript
 npm test           # testes automatizados
-npm run verify     # sintaxe + testes
+npm run verify     # sintaxe + testes + consistência da release
 ```
 
 ## Serviço systemd

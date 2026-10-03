@@ -5,9 +5,12 @@ const { DEFAULT_SUBTITLE_LANGUAGES, normalizeSubtitleLanguages } = require('./su
 const { MEDIA_PROFILES, normalizeMediaProfile } = require('./mediaProfileService');
 const { normalizeChannels, validateChannels } = require('./channelConfig');
 const { normalizeOrphanPolicy, normalizeRetentionDays, ORPHAN_POLICIES } = require('./orphans/orphanPolicy');
+const { sanitizeJsRuntimeName } = require('./ytDlpUtils');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
-const CONFIG_DIR = path.join(ROOT_DIR, 'config');
+const CONFIG_DIR = process.env.ERSATZTV_CONFIG_DIR
+  ? path.resolve(process.env.ERSATZTV_CONFIG_DIR)
+  : path.join(ROOT_DIR, 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 const CONFIG_VERSION = 9;
 
@@ -43,7 +46,6 @@ const DEFAULT_CONFIG = {
     jsRuntimeCustomName: 'deno',
     ejsComponents: 'ejs:github',
     writeThumbnails: true,
-    updateExistingThumbnails: false,
     pauseOnLowDisk: true,
     minFreeSpaceGb: 20,
     scanOnQueueIdle: true,
@@ -128,12 +130,6 @@ function normalizeOptionalMaxHeight(value) {
   return ALLOWED_MAX_HEIGHTS.has(height) ? height : null;
 }
 
-function sanitizeJsRuntimeName(value) {
-  return String(value || '')
-    .trim()
-    .replace(/[^a-zA-Z0-9_-]/g, '') || 'deno';
-}
-
 function normalizeJsRuntimeMode(value) {
   const mode = String(value || '').trim();
   return JS_RUNTIME_MODES.has(mode) ? mode : DEFAULT_CONFIG.downloads.jsRuntimeMode;
@@ -180,51 +176,19 @@ function buildDownloadsConfig(rawConfig) {
   const rawDownloads = rawConfig.downloads && typeof rawConfig.downloads === 'object'
     ? rawConfig.downloads
     : {};
-  const legacyStream = rawConfig.stream && typeof rawConfig.stream === 'object'
-    ? rawConfig.stream
-    : {};
-
-  const maxHeightSource = hasOwn(rawDownloads, 'maxHeight')
-    ? rawDownloads.maxHeight
-    : (hasOwn(legacyStream, 'maxHeight') ? legacyStream.maxHeight : DEFAULT_CONFIG.downloads.maxHeight);
-
-  const runtimeModeSource = hasOwn(rawDownloads, 'jsRuntimeMode')
-    ? rawDownloads.jsRuntimeMode
-    : legacyStream.jsRuntimeMode;
-  const runtimeMode = normalizeJsRuntimeMode(runtimeModeSource);
-
-  const runtimePathSource = hasOwn(rawDownloads, 'jsRuntimePath')
-    ? rawDownloads.jsRuntimePath
-    : legacyStream.jsRuntimePath;
-
-  const ejsSource = hasOwn(rawDownloads, 'ejsComponents')
-    ? rawDownloads.ejsComponents
-    : legacyStream.ejsComponents;
-
-  const userAgentSource = hasOwn(rawDownloads, 'userAgent')
-    ? rawDownloads.userAgent
-    : legacyStream.userAgent;
+  const runtimeMode = normalizeJsRuntimeMode(rawDownloads.jsRuntimeMode);
 
   return {
-    maxHeight: normalizeMaxHeight(maxHeightSource),
+    maxHeight: normalizeMaxHeight(rawDownloads.maxHeight),
     container: 'mp4',
     codecProfile: 'mp4_h264_aac',
     concurrentDownloads: 1,
-    userAgent: String(userAgentSource || DEFAULT_CONFIG.downloads.userAgent).trim() || DEFAULT_CONFIG.downloads.userAgent,
+    userAgent: String(rawDownloads.userAgent || DEFAULT_CONFIG.downloads.userAgent).trim() || DEFAULT_CONFIG.downloads.userAgent,
     jsRuntimeMode: runtimeMode,
-    jsRuntimePath: String(runtimePathSource !== undefined ? runtimePathSource : defaultJsRuntimePath(runtimeMode)).trim(),
-    jsRuntimeCustomName: sanitizeJsRuntimeName(
-      hasOwn(rawDownloads, 'jsRuntimeCustomName')
-        ? rawDownloads.jsRuntimeCustomName
-        : legacyStream.jsRuntimeCustomName
-    ),
-    ejsComponents: normalizeEjsComponents(ejsSource, runtimeMode),
+    jsRuntimePath: String(hasOwn(rawDownloads, 'jsRuntimePath') ? rawDownloads.jsRuntimePath : defaultJsRuntimePath(runtimeMode)).trim(),
+    jsRuntimeCustomName: sanitizeJsRuntimeName(rawDownloads.jsRuntimeCustomName) || 'deno',
+    ejsComponents: normalizeEjsComponents(rawDownloads.ejsComponents, runtimeMode),
     writeThumbnails: rawDownloads.writeThumbnails !== false,
-    updateExistingThumbnails: Boolean(
-      hasOwn(rawDownloads, 'updateExistingThumbnails')
-        ? rawDownloads.updateExistingThumbnails
-        : (rawConfig.youtubeApi && rawConfig.youtubeApi.updateExistingThumbnails)
-    ),
     pauseOnLowDisk: rawDownloads.pauseOnLowDisk !== false,
     minFreeSpaceGb: Math.max(1, Number(rawDownloads.minFreeSpaceGb) || DEFAULT_CONFIG.downloads.minFreeSpaceGb),
     scanOnQueueIdle: rawDownloads.scanOnQueueIdle !== false,
@@ -232,7 +196,6 @@ function buildDownloadsConfig(rawConfig) {
     retryDelaysMinutes: normalizeRetryDelays(rawDownloads.retryDelaysMinutes)
   };
 }
-
 function normalizePlaylistSubtitles(playlist) {
   const raw = playlist && playlist.subtitles && typeof playlist.subtitles === 'object'
     ? playlist.subtitles
@@ -247,14 +210,8 @@ function normalizePlaylistSubtitles(playlist) {
 }
 
 function normalizePlaylistMediaProfile(playlist) {
-  if (playlist && playlist.mediaProfile) return normalizeMediaProfile(playlist.mediaProfile);
-
-  // Compatibilidade de transicao apenas para a configuracao imediatamente anterior.
-  if (playlist && playlist.showMetadata && playlist.showMetadata.enabled) return MEDIA_PROFILES.MUSIC_CLIPS;
-  if (playlist && playlist.movieMetadata && playlist.movieMetadata.enabled) return MEDIA_PROFILES.MOVIE;
-  return MEDIA_PROFILES.GENERIC;
+  return normalizeMediaProfile(playlist && playlist.mediaProfile || MEDIA_PROFILES.GENERIC);
 }
-
 function normalizeConfig(raw) {
   const rawConfig = raw && typeof raw === 'object' ? raw : {};
   const rawServer = rawConfig.server && typeof rawConfig.server === 'object' ? rawConfig.server : {};
@@ -264,11 +221,6 @@ function normalizeConfig(raw) {
   const rawScheduler = rawConfig.scheduler && typeof rawConfig.scheduler === 'object' ? rawConfig.scheduler : {};
   const rawChannelScheduler = rawConfig.channelScheduler && typeof rawConfig.channelScheduler === 'object' ? rawConfig.channelScheduler : {};
   const rawCleanup = rawConfig.cleanup && typeof rawConfig.cleanup === 'object' ? rawConfig.cleanup : {};
-  const sourceConfigVersion = Number(rawConfig.configVersion || 1);
-  const legacyOrphanPolicy = sourceConfigVersion < 9 ? ORPHAN_POLICIES.MARK : null;
-
-  const legacyLibraryId = toOptionalPositiveInteger(rawErsatz.libraryId);
-  const legacyChannelNumber = toOptionalPositiveInteger(rawErsatz.channelNumber);
   const normalizedBaseDir = String(rawPaths.baseDir || DEFAULT_CONFIG.paths.baseDir).trim() || DEFAULT_CONFIG.paths.baseDir;
   const defaultChannelsBaseDir = path.join(path.dirname(normalizedBaseDir), 'youtube-channels');
 
@@ -284,8 +236,7 @@ function normalizeConfig(raw) {
       ytDlpPath: String(rawPaths.ytDlpPath || DEFAULT_CONFIG.paths.ytDlpPath).trim() || DEFAULT_CONFIG.paths.ytDlpPath,
       ffmpegPath: String(rawPaths.ffmpegPath || DEFAULT_CONFIG.paths.ffmpegPath).trim() || DEFAULT_CONFIG.paths.ffmpegPath,
       ffprobePath: String(rawPaths.ffprobePath || DEFAULT_CONFIG.paths.ffprobePath).trim() || DEFAULT_CONFIG.paths.ffprobePath,
-      // Cookies only remain enabled when explicitly configured. A legacy streamScriptPath never enables them.
-      cookiesPath: hasOwn(rawPaths, 'cookiesPath') ? String(rawPaths.cookiesPath || '').trim() : ''
+      cookiesPath: String(rawPaths.cookiesPath || '').trim()
     },
     downloads: buildDownloadsConfig(rawConfig),
     youtubeApi: {
@@ -304,7 +255,7 @@ function normalizeConfig(raw) {
       smartCollectionSelections: normalizeSmartCollectionSelections(rawErsatz.smartCollectionSelections)
     },
     playlists: [],
-    channels: normalizeChannels(rawConfig.channels, ALLOWED_MAX_HEIGHTS, { legacyOrphanPolicy }),
+    channels: normalizeChannels(rawConfig.channels, ALLOWED_MAX_HEIGHTS),
     scheduler: {
       enabled: Boolean(rawScheduler.enabled),
       intervalMinutes: Math.max(1, Number(rawScheduler.intervalMinutes) || DEFAULT_CONFIG.scheduler.intervalMinutes),
@@ -329,23 +280,18 @@ function normalizeConfig(raw) {
         url: urls[0] || '',
         urls,
         enabled: !playlist || playlist.enabled !== false,
-        libraryId: toOptionalPositiveInteger(playlist && playlist.libraryId) || legacyLibraryId,
-        channelNumber: toOptionalPositiveInteger(playlist && playlist.channelNumber) || legacyChannelNumber,
+        libraryId: toOptionalPositiveInteger(playlist && playlist.libraryId),
+        channelNumber: toOptionalPositiveInteger(playlist && playlist.channelNumber),
         channelName: String(playlist && playlist.channelName || '').trim(),
         cookiesPath: String(playlist && playlist.cookiesPath || '').trim(),
         maxHeight: normalizeOptionalMaxHeight(playlist && playlist.maxHeight),
         subtitles: normalizePlaylistSubtitles(playlist),
         mediaProfile: normalizePlaylistMediaProfile(playlist),
-        orphanPolicy: normalizeOrphanPolicy(playlist && playlist.orphanPolicy, legacyOrphanPolicy),
+        orphanPolicy: normalizeOrphanPolicy(playlist && playlist.orphanPolicy, null),
         quarantineRetentionDays: normalizeRetentionDays(playlist && playlist.quarantineRetentionDays, null)
       };
     })
     .filter((playlist) => playlist.name && playlist.urls.length > 0);
-
-  // Empty library lists are valid. Version upgrades must never create a sample library.
-  if (!Array.isArray(rawConfig.playlists) && Number(rawConfig.configVersion || 0) <= 1) {
-    config.playlists = clone(DEFAULT_CONFIG.playlists);
-  }
 
   return config;
 }
@@ -391,15 +337,16 @@ function validateConfig(config) {
   return config;
 }
 
-function timestampForFilename() {
-  return new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '').replace('T', '-');
-}
-
 async function atomicWriteJson(filePath, value) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  await fs.writeFile(tempPath, JSON.stringify(value, null, 2) + '\n', 'utf8');
-  await fs.rename(tempPath, filePath);
+  try {
+    await fs.writeFile(tempPath, JSON.stringify(value, null, 2) + '\n', 'utf8');
+    await fs.rename(tempPath, filePath);
+  } catch (error) {
+    await fs.rm(tempPath, { force: true }).catch(() => {});
+    throw error;
+  }
 }
 
 async function ensureConfigFile() {
@@ -411,25 +358,14 @@ async function ensureConfigFile() {
   }
 }
 
-async function migrateConfigFile(raw, normalized) {
-  const sourceVersion = Number(raw && raw.configVersion) || 1;
-  const backupPath = path.join(CONFIG_DIR, `config.v${sourceVersion}.backup-${timestampForFilename()}.json`);
-  await fs.writeFile(backupPath, JSON.stringify(raw, null, 2) + '\n', 'utf8');
-  await atomicWriteJson(CONFIG_PATH, normalized);
-  return backupPath;
-}
-
 async function loadConfig() {
   await ensureConfigFile();
   const content = await fs.readFile(CONFIG_PATH, 'utf8');
   const raw = JSON.parse(content);
-  const normalized = validateConfig(normalizeConfig(raw));
-
   if (Number(raw.configVersion) !== CONFIG_VERSION) {
-    await migrateConfigFile(raw, normalized);
+    throw new Error(`config.json usa configVersion ${raw.configVersion ?? 'ausente'}. A v3.5.3 aceita somente configVersion ${CONFIG_VERSION}; conclua a migracao na v3.5.2 antes de atualizar.`);
   }
-
-  return normalized;
+  return validateConfig(normalizeConfig(raw));
 }
 
 async function saveConfig(config) {

@@ -1,36 +1,12 @@
-const path = require('path');
-const { spawn } = require('child_process');
 const logger = require('../logger');
+const { runCommand } = require('../processUtils');
 const { DESTINATION_TYPES } = require('../destinationService');
+const { buildYtDlpCommonArgs } = require('../ytDlpUtils');
 const {
   shouldUseYouTubeApi,
   fetchSourcesViaApi,
   canonicalWatchUrl
 } = require('../youtubeApi');
-
-function runCommand(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: options.cwd || process.cwd(), env: process.env, shell: false });
-    let stdout = '';
-    let stderr = '';
-    let timedOut = false;
-    let killTimer = null;
-    const timeoutMs = Number(options.timeoutMs) || 0;
-    const timeout = timeoutMs > 0 ? setTimeout(() => {
-      timedOut = true;
-      child.kill('SIGTERM');
-      killTimer = setTimeout(() => child.kill('SIGKILL'), 3000);
-    }, timeoutMs) : null;
-    child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
-    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
-    child.on('error', reject);
-    child.on('close', (code, signal) => {
-      if (timeout) clearTimeout(timeout);
-      if (killTimer) clearTimeout(killTimer);
-      resolve({ code, signal, stdout, stderr, timedOut });
-    });
-  });
-}
 
 function getUrls(source) {
   const values = [];
@@ -39,37 +15,6 @@ function getUrls(source) {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
 }
 
-function getEffectiveCookiesPath(config, source) {
-  return String((source && source.cookiesPath) || config.paths.cookiesPath || '').trim();
-}
-
-function sanitizeJsRuntimeName(value) {
-  return String(value || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
-}
-
-function getYtDlpJsRuntimeArg(config) {
-  const downloads = config.downloads || {};
-  const mode = String(downloads.jsRuntimeMode || 'disabled').trim();
-  if (!mode || mode === 'disabled') return '';
-  const runtimeName = mode === 'custom' ? sanitizeJsRuntimeName(downloads.jsRuntimeCustomName) : sanitizeJsRuntimeName(mode);
-  if (!runtimeName) return '';
-  const runtimePath = String(downloads.jsRuntimePath || '').trim();
-  return runtimePath ? `${runtimeName}:${runtimePath}` : runtimeName;
-}
-
-function buildYtDlpCommonArgs(config, source) {
-  const args = [];
-  const cookiesPath = getEffectiveCookiesPath(config, source);
-  const runtimeArg = getYtDlpJsRuntimeArg(config);
-  const ejsComponents = runtimeArg ? String(config.downloads.ejsComponents || '').trim() : '';
-  if (runtimeArg) args.push('--js-runtimes', runtimeArg);
-  if (ejsComponents && ejsComponents !== 'none') args.push('--remote-components', ejsComponents);
-  if (cookiesPath) args.push('--cookies', cookiesPath);
-  if (config.downloads.userAgent) args.push('--add-header', `User-Agent: ${config.downloads.userAgent}`);
-  if (config.paths && config.paths.ffmpegPath) args.push('--ffmpeg-location', path.dirname(config.paths.ffmpegPath));
-  args.push('--no-color');
-  return args;
-}
 
 function isSingleVideoSource(urlValue) {
   try {
@@ -140,7 +85,7 @@ function isCompletedStream(video) {
   if (video && video.wasLive) return true;
   if (['was_live', 'not_live'].includes(liveStatus)) return true;
   // Be conservative for the Streams source: unknown, current and upcoming
-  // statuses are not eligible in v3.0.
+  // statuses are not eligible for the completed-stream source.
   return false;
 }
 
@@ -257,10 +202,7 @@ async function fetchDestinationVideos(config, destination, options = {}) {
 }
 
 module.exports = {
-  runCommand,
   getUrls,
-  getEffectiveCookiesPath,
-  buildYtDlpCommonArgs,
   isSingleVideoSource,
   getSourceKind,
   parseYtDlpJsonLines,

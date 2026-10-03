@@ -5,7 +5,9 @@ const {
   SUPPORTED_TEMPLATE_VERSIONS,
   normalizeGraphicsElementPath,
   sourceSupportsPlaybackOrder,
-  normalizePlaybackOrder
+  normalizePlaybackOrder,
+  sequenceSupportsItemPad,
+  modeSupportsItemPad
 } = require('./schema');
 const { validateProject } = require('./validator');
 
@@ -173,27 +175,6 @@ function baseEvent(input = {}, options = {}, resolveSource = (key) => key) {
 }
 
 
-function sequenceSupportsItemPad(steps = []) {
-  const modes = (steps || []).map((step) => String(step?.mode || 'count'));
-  return modes.includes('count') && modes.every((mode) => !['duration', 'all'].includes(mode));
-}
-
-function versionAtLeast(value, minimum) {
-  const a = String(value || '0').split('.').map((n) => Number(n) || 0);
-  const b = String(minimum || '0').split('.').map((n) => Number(n) || 0);
-  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
-    if ((a[i] || 0) > (b[i] || 0)) return true;
-    if ((a[i] || 0) < (b[i] || 0)) return false;
-  }
-  return true;
-}
-
-function modeSupportsItemPad(mode, steps = []) {
-  const normalized = String(mode || 'count');
-  if (normalized === 'count') return true;
-  if (normalized === 'sequence') return sequenceSupportsItemPad(steps);
-  return false;
-}
 
 function stepToEngine(step = {}, resolveSource = (key) => key) {
   return compact({
@@ -209,13 +190,10 @@ function stepToEngine(step = {}, resolveSource = (key) => key) {
 
 function modulesToEngine(project, resolveSource) {
   const modules = project.modules || {};
-  const itemPadEngine = versionAtLeast(project.templateVersion || TEMPLATE_VERSION, '1.3.0');
-  const closestStartEngine = versionAtLeast(project.templateVersion || TEMPLATE_VERSION, '1.3.1');
-  const timing = (item) => closestStartEngine ? startTimingFields(item) : {};
+  const timing = (item) => startTimingFields(item);
   const rotation = (modules.rotation || []).map((item) => compact({
     source: resolveSource(item.source, item.order), presentation: item.presentation,
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
-    pad_to_nearest_minutes: !itemPadEngine && item.padToNearestMinutes !== '' && item.padToNearestMinutes !== null && item.padToNearestMinutes !== undefined ? Number(item.padToNearestMinutes) : undefined,
     ...playbackFields(item, resolveSource)
   }));
   const countRotation = (modules.countRotation || []).map((item) => compact({
@@ -242,27 +220,26 @@ function modulesToEngine(project, resolveSource) {
     use_filler_remainder: item.useFillerRemainder !== false
   }));
   const fixedEvents = (modules.fixedEvents || []).map((item) => compact({ ...baseEvent(item, {}, resolveSource), ...timing(item), time: item.time, source: resolveSource(item.source, item.order), count: Number(item.count) }));
-  const fixedDurationEvents = (modules.fixedDurationEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine }, resolveSource), ...timing(item), time: item.time, source: resolveSource(item.source, item.order), duration_minutes: Number(item.durationMinutes) }));
-  const fixedAllEvents = (modules.fixedAllEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine }, resolveSource), ...timing(item), time: item.time, source: resolveSource(item.source, item.order) }));
-  const fixedWindowEvents = (modules.fixedWindowEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine }, resolveSource), start_time: item.startTime, end_time: item.endTime, source: resolveSource(item.source, item.order) }));
+  const fixedDurationEvents = (modules.fixedDurationEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: false }, resolveSource), ...timing(item), time: item.time, source: resolveSource(item.source, item.order), duration_minutes: Number(item.durationMinutes) }));
+  const fixedAllEvents = (modules.fixedAllEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: false }, resolveSource), ...timing(item), time: item.time, source: resolveSource(item.source, item.order) }));
+  const fixedWindowEvents = (modules.fixedWindowEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: false }, resolveSource), start_time: item.startTime, end_time: item.endTime, source: resolveSource(item.source, item.order) }));
   const windowRotations = (modules.windowRotations || []).map((item) => compact({
     ...baseEvent(item, { includePad: false }, resolveSource), start_time: item.startTime, end_time: item.endTime, block_minutes: Number(item.blockMinutes),
     items: (item.items || []).map((entry) => compact({
       source: resolveSource(entry.source, entry.order), presentation: entry.presentation,
       duration_minutes: entry.durationMinutes !== '' && entry.durationMinutes !== undefined ? Number(entry.durationMinutes) : undefined,
-      pad_to_nearest_minutes: !itemPadEngine && entry.padToNearestMinutes !== '' && entry.padToNearestMinutes !== null && entry.padToNearestMinutes !== undefined ? Number(entry.padToNearestMinutes) : undefined,
       ...playbackFields(entry, resolveSource)
     }))
   }));
-  const sequenceEvents = (modules.sequenceEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: !itemPadEngine || sequenceSupportsItemPad(item.steps) }, resolveSource), ...timing(item), time: item.time, atomic: Boolean(item.atomic), steps: (item.steps || []).map((step) => stepToEngine(step, resolveSource)) }));
+  const sequenceEvents = (modules.sequenceEvents || []).map((item) => compact({ ...baseEvent(item, { includePad: sequenceSupportsItemPad(item.steps) }, resolveSource), ...timing(item), time: item.time, atomic: Boolean(item.atomic), steps: (item.steps || []).map((step) => stepToEngine(step, resolveSource)) }));
   const intervalEvents = (modules.intervalEvents || []).map((item) => compact({
-    ...baseEvent(item, { includePad: !itemPadEngine || modeSupportsItemPad(item.mode) }, resolveSource), ...timing(item), start_time: item.startTime, end_time: item.endTime, every_minutes: Number(item.everyMinutes),
+    ...baseEvent(item, { includePad: modeSupportsItemPad(item.mode) }, resolveSource), ...timing(item), start_time: item.startTime, end_time: item.endTime, every_minutes: Number(item.everyMinutes),
     source: item.source ? resolveSource(item.source, item.order) : undefined, mode: item.mode, count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
     late_policy: item.latePolicy || 'queue', max_lateness_minutes: item.maxLatenessMinutes !== '' && item.maxLatenessMinutes !== undefined ? Number(item.maxLatenessMinutes) : undefined
   }));
   const choiceEvents = (modules.choiceEvents || []).map((item) => compact({
-    ...baseEvent(item, { includePad: !itemPadEngine || modeSupportsItemPad(item.mode) }, resolveSource), ...timing(item), time: item.time, mode: item.mode, count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
+    ...baseEvent(item, { includePad: modeSupportsItemPad(item.mode) }, resolveSource), ...timing(item), time: item.time, mode: item.mode, count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
     selection: item.selection || 'weighted', choices: (item.choices || []).map((choice) => compact({
       source: resolveSource(choice.source, choice.order), presentation: choice.presentation, weight: Number(choice.weight || 1), ...playbackFields(choice, resolveSource)
@@ -275,15 +252,15 @@ function modulesToEngine(project, resolveSource) {
       count: slot.count !== '' && slot.count !== undefined ? Number(slot.count) : undefined,
       duration_minutes: slot.durationMinutes !== '' && slot.durationMinutes !== undefined ? Number(slot.durationMinutes) : undefined,
       presentation: slot.presentation, priority: slot.priority !== '' && slot.priority !== undefined ? Number(slot.priority) : undefined,
-      pad_to_nearest_minutes: (!itemPadEngine || modeSupportsItemPad(slot.mode)) && slot.padToNearestMinutes !== '' && slot.padToNearestMinutes !== undefined ? Number(slot.padToNearestMinutes) : undefined,
+      pad_to_nearest_minutes: modeSupportsItemPad(slot.mode) && slot.padToNearestMinutes !== '' && slot.padToNearestMinutes !== undefined ? Number(slot.padToNearestMinutes) : undefined,
       ...playbackFields(slot, resolveSource)
     }))
   }));
   const temporaryOverrides = (modules.temporaryOverrides || []).map((item) => compact({
-    ...baseEvent(item, { includePad: !itemPadEngine }, resolveSource), start_datetime: item.startDatetime, end_datetime: item.endDatetime, source: resolveSource(item.source, item.order)
+    ...baseEvent(item, { includePad: false }, resolveSource), start_datetime: item.startDatetime, end_datetime: item.endDatetime, source: resolveSource(item.source, item.order)
   }));
   const dateEvents = (modules.dateEvents || []).map((item) => compact({
-    ...baseEvent(item, { includePad: !itemPadEngine || modeSupportsItemPad(item.mode, item.steps) }, resolveSource), ...timing(item), datetime: item.datetime, source: item.source ? resolveSource(item.source, item.order) : undefined, mode: item.mode,
+    ...baseEvent(item, { includePad: modeSupportsItemPad(item.mode, item.steps) }, resolveSource), ...timing(item), datetime: item.datetime, source: item.source ? resolveSource(item.source, item.order) : undefined, mode: item.mode,
     count: item.count !== '' && item.count !== undefined ? Number(item.count) : undefined,
     duration_minutes: item.durationMinutes !== '' && item.durationMinutes !== undefined ? Number(item.durationMinutes) : undefined,
     steps: item.mode === 'sequence' ? (item.steps || []).map((step) => stepToEngine(step, resolveSource)) : undefined
@@ -427,7 +404,7 @@ function generatedConfig(project, templateVersion = String(project.templateVersi
     `ALLOW_OVERRUN = ${py(data.options.allowOverrun)}`,
     `HTTP_TIMEOUT_SECONDS = ${py(data.options.httpTimeoutSeconds)}`,
     `DEFAULT_STATE_DIR = Path(os.environ.get("ETV_SCRIPT_STATE_DIR", Path(__file__).resolve().parent))`,
-    `STATE_VERSION = ${versionAtLeast(templateVersion, '1.3.1') ? 12 : 11}`,
+    'STATE_VERSION = 12',
     `SEEN_OCCURRENCE_RETENTION_DAYS = ${py(data.options.seenOccurrenceRetentionDays)}`
   ].join('\n');
 }

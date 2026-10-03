@@ -5,17 +5,12 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { normalizeConfig } = require('../src/config');
-const {
-  DownloadManager,
-  buildFormatSelector,
-  buildDownloadArgs,
-  parseProgressLine,
-  makeItemId
-} = require('../src/downloadManager');
+const { DownloadManager, makeItemId } = require('../src/downloadManager');
+const { buildFormatSelector, buildDownloadArgs, parseProgressLine } = require('../src/download/ytDlpDownload');
 
 function makeConfig(baseDir) {
   return normalizeConfig({
-    configVersion: 2,
+    configVersion: 9,
     paths: {
       baseDir,
       ytDlpPath: '/usr/local/bin/yt-dlp',
@@ -38,7 +33,9 @@ function makeConfig(baseDir) {
         libraryId: null,
         channelNumber: null,
         maxHeight: null,
-        cookiesPath: ''
+        cookiesPath: '',
+        orphanPolicy: 'mark',
+        quarantineRetentionDays: null
       }
     ],
     scheduler: { enabled: false }
@@ -224,6 +221,11 @@ test('worker processes a queued item end-to-end with a yt-dlp compatible stub', 
 const fs = require('fs');
 const path = require('path');
 const source = ${JSON.stringify(fixture)};
+const args = process.argv.slice(2);
+if (args.includes('--skip-download') || args.includes('--dump-single-json') || args.includes('--dump-json')) {
+  console.log(JSON.stringify({ id: 'eeeeeeeeeee', title: 'Artist - Full Worker Test', availability: 'public' }));
+  process.exit(0);
+}
 const target = path.join(process.cwd(), 'media.mp4');
 fs.copyFileSync(source, target);
 const size = fs.statSync(target).size;
@@ -448,56 +450,6 @@ test('music clips profile uses artist/show folders, Season 01 and stable episode
   assert.equal(path.basename(third.targetPath), 'Twenty One Pilots - S01E03 - Next Semester.mp4');
 });
 
-test('music clips episode numbers follow publication chronology instead of discovery order', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-episode-chronology-'));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
-  const config = makeConfig(path.join(root, 'media'));
-  config.playlists[0].mediaProfile = 'music_clips';
-  const playlist = { ...config.playlists[0], folderName: 'Teste' };
-  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
-  await manager.init(config);
-
-  await manager.reconcileLibrary(config, playlist, [
-    { id: 'chrononewer01', title: 'Artist - Newer', publishedAt: '2025-06-12T14:30:00Z' },
-    { id: 'chronoolder01', title: 'Artist - Older', publishedAt: '2023-01-02T10:00:00Z' },
-    { id: 'chronomiddle1', title: 'Artist - Middle', publishedAt: '2024-04-09T11:00:00Z' }
-  ]);
-
-  const older = manager.state.items[makeItemId('Teste', 'chronoolder01')];
-  const middle = manager.state.items[makeItemId('Teste', 'chronomiddle1')];
-  const newer = manager.state.items[makeItemId('Teste', 'chrononewer01')];
-  assert.equal(older.showEpisodeNumber, 1);
-  assert.equal(middle.showEpisodeNumber, 2);
-  assert.equal(newer.showEpisodeNumber, 3);
-  assert.equal(path.basename(older.targetPath), 'Artist - S01E01 - Older.mp4');
-  assert.equal(path.basename(middle.targetPath), 'Artist - S01E02 - Middle.mp4');
-  assert.equal(path.basename(newer.targetPath), 'Artist - S01E03 - Newer.mp4');
-});
-
-test('music clips chronology uses a manually corrected aired date from the existing NFO', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-episode-manual-aired-'));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
-  const config = makeConfig(path.join(root, 'media'));
-  config.playlists[0].mediaProfile = 'music_clips';
-  const playlist = { ...config.playlists[0], folderName: 'Teste' };
-  const manager = new DownloadManager({ statePath: path.join(root, 'state.json') });
-  await manager.init(config);
-
-  await manager.reconcileLibrary(config, playlist, [
-    { id: 'manualaired01', title: 'Artist - First', publishedAt: '2025-01-01T10:00:00Z' },
-    { id: 'manualaired02', title: 'Artist - Second', publishedAt: '2024-01-01T10:00:00Z' }
-  ]);
-  const first = manager.state.items[makeItemId('Teste', 'manualaired01')];
-  const second = manager.state.items[makeItemId('Teste', 'manualaired02')];
-
-  await fs.mkdir(path.dirname(first.nfoPath), { recursive: true });
-  await fs.writeFile(first.nfoPath, '<episodedetails>\n  <season>1</season>\n  <episode>2</episode>\n  <aired>2020-05-10</aired>\n</episodedetails>\n');
-  await fs.writeFile(second.nfoPath, '<episodedetails>\n  <season>1</season>\n  <episode>1</episode>\n  <aired>2024-01-01</aired>\n</episodedetails>\n');
-
-  await manager.resequenceMusicClipEpisodes(playlist, { renameFiles: true, patchNfos: true, addMissingDate: false });
-  assert.equal(first.showEpisodeNumber, 1);
-  assert.equal(second.showEpisodeNumber, 2);
-});
 
 test('music clips profile creates tvshow NFO, episode NFO and episode artwork', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-v27-finalize-'));
@@ -782,7 +734,7 @@ test('manual quarantine of a kept item has precedence over a delete orphan polic
   assert.equal(item.storageState, 'quarantined');
 });
 
-test('restoring an older quarantined music clip through content actions avoids SxxExx collisions and resequences atomically', async (t) => {
+test('restoring a quarantined music clip resolves an SxxExx collision without resequencing the library', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-clip-restore-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const config = makeConfig(path.join(root, 'media'));
@@ -805,7 +757,6 @@ test('restoring an older quarantined music clip through content actions avoids S
   const newer = await prepareCompletedItem(manager, config, playlist, {
     id: 'newclip0001', title: 'Artist - New Song', publishedAt: '2021-01-01T00:00:00Z', releaseDate: '2021-01-01'
   }, { nfoContent: '<episodedetails><title>New Song</title><season>1</season><episode>1</episode><aired>2021-01-01</aired></episodedetails>', thumbnail: true });
-  await manager.resequenceMusicClipEpisodes(playlist, { renameFiles: true, patchNfos: true, addMissingDate: false });
 
   // Force the historical path to collide with the current clip, which is the hard restore case.
   const qVideo = older.quarantine.files.find((file) => file.kind === 'video');
@@ -824,8 +775,10 @@ test('restoring an older quarantined music clip through content actions avoids S
   assert.equal(older.storageState, 'active');
   assert.equal(newer.storageState, 'active');
   assert.notEqual(path.resolve(older.targetPath), path.resolve(newer.targetPath));
-  assert.match(path.basename(older.targetPath), /S01E01/);
   assert.match(path.basename(newer.targetPath), /S01E02/);
+  assert.match(path.basename(older.targetPath), /S01E03/);
+  assert.equal(older.showEpisodeNumber, 3);
+  assert.match(await fs.readFile(older.nfoPath, 'utf8'), /<episode>3<\/episode>/);
   assert.equal(await fs.readFile(older.targetPath, 'utf8'), 'video-oldclip0001');
   assert.equal(await fs.readFile(newer.targetPath, 'utf8'), 'video-newclip0001');
 });

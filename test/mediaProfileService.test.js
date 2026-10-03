@@ -12,8 +12,7 @@ const {
   buildMovieNfo,
   buildTvShowNfo,
   buildEpisodeNfo,
-  getEpisodeNfoSequenceMetadata,
-  patchMusicClipEpisodeSequenceContent
+  patchEpisodeNfoNumberContent
 } = require('../src/mediaProfileService');
 
 test('normalizes the three media profiles and defaults to generic', () => {
@@ -127,7 +126,7 @@ test('new NFOs include YouTube release dates without changing existing profile m
   assert.match(episode, /<aired>2023-06-09<\/aired>/);
 });
 
-test('music clip sequence patch changes only season and episode while preserving the rest of the NFO', () => {
+test('episode number patch changes only season and episode while preserving the rest of the NFO', () => {
   const original = [
     '<episodedetails>',
     '  <title>Título manual</title>',
@@ -138,16 +137,11 @@ test('music clip sequence patch changes only season and episode while preserving
     '</episodedetails>',
     ''
   ].join('\n');
-  const parsed = getEpisodeNfoSequenceMetadata(original);
-  assert.equal(parsed.aired, '1999-12-31');
-  assert.equal(parsed.seasonNumber, 9);
-  assert.equal(parsed.episodeNumber, 77);
 
-  const result = patchMusicClipEpisodeSequenceContent(original, {
+  const result = patchEpisodeNfoNumberContent(original, {
     showSeasonNumber: 1,
-    showEpisodeNumber: 3,
-    releaseDate: '2025-01-01'
-  }, { addMissingDate: false });
+    showEpisodeNumber: 3
+  });
   assert.deepEqual(result.updated, ['season', 'episode']);
   assert.match(result.content, /<season>1<\/season>/);
   assert.match(result.content, /<episode>3<\/episode>/);

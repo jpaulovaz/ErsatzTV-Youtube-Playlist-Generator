@@ -1,5 +1,5 @@
 const path = require('path');
-const { sanitizeName, isPathInside } = require('./utils');
+const { sanitizeName } = require('./utils');
 const { MEDIA_PROFILES, normalizeMediaProfile } = require('./mediaProfileService');
 const { CHANNEL_SOURCE_KINDS } = require('./channelConfig');
 const { ORPHAN_POLICIES, normalizeOrphanPolicy, normalizeRetentionDays } = require('./orphans/orphanPolicy');
@@ -165,14 +165,6 @@ function findChannelPlaylist(config, channelId, playlistId) {
   return playlist ? { channel, playlist } : null;
 }
 
-function assertDestinationPath(destination, candidate) {
-  if (!destination || !destination.rootPath) throw new Error('Destino sem pasta raiz.');
-  if (!isPathInside(destination.rootPath, candidate) && path.resolve(candidate) !== path.resolve(destination.rootPath)) {
-    throw new Error('Caminho fora da raiz do destino.');
-  }
-  return candidate;
-}
-
 module.exports = {
   DESTINATION_TYPES,
   GLOBAL_SOURCE_META,
@@ -185,6 +177,5 @@ module.exports = {
   getAllDestinations,
   findDestinationById,
   findChannel,
-  findChannelPlaylist,
-  assertDestinationPath
+  findChannelPlaylist
 };

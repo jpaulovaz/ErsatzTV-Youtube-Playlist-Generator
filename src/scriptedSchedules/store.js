@@ -4,7 +4,9 @@ const crypto = require('crypto');
 const { ROOT_DIR } = require('../config');
 const { defaultProject, hydrateProject, defaultSettings, MODULE_SCHEMA_VERSION, nowIso } = require('./schema');
 
-const BASE_DIR = path.join(ROOT_DIR, 'data', 'scripted-schedules');
+const BASE_DIR = process.env.ERSATZTV_SCRIPTED_SCHEDULES_DIR
+  ? path.resolve(process.env.ERSATZTV_SCRIPTED_SCHEDULES_DIR)
+  : path.join(ROOT_DIR, 'data', 'scripted-schedules');
 const SETTINGS_PATH = path.join(BASE_DIR, 'settings.json');
 const PROJECTS_DIR = path.join(BASE_DIR, 'projects');
 const HISTORY_DIR = path.join(BASE_DIR, 'history');

@@ -1,7 +1,7 @@
 const fs = require('fs/promises');
 const path = require('path');
 const { spawn } = require('child_process');
-const { ROOT_DIR, normalizeMaxHeight } = require('./config');
+const { ROOT_DIR } = require('./config');
 const { STATE_VERSION, normalizeSubtitleState, createDefaultState, normalizeState, atomicWriteJson } = require('./download/queueState');
 const { getDiskStats, moveAcrossFileSystems, downloadRemoteFile } = require('./download/storageUtils');
 const { findNextRunnableItem: selectNextRunnableItem, findNextSubtitleRunnableItem: selectNextSubtitleRunnableItem } = require('./download/workerSelector');
@@ -12,13 +12,13 @@ const {
   getAllDestinations
 } = require('./destinationService');
 const logger = require('./logger');
+const { runCommand, killProcessTree } = require('./processUtils');
 const { scanOnIdle, runLibraryAction } = require('./ersatztvService');
 const {
   getSubtitleSettings,
   findExistingSubtitleLanguages,
   buildSubtitleDownloadArgs,
-  finalizeStagedSubtitles,
-  listSubtitleSidecars
+  finalizeStagedSubtitles
 } = require('./subtitleService');
 const {
   MEDIA_PROFILES,
@@ -30,9 +30,7 @@ const {
   writeGenericNfo,
   writeMovieNfo,
   writeTvShowNfo,
-  writeEpisodeNfo,
-  getEpisodeNfoSequenceMetadata,
-  patchMusicClipEpisodeSequence
+  writeEpisodeNfo
 } = require('./mediaProfileService');
 const {
   normalizeDateOnly,
@@ -53,7 +51,18 @@ const {
   getQuarantineRoot
 } = require('./orphans/quarantineService');
 const { sweepExpiredQuarantine } = require('./orphans/orphanMaintenance');
-const { fetchReleaseMetadataForItems } = require('./releaseDateService');
+const { fetchReleaseMetadataForItems } = require('./discovery/releaseMetadataService');
+const { getUrls } = require('./discovery/youtubeSourceProvider');
+const { buildYtDlpCommonArgs } = require('./ytDlpUtils');
+const {
+  getEffectiveMaxHeight,
+  buildDownloadArgs,
+  parseProgressLine,
+  parseFileLine,
+  isSubtitleUnavailableOutput,
+  attachLineReader,
+  appendTail
+} = require('./download/ytDlpDownload');
 const {
   sanitizeName,
   sanitizeFileComponent,
@@ -99,7 +108,7 @@ function makeItemId(destinationId, videoId) {
 
 function getAssignedShowEpisodeNumber(state, destinationId, artist, itemId) {
   const current = state && state.items ? state.items[itemId] : null;
-  const currentNumber = Number(current && (current.showEpisodeNumber || current.mediaMetadata && current.mediaMetadata.episodeNumber || current.showMetadata && current.showMetadata.episodeNumber));
+  const currentNumber = Number(current && (current.showEpisodeNumber || current.mediaMetadata && current.mediaMetadata.episodeNumber));
   if (Number.isInteger(currentNumber) && currentNumber > 0) return currentNumber;
 
   const artistKey = normalizeArtistDisplayName(artist).toLocaleLowerCase('pt-BR');
@@ -110,126 +119,15 @@ function getAssignedShowEpisodeNumber(state, destinationId, artist, itemId) {
       existing.artist || resolveMediaIdentity(existing).artist
     );
     if (existingArtist.toLocaleLowerCase('pt-BR') !== artistKey) continue;
-    const episodeNumber = Number(existing.showEpisodeNumber || existing.mediaMetadata && existing.mediaMetadata.episodeNumber || existing.showMetadata && existing.showMetadata.episodeNumber);
+    const episodeNumber = Number(existing.showEpisodeNumber || existing.mediaMetadata && existing.mediaMetadata.episodeNumber);
     if (Number.isInteger(episodeNumber) && episodeNumber > maxEpisode) maxEpisode = episodeNumber;
   }
   return maxEpisode + 1;
 }
 
-function currentEpisodeNumber(item) {
-  const value = Number(item && (
-    item.showEpisodeNumber ||
-    item.mediaMetadata && item.mediaMetadata.episodeNumber ||
-    item.showMetadata && item.showMetadata.episodeNumber
-  ));
-  return Number.isInteger(value) && value > 0 ? value : Number.MAX_SAFE_INTEGER;
-}
-
-function chronologyTimestamp(item, releaseDate) {
-  if (!releaseDate) return Number.POSITIVE_INFINITY;
-  const publishedAt = String(item && item.publishedAt || '').trim();
-  const parsed = publishedAt ? new Date(publishedAt) : null;
-  if (parsed && !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === releaseDate) {
-    return parsed.getTime();
-  }
-  return new Date(`${releaseDate}T00:00:00Z`).getTime();
-}
-
-function compareMusicClipChronology(a, b) {
-  const aHasDate = Boolean(a.releaseDate);
-  const bHasDate = Boolean(b.releaseDate);
-  if (aHasDate !== bHasDate) return aHasDate ? -1 : 1;
-  if (a.releaseDate !== b.releaseDate) return String(a.releaseDate || '').localeCompare(String(b.releaseDate || ''));
-  if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
-  if (a.previousEpisode !== b.previousEpisode) return a.previousEpisode - b.previousEpisode;
-  if (a.queueOrder !== b.queueOrder) return a.queueOrder - b.queueOrder;
-  return String(a.item.videoId || a.item.id || '').localeCompare(String(b.item.videoId || b.item.id || ''));
-}
-
-function formatEpisodeToken(seasonNumber, episodeNumber) {
-  const season = String(Math.max(1, Number(seasonNumber) || 1)).padStart(2, '0');
-  const episode = String(Math.max(1, Number(episodeNumber) || 1)).padStart(2, '0');
-  return `S${season}E${episode}`;
-}
-
-function replaceEpisodeToken(value, seasonNumber, episodeNumber) {
-  const token = formatEpisodeToken(seasonNumber, episodeNumber);
-  const text = String(value || '');
-  return /S\d+E\d+/i.test(text) ? text.replace(/S\d+E\d+/i, token) : text;
-}
-
-function deriveSequencedPath(filePath, seasonNumber, episodeNumber) {
-  const raw = String(filePath || '').trim();
-  if (!raw) return '';
-  const parsed = path.parse(raw);
-  const nextName = replaceEpisodeToken(parsed.name, seasonNumber, episodeNumber);
-  return path.join(parsed.dir, `${nextName}${parsed.ext}`);
-}
-
-async function renamePathSetAtomically(operations) {
-  const unique = [];
-  const seen = new Set();
-  for (const operation of operations || []) {
-    const rawSource = String(operation && operation.source || '').trim();
-    const rawTarget = String(operation && operation.target || '').trim();
-    if (!rawSource || !rawTarget) continue;
-    const source = path.resolve(rawSource);
-    const target = path.resolve(rawTarget);
-    if (source === target || seen.has(source)) continue;
-    seen.add(source);
-    if (!(await pathExists(source))) continue;
-    unique.push({ source, target });
-  }
-  if (unique.length === 0) return 0;
-
-  const sources = new Set(unique.map((entry) => entry.source));
-  for (const entry of unique) {
-    if (await pathExists(entry.target) && !sources.has(entry.target)) {
-      throw new Error(`Renumeracao cancelada: o destino ja existe: ${entry.target}`);
-    }
-  }
-
-  const token = `.renumber-${process.pid}-${Date.now()}-`;
-  const staged = [];
-  try {
-    for (let index = 0; index < unique.length; index += 1) {
-      const entry = unique[index];
-      const temp = `${entry.source}${token}${index}`;
-      await fs.rename(entry.source, temp);
-      staged.push({ ...entry, temp, finalized: false });
-    }
-    for (const entry of staged) {
-      await fs.mkdir(path.dirname(entry.target), { recursive: true });
-      await fs.rename(entry.temp, entry.target);
-      entry.finalized = true;
-    }
-  } catch (error) {
-    for (const entry of [...staged].reverse()) {
-      try {
-        if (entry.finalized && await pathExists(entry.target) && !(await pathExists(entry.source))) {
-          await fs.rename(entry.target, entry.source);
-        } else if (!entry.finalized && await pathExists(entry.temp) && !(await pathExists(entry.source))) {
-          await fs.rename(entry.temp, entry.source);
-        }
-      } catch {
-        // Best effort rollback; the original error remains the primary failure.
-      }
-    }
-    throw error;
-  }
-
-  return staged.length;
-}
-
-function getPlaylistUrls(playlist) {
-  const values = [];
-  if (playlist && typeof playlist.url === 'string') values.push(playlist.url);
-  if (playlist && Array.isArray(playlist.urls)) values.push(...playlist.urls);
-  return [...new Set(values.map((item) => String(item || '').trim()).filter(Boolean))];
-}
 
 function normalizePlaylist(playlist) {
-  const urls = getPlaylistUrls(playlist);
+  const urls = getUrls(playlist);
   return {
     ...playlist,
     url: urls[0] || '',
@@ -254,204 +152,6 @@ function resolveDestinationId(config, value) {
   return findDestinationById(config, raw, { includeDisabled: true }) ? raw : sanitizeName(raw);
 }
 
-function getEffectiveCookiesPath(config, playlist) {
-  return String((playlist && playlist.cookiesPath) || (config.paths && config.paths.cookiesPath) || '').trim();
-}
-
-function getEffectiveMaxHeight(config, playlist) {
-  return normalizeMaxHeight((playlist && playlist.maxHeight) || (config.downloads && config.downloads.maxHeight));
-}
-
-function sanitizeJsRuntimeName(value) {
-  return String(value || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
-}
-
-function getJsRuntimeArg(config) {
-  const downloads = config.downloads || {};
-  const mode = String(downloads.jsRuntimeMode || 'disabled').trim();
-  if (!mode || mode === 'disabled') return '';
-
-  const name = mode === 'custom'
-    ? sanitizeJsRuntimeName(downloads.jsRuntimeCustomName)
-    : sanitizeJsRuntimeName(mode);
-  if (!name) return '';
-
-  const runtimePath = String(downloads.jsRuntimePath || '').trim();
-  return runtimePath ? `${name}:${runtimePath}` : name;
-}
-
-function buildFormatSelector(maxHeight) {
-  const height = normalizeMaxHeight(maxHeight);
-  const compatible = [
-    `bestvideo[height<=${height}][vcodec^=avc1]+bestaudio[acodec^=mp4a]`,
-    `best[height<=${height}][ext=mp4][vcodec^=avc1][acodec^=mp4a]`,
-    `best[height<=${height}][vcodec^=avc1][acodec^=mp4a]`
-  ];
-  const anyCodec = [
-    `bestvideo[height<=${height}]+bestaudio`,
-    `best[height<=${height}]`
-  ];
-
-  // YouTube normally offers AVC only up to 1080p. Above that, prefer the
-  // requested resolution and let the local ffmpeg normalization create H.264/AAC.
-  return height > 1080
-    ? anyCodec.join('/')
-    : [...compatible, ...anyCodec].join('/');
-}
-
-function buildDownloadArgs(config, playlist, item, workDir) {
-  const downloads = config.downloads || {};
-  const args = [];
-  const runtimeArg = getJsRuntimeArg(config);
-  const ejsComponents = runtimeArg ? String(downloads.ejsComponents || '').trim() : '';
-  const cookiesPath = getEffectiveCookiesPath(config, playlist);
-  const outputTemplate = path.join(workDir, 'media.%(ext)s');
-
-  if (runtimeArg) args.push('--js-runtimes', runtimeArg);
-  if (ejsComponents && ejsComponents !== 'none') args.push('--remote-components', ejsComponents);
-  if (cookiesPath) args.push('--cookies', cookiesPath);
-  if (downloads.userAgent) args.push('--add-header', `User-Agent: ${downloads.userAgent}`);
-  if (config.paths && config.paths.ffmpegPath) args.push('--ffmpeg-location', path.dirname(config.paths.ffmpegPath));
-
-  args.push(
-    '--no-playlist',
-    '--continue',
-    '--no-overwrites',
-    '--newline',
-    '--no-color',
-    '--progress',
-    '--progress-template',
-    'download:__YTDLP_PROGRESS__%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s',
-    '--print',
-    'after_move:__YTDLP_FILE__%(filepath)s',
-    '--no-simulate',
-    '--merge-output-format',
-    'mkv'
-  );
-
-  if (downloads.writeThumbnails !== false) {
-    args.push('--write-thumbnail', '--convert-thumbnails', 'jpg');
-  }
-
-  args.push(
-    '-f',
-    buildFormatSelector(item.maxHeight || getEffectiveMaxHeight(config, playlist)),
-    '-o',
-    outputTemplate,
-    item.url || `https://www.youtube.com/watch?v=${item.videoId}`
-  );
-
-  return args;
-}
-
-function parseNumber(value) {
-  const number = Number(String(value || '').trim());
-  return Number.isFinite(number) && number >= 0 ? number : null;
-}
-
-function parseProgressLine(line) {
-  const marker = '__YTDLP_PROGRESS__';
-  const index = String(line || '').indexOf(marker);
-  if (index < 0) return null;
-  const parts = String(line).slice(index + marker.length).trim().split('|');
-  return {
-    downloadedBytes: parseNumber(parts[0]),
-    totalBytes: parseNumber(parts[1]) || parseNumber(parts[2]),
-    speedBytesPerSecond: parseNumber(parts[3]),
-    etaSeconds: parseNumber(parts[4])
-  };
-}
-
-function parseFileLine(line) {
-  const marker = '__YTDLP_FILE__';
-  const index = String(line || '').indexOf(marker);
-  if (index < 0) return '';
-  return String(line).slice(index + marker.length).trim();
-}
-
-function isSubtitleUnavailableOutput(output) {
-  return /there are no subtitles|no subtitles|requested subtitles?.*(?:not available|not found)|did not get any subtitles|no automatic captions/i.test(String(output || ''));
-}
-
-function attachLineReader(stream, callback) {
-  let buffer = '';
-  stream.on('data', (chunk) => {
-    buffer += chunk.toString();
-    const lines = buffer.split(/\r?\n/);
-    buffer = lines.pop() || '';
-    for (const line of lines) callback(line);
-  });
-  stream.on('end', () => {
-    if (buffer) callback(buffer);
-  });
-}
-
-function appendTail(current, line, maxLength = 24000) {
-  const next = `${current || ''}${current ? '\n' : ''}${line}`;
-  return next.length <= maxLength ? next : next.slice(-maxLength);
-}
-
-function killProcessTree(child) {
-  if (!child || !child.pid) return;
-  try {
-    if (process.platform !== 'win32') {
-      process.kill(-child.pid, 'SIGTERM');
-    } else {
-      child.kill('SIGTERM');
-    }
-  } catch {
-    try {
-      child.kill('SIGTERM');
-    } catch {
-      // Processo ja finalizado.
-    }
-  }
-
-  setTimeout(() => {
-    try {
-      if (process.platform !== 'win32') {
-        process.kill(-child.pid, 'SIGKILL');
-      } else {
-        child.kill('SIGKILL');
-      }
-    } catch {
-      // Processo ja finalizado.
-    }
-  }, 5000).unref();
-}
-
-function runCommand(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: options.cwd || process.cwd(),
-      env: options.env || process.env,
-      shell: false,
-      detached: Boolean(options.detached)
-    });
-    if (typeof options.onSpawn === 'function') options.onSpawn(child);
-    let stdout = '';
-    let stderr = '';
-    let timedOut = false;
-    let killTimer = null;
-    const timeoutMs = Number(options.timeoutMs) || 0;
-    const timeout = timeoutMs > 0
-      ? setTimeout(() => {
-        timedOut = true;
-        child.kill('SIGTERM');
-        killTimer = setTimeout(() => child.kill('SIGKILL'), 3000);
-      }, timeoutMs)
-      : null;
-
-    child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
-    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
-    child.on('error', reject);
-    child.on('close', (code, signal) => {
-      if (timeout) clearTimeout(timeout);
-      if (killTimer) clearTimeout(killTimer);
-      resolve({ code, signal, stdout, stderr, timedOut });
-    });
-  });
-}
 
 class DownloadManager {
   constructor(options = {}) {
@@ -634,15 +334,7 @@ class DownloadManager {
     const url = String(item && (item.url || (item.videoId ? `https://www.youtube.com/watch?v=${item.videoId}` : '')) || '').trim();
     if (!url) return { ok: false, error: 'URL do video nao esta disponivel no estado.' };
     const source = findPlaylistByFolder(this.config, item.destinationId || item.libraryFolder);
-    const cookiesPath = getEffectiveCookiesPath(this.config, source);
-    const args = [];
-    const runtimeArg = getJsRuntimeArg(this.config);
-    const ejsComponents = runtimeArg ? String(this.config.downloads && this.config.downloads.ejsComponents || '').trim() : '';
-    if (runtimeArg) args.push('--js-runtimes', runtimeArg);
-    if (ejsComponents && ejsComponents !== 'none') args.push('--remote-components', ejsComponents);
-    if (cookiesPath) args.push('--cookies', cookiesPath);
-    if (this.config.downloads && this.config.downloads.userAgent) args.push('--add-header', `User-Agent: ${this.config.downloads.userAgent}`);
-    args.push('--skip-download', '--no-playlist', '--print', '%(id)s', url);
+    const args = [...buildYtDlpCommonArgs(this.config, source), '--skip-download', '--no-playlist', '--print', '%(id)s', url];
     try {
       const result = await runCommand(this.config.paths.ytDlpPath, args, { timeoutMs: 60 * 1000 });
       if (result.code === 0 && String(result.stdout || '').trim()) return { ok: true };
@@ -1383,16 +1075,6 @@ class DownloadManager {
     const profileSettings = getMediaProfileSettings(playlist);
     await this.ensureReleaseMetadata(item, playlist);
 
-    if (profileSettings.musicClips) {
-      const sequence = await this.resequenceMusicClipEpisodes(playlist, {
-        renameFiles: true,
-        patchNfos: true,
-        addMissingDate: false
-      });
-      if (sequence.itemsRenumbered > 0 || sequence.filesRenamed > 0) {
-        await logger.info(`Numeracao cronologica atualizada antes de concluir ${item.videoId}.`, sequence);
-      }
-    }
 
     await fs.mkdir(path.dirname(item.targetPath), { recursive: true });
     if (await pathExists(item.targetPath)) {
@@ -1404,15 +1086,13 @@ class DownloadManager {
     const stagedThumbnail = await this.findStagedThumbnail(workDir);
     const forceArtwork = profileSettings.movie || profileSettings.musicClips;
     if (this.config.downloads.writeThumbnails !== false || forceArtwork) {
-      const shouldReplace = this.config.downloads.updateExistingThumbnails === true;
-      if (stagedThumbnail && (shouldReplace || !(await pathExists(item.thumbnailPath)))) {
-        if (shouldReplace) await fs.rm(item.thumbnailPath, { force: true });
+      const artworkMissing = !(await pathExists(item.thumbnailPath));
+      if (artworkMissing && stagedThumbnail) {
         await moveAcrossFileSystems(stagedThumbnail, item.thumbnailPath);
-      } else if (!stagedThumbnail && item.thumbnailUrl && (shouldReplace || !(await pathExists(item.thumbnailPath)))) {
+      } else if (artworkMissing && item.thumbnailUrl) {
         const tempThumbnail = path.join(workDir, 'remote-thumbnail.jpg');
         try {
           await downloadRemoteFile(item.thumbnailUrl, tempThumbnail, 30000);
-          if (shouldReplace) await fs.rm(item.thumbnailPath, { force: true });
           await moveAcrossFileSystems(tempThumbnail, item.thumbnailPath);
         } catch (error) {
           await logger.warn(`Video concluido, mas a thumbnail de ${item.videoId} nao pôde ser salva: ${error.message}`);
@@ -1420,8 +1100,6 @@ class DownloadManager {
       }
     }
 
-    delete item.showMetadata;
-    delete item.movieMetadata;
     item.mediaProfile = profileSettings.profile;
 
     try {
@@ -1746,171 +1424,6 @@ class DownloadManager {
       !this.storage.error &&
       this.storage.low
     );
-  }
-
-  async resequenceMusicClipEpisodes(destination, options = {}) {
-    const profileSettings = getMediaProfileSettings(destination);
-    const destinationId = String(destination && (destination.id || destination.folderName) || '').trim();
-    const summary = {
-      applicable: profileSettings.musicClips,
-      items: 0,
-      artists: 0,
-      itemsRenumbered: 0,
-      filesRenamed: 0,
-      nfoSequenceUpdated: 0,
-      missingDate: 0
-    };
-    if (!profileSettings.musicClips || !destinationId) return summary;
-
-    const candidates = Object.values(this.state.items).filter((item) => {
-      if (!item || (item.destinationId || item.libraryFolder) !== destinationId) return false;
-      const disposition = item.userDisposition || USER_DISPOSITIONS.MANAGED;
-      const storage = item.storageState || (item.targetPath ? STORAGE_STATES.ACTIVE : STORAGE_STATES.ABSENT);
-      if (disposition === USER_DISPOSITIONS.IGNORED) return false;
-      if (storage === STORAGE_STATES.QUARANTINED) return false;
-      if (item.status === 'removed' && item.suppressed) return false;
-      if (disposition === USER_DISPOSITIONS.KEEP) return storage === STORAGE_STATES.ACTIVE;
-      if (item.sourceActive !== false) return item.status !== 'orphaned';
-      return storage === STORAGE_STATES.ACTIVE && item.status === 'completed';
-    });
-    if (candidates.length === 0) return summary;
-
-    const rows = [];
-    for (const item of candidates) {
-      const identity = resolveMediaIdentity(item);
-      const nfoPath = String(item.nfoPath || (item.targetPath ? item.targetPath.replace(/\.[^.]+$/, '.nfo') : '')).trim();
-      let nfoSequence = null;
-      if (nfoPath && await pathExists(nfoPath)) {
-        try {
-          nfoSequence = getEpisodeNfoSequenceMetadata(await fs.readFile(nfoPath, 'utf8'));
-        } catch (error) {
-          await logger.warn(`Nao foi possivel ler a data manual do NFO de ${item.videoId}: ${error.message}`);
-        }
-      }
-
-      const releaseDate = nfoSequence && nfoSequence.aired
-        ? nfoSequence.aired
-        : normalizeDateOnly(item.releaseDate || item.publishedAt || item.uploadDate);
-      if (!releaseDate) summary.missingDate += 1;
-      rows.push({
-        item,
-        identity,
-        nfoPath,
-        nfoSequence,
-        releaseDate: releaseDate || null,
-        timestamp: chronologyTimestamp(item, releaseDate),
-        previousEpisode: currentEpisodeNumber(item),
-        queueOrder: Math.max(0, Number(item.queueOrder) || 0)
-      });
-    }
-
-    const groups = new Map();
-    for (const row of rows) {
-      const key = normalizeArtistDisplayName(row.identity.artist).toLocaleLowerCase('pt-BR');
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(row);
-    }
-    summary.artists = groups.size;
-    summary.items = rows.length;
-
-    const planned = [];
-    for (const group of groups.values()) {
-      group.sort(compareMusicClipChronology);
-      for (let index = 0; index < group.length; index += 1) {
-        const row = group[index];
-        planned.push({ ...row, seasonNumber: 1, episodeNumber: index + 1 });
-      }
-    }
-
-    const fileOperations = [];
-    const pathPlans = [];
-    for (const row of planned) {
-      const item = row.item;
-      const oldTarget = String(item.targetPath || '').trim();
-      if (!oldTarget) continue;
-      const parsedTarget = path.parse(oldTarget);
-      const newTarget = deriveSequencedPath(oldTarget, row.seasonNumber, row.episodeNumber);
-      const oldMediaBase = parsedTarget.name;
-      const newMediaBase = path.parse(newTarget).name;
-
-      const oldNfo = String(item.nfoPath || path.join(parsedTarget.dir, `${oldMediaBase}.nfo`));
-      const parsedNfo = path.parse(oldNfo);
-      const newNfoBase = parsedNfo.name === oldMediaBase
-        ? newMediaBase
-        : (replaceEpisodeToken(parsedNfo.name, row.seasonNumber, row.episodeNumber) || parsedNfo.name);
-      const newNfo = path.join(parsedNfo.dir, `${newNfoBase}${parsedNfo.ext || '.nfo'}`);
-
-      const oldThumbnail = String(item.thumbnailPath || path.join(parsedTarget.dir, `${oldMediaBase}-thumb.jpg`));
-      const parsedThumbnail = path.parse(oldThumbnail);
-      const newThumbnailName = replaceEpisodeToken(parsedThumbnail.name, row.seasonNumber, row.episodeNumber);
-      const newThumbnail = path.join(parsedThumbnail.dir, `${newThumbnailName}${parsedThumbnail.ext}`);
-
-      fileOperations.push({ source: oldTarget, target: newTarget });
-      fileOperations.push({ source: oldNfo, target: newNfo });
-      fileOperations.push({ source: oldThumbnail, target: newThumbnail });
-
-      if (await pathExists(oldTarget)) {
-        for (const subtitlePath of await listSubtitleSidecars(oldTarget)) {
-          const subtitleName = path.basename(subtitlePath);
-          const suffix = subtitleName.slice(oldMediaBase.length);
-          fileOperations.push({
-            source: subtitlePath,
-            target: path.join(path.dirname(subtitlePath), `${newMediaBase}${suffix}`)
-          });
-        }
-      }
-
-      pathPlans.push({ row, oldTarget, newTarget, oldNfo, newNfo, oldThumbnail, newThumbnail });
-    }
-
-    if (options.renameFiles !== false) {
-      summary.filesRenamed = await renamePathSetAtomically(fileOperations);
-    }
-
-    for (const plan of pathPlans) {
-      const { row, newTarget, newNfo, newThumbnail } = plan;
-      const item = row.item;
-      const beforeSeason = Number(item.showSeasonNumber) || 0;
-      const beforeEpisode = currentEpisodeNumber(item);
-      const beforeTarget = String(item.targetPath || '');
-
-      item.artist = row.identity.artist;
-      item.trackTitle = row.identity.trackTitle;
-      item.showSeasonNumber = row.seasonNumber;
-      item.showEpisodeNumber = row.episodeNumber;
-      item.targetPath = newTarget;
-      if (item.mediaPath) item.mediaPath = newTarget;
-      item.nfoPath = newNfo;
-      item.thumbnailPath = newThumbnail;
-
-      if (item.mediaMetadata && typeof item.mediaMetadata === 'object') {
-        item.mediaMetadata.seasonNumber = row.seasonNumber;
-        item.mediaMetadata.episodeNumber = row.episodeNumber;
-        item.mediaMetadata.nfoPath = newNfo;
-        item.mediaMetadata.artworkPath = newThumbnail;
-      }
-      if (item.showMetadata && typeof item.showMetadata === 'object') {
-        item.showMetadata.seasonNumber = row.seasonNumber;
-        item.showMetadata.episodeNumber = row.episodeNumber;
-      }
-
-      if (beforeSeason !== row.seasonNumber || beforeEpisode !== row.episodeNumber || beforeTarget !== newTarget) {
-        summary.itemsRenumbered += 1;
-        item.updatedAt = nowIso();
-      }
-
-      if (options.patchNfos !== false && await pathExists(newNfo)) {
-        const patch = await patchMusicClipEpisodeSequence(item, newNfo, {
-          addMissingDate: options.addMissingDate === true
-        });
-        if (patch.changed) {
-          summary.nfoSequenceUpdated += 1;
-          item.updatedAt = nowIso();
-        }
-      }
-    }
-
-    return summary;
   }
 
   chooseTargetPaths(playlist, video, itemId) {
@@ -2282,20 +1795,6 @@ class DownloadManager {
       }
     }
 
-    if (getMediaProfileSettings(destination).musicClips) {
-      const sequence = await this.resequenceMusicClipEpisodes(destination, {
-        renameFiles: true,
-        patchNfos: true,
-        addMissingDate: false
-      });
-      summary.episodesRenumbered = sequence.itemsRenumbered;
-      summary.sequenceFilesRenamed = sequence.filesRenamed;
-      summary.sequenceNfoUpdated = sequence.nfoSequenceUpdated;
-      summary.sequenceMissingDate = sequence.missingDate;
-      if (sequence.filesRenamed > 0 || sequence.nfoSequenceUpdated > 0) {
-        this.ensureLibraryState(destinationId).dirty = true;
-      }
-    }
 
     const destinationState = this.ensureLibraryState(destinationId);
     destinationState.lastDiscoveryAt = nowIso();
@@ -2829,7 +2328,6 @@ class DownloadManager {
   async runContentAction(destinationId, action, itemIds) {
     const { destination, items } = this.getContentActionItems(destinationId, itemIds);
     const summary = { action, destinationId: destination.id, requested: items.length, changed: 0, restored: 0, quarantined: 0, deleted: 0, queued: 0 };
-    let resequenceNeeded = false;
 
     for (const item of items) {
       item.userDisposition = item.userDisposition || USER_DISPOSITIONS.MANAGED;
@@ -2857,7 +2355,6 @@ class DownloadManager {
         item.updatedAt = nowIso();
         summary.changed += 1;
         summary.quarantined += 1;
-        resequenceNeeded = true;
         continue;
       }
 
@@ -2874,7 +2371,6 @@ class DownloadManager {
         item.updatedAt = nowIso();
         summary.changed += 1;
         summary.restored += 1;
-        resequenceNeeded = true;
         continue;
       }
 
@@ -2896,7 +2392,6 @@ class DownloadManager {
         item.updatedAt = nowIso();
         summary.changed += 1;
         summary.quarantined += 1;
-        resequenceNeeded = true;
         continue;
       }
 
@@ -2917,7 +2412,6 @@ class DownloadManager {
         }
         summary.changed += 1;
         summary.deleted += 1;
-        resequenceNeeded = true;
         continue;
       }
 
@@ -2935,8 +2429,7 @@ class DownloadManager {
           item.updatedAt = nowIso();
           summary.restored += 1;
           summary.changed += 1;
-          resequenceNeeded = true;
-          continue;
+            continue;
         }
 
         if (item.sourceActive === false) {
@@ -2964,9 +2457,6 @@ class DownloadManager {
       throw new Error('Acao de conteudo nao suportada.');
     }
 
-    if (resequenceNeeded && getMediaProfileSettings(destination).musicClips) {
-      await this.resequenceMusicClipEpisodes(destination, { renameFiles: true, patchNfos: true, addMissingDate: false });
-    }
     if (summary.changed > 0) this.ensureLibraryState(destination.id).dirty = true;
     if (this.config.cleanup.removeEmptyArtistFolders) {
       await removeEmptyDirectories(destination.rootPath, destination.rootPath, logger).catch(() => {});
@@ -3011,9 +2501,6 @@ class DownloadManager {
       await fs.rm(this.getWorkDir(item), { recursive: true, force: true });
       delete this.state.items[item.id];
       this.ensureLibraryState(destination.id).dirty = true;
-      if (getMediaProfileSettings(destination).musicClips) {
-        await this.resequenceMusicClipEpisodes(destination, { renameFiles: true, patchNfos: true, addMissingDate: false });
-      }
       await this.saveNow();
       await logger.info(`Politica de orfao aplicada apos concluir download: arquivo excluido (${item.videoId}).`);
       return { applied: true, action: 'delete' };
@@ -3028,9 +2515,6 @@ class DownloadManager {
         item.status = 'orphaned';
         item.updatedAt = nowIso();
         this.ensureLibraryState(destination.id).dirty = true;
-        if (getMediaProfileSettings(destination).musicClips) {
-          await this.resequenceMusicClipEpisodes(destination, { renameFiles: true, patchNfos: true, addMissingDate: false });
-        }
         await this.saveNow();
         await logger.info(`Politica de orfao aplicada apos concluir download: item movido para quarentena (${item.videoId}).`);
         return { applied: true, action: 'quarantine' };
@@ -3151,8 +2635,4 @@ module.exports = manager;
 module.exports.DownloadManager = DownloadManager;
 module.exports.STATE_PATH = STATE_PATH;
 module.exports.makeItemId = makeItemId;
-module.exports.buildFormatSelector = buildFormatSelector;
-module.exports.buildDownloadArgs = buildDownloadArgs;
-module.exports.parseProgressLine = parseProgressLine;
 module.exports.findPlaylistByFolder = findPlaylistByFolder;
-module.exports.getEffectiveMaxHeight = getEffectiveMaxHeight;

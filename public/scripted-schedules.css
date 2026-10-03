@@ -125,8 +125,8 @@ button.ghost { background: transparent; }
   .ss-validation-list > div { grid-template-columns: 1fr; gap: 2px; }
 }
 
-/* v3.2.1 - accordions for resources/programming + local save actions */
-/* v3.3.0 - optional Pad To Nearest Minute controls */
+/* Accordions de Recursos/Programacao e acoes locais de salvamento */
+/* Controles opcionais de Pad To Nearest Minute */
 .ss-section-accordion,
 .ss-accordion-card {
   display: block;
@@ -248,7 +248,7 @@ button.ghost { background: transparent; }
   .ss-editor-save-bar .header-actions button { flex: 1 1 150px; }
 }
 
-/* v3.3.1 - contextual help for every Scripted Schedule configuration field */
+/* Ajuda contextual dos campos de Scripted Schedules */
 .ss-label-title,
 .ss-check-group-title,
 .ss-mini-help,
@@ -340,7 +340,7 @@ button.ghost { background: transparent; }
   .ss-help-popover { width: min(320px, calc(100vw - 24px)); }
 }
 
-/* v3.4.1 - seletor de módulos: lista compacta + detalhes no painel direito */
+/* Seletor de modulos: lista compacta e detalhes no painel direito */
 .ss-module-modal-backdrop {
   position: fixed; inset: 0; z-index: 2200; background: rgba(5, 10, 18, .72);
   display: grid; place-items: center; padding: 20px;

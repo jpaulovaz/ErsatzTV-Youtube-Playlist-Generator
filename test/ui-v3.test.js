@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.5\.2/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.5\.2/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.5\.3/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.5\.3/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -177,9 +177,9 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.1 modul
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.5\.2/);
-  assert.match(html, /scriptedScheduleEditorUtils\.js\?v=3\.5\.2/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.5\.2/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.5\.3/);
+  assert.match(html, /scriptedScheduleEditorUtils\.js\?v=3\.5\.3/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.5\.3/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -191,11 +191,12 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.1 modul
   assert.match(view, /Presentation Profiles/);
   assert.match(view, /Scripted Playlists/);
   assert.match(view, /Grupos de Graphics/);
-  assert.match(view, /LATEST_TEMPLATE_VERSION = '1\.3\.1'/);
+  assert.doesNotMatch(view, /LATEST_TEMPLATE_VERSION/);
+  assert.match(view, /usa somente o Universal 1\.3\.1/);
   assert.match(view, /Pad To Nearest Minute/);
   assert.match(view, /PAD_TO_NEAREST_OPTIONS = \[5, 10, 15, 30\]/);
   assert.match(view, /Configure o Filler do projeto para liberar esta opção/);
-  assert.match(view, /upgrade-template/);
+  assert.doesNotMatch(view, /upgrade-template/);
   assert.match(view, /data-ss-action="duplicate-module-entry"/);
   assert.match(view, />Duplicar item<\/button>/);
   assert.match(view, /Item duplicado\. Ajuste horário, Source ou filtros conforme necessário\./);
@@ -351,7 +352,7 @@ test('Scripted Schedules Help stays inside the Programacao sidebar group and is 
   assert.match(programacaoGroup, /data-view="help"/);
   assert.doesNotMatch(sistemaGroup, /data-view="help"/);
   assert.match(html, /id="view-help"/);
-  assert.match(html, /helpView\.js\?v=3\.5\.2/);
+  assert.match(html, /helpView\.js\?v=3\.5\.3/);
   assert.match(help, /Programação · Scripted Schedules/);
   assert.match(help, /Assuntos da ajuda de Scripted Schedules/);
   for (const tab of ['Começando', 'Recursos', 'Queries', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));
@@ -512,7 +513,7 @@ test('Libraries remove the temporary date and episode migration action', () => {
   assert.doesNotMatch(app, /Atualizar datas e episódios/);
 });
 
-test('manual thumbnail refresh maintenance is removed while normal thumbnail replacement setting remains', () => {
+test('legacy thumbnail maintenance and replacement override are both removed', () => {
   const html = read('index.html');
   const app = read('app.js');
   const channels = read('js/channelsView.js');
@@ -526,9 +527,9 @@ test('manual thumbnail refresh maintenance is removed while normal thumbnail rep
   }
   assert.doesNotMatch(app, />Atualizar thumbnails<\/button>/);
   assert.doesNotMatch(channels, />Atualizar thumbnails<\/button>/);
-  assert.match(html, /downloads\.updateExistingThumbnails/);
-  assert.match(html, /Atualizar thumbnails existentes/);
-  assert.match(manager, /config\.downloads\.updateExistingThumbnails === true/);
+  assert.doesNotMatch(html, /downloads\.updateExistingThumbnails/);
+  assert.doesNotMatch(html, /Atualizar thumbnails existentes/);
+  assert.doesNotMatch(manager, /updateExistingThumbnails/);
 });
 
 

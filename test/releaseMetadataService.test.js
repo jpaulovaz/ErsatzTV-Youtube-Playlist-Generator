@@ -5,7 +5,7 @@ const {
   releaseMetadataFromVideo,
   mergeReleaseMetadata
 } = require('../src/releaseMetadataUtils');
-const { fetchOneViaYtDlp, fetchReleaseMetadataForItems } = require('../src/releaseDateService');
+const { fetchOneViaYtDlp, fetchReleaseMetadataForItems } = require('../src/discovery/releaseMetadataService');
 
 test('normalizes YouTube API timestamps and yt-dlp upload dates into release metadata', () => {
   assert.equal(normalizeDateOnly('20250612'), '2025-06-12');

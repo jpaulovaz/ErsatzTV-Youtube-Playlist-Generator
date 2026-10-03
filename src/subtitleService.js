@@ -1,30 +1,11 @@
 const fs = require('fs/promises');
 const path = require('path');
+const { moveAcrossFileSystems } = require('./download/storageUtils');
+const { buildYtDlpCommonArgs } = require('./ytDlpUtils');
 
 const SUPPORTED_SUBTITLE_LANGUAGES = ['pt-BR', 'pt', 'en', 'es'];
 const DEFAULT_SUBTITLE_LANGUAGES = [...SUPPORTED_SUBTITLE_LANGUAGES];
 
-function sanitizeJsRuntimeName(value) {
-  return String(value || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
-}
-
-function getJsRuntimeArg(config) {
-  const downloads = config && config.downloads || {};
-  const mode = String(downloads.jsRuntimeMode || 'disabled').trim();
-  if (!mode || mode === 'disabled') return '';
-
-  const name = mode === 'custom'
-    ? sanitizeJsRuntimeName(downloads.jsRuntimeCustomName)
-    : sanitizeJsRuntimeName(mode);
-  if (!name) return '';
-
-  const runtimePath = String(downloads.jsRuntimePath || '').trim();
-  return runtimePath ? `${name}:${runtimePath}` : name;
-}
-
-function getEffectiveCookiesPath(config, playlist) {
-  return String((playlist && playlist.cookiesPath) || (config && config.paths && config.paths.cookiesPath) || '').trim();
-}
 
 function normalizeSubtitleLanguages(value) {
   const input = Array.isArray(value) ? value : [];
@@ -97,21 +78,9 @@ function buildSubtitleDownloadArgs(config, playlist, item, workDir, languages) {
   const requested = normalizeSubtitleLanguages(languages);
   if (requested.length === 0) throw new Error('Nenhum idioma de legenda foi solicitado.');
 
-  const downloads = config && config.downloads || {};
   const settings = getSubtitleSettings(playlist);
-  const runtimeArg = getJsRuntimeArg(config);
-  const ejsComponents = runtimeArg ? String(downloads.ejsComponents || '').trim() : '';
-  const cookiesPath = getEffectiveCookiesPath(config, playlist);
   const outputTemplate = path.join(workDir, 'subtitle.%(ext)s');
-  const args = [];
-
-  if (runtimeArg) args.push('--js-runtimes', runtimeArg);
-  if (ejsComponents && ejsComponents !== 'none') args.push('--remote-components', ejsComponents);
-  if (cookiesPath) args.push('--cookies', cookiesPath);
-  if (downloads.userAgent) args.push('--add-header', `User-Agent: ${downloads.userAgent}`);
-  if (config && config.paths && config.paths.ffmpegPath) {
-    args.push('--ffmpeg-location', path.dirname(config.paths.ffmpegPath));
-  }
+  const args = [...buildYtDlpCommonArgs(config, playlist)];
 
   args.push(
     '--skip-download',
@@ -159,19 +128,6 @@ async function collectStagedSubtitles(workDir) {
     result.push({ language, filePath, sizeBytes: stats.size });
   }
   return result;
-}
-
-async function moveAcrossFileSystems(sourcePath, targetPath) {
-  await fs.mkdir(path.dirname(targetPath), { recursive: true });
-  try {
-    await fs.rename(sourcePath, targetPath);
-  } catch (error) {
-    if (error.code !== 'EXDEV') throw error;
-    const tempTarget = `${targetPath}.importing-${process.pid}`;
-    await fs.copyFile(sourcePath, tempTarget);
-    await fs.rename(tempTarget, targetPath);
-    await fs.rm(sourcePath, { force: true });
-  }
 }
 
 async function finalizeStagedSubtitles(workDir, mediaPath) {

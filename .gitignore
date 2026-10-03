@@ -9,6 +9,7 @@ npm-debug.log*
 /data/*.tmp-*
 
 # Configuracao ativa, segredos e backups de migracao
+/config/config.json
 /config/config.local.json
 /config/config.v*.backup-*.json
 
