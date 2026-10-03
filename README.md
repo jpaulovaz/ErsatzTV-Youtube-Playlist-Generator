@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.5.1
+# ErsatzTV YouTube Downloader 3.5.2
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.5.1 mantém o gerenciamento de órfãos/quarentena introduzido na v3.5.0 e acrescenta **Duplicar item** aos módulos de Scripted Schedules. A cópia preserva toda a configuração do item, recebe ID único quando necessário e é inserida imediatamente depois do original para edição rápida. O Universal permanece v1.3.1; não há mudança de `configVersion`, schema de Scripted Schedules nem estado persistente.
+A versão 3.5.2 refina a ação **Duplicar item** dos Scripted Schedules, mantendo as ações do item agrupadas à direita, e remove a manutenção manual obsoleta **Atualizar thumbnails** de Bibliotecas e Playlists de Canais. O fluxo normal de download continua salvando thumbnails/artwork e a opção global **Atualizar thumbnails existentes** permanece ativa. O Universal permanece v1.3.1; não há mudança de `configVersion`, schema de Scripted Schedules nem estado persistente.
 
 ## Arquitetura
 
@@ -233,7 +233,7 @@ O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão**
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.5.1:
+Módulos disponíveis na v3.5.2:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.

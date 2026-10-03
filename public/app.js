@@ -704,7 +704,6 @@ function renderLibraries() {
               <button class="small primary" type="button" data-library-action="run">Buscar novidades</button>
               <button class="small" type="button" data-library-action="view-content">Ver conteúdo</button>
               <button class="small" type="button" data-library-action="test-cookies">Testar cookies</button>
-              <button class="small" type="button" data-library-action="refresh-thumbnails">Atualizar thumbnails</button>
               <button class="small" type="button" data-library-action="refresh-subtitles">Buscar legendas ausentes</button>
               <span data-library-orphan-action-slot>${orphanAction}</span>
             </div>
@@ -1164,7 +1163,7 @@ function renderStatus() {
   const current = queue.current;
   const progress = current && current.progress ? current.progress : {};
 
-  $('#versionBadge').textContent = `v${statusData.version || '3.5.1'}`;
+  $('#versionBadge').textContent = `v${statusData.version || '3.5.2'}`;
   $('#discoveryState').textContent = discovery.running ? 'Em execução' : 'Aguardando';
   $('#discoveryStep').textContent = discovery.currentStep || '-';
   $('#queueState').textContent = queueStateText(queue);
@@ -1518,8 +1517,6 @@ async function handleLibraryAction(button) {
   if (action === 'test-cookies') {
     const details = result.result;
     showToast(`${details.message}${details.ytDlp && details.ytDlp.stderr ? `\n${details.ytDlp.stderr.slice(-800)}` : ''}`, !details.ok && details.status !== 'not-configured');
-  } else if (action === 'refresh-thumbnails') {
-    showToast(`Thumbnails: ${result.result.created || 0} criadas, ${result.result.updated || 0} atualizadas, ${result.result.failed || 0} falhas.`);
   } else if (action === 'refresh-subtitles') {
     const details = result.result;
     showToast(details.queued > 0

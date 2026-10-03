@@ -258,6 +258,15 @@ test('channel destination marks remotely removed items as orphaned without delet
 });
 
 
+test('obsolete manual thumbnail refresh is not a supported Channel Playlist action', async () => {
+  const config = makeConfig();
+  await assert.rejects(
+    runPlaylistAction(config, 'UC_TEST_CHANNEL', 'PL_CLIPS', 'refresh-thumbnails', {}),
+    /Acao da playlist nao suportada/
+  );
+});
+
+
 test('channel destructive operations reject cleanup or deletion without explicit confirmation', async () => {
   const config = makeConfig();
   await assert.rejects(

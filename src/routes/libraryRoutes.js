@@ -95,8 +95,6 @@ async function handleLibraryRoutes(req, res, url, deps) {
   let result;
   if (action === 'test-cookies') {
     result = await testPlaylistCookies(config, playlistName);
-  } else if (action === 'refresh-thumbnails') {
-    result = await downloadManager.refreshThumbnails(playlist.folderName);
   } else if (action === 'refresh-subtitles') {
     result = await downloadManager.queueMissingSubtitles(playlist.folderName);
   } else if (action === 'content-action') {

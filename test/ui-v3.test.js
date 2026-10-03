@@ -28,8 +28,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.5\.1/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.5\.1/);
+  assert.match(html, /\/js\/destinationForm\.js\?v=3\.5\.2/);
+  assert.match(html, /\/js\/channelsView\.js\?v=3\.5\.2/);
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -177,9 +177,9 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.1 modul
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.5\.1/);
-  assert.match(html, /scriptedScheduleEditorUtils\.js\?v=3\.5\.1/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.5\.1/);
+  assert.match(html, /scripted-schedules\.css\?v=3\.5\.2/);
+  assert.match(html, /scriptedScheduleEditorUtils\.js\?v=3\.5\.2/);
+  assert.match(html, /scriptedSchedulesView\.js\?v=3\.5\.2/);
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -199,7 +199,7 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.1 modul
   assert.match(view, /data-ss-action="duplicate-module-entry"/);
   assert.match(view, />Duplicar item<\/button>/);
   assert.match(view, /Item duplicado\. Ajuste horário, Source ou filtros conforme necessário\./);
-  assert.match(css, /\.ss-entry-actions/);
+  assert.match(css, /\.ss-entry-actions\s*\{[\s\S]*?justify-content:\s*flex-end;/);
   assert.match(css, /\.ss-editor-tabs/);
   assert.match(view, /handleAccordionToggle/);
   assert.match(view, /data-ss-accordion/);
@@ -351,7 +351,7 @@ test('Scripted Schedules Help stays inside the Programacao sidebar group and is 
   assert.match(programacaoGroup, /data-view="help"/);
   assert.doesNotMatch(sistemaGroup, /data-view="help"/);
   assert.match(html, /id="view-help"/);
-  assert.match(html, /helpView\.js\?v=3\.5\.1/);
+  assert.match(html, /helpView\.js\?v=3\.5\.2/);
   assert.match(help, /Programação · Scripted Schedules/);
   assert.match(help, /Assuntos da ajuda de Scripted Schedules/);
   for (const tab of ['Começando', 'Recursos', 'Queries', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));
@@ -510,6 +510,25 @@ test('Libraries remove the temporary date and episode migration action', () => {
   const app = read('app.js');
   assert.doesNotMatch(app, /data-library-action="refresh-release-dates"/);
   assert.doesNotMatch(app, /Atualizar datas e episódios/);
+});
+
+test('manual thumbnail refresh maintenance is removed while normal thumbnail replacement setting remains', () => {
+  const html = read('index.html');
+  const app = read('app.js');
+  const channels = read('js/channelsView.js');
+  const manager = fs.readFileSync(path.join(__dirname, '..', 'src', 'downloadManager.js'), 'utf8');
+  const libraryRoutes = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'libraryRoutes.js'), 'utf8');
+  const channelActions = fs.readFileSync(path.join(__dirname, '..', 'src', 'channelActionsService.js'), 'utf8');
+
+  for (const source of [app, channels, manager, libraryRoutes, channelActions]) {
+    assert.doesNotMatch(source, /refresh-thumbnails/);
+    assert.doesNotMatch(source, /refreshThumbnails/);
+  }
+  assert.doesNotMatch(app, />Atualizar thumbnails<\/button>/);
+  assert.doesNotMatch(channels, />Atualizar thumbnails<\/button>/);
+  assert.match(html, /downloads\.updateExistingThumbnails/);
+  assert.match(html, /Atualizar thumbnails existentes/);
+  assert.match(manager, /config\.downloads\.updateExistingThumbnails === true/);
 });
 
 

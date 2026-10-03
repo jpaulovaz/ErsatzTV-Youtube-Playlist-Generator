@@ -367,7 +367,6 @@
                   <button class="small primary" type="button" data-channel-playlist-action="run">Buscar novidades</button>
                   <button class="small" type="button" data-channel-playlist-action="view-content">Ver conteúdo</button>
                   <button class="small" type="button" data-channel-playlist-action="test-cookies">Testar cookies</button>
-                  <button class="small" type="button" data-channel-playlist-action="refresh-thumbnails">Atualizar thumbnails</button>
                   <button class="small" type="button" data-channel-playlist-action="refresh-subtitles">Buscar legendas ausentes</button>
                   ${orphanAction}
                 </div>
@@ -737,7 +736,6 @@
     }
     const response = await ctx.api(`/api/channels/${encodeURIComponent(channelId)}/playlists/${encodeURIComponent(playlistId)}/${encodeURIComponent(action)}`, { method: 'POST', body: '{}' });
     if (action === 'test-cookies') ctx.showToast(response.result && response.result.message || 'Cookies testados.');
-    else if (action === 'refresh-thumbnails') ctx.showToast('Atualização de thumbnails concluída.');
     else if (action === 'refresh-subtitles') ctx.showToast('Busca de legendas agendada/concluída.');
     else ctx.showToast('Ação concluída.');
     await ctx.refresh();

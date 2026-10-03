@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.5.1 - pacote de atualização
+ErsatzTV YouTube Downloader 3.5.2 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.5.0.
+Extraia este ZIP sobre uma instalação v3.5.1.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,13 +9,11 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principais alterações:
-- ação Duplicar item em todos os itens principais dos módulos de Scripted Schedules;
-- clonagem profunda de campos e estruturas internas sem compartilhar referências com o original;
-- geração automática de ID único no projeto inteiro (`_copy`, `_copy_2`, ...);
-- Nome opcional recebe o sufixo (cópia), quando preenchido;
-- cópia inserida imediatamente depois do original e aberta automaticamente para edição;
-- Duplicar item como ação neutra à esquerda e Remover preservado como ação destrutiva à direita.
+- Duplicar item e Remover passam a ficar agrupados à direita nos itens de Scripted Schedules;
+- removida a ação manual obsoleta Atualizar thumbnails de Bibliotecas e Playlists de Canais;
+- removidos handlers/rotas e o método refreshThumbnails() exclusivos dessa manutenção manual;
+- preservada a opção Atualizar thumbnails existentes, ainda usada pelo fluxo normal de finalização dos downloads.
 
-Aplicação v3.5.1, Universal v1.3.1, configVersion 9, schema de Scripted Schedules 1 e estado persistente 5.
+Aplicação v3.5.2, Universal v1.3.1, configVersion 9, schema de Scripted Schedules 1 e estado persistente 5.
 Não há migração de dados ou mudança no formato salvo dos projetos.
 Consulte UPGRADE.md antes da atualização.

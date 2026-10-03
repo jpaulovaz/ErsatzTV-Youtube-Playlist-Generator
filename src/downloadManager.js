@@ -3046,42 +3046,6 @@ class DownloadManager {
     return { applied: false };
   }
 
-  async refreshThumbnails(libraryFolder) {
-    const folder = resolveDestinationId(this.config, libraryFolder);
-    const summary = { playlist: folder, checked: 0, created: 0, updated: 0, skipped: 0, failed: 0 };
-
-    for (const item of Object.values(this.state.items)) {
-      if (item.libraryFolder !== folder || item.status !== 'completed') continue;
-      summary.checked += 1;
-      if (!item.thumbnailUrl) {
-        summary.skipped += 1;
-        continue;
-      }
-      const exists = await pathExists(item.thumbnailPath);
-      if (exists && !this.config.downloads.updateExistingThumbnails) {
-        summary.skipped += 1;
-        continue;
-      }
-      try {
-        const temp = `${item.thumbnailPath}.tmp-${process.pid}`;
-        await fs.mkdir(path.dirname(item.thumbnailPath), { recursive: true });
-        await downloadRemoteFile(item.thumbnailUrl, temp, 30000);
-        await fs.rm(item.thumbnailPath, { force: true });
-        await fs.rename(temp, item.thumbnailPath);
-        if (item.mediaLayout === 'show-season' && item.showPosterPath && !(await pathExists(item.showPosterPath))) {
-          await fs.copyFile(item.thumbnailPath, item.showPosterPath);
-        }
-        if (exists) summary.updated += 1;
-        else summary.created += 1;
-      } catch (error) {
-        summary.failed += 1;
-        await logger.warn(`Falha ao atualizar thumbnail de ${item.videoId}: ${error.message}`);
-      }
-    }
-
-    return summary;
-  }
-
   async deleteDestinationData(config, destination) {
     if (!destination || !destination.id || !destination.rootPath) throw new Error('Destino invalido para exclusao.');
     const destinationId = destination.id;

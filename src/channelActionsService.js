@@ -35,7 +35,6 @@ function getPlaylistDestination(config, channelId, playlistId) {
 async function runPlaylistAction(config, channelId, playlistId, action, payload = {}) {
   const { playlist, destination } = getPlaylistDestination(config, channelId, playlistId);
   if (action === 'test-cookies') return testDestinationCookies(config, destination);
-  if (action === 'refresh-thumbnails') return downloadManager.refreshThumbnails(destination.id);
   if (action === 'refresh-subtitles') return downloadManager.queueMissingSubtitles(destination.id);
   if (action === 'orphans-preview') return downloadManager.previewOrphans(destination.id);
   if (action === 'orphans-cleanup') {

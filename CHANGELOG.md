@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.5.2
+
+- Em **Scripted Schedules**, as ações de cada item ficam agrupadas à direita: **Duplicar item** passa a ficar imediatamente ao lado de **Remover**, mantendo a duplicação como ação neutra e a remoção como destrutiva.
+- Removida a ação manual obsoleta **Atualizar thumbnails** das Bibliotecas e das Playlists de Canais. Também foram removidos seus handlers HTTP/UI e o método de manutenção `refreshThumbnails()` do downloader.
+- O fluxo normal de download **continua salvando thumbnails/artwork**. A configuração **Atualizar thumbnails existentes** foi preservada porque ainda controla se uma thumbnail já existente pode ser substituída durante a finalização normal de um download.
+- Nenhuma alteração no Universal v1.3.1, `configVersion` 9, schema de Scripted Schedules 1, estado persistente 5 ou formato salvo dos projetos.
+
 ## 3.5.1
 
 - Cada item principal dos módulos de **Scripted Schedules** passa a oferecer **Duplicar item** ao lado da ação de remoção, facilitando repetir blocos e alterar somente horário, Source, biblioteca, filtros ou outra característica necessária.

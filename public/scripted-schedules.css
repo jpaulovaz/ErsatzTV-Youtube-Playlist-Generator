@@ -196,7 +196,7 @@ button.ghost { background: transparent; }
   padding-top: 12px;
 }
 .ss-entry-actions {
-  justify-content: space-between;
+  justify-content: flex-end;
   flex-wrap: wrap;
 }
 .ss-resource-card,
