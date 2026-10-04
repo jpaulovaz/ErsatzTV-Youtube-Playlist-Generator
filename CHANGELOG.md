@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.6.0
+
+- **Ver conteúdo** ganha um Gerenciador de Legendas integrado com player local, disponível para Bibliotecas e Playlists selecionadas em Canais por meio do mesmo backend compartilhado.
+- SRTs já existentes podem ser carregados como prévia no player, inclusive arquivos baixados anteriormente pelo fluxo do YouTube. Legendas antigas sem proveniência registrada continuam totalmente utilizáveis.
+- Novo provider YouTube consulta as faixas disponíveis sob demanda e distingue legendas **enviadas pelo canal** de legendas **automáticas**; testar uma faixa não altera o sidecar ativo.
+- Clipes musicais ganham provider **LRCLIB** manual, com Artista/Música/Álbum editáveis, restauração dos valores detectados, ordenação por correspondência e indicação de diferença de duração. Resultados sem letra sincronizada ou instrumentais não são aplicados.
+- Preview de qualquer candidato é temporário. Somente **Aplicar** grava o SRT escolhido e a substituição de um idioma existente exige confirmação, preservando antes a versão anterior.
+- Sincronização oferece offset em passos de 100 ms/1 s ou valor exato. O ajuste é imediato no player, mas somente **Salvar ajuste** regrava os timestamps do SRT.
+- Novo histórico físico conserva até **cinco versões anteriores por idioma**, com restauração e criação automática de um ponto de retorno da versão atual.
+- O player transmite arquivos locais por rota autenticada com suporte a **HTTP Range**. Quando o codec não é reproduzível diretamente pelo navegador, pode gerar uma prévia MP4 compatível temporária via ffmpeg.
+- Novo estado independente `data/subtitle-manager-state.json` versão **1**, além de `data/subtitle-history/` e área temporária `.subtitle-preview/`; a fila de downloads continua no estado v5.
+- Downloads automáticos do YouTube realizados a partir desta versão registram proveniência como **YouTube · tipo não identificado** quando o pipeline legado não consegue provar se a faixa era manual ou automática; escolhas feitas pelo novo gerenciador registram a origem precisa.
+- Pesquisa YouTube continua possível quando existe `videoId` mesmo sem mídia local; preview exige mídia e aplicação exige item ativo/gravação segura. LRCLIB aparece somente no perfil Clipes musicais.
+- Segurança mantém toda resolução por destino + item, impede escrita fora da raiz ativa, não expõe caminhos arbitrários ao navegador e limita/normaliza arquivos de legenda antes de processá-los.
+- Aplicação **v3.6.0**; Universal **v1.3.1**; `configVersion` **9**; schema de Scripted Schedules **1**; estado persistente de downloads **5**; subtitle-manager state **1**.
+
 ## 3.5.3
 
 - Faxina estrutural da base sem remoção de recursos atuais: código morto, fallbacks e caminhos de compatibilidade já concluídos deixam de participar da aplicação.

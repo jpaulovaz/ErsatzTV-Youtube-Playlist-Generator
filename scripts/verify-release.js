@@ -28,8 +28,6 @@ expect('UPGRADE.md', new RegExp(`^# Atualização para ${version.replaceAll('.',
 expect('CHANGELOG.md', new RegExp(`^## ${version.replaceAll('.', '\\.')}$`, 'm'), `changelog deve conter ${version}`);
 expect('UPDATE_CONTENTS.txt', new RegExp(`ErsatzTV YouTube Downloader ${version.replaceAll('.', '\\.')} - pacote de atualização`), `conteudo do update deve usar ${version}`);
 expect('MODIFIED_FILES.txt', new RegExp(`^ErsatzTV YouTube Downloader ${version.replaceAll('.', '\\.')}$`, 'm'), `lista de arquivos deve usar ${version}`);
-const cleanupFile = `MANUAL_CLEANUP_${version}.txt`;
-expect(cleanupFile, /Universal 1\.3\.1|universal-v1\.3\.1/, 'lista manual deve preservar explicitamente o motor atual');
 expect('config/config.example.json', /\"configVersion\"\s*:\s*9/, 'config de exemplo deve usar configVersion 9');
 reject('config/config.example.json', /updateExistingThumbnails|showMetadata|movieMetadata/, 'config de exemplo nao deve conter campos removidos');
 expect('src/scriptedSchedules/schema.js', /TEMPLATE_VERSION\s*=\s*'1\.3\.1'/, 'Universal atual deve ser 1.3.1');

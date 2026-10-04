@@ -1,76 +1,69 @@
-# Atualização para 3.5.3
+# Atualização para 3.6.0
 
-A versão 3.5.3 é uma faxina estrutural sobre a v3.5.2. O objetivo é reduzir dívida técnica e remover compatibilidades que já cumpriram sua função, sem retirar recursos atuais do aplicativo.
+A versão 3.6.0 atualiza diretamente a **v3.5.3** e introduz o Gerenciador Integrado de Legendas e Player de Validação no **Ver conteúdo**.
 
-## Pré-requisito obrigatório
+## Versionamento
 
-Antes de atualizar, execute a v3.5.2 uma última vez e confirme:
-
-- `config/config.json` usa `"configVersion": 9`;
-- todos os projetos de **Scripted Schedules** que ainda serão utilizados estão no **Universal v1.3.1**;
-- a aplicação inicia normalmente e a fila não possui operação crítica interrompida.
-
-A v3.5.3 **não migra** configurações anteriores nem motores Universal antigos. Se algum item ainda estiver pendente, conclua a migração na v3.5.2 antes de aplicar este update.
-
-## O que muda
-
-- configuração passa a aceitar somente o schema atual (`configVersion` 9), sem fallbacks de versões antigas;
-- Scripted Schedules passa a trabalhar somente com Universal v1.3.1;
-- compatibilidade de `movieMetadata`/`showMetadata` antigos é retirada dos caminhos atuais; o perfil `mediaProfile` continua sendo a fonte de verdade;
-- a antiga opção `updateExistingThumbnails` deixa de existir. O comportamento atual preserva artwork já existente e continua criando artwork quando ele ainda não existe;
-- o enriquecimento de data continua existindo, agora dentro da camada atual de descoberta (`releaseMetadataService`), sem depender do antigo `releaseDateService`;
-- Clipes musicais deixam de executar resequenciamento global. Novos episódios recebem numeração incremental estável; numa colisão durante restauração, somente o item restaurado recebe o próximo episódio livre;
-- execução de processos externos, argumentos comuns de yt-dlp e movimentação entre filesystems passam a reutilizar utilitários compartilhados;
-- a montagem/parsing específico de downloads do yt-dlp sai do `downloadManager` para um módulo dedicado;
-- `npm run check` e `npm test` descobrem automaticamente os arquivos atuais; testes usam log temporário e não deixam resíduos na árvore;
-- `npm run verify` é não destrutivo e também verifica a consistência do versionamento da release;
-- o exemplo systemd fica genérico, sem usuário/versão específicos de uma instalação.
-
-## Versões
-
-- aplicação: **v3.5.3**;
-- versão-base do update: **v3.5.2**;
-- Universal suportado: **v1.3.1**;
+- aplicação: **v3.6.0**;
+- Universal: **v1.3.1**;
 - `configVersion`: **9**;
+- estado persistente de downloads: **5**;
 - schema de Scripted Schedules: **1**;
-- estado persistente de downloads: **5**.
+- novo estado do Gerenciador de Legendas: **1**.
 
-Não há mudança de schema do estado nem do armazenamento dos projetos. A exigência é que os dados já tenham sido migrados antes, conforme o pré-requisito acima.
+Não existe migração de `config.json`, `download-state.json` nem de projetos de Scripted Schedules nesta versão.
 
 ## Antes de atualizar
 
-1. Pare o aplicativo.
+1. Confirme que a instalação atual está em **v3.5.3** e inicia normalmente.
 2. Faça backup de `config/` e `data/`.
-3. Confirme os pré-requisitos acima.
-4. Leia `MANUAL_CLEANUP_3.5.3.txt`; os arquivos listados ali não são mais usados pelo código atual e podem ser removidos manualmente depois que a v3.5.3 estiver validada.
+3. Preserve as pastas de mídia normalmente; o update não as contém nem as modifica durante a instalação.
+4. Confirme que `yt-dlp`, `ffmpeg` e `ffprobe` continuam acessíveis nos caminhos configurados.
+5. Para usar o provider LRCLIB, permita saída HTTPS do servidor para `https://lrclib.net`.
 
-## Aplicar o update
+## Aplicando o pacote update
 
-Extraia `ErsatzTV-YouTube-Downloader-v3.5.3-update.zip` sobre uma instalação **v3.5.2**:
+Pare o serviço e extraia `ErsatzTV-YouTube-Downloader-v3.6.0-update.zip` sobre a instalação v3.5.3:
 
 ```bash
+sudo systemctl stop ersatztv-youtube-downloader
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.6.0-update.zip -d /caminho/da/aplicacao
 cd /caminho/da/aplicacao
-pm2 stop ersatztv-youtube-downloader
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.5.3-update.zip -d .
 npm run verify
-pm2 restart ersatztv-youtube-downloader --update-env
-pm2 save
+sudo systemctl start ersatztv-youtube-downloader
 ```
 
-O pacote `update` não contém `config/config.json`, `config/auth.json` nem o conteúdo operacional de `data/`.
+O update **não contém** `config/config.json`, `config/auth.json`, `data/` nem mídia do usuário.
 
-Depois do primeiro acesso, faça `Ctrl+F5` para garantir que o navegador carregue os arquivos JavaScript/CSS da v3.5.3.
+Depois do primeiro acesso, use `Ctrl+F5` se o navegador ainda exibir arquivos estáticos antigos.
 
-## Verificação rápida
+## O que muda para as legendas
 
-1. Abra **Bibliotecas**, faça uma descoberta e confirme fila/download normal.
-2. Se usar **Canais**, execute uma descoberta de uma Playlist selecionada.
-3. Abra **Ver conteúdo** e confirme Conteúdo/Órfãos/Quarentena/Ignorados conforme aplicável.
-4. Em uma biblioteca de Clipes musicais, confirme que novos episódios recebem o próximo `SxxExx` sem renumerar os anteriores.
-5. Abra um projeto de **Scripted Schedules** e confirme que o motor exibido é Universal v1.3.1.
-6. Rode `npm run verify` e confirme que sintaxe, testes e consistência da release terminam sem falhas.
-7. Somente depois dessa validação, faça a limpeza manual dos arquivos de `MANUAL_CLEANUP_3.5.3.txt`.
+O download automático de legendas do YouTube configurado em cada Biblioteca continua funcionando como antes. O novo gerenciador é uma ferramenta manual adicional.
+
+No **Ver conteúdo**:
+
+- **Gerenciar legendas** consulta faixas do YouTube e, em Clipes musicais, resultados do LRCLIB;
+- SRTs já existentes podem ser testados no player, inclusive os baixados por versões anteriores;
+- preview, busca e offset temporário não sobrescrevem a legenda ativa;
+- **Aplicar** e **Salvar ajuste** guardam a versão anterior no histórico antes de escrever;
+- até cinco versões anteriores por idioma ficam em `data/subtitle-history/`;
+- `data/subtitle-manager-state.json` é criado automaticamente quando necessário;
+- prévias compatíveis geradas por ffmpeg ficam em `data/.subtitle-preview/` e são temporárias.
+
+Para arquivos existentes cuja origem nunca foi registrada, a interface usa **Arquivo local · origem não registrada**. Isso não impede preview, offset, substituição ou restauração.
+
+## Validação após o update
+
+1. Abra uma Biblioteca em **Ver conteúdo** e selecione um vídeo com SRT existente.
+2. Confirme que **Testar no player** mostra a legenda sem modificar o arquivo.
+3. Consulte as faixas do YouTube e confirme que manuais e automáticas aparecem separadamente quando disponíveis.
+4. Em um destino **Clipes musicais**, faça uma busca LRCLIB e teste um candidato sincronizado antes de aplicar.
+5. Se usar offset, confirme que o preview muda imediatamente e que o arquivo só é regravado após **Salvar ajuste**.
+6. Aplique uma faixa e confirme que a versão anterior aparece no histórico com opção **Restaurar**.
 
 ## Rollback
 
-Configuração v9, estado v5 e projetos Universal v1.3.1 continuam legíveis pela v3.5.2. Para rollback, restaure os arquivos da v3.5.2 mantendo `config/` e `data/`. Se você já tiver removido manualmente os arquivos obsoletos listados para a v3.5.3, use um pacote completo v3.5.2 para restaurar também esses arquivos antes do rollback.
+A v3.6.0 não altera os formatos de configuração, download state ou Scripted Schedules. Para rollback, pare o serviço e restaure os arquivos da v3.5.3 mantendo `config/`, `data/` e as mídias.
+
+Os SRT aplicados ou ajustados manualmente continuam sendo arquivos SRT normais. Se desejar desfazer alterações de legenda antes do rollback, use o próprio histórico do Gerenciador enquanto ainda estiver na v3.6.0.

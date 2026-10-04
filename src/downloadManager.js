@@ -54,6 +54,7 @@ const { sweepExpiredQuarantine } = require('./orphans/orphanMaintenance');
 const { fetchReleaseMetadataForItems } = require('./discovery/releaseMetadataService');
 const { getUrls } = require('./discovery/youtubeSourceProvider');
 const { buildYtDlpCommonArgs } = require('./ytDlpUtils');
+const { registerManagedDownload } = require('./subtitleManager/subtitleManagerService');
 const {
   getEffectiveMaxHeight,
   buildDownloadArgs,
@@ -519,6 +520,7 @@ class DownloadManager {
     item.subtitles.lastError = null;
 
     if (changed > 0) {
+      await registerManagedDownload(item, finalized.moved);
       const libraryState = this.ensureLibraryState(item.libraryFolder);
       libraryState.dirty = true;
       if (libraryState.subtitleBackfill && libraryState.subtitleBackfill.active) {

@@ -16,6 +16,7 @@ const {
 } = require('../channelActionsService');
 const { findChannel } = require('../destinationService');
 const { listDestinationContent, getDestinationThumbnail, getDestinationFolderPoster } = require('../libraryContentService');
+const { handleSubtitleManagerAction } = require('./subtitleManagerRoutes');
 
 function parseParts(pathname) {
   return pathname.split('/').filter(Boolean).map((part) => decodeURIComponent(part));
@@ -143,6 +144,10 @@ async function handleChannelRoutes(req, res, url, deps) {
       }
       deps.sendBuffer(res, 200, poster.content, poster.contentType, { 'Cache-Control': 'private, max-age=60' });
       return true;
+    }
+    if (parts.length === 6) {
+      const { destination } = getPlaylistDestination(config, channelId, playlistId);
+      if (await handleSubtitleManagerAction({ req, res, url, deps, config, destination, action: parts[5] })) return true;
     }
     if (req.method === 'POST' && parts.length === 6 && parts[5] === 'run') {
       ensureIdle();

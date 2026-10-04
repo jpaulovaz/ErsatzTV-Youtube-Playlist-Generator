@@ -4,6 +4,8 @@ const scheduler = require('../scheduler');
 const channelScheduler = require('../channelScheduler');
 const discoveryLock = require('../discovery/discoveryLock');
 const { listLibraryContent, getLibraryThumbnail, getLibraryFolderPoster } = require('../libraryContentService');
+const { libraryDestination } = require('../destinationService');
+const { handleSubtitleManagerAction } = require('./subtitleManagerRoutes');
 const {
   runSync,
   runPlaylistApiAction,
@@ -76,6 +78,9 @@ async function handleLibraryRoutes(req, res, url, deps) {
     });
     return true;
   }
+
+  const subtitleDestination = libraryDestination(config, playlist);
+  if (subtitleDestination && await handleSubtitleManagerAction({ req, res, url, deps, config, destination: subtitleDestination, action })) return true;
 
   if (req.method !== 'POST') return false;
 

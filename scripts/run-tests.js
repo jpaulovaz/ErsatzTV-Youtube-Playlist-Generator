@@ -5,14 +5,8 @@ const { spawnSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const TEST_DIR = path.join(ROOT, 'test');
-const EXCLUDED = new Set([
-  'movieMetadataService.test.js',
-  'showMetadataService.test.js',
-  'releaseDateService.test.js'
-]);
-
 const tests = fs.readdirSync(TEST_DIR)
-  .filter((name) => name.endsWith('.test.js') && !EXCLUDED.has(name))
+  .filter((name) => name.endsWith('.test.js'))
   .sort()
   .map((name) => path.join('test', name));
 
@@ -27,7 +21,8 @@ try {
       ...process.env,
       ERSATZTV_LOG_DIR: logDir,
       ERSATZTV_CONFIG_DIR: path.join(testRoot, 'config'),
-      ERSATZTV_SCRIPTED_SCHEDULES_DIR: scriptedSchedulesDir
+      ERSATZTV_SCRIPTED_SCHEDULES_DIR: scriptedSchedulesDir,
+      ERSATZTV_SUBTITLE_MANAGER_DIR: path.join(testRoot, 'subtitle-manager')
     }
   });
   process.exitCode = result.status ?? 1;

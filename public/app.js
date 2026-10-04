@@ -905,6 +905,7 @@ function renderLibraryContent() {
 
 function closeLibraryContentDetails() {
   $('#libraryContentDetails').classList.add('hidden');
+  if (window.SubtitleManagerUI) window.SubtitleManagerUI.close();
 }
 
 function contentDetailActions(item) {
@@ -950,9 +951,18 @@ function showLibraryContentDetails(item) {
   ];
   $('#libraryContentDetailsTitle').textContent = item.title || item.videoId || 'Vídeo';
   $('#libraryContentDetailsList').innerHTML = rows.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join('');
-  $('#libraryContentDetailsActions').innerHTML = contentDetailActions(item).map((entry) => (
+  const hasLocalMedia = ['active', 'quarantined'].includes(String(item.storageState || 'active')) && Number(item.fileSizeBytes || 0) > 0;
+  const subtitleActions = item.videoId
+    ? [
+        '<button type="button" class="small" data-subtitle-manager-open>Gerenciar legendas</button>',
+        ...(hasLocalMedia ? ['<button type="button" class="small" data-subtitle-player-open>Abrir player</button>'] : [])
+      ]
+    : [];
+  const contentActions = contentDetailActions(item).map((entry) => (
     `<button type="button" class="small ${entry.danger ? 'danger' : ''}" data-content-item-action="${entry.action}" data-item-id="${escapeHtml(item.id)}">${escapeHtml(entry.label)}</button>`
-  )).join('');
+  ));
+  $('#libraryContentDetailsActions').innerHTML = [...subtitleActions, ...contentActions].join('');
+  if (window.SubtitleManagerUI) window.SubtitleManagerUI.setContext({ item, endpointBase: libraryContentState.endpointBase });
   const panel = $('#libraryContentDetails');
   panel.classList.remove('hidden');
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1861,6 +1871,9 @@ async function bootstrap() {
   $$('.settings-accordion').forEach((item) => { item.open = false; });
   setActiveView(sessionStorage.getItem('ersatztv_active_view') || 'overview', { persist: false });
   updateSettingsAccordionToggle();
+  if (window.SubtitleManagerUI) {
+    window.SubtitleManagerUI.configure({ api, showToast, showDialog: showAppDialog, escapeHtml });
+  }
   bindEvents();
   bindMobileNavBehavior();
   syncMobileNavForViewport();

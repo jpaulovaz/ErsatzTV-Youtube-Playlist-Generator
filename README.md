@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.5.3
+# ErsatzTV YouTube Downloader 3.6.0
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.5.3 é uma faxina estrutural sobre a v3.5.2. Ela remove caminhos de compatibilidade já concluídos, centraliza utilitários repetidos, simplifica o pipeline de download e torna os comandos de verificação não destrutivos e automáticos. O comportamento atual de Bibliotecas, Canais, fila, órfãos, quarentena, legendas, metadata, ErsatzTV e Scripted Schedules é preservado. O aplicativo passa a aceitar somente `configVersion` 9 e projetos Scripted Schedule no Universal v1.3.1; não há mudança no schema de Scripted Schedules nem no estado persistente de downloads.
+A versão 3.6.0 acrescenta um **Gerenciador de Legendas integrado ao Ver conteúdo**, com player local, consulta manual de faixas do YouTube, busca de letras sincronizadas no LRCLIB para Clipes musicais, preview antes de aplicar, ajuste de offset e histórico restaurável. A funcionalidade nova é manual e não altera a política existente de download automático de legendas do YouTube. Universal permanece em v1.3.1, `configVersion` em 9, schema de Scripted Schedules em 1 e estado de downloads em 5; o novo gerenciador mantém estado próprio na versão 1.
 
 ## Arquitetura
 
@@ -38,6 +38,7 @@ Biblioteca local do ErsatzTV
 - NFOs novos incluem `year` + `premiered` em Movies e `aired` em episódios de Clipes musicais.
 - Thumbnail do vídeo como artwork de episódio (`-thumb.jpg`) e `poster.jpg` no nível do artista/Show.
 - Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
+- **Gerenciador manual de legendas** no Ver conteúdo: player, preview de SRT local/YouTube/LRCLIB, busca manual, offset e histórico de até cinco versões por idioma.
 - Seleção múltipla de idiomas: `pt-BR`, `pt`, `en` e `es`.
 - Ação **Buscar legendas ausentes** para o acervo já baixado, sem baixar novamente os vídeos.
 - Deduplicação por ID do YouTube dentro de cada destino; o mesmo vídeo pode existir intencionalmente em destinos diferentes.
@@ -71,6 +72,7 @@ Biblioteca local do ErsatzTV
 - Opcional: Deno para os desafios JavaScript atuais do YouTube.
 - Para usar **Scripted Schedules**: Python 3 recomendado no host do aplicativo para validar o arquivo gerado; o processo do ErsatzTV precisa conseguir executar o script e gravar seu arquivo de estado.
 - Opcional: uma YouTube Data API Key.
+- Para buscar letras sincronizadas no **LRCLIB**, o servidor precisa ter saída HTTPS para `https://lrclib.net`; nenhuma API key do LRCLIB é necessária.
 - Opcional: `cookies.txt` em formato Netscape para vídeos que exigem sessão.
 
 Exemplo de verificação:
@@ -119,7 +121,7 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A v3.5.3 trabalha somente com a configuração atual (`configVersion: 9`). Antes do update, conclua qualquer migração pendente ainda na v3.5.2 e confirme que os projetos de Scripted Schedules usam Universal v1.3.1. Consulte [UPGRADE.md](UPGRADE.md).
+A v3.6.0 atualiza diretamente uma instalação **v3.5.3** já limpa. `configVersion` continua 9 e o Universal continua 1.3.1. O novo `subtitle-manager-state.json` é criado automaticamente quando necessário; não existe migração manual de configuração. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Estrutura dos arquivos
 
@@ -226,13 +228,13 @@ Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando
 
 ## Scripted Schedules
 
-A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do **Universal v1.3.1**, único motor suportado pela v3.5.3.
+A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do **Universal v1.3.1**, único motor suportado pela v3.6.0.
 
 O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas. O valor **Nenhum** nos seletores de Presentation é interno e sempre vazio; ele não aparece como perfil editável.
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.5.3:
+Módulos disponíveis na v3.6.0:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -331,6 +333,41 @@ Para o acervo existente, habilite as legendas na biblioteca, selecione os idioma
 
 O `yt-dlp` usa `--write-subs`, `--write-auto-subs` quando habilitado, `--sub-langs` para os idiomas selecionados e `--convert-subs srt`. O aplicativo preserva SRT já existentes e busca somente os idiomas selecionados que ainda estiverem ausentes.
 
+## Gerenciador manual de legendas e player
+
+Em **Ver conteúdo**, abra um item e use **Gerenciar legendas**. Quando existe mídia local, **Abrir player** inicia a mesma área já focada na reprodução. O gerenciador é compartilhado por Bibliotecas e Playlists selecionadas em Canais.
+
+O fluxo é deliberadamente seguro:
+
+1. pesquisar ou selecionar uma faixa;
+2. **Testar no player** sem alterar o SRT ativo;
+3. ajustar o offset temporariamente, se necessário;
+4. somente **Aplicar** ou **Salvar ajuste** grava uma alteração definitiva.
+
+As legendas `.srt` já presentes ao lado do vídeo também podem ser testadas no player. Isso inclui arquivos baixados por versões anteriores do fluxo do YouTube. Quando a origem histórica não foi registrada, a interface mostra **Arquivo local · origem não registrada**; novos downloads automáticos do YouTube podem ser identificados como **YouTube · tipo não identificado**, enquanto faixas escolhidas pelo novo gerenciador registram corretamente se eram enviadas pelo canal ou automáticas.
+
+### YouTube
+
+**Consultar faixas do YouTube** lista separadamente legendas publicadas pelo canal e legendas automáticas disponíveis para o `videoId`. A consulta pode ser feita mesmo quando a mídia local não está disponível, mas **Testar no player** requer o vídeo local e **Aplicar** requer um item ativo gravável. A faixa escolhida é materializada temporariamente e só vira sidecar após confirmação.
+
+### LRCLIB para Clipes musicais
+
+O provider LRCLIB aparece somente para o perfil **Clipes musicais**. Artista, música e álbum são preenchidos com os metadados conhecidos, mas permanecem editáveis; **Restaurar dados originais** desfaz correções feitas apenas para uma busca. Os candidatos mostram dados de faixa, duração, diferença em relação ao vídeo e uma indicação local de correspondência.
+
+A aplicação usa apenas resultados com letra sincronizada. Resultados instrumentais ou sem timestamps podem ser exibidos como informação, mas não são aplicáveis. Nenhum resultado é escolhido automaticamente.
+
+### Offset e histórico
+
+O preview permite adiantar ou atrasar a faixa em passos de 100 ms ou 1 s, além de um valor exato. O offset do preview não altera arquivo algum. **Salvar ajuste** reescreve os timestamps do SRT ativo e guarda a versão anterior antes da alteração.
+
+Ao substituir, ajustar ou restaurar uma legenda, o gerenciador mantém até **cinco versões anteriores por idioma** em `data/subtitle-history/`. A ação **Restaurar** cria novamente um ponto de retorno da versão atual antes de recuperar a escolhida.
+
+### Player e compatibilidade
+
+O player transmite a mídia local por uma rota autenticada com suporte a HTTP Range, portanto seek não exige carregar o arquivo inteiro. As cues de preview são entregues ao player sem expor caminhos arbitrários do filesystem. Se o navegador não reproduzir diretamente o codec do arquivo, a interface oferece **Criar prévia compatível**, gerada temporariamente por ffmpeg; essa prévia não substitui a mídia da biblioteca e é limpa automaticamente.
+
+O gerenciador grava seu próprio estado em `data/subtitle-manager-state.json` (versão 1). Esse arquivo armazena proveniência, offset aplicado e referências de histórico; ele não substitui `download-state.json`.
+
 ## Perfis de mídia
 
 O perfil é escolhido diretamente na biblioteca. Não existem switches separados de Movie/Show.
@@ -418,7 +455,7 @@ Cada **Biblioteca** e cada **Playlist de Canal** possui a configuração **Arqui
 - **Marcar como órfão**: mantém o arquivo no lugar. **Limpar órfãos** só aparece quando esta política está selecionada e existem órfãos.
 - **Mover para quarentena recuperável**: retira o pacote da biblioteca ativa e o preserva fora da raiz escaneada. A retenção pode ser **Nunca**, 30, 90 ou 180 dias.
 
-Cada destino atual precisa ter uma política de órfãos válida. A v3.5.3 não executa migração automática de destinos antigos; configurações já atualizadas para `configVersion` 9 continuam preservadas.
+Cada destino atual precisa ter uma política de órfãos válida. A v3.6.0 não executa migração automática de destinos antigos; configurações já atualizadas para `configVersion` 9 continuam preservadas.
 
 A quarentena fica em uma pasta irmã da base de mídia, preferencialmente no mesmo filesystem, para que movimentos sejam feitos por `rename` quando possível. Em filesystems diferentes o aplicativo usa cópia, validação e só então remove o original. Nunca sobrescreve silenciosamente um arquivo existente durante restauração. MP4, NFO, thumbnail/poster e SRTs são tratados como um pacote; em Clipes musicais, assets compartilhados do Show só são retirados quando não resta outro episódio ativo/mantido.
 
@@ -504,6 +541,9 @@ config/auth.json                    credencial derivada e parâmetros de sessão
 data/download-state.json            fila, histórico e índice por videoId
 data/channel-state.json             estado de descoberta/sincronização dos Canais
 data/youtube-cache.json             cache da YouTube Data API
+data/subtitle-manager-state.json    proveniência, offsets e histórico lógico do gerenciador de legendas
+data/subtitle-history/              cópias restauráveis de SRT substituídos/ajustados
+data/.subtitle-preview/             prévias temporárias do player; limpeza automática
 data/app.log                        log operacional
 data/scripted-schedules/            projetos, histórico e metadados do gerador de Scripted Schedules
 .youtube-downloader-work/           arquivos temporários dentro da pasta base

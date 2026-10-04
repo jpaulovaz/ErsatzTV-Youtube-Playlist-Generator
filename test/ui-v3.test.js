@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const APP_VERSION = require('../package.json').version;
+const APP_VERSION_RE = APP_VERSION.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 function read(name) {
   return fs.readFileSync(path.join(__dirname, '..', 'public', name), 'utf8');
@@ -28,8 +30,8 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /id="runChannelsBtn"/);
   assert.match(html, /paths\.channelsBaseDir/);
   assert.match(html, /channelScheduler\.intervalMinutes/);
-  assert.match(html, /\/js\/destinationForm\.js\?v=3\.5\.3/);
-  assert.match(html, /\/js\/channelsView\.js\?v=3\.5\.3/);
+  assert.match(html, new RegExp(`/js/destinationForm\\.js\\?v=${APP_VERSION_RE}`));
+  assert.match(html, new RegExp(`/js/channelsView\\.js\\?v=${APP_VERSION_RE}`));
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
@@ -177,9 +179,9 @@ test('Scripted Schedules is an isolated builder view with Universal v1.3.1 modul
   assert.match(html, /data-view="scripted-schedules"/);
   assert.match(html, /id="view-scripted-schedules"/);
   assert.match(html, /id="scriptedSchedulesRoot"/);
-  assert.match(html, /scripted-schedules\.css\?v=3\.5\.3/);
-  assert.match(html, /scriptedScheduleEditorUtils\.js\?v=3\.5\.3/);
-  assert.match(html, /scriptedSchedulesView\.js\?v=3\.5\.3/);
+  assert.match(html, new RegExp(`scripted-schedules\\.css\\?v=${APP_VERSION_RE}`));
+  assert.match(html, new RegExp(`scriptedScheduleEditorUtils\\.js\\?v=${APP_VERSION_RE}`));
+  assert.match(html, new RegExp(`scriptedSchedulesView\\.js\\?v=${APP_VERSION_RE}`));
   assert.match(app, /'scripted-schedules'/);
   assert.match(app, /ScriptedSchedulesView\.init/);
   assert.match(server, /handleScriptedScheduleRoutes/);
@@ -352,7 +354,7 @@ test('Scripted Schedules Help stays inside the Programacao sidebar group and is 
   assert.match(programacaoGroup, /data-view="help"/);
   assert.doesNotMatch(sistemaGroup, /data-view="help"/);
   assert.match(html, /id="view-help"/);
-  assert.match(html, /helpView\.js\?v=3\.5\.3/);
+  assert.match(html, new RegExp(`helpView\\.js\\?v=${APP_VERSION_RE}`));
   assert.match(help, /Programação · Scripted Schedules/);
   assert.match(help, /Assuntos da ajuda de Scripted Schedules/);
   for (const tab of ['Começando', 'Recursos', 'Queries', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));
@@ -569,4 +571,38 @@ test('library content browser manages active and special content states', () => 
   assert.match(css, /\.library-content-thumb\s*\{[\s\S]*?aspect-ratio:\s*16 \/ 9;/);
   assert.match(css, /\.library-content-thumb\.has-image \.library-content-thumb-placeholder/);
   assert.match(css, /\.library-content-details/);
+});
+
+test('Ver conteúdo integra player e gerenciador manual de legendas', () => {
+  const html = read('index.html');
+  const app = read('app.js');
+  const manager = read('js/subtitleManager.js');
+  const css = read('styles.css');
+
+  assert.match(html, /id="subtitleManagerPanel"/);
+  assert.match(html, /\/js\/subtitleManager\.js\?v=/);
+  assert.match(app, /data-subtitle-manager-open>Gerenciar legendas/);
+  assert.match(app, /data-subtitle-player-open>Abrir player/);
+  assert.match(app, /SubtitleManagerUI\.setContext/);
+  assert.match(manager, /Consultar faixas do YouTube/);
+  assert.match(manager, /Pesquisar LRCLIB/);
+  assert.match(manager, /Testar no player/);
+  assert.match(manager, /Criar prévia compatível/);
+  assert.match(manager, /Adiantar 100 ms/);
+  assert.match(manager, /Atrasar 100 ms/);
+  assert.match(manager, /Salvar ajuste na legenda ativa/);
+  assert.match(manager, /Restaurar dados originais/);
+  assert.match(manager, /Aplicar e preservar anterior/);
+  assert.match(css, /\.subtitle-manager-player-card/);
+  assert.match(css, /\.subtitle-manager-results/);
+});
+
+test('Subtitle Manager expõe pesquisa sem mídia e restringe preview/aplicação ao contexto seguro', () => {
+  const app = read('app.js');
+  const manager = read('js/subtitleManager.js');
+  assert.match(app, /const hasLocalMedia =/);
+  assert.match(app, /const subtitleActions = item\.videoId/);
+  assert.match(manager, /lrclibAvailable \? `<option value="lrclib"/);
+  assert.match(manager, /item\.canPreview === false \|\| !state\.status\?\.mediaAvailable/);
+  assert.match(manager, /Diferença:/);
 });

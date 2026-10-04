@@ -1,61 +1,46 @@
-ErsatzTV YouTube Downloader 3.5.3
+ErsatzTV YouTube Downloader 3.6.0
 
-Arquivos alterados em relacao a v3.5.2:
+Arquivos alterados em relacao a v3.5.3:
 
-M	.gitignore
 M	CHANGELOG.md
 M	MODIFIED_FILES.txt
 M	README.md
 M	UPDATE_CONTENTS.txt
 M	UPGRADE.md
-M	config/config.example.json
-M	deploy/ersatztv-youtube-downloader.service.example
 M	package.json
 M	public/app.js
 M	public/index.html
-M	public/js/scriptedSchedulesView.js
+A	public/js/subtitleManager.js
 M	public/login.html
-M	public/scripted-schedules.css
 M	public/styles.css
-M	src/channelActionsService.js
-M	src/channelConfig.js
+M	scripts/run-tests.js
+M	scripts/verify-release.js
 M	src/config.js
-M	src/destinationService.js
-M	src/discovery/channelCatalogService.js
-M	src/discovery/youtubeSourceProvider.js
-M	src/download/queueState.js
 M	src/downloadManager.js
-M	src/logger.js
-M	src/mediaProfileService.js
-M	src/orphans/orphanPolicy.js
-M	src/orphans/quarantineService.js
-M	src/scriptedSchedules/generator.js
-M	src/scriptedSchedules/schema.js
-M	src/scriptedSchedules/store.js
-M	src/scriptedSchedules/validator.js
-M	src/server.js
-M	src/subtitleService.js
-M	src/syncService.js
-M	src/utils.js
-M	test/channels.test.js
-M	test/config.test.js
-M	test/downloadManager.test.js
-M	test/mediaProfileService.test.js
-M	test/quarantineService.test.js
-M	test/scriptedSchedules.test.js
-M	test/subtitleService.test.js
+M	src/main.js
+A	src/mediaPreviewService.js
+M	src/routes/channelRoutes.js
+M	src/routes/libraryRoutes.js
+A	src/routes/subtitleManagerRoutes.js
+A	src/subtitleManager/subtitleFormats.js
+A	src/subtitleManager/subtitleHistoryService.js
+A	src/subtitleManager/subtitleManagerService.js
+A	src/subtitleManager/subtitleManagerState.js
+A	src/subtitleManager/subtitleTiming.js
+A	src/subtitleProviders/lrclibProvider.js
+A	src/subtitleProviders/matchScore.js
+A	src/subtitleProviders/youtubeProvider.js
+A	test/subtitleFormats.test.js
+A	test/subtitleManager.test.js
+A	test/subtitleProviders.test.js
 M	test/ui-v3.test.js
-A	MANUAL_CLEANUP_3.5.3.txt
-A	scripts/check-syntax.js
-A	scripts/run-tests.js
-A	scripts/verify-release.js
-A	src/discovery/releaseMetadataService.js
-A	src/download/ytDlpDownload.js
-A	src/processUtils.js
-A	src/ytDlpUtils.js
-A	test/configFile.test.js
-A	test/processUtils.test.js
-A	test/releaseMetadataService.test.js
-A	test/ytDlpUtils.test.js
 
-Observacao: o update nao apaga arquivos fisicos obsoletos. Consulte MANUAL_CLEANUP_3.5.3.txt.
+Versionamento:
+- Aplicacao: v3.6.0
+- Universal: v1.3.1
+- configVersion: 9
+- Scripted Schedules schema: 1
+- download state: 5
+- subtitle-manager state: 1
+
+O pacote update preserva config/config.json, config/auth.json, data/ e arquivos de midia.

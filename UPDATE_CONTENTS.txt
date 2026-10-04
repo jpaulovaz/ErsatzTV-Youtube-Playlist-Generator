@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.5.3 - pacote de atualização
+ErsatzTV YouTube Downloader 3.6.0 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.5.2 já migrada para configVersion 9 e Universal v1.3.1.
+Extraia este ZIP sobre uma instalação v3.5.3.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,16 +9,17 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principais alterações:
-- removidos caminhos de compatibilidade de configurações antigas, movieMetadata/showMetadata e updateExistingThumbnails;
-- Scripted Schedules passa a trabalhar somente com Universal v1.3.1;
-- enriquecimento de data movido para a camada atual de descoberta;
-- removido o resequenciamento global de Clipes musicais, preservando numeração incremental e tratamento local de colisão na restauração;
-- utilitários de processos, yt-dlp e movimentação de arquivos consolidados;
-- downloadManager simplificado com helper dedicado ao fluxo de download do yt-dlp;
-- comandos check/test/verify modernizados, automáticos e não destrutivos;
-- testes deixam de gerar log/media residual na árvore do projeto;
-- serviço systemd de exemplo generalizado;
-- lista de arquivos físicos obsoletos para exclusão manual em MANUAL_CLEANUP_3.5.3.txt.
+- novo Gerenciador de Legendas integrado ao Ver conteúdo;
+- player autenticado com HTTP Range e fallback de prévia compatível via ffmpeg;
+- preview de SRT local existente, inclusive legendas já baixadas do YouTube;
+- consulta manual de legendas manuais e automáticas disponíveis no YouTube;
+- provider LRCLIB para Clipes musicais, com busca editável e indicação de correspondência/duração;
+- preview de candidatos sem sobrescrever o arquivo ativo;
+- offset interativo e persistência somente após confirmação;
+- histórico restaurável de até cinco versões por idioma;
+- novo estado independente subtitle-manager-state v1;
+- mesmas rotas/serviços compartilhados por Bibliotecas e Playlists de Canais;
+- nenhuma alteração no Universal, configVersion, download state ou schema de Scripted Schedules.
 
-Aplicação v3.5.3, Universal v1.3.1, configVersion 9, schema de Scripted Schedules 1 e estado persistente 5.
-Consulte UPGRADE.md e MANUAL_CLEANUP_3.5.3.txt antes da atualização.
+Aplicação v3.6.0, Universal v1.3.1, configVersion 9, schema de Scripted Schedules 1, estado persistente 5 e subtitle-manager state 1.
+Consulte UPGRADE.md antes da atualização.

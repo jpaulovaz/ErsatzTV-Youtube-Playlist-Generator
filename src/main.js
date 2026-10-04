@@ -5,6 +5,7 @@ const scheduler = require('./scheduler');
 const channelScheduler = require('./channelScheduler');
 const logger = require('./logger');
 const auth = require('./auth');
+const mediaPreviewService = require('./mediaPreviewService');
 
 let server = null;
 let shuttingDown = false;
@@ -16,6 +17,7 @@ async function shutdown(signal) {
   scheduler.stopTimer();
   channelScheduler.stopTimer();
   await downloadManager.stop({ terminateCurrent: true });
+  await mediaPreviewService.clearAllPreviews();
   auth.stop();
   if (server) {
     await new Promise((resolve) => server.close(resolve));
@@ -25,6 +27,7 @@ async function shutdown(signal) {
 
 async function main() {
   const config = await loadConfig();
+  await mediaPreviewService.ensureCleanPreviewDir();
   await downloadManager.start(config);
   server = await startServer(config);
   scheduler.start(config);
