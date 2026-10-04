@@ -120,7 +120,8 @@ async function handleChannelRoutes(req, res, url, deps) {
         query: url.searchParams.get('q'),
         offset: url.searchParams.get('offset'),
         limit: url.searchParams.get('limit'),
-        view: url.searchParams.get('view')
+        view: url.searchParams.get('view'),
+      subtitleOrigin: url.searchParams.get('subtitleOrigin')
       });
       deps.sendJson(res, 200, { ok: true, result });
       return true;

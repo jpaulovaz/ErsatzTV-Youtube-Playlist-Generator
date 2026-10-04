@@ -564,6 +564,11 @@ test('library content browser manages active and special content states', () => 
   assert.match(app, /Excluir e ignorar/);
   assert.match(app, /Restaurar e manter/);
   assert.match(html, /id="libraryContentView"/);
+  assert.match(html, /value="subtitles-missing">Sem legendas/);
+  assert.match(html, /value="subtitles-present">Com legendas/);
+  assert.match(html, /id="libraryContentSubtitleOrigin"/);
+  assert.match(app, /subtitleOrigin/);
+  assert.match(app, /Origem da legenda|originLabels/);
   assert.match(app, /frame\.classList\.add\('has-image'\)/);
   assert.match(app, /relativeFile/);
   assert.match(css, /\.library-content-grid/);

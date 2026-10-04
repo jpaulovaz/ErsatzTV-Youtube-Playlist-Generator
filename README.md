@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.6.2
+# ErsatzTV YouTube Downloader 3.6.3
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.6.2 refina o **Gerenciador de Legendas integrado ao Ver conteúdo**: a legenda atualmente carregada em prévia fica destacada tanto nas faixas locais quanto nos resultados de YouTube/LRCLIB, e seu botão muda de **Testar no player** para **Em teste no player**. Ao escolher outra faixa, o destaque migra imediatamente sem reiniciar o player. Universal permanece em v1.3.1, `configVersion` em 9, schema de Scripted Schedules em 1, estado de downloads em 5 e subtitle-manager state em 1.
+A versão 3.6.3 amplia o **Ver conteúdo** com filtros específicos para legendas: **Sem legendas** localiza rapidamente vídeos que ainda não possuem faixa e **Com legendas** habilita um segundo seletor por origem (**YouTube**, **LRCLIB** ou **Arquivo local / origem não registrada**). O Gerenciador de Legendas e o player introduzidos na série 3.6 continuam inalterados. Universal permanece em v1.3.1, `configVersion` em 9, schema de Scripted Schedules em 1, estado de downloads em 5 e subtitle-manager state em 1.
 
 ## Arquitetura
 
@@ -121,7 +121,7 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A v3.6.2 atualiza diretamente uma instalação **v3.6.1**. `configVersion` continua 9, o Universal continua 1.3.1 e o subtitle-manager state continua 1; não existe migração manual de configuração ou estado. Consulte [UPGRADE.md](UPGRADE.md).
+A v3.6.3 atualiza diretamente uma instalação **v3.6.2**. `configVersion` continua 9, o Universal continua 1.3.1 e o subtitle-manager state continua 1; não existe migração manual de configuração ou estado. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Estrutura dos arquivos
 
@@ -161,7 +161,7 @@ Genérico:         Artista -> vídeos
 
 A listagem usa o estado persistente para identidade, duração, tamanho, Video ID e localização, mas **prefere o NFO existente** para título, artista do Show, temporada/episódio e data quando esses campos estiverem presentes. Assim, correções manuais de NFO continuam aparecendo sem que o navegador regrave o arquivo.
 
-O seletor **Exibir** também permite abrir **Órfãos**, **Quarentena** e **Ignorados** quando esses estados existem. Quarentena e Ignorados permanecem visíveis mesmo quando o item não faz mais parte da árvore ativa da biblioteca. Ações disponíveis dependem do estado: **Excluir e ignorar**, **Reativar**, **Restaurar e manter**, **Enviar para quarentena** e **Excluir definitivamente**. A quarentena aceita seleção múltipla para restauração/exclusão.
+O seletor **Exibir** também permite abrir **Sem legendas**, **Com legendas**, **Órfãos**, **Quarentena** e **Ignorados**. **Sem legendas** mostra somente vídeos ativos sem faixa registrada. **Com legendas** habilita ao lado o filtro **Origem da legenda**, com **Todas as origens**, **YouTube**, **LRCLIB** e **Arquivo local / origem não registrada**; um vídeo com faixas de origens diferentes pode aparecer em mais de uma origem. Quarentena e Ignorados permanecem visíveis mesmo quando o item não faz mais parte da árvore ativa da biblioteca. Ações disponíveis dependem do estado: **Excluir e ignorar**, **Reativar**, **Restaurar e manter**, **Enviar para quarentena** e **Excluir definitivamente**. A quarentena aceita seleção múltipla para restauração/exclusão.
 
 A pesquisa continua aceitando título, artista, `SxxExx`, Video ID e caminho relativo. Os cards são paginados e thumbnails usam `loading=lazy`. O painel de detalhes mostra somente informações seguras e caminhos **relativos**. Caminhos absolutos do servidor não são enviados ao navegador; thumbnails/posters ativos e de quarentena são resolvidos internamente e validados contra suas raízes permitidas.
 
@@ -228,13 +228,13 @@ Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando
 
 ## Scripted Schedules
 
-A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do **Universal v1.3.1**, único motor suportado pela v3.6.2.
+A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do **Universal v1.3.1**, único motor suportado pela v3.6.3.
 
 O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas. O valor **Nenhum** nos seletores de Presentation é interno e sempre vazio; ele não aparece como perfil editável.
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.6.2:
+Módulos disponíveis na v3.6.3:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -455,7 +455,7 @@ Cada **Biblioteca** e cada **Playlist de Canal** possui a configuração **Arqui
 - **Marcar como órfão**: mantém o arquivo no lugar. **Limpar órfãos** só aparece quando esta política está selecionada e existem órfãos.
 - **Mover para quarentena recuperável**: retira o pacote da biblioteca ativa e o preserva fora da raiz escaneada. A retenção pode ser **Nunca**, 30, 90 ou 180 dias.
 
-Cada destino atual precisa ter uma política de órfãos válida. A v3.6.2 não executa migração automática de destinos antigos; configurações já atualizadas para `configVersion` 9 continuam preservadas.
+Cada destino atual precisa ter uma política de órfãos válida. A v3.6.3 não executa migração automática de destinos antigos; configurações já atualizadas para `configVersion` 9 continuam preservadas.
 
 A quarentena fica em uma pasta irmã da base de mídia, preferencialmente no mesmo filesystem, para que movimentos sejam feitos por `rename` quando possível. Em filesystems diferentes o aplicativo usa cópia, validação e só então remove o original. Nunca sobrescreve silenciosamente um arquivo existente durante restauração. MP4, NFO, thumbnail/poster e SRTs são tratados como um pacote; em Clipes musicais, assets compartilhados do Show só são retirados quando não resta outro episódio ativo/mantido.
 

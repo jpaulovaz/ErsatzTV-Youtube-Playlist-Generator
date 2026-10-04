@@ -1,10 +1,10 @@
-# Atualização para 3.6.2
+# Atualização para 3.6.3
 
-A versão 3.6.2 atualiza diretamente a **v3.6.1** e melhora a identificação visual da legenda que está sendo testada no player do **Ver conteúdo**.
+A versão 3.6.3 atualiza diretamente a **v3.6.2** e adiciona filtros de legenda ao **Ver conteúdo**, sem alterar formatos persistentes.
 
 ## Versionamento
 
-- aplicação: **v3.6.2**;
+- aplicação: **v3.6.3**;
 - Universal: **v1.3.1**;
 - `configVersion`: **9**;
 - estado persistente de downloads: **5**;
@@ -15,17 +15,17 @@ Não existe migração de configuração, estado ou projetos de Scripted Schedul
 
 ## Antes de atualizar
 
-1. Confirme que a instalação atual está em **v3.6.1** e inicia normalmente.
+1. Confirme que a instalação atual está em **v3.6.2** e inicia normalmente.
 2. Faça backup de `config/` e `data/`.
 3. Preserve normalmente as pastas de mídia; o pacote update não contém mídia.
 
 ## Aplicando o pacote update
 
-Pare o serviço e extraia `ErsatzTV-YouTube-Downloader-v3.6.2-update.zip` sobre a instalação v3.6.1:
+Pare o serviço e extraia `ErsatzTV-YouTube-Downloader-v3.6.3-update.zip` sobre a instalação v3.6.2:
 
 ```bash
 sudo systemctl stop ersatztv-youtube-downloader
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.6.2-update.zip -d /caminho/da/aplicacao
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.6.3-update.zip -d /caminho/da/aplicacao
 cd /caminho/da/aplicacao
 npm run verify
 sudo systemctl start ersatztv-youtube-downloader
@@ -35,22 +35,26 @@ O update **não contém** `config/config.json`, `config/auth.json`, `data/` nem 
 
 Depois do primeiro acesso, use `Ctrl+F5` se o navegador ainda exibir arquivos estáticos antigos.
 
-## O que muda no Gerenciador de Legendas
+## O que muda em Ver conteúdo
 
-- A faixa local atualmente carregada no player recebe destaque visual.
-- Um resultado de YouTube ou LRCLIB atualmente carregado em prévia recebe o mesmo destaque.
-- O botão correspondente muda de **Testar no player** para **Em teste no player** enquanto aquela faixa estiver selecionada.
-- Ao testar outra legenda, o destaque anterior é removido e a nova seleção é marcada imediatamente.
-- A troca de destaque entre resultados não força recarga da página nem reinicialização do player.
+- **Exibir > Sem legendas** lista somente vídeos ativos sem faixa de legenda registrada.
+- **Exibir > Com legendas** lista somente vídeos que possuem ao menos uma faixa.
+- Em **Com legendas**, surge ao lado **Origem da legenda** com:
+  - Todas as origens;
+  - YouTube;
+  - LRCLIB;
+  - Arquivo local / origem não registrada.
+- Um vídeo com, por exemplo, uma faixa do YouTube e outra do LRCLIB aparece nos dois filtros correspondentes.
+- Legendas antigas sem proveniência salva são tratadas como **Arquivo local / origem não registrada**; a aplicação não tenta adivinhar sua fonte.
 
 ## Validação após o update
 
-1. Abra **Ver conteúdo > Gerenciar legendas** em um item com pelo menos duas opções de legenda.
-2. Clique em **Testar no player** numa legenda local e confirme que a linha e o botão ficam destacados e o texto muda para **Em teste no player**.
-3. Teste outra legenda local e confirme que o destaque migra para ela.
-4. Faça uma pesquisa no YouTube ou LRCLIB, teste um resultado e confirme o mesmo comportamento na lista de candidatos.
-5. Alterne entre dois candidatos e confirme que somente o candidato atual permanece destacado.
+1. Abra **Ver conteúdo** de uma Biblioteca ou Playlist de Canal.
+2. Em **Exibir**, escolha **Sem legendas** e confirme que aparecem somente vídeos sem faixas registradas.
+3. Escolha **Com legendas** e confirme que o seletor **Origem da legenda** aparece ao lado.
+4. Teste **YouTube**, **LRCLIB** e **Arquivo local / origem não registrada** conforme existirem no acervo.
+5. Confirme que a pesquisa por título/artista continua funcionando dentro da visão selecionada.
 
 ## Rollback
 
-A v3.6.2 não altera formatos persistentes. Para rollback, pare o serviço e restaure os arquivos da v3.6.1 mantendo `config/`, `data/` e as mídias.
+A v3.6.3 não altera formatos persistentes. Para rollback, pare o serviço e restaure os arquivos da v3.6.2 mantendo `config/`, `data/` e as mídias.

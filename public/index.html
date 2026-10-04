@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>ErsatzTV YouTube Downloader</title>
-  <link rel="icon" href="/brand-mark.svg?v=3.6.2" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=3.6.2&amp;rev=scripted-schedules-2">
-  <link rel="stylesheet" href="/scripted-schedules.css?v=3.6.2">
+  <link rel="icon" href="/brand-mark.svg?v=3.6.3" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=3.6.3&amp;rev=scripted-schedules-2">
+  <link rel="stylesheet" href="/scripted-schedules.css?v=3.6.3">
 </head>
 <body class="app-page">
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.6.2" alt=""></span>
+        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.6.3" alt=""></span>
         <div class="brand-copy">
           <div class="title-line">
             <h1>ErsatzTV YouTube Downloader</h1>
-            <span id="versionBadge" class="version-badge">v3.6.2</span>
+            <span id="versionBadge" class="version-badge">v3.6.3</span>
           </div>
         </div>
       </div>
@@ -334,9 +334,19 @@
               <label>Exibir
                 <select id="libraryContentView">
                   <option value="content">Conteúdo</option>
+                  <option value="subtitles-missing">Sem legendas</option>
+                  <option value="subtitles-present">Com legendas</option>
                   <option value="orphans">Órfãos</option>
                   <option value="quarantine">Quarentena</option>
                   <option value="ignored">Ignorados</option>
+                </select>
+              </label>
+              <label id="libraryContentSubtitleOriginLabel" class="hidden">Origem da legenda
+                <select id="libraryContentSubtitleOrigin">
+                  <option value="all">Todas as origens</option>
+                  <option value="youtube">YouTube</option>
+                  <option value="lrclib">LRCLIB</option>
+                  <option value="local">Arquivo local / origem não registrada</option>
                 </select>
               </label>
               <label class="library-content-search">Pesquisar vídeos
@@ -642,12 +652,12 @@
   </dialog>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="/js/destinationForm.js?v=3.6.2"></script>
-  <script src="/js/channelsView.js?v=3.6.2&amp;rev=ersatztv-catalog-1"></script>
-  <script src="/js/scriptedScheduleEditorUtils.js?v=3.6.2"></script>
-  <script src="/js/scriptedSchedulesView.js?v=3.6.2"></script>
-  <script src="/js/helpView.js?v=3.6.2"></script>
-  <script src="/js/subtitleManager.js?v=3.6.2"></script>
-  <script src="/app.js?v=3.6.2"></script>
+  <script src="/js/destinationForm.js?v=3.6.3"></script>
+  <script src="/js/channelsView.js?v=3.6.3&amp;rev=ersatztv-catalog-1"></script>
+  <script src="/js/scriptedScheduleEditorUtils.js?v=3.6.3"></script>
+  <script src="/js/scriptedSchedulesView.js?v=3.6.3"></script>
+  <script src="/js/helpView.js?v=3.6.3"></script>
+  <script src="/js/subtitleManager.js?v=3.6.3"></script>
+  <script src="/app.js?v=3.6.3"></script>
 </body>
 </html>

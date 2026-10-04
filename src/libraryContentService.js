@@ -5,11 +5,13 @@ const { getXmlTagText, normalizeMediaProfile, MEDIA_PROFILES } = require('./medi
 const { normalizeDateOnly } = require('./releaseMetadataUtils');
 const { USER_DISPOSITIONS, STORAGE_STATES } = require('./orphans/orphanPolicy');
 const { quarantineThumbnailPath } = require('./orphans/quarantineService');
+const subtitleManagerState = require('./subtitleManager/subtitleManagerState');
 
 const DEFAULT_PAGE_SIZE = 60;
 const MAX_PAGE_SIZE = 120;
 const STATE_PAGE_SIZE = 500;
-const CONTENT_VIEWS = new Set(['content', 'orphans', 'quarantine', 'ignored']);
+const CONTENT_VIEWS = new Set(['content', 'subtitles-missing', 'subtitles-present', 'orphans', 'quarantine', 'ignored']);
+const SUBTITLE_ORIGINS = new Set(['all', 'youtube', 'lrclib', 'local']);
 
 function decodeXmlEntities(value) {
   return String(value || '')
@@ -48,6 +50,46 @@ function normalizeContentView(value) {
   return CONTENT_VIEWS.has(normalized) ? normalized : 'content';
 }
 
+
+function normalizeSubtitleOrigin(value) {
+  const normalized = String(value || 'all').trim().toLowerCase();
+  return SUBTITLE_ORIGINS.has(normalized) ? normalized : 'all';
+}
+
+function subtitlePresence(item) {
+  const raw = item && item.subtitles && typeof item.subtitles === 'object' ? item.subtitles : {};
+  const languages = Array.isArray(raw.foundLanguages)
+    ? raw.foundLanguages.map((value) => String(value || '').trim()).filter(Boolean)
+    : [];
+  return {
+    languages,
+    hasSubtitles: languages.length > 0 || String(raw.status || '').trim().toLowerCase() === 'complete'
+  };
+}
+
+function subtitleOrigins(item, managerItemState = null) {
+  const presence = subtitlePresence(item);
+  if (!presence.hasSubtitles) return [];
+  const tracks = managerItemState && managerItemState.tracks && typeof managerItemState.tracks === 'object'
+    ? managerItemState.tracks
+    : {};
+  const origins = new Set();
+  const languages = presence.languages.length ? presence.languages : Object.keys(tracks);
+  if (!languages.length) origins.add('local');
+  for (const language of languages) {
+    const provider = String(tracks[language] && tracks[language].provider || '').trim().toLowerCase();
+    if (provider === 'youtube') origins.add('youtube');
+    else if (provider === 'lrclib') origins.add('lrclib');
+    else origins.add('local');
+  }
+  return [...origins];
+}
+
+function matchesSubtitleOrigin(item, managerItemState, origin) {
+  const selected = normalizeSubtitleOrigin(origin);
+  return selected === 'all' || subtitleOrigins(item, managerItemState).includes(selected);
+}
+
 function isStoredItem(item) {
   return Boolean(item && item.targetPath && (item.status === 'completed' || item.mediaPath || Number(item.fileSizeBytes) > 0));
 }
@@ -65,6 +107,8 @@ function matchesView(item, view) {
   const disposition = item.userDisposition || USER_DISPOSITIONS.MANAGED;
   const storage = item.storageState || (isStoredItem(item) ? STORAGE_STATES.ACTIVE : STORAGE_STATES.ABSENT);
   if (view === 'content') return isActiveContentItem(item);
+  if (view === 'subtitles-missing') return isActiveContentItem(item) && !subtitlePresence(item).hasSubtitles;
+  if (view === 'subtitles-present') return isActiveContentItem(item) && subtitlePresence(item).hasSubtitles;
   if (view === 'orphans') return item.sourceActive === false && disposition === USER_DISPOSITIONS.MANAGED && storage === STORAGE_STATES.ACTIVE;
   if (view === 'quarantine') return storage === STORAGE_STATES.QUARANTINED && disposition !== USER_DISPOSITIONS.IGNORED;
   if (view === 'ignored') return disposition === USER_DISPOSITIONS.IGNORED;
@@ -271,14 +315,25 @@ function breadcrumbsFor(currentPath) {
 
 function specialCounts(items) {
   return items.reduce((acc, item) => {
+    if (matchesView(item, 'subtitles-missing')) acc.subtitleMissing += 1;
+    if (matchesView(item, 'subtitles-present')) acc.subtitlePresent += 1;
     if (matchesView(item, 'orphans')) acc.orphans += 1;
     if (matchesView(item, 'quarantine')) acc.quarantine += 1;
     if (matchesView(item, 'ignored')) acc.ignored += 1;
     return acc;
-  }, { orphans: 0, quarantine: 0, ignored: 0 });
+  }, { subtitleMissing: 0, subtitlePresent: 0, orphans: 0, quarantine: 0, ignored: 0 });
 }
 
-async function listDestinationContent({ destination, downloadManager, browserPath = '', query = '', offset = 0, limit = DEFAULT_PAGE_SIZE, view = 'content' }) {
+function subtitleOriginCounts(entries, managerState) {
+  const counts = { youtube: 0, lrclib: 0, local: 0 };
+  for (const entry of entries) {
+    const itemState = managerState && managerState.items ? managerState.items[entry.item.id] : null;
+    for (const origin of subtitleOrigins(entry.item, itemState)) counts[origin] += 1;
+  }
+  return counts;
+}
+
+async function listDestinationContent({ destination, downloadManager, browserPath = '', query = '', offset = 0, limit = DEFAULT_PAGE_SIZE, view = 'content', subtitleOrigin = 'all' }) {
   if (!destination) {
     const error = new Error('Destino invalido.');
     error.statusCode = 404;
@@ -286,11 +341,25 @@ async function listDestinationContent({ destination, downloadManager, browserPat
   }
   const selectedView = normalizeContentView(view);
   const currentPath = selectedView === 'content' ? normalizeBrowserPath(browserPath) : '';
+  const selectedSubtitleOrigin = selectedView === 'subtitles-present' ? normalizeSubtitleOrigin(subtitleOrigin) : 'all';
   const q = String(query || '').trim().toLocaleLowerCase('pt-BR');
   const safeOffset = Math.max(0, Math.floor(Number(offset) || 0));
   const safeLimit = Math.max(1, Math.min(Number(limit) || DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE));
   const allItems = getAllDestinationItems(downloadManager, destination.id);
-  const entries = buildEntries(downloadManager, destination, selectedView);
+  let entries = buildEntries(downloadManager, destination, selectedView);
+  let managerState = null;
+  let originCounts = { youtube: 0, lrclib: 0, local: 0 };
+  if (selectedView === 'subtitles-present') {
+    managerState = await subtitleManagerState.load();
+    originCounts = subtitleOriginCounts(entries, managerState);
+    if (selectedSubtitleOrigin !== 'all') {
+      entries = entries.filter((entry) => matchesSubtitleOrigin(
+        entry.item,
+        managerState.items && managerState.items[entry.item.id],
+        selectedSubtitleOrigin
+      ));
+    }
+  }
   let directories = [];
   let metadata = [];
   const nfoCache = new Map();
@@ -330,6 +399,8 @@ async function listDestinationContent({ destination, downloadManager, browserPat
     path: currentPath,
     breadcrumbs: breadcrumbsFor(currentPath),
     query: String(query || '').trim(),
+    subtitleOrigin: selectedSubtitleOrigin,
+    subtitleOriginCounts: originCounts,
     directories,
     items: metadata,
     pagination: { total, offset: safeOffset, limit: safeLimit, hasMore: safeOffset + metadata.length < total }
@@ -397,6 +468,10 @@ module.exports = {
   safeRelativeFile,
   normalizeBrowserPath,
   normalizeContentView,
+  normalizeSubtitleOrigin,
+  subtitlePresence,
+  subtitleOrigins,
+  matchesSubtitleOrigin,
   isStoredItem,
   isActiveContentItem,
   matchesView,

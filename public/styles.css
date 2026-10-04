@@ -2005,6 +2005,7 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
   .library-content-folder-poster { flex-basis: 56px; }
 }
 .library-content-toolbar > label:not(.library-content-search) { min-width: 170px; }
+#libraryContentSubtitleOriginLabel { min-width: 260px; }
 .library-content-batch-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .library-content-card { position: relative; }
 .library-content-card.is-selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-border); }

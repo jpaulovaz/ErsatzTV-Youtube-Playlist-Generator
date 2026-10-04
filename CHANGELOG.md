@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.6.3
+
+- O seletor **Exibir** do **Ver conteúdo** ganha as visões **Sem legendas** e **Com legendas**, disponíveis tanto para Bibliotecas quanto para Playlists selecionadas em Canais.
+- **Sem legendas** mostra somente vídeos ativos sem nenhuma faixa registrada, facilitando localizar rapidamente itens que ainda precisam de tratamento.
+- Ao escolher **Com legendas**, aparece ao lado o filtro **Origem da legenda** com **Todas as origens**, **YouTube**, **LRCLIB** e **Arquivo local / origem não registrada**.
+- A origem é baseada no estado do Gerenciador de Legendas; arquivos antigos sem proveniência conhecida permanecem classificados com segurança como origem não registrada, sem inferir YouTube/LRCLIB.
+- Vídeos com faixas de origens diferentes podem aparecer em mais de um filtro de origem, e os contadores do seletor refletem o acervo ativo.
+- Aplicação **v3.6.3**; Universal **v1.3.1**; `configVersion` **9**; schema de Scripted Schedules **1**; estado persistente de downloads **5**; subtitle-manager state **1**.
+
 ## 3.6.2
 
 - O Gerenciador de Legendas passa a destacar visualmente a legenda que está carregada em prévia no player, tanto nas faixas locais quanto nos resultados de YouTube/LRCLIB.

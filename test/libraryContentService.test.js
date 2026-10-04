@@ -10,6 +10,7 @@ const {
   getLibraryThumbnail,
   getLibraryFolderPoster
 } = require('../src/libraryContentService');
+const subtitleManagerState = require('../src/subtitleManager/subtitleManagerState');
 
 function makeManager(items) {
   return {
@@ -272,4 +273,69 @@ test('special content views keep recoverable orphan quarantine separate from ign
 
   const orphanView = await listLibraryContent({ config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items), view: 'orphans' });
   assert.deepEqual(orphanView.items.map((item) => item.videoId), ['orphan']);
+});
+
+
+test('subtitle views separate missing tracks and filter present tracks by recorded origin', async (t) => {
+  const fx = await fixture();
+  t.after(async () => {
+    await subtitleManagerState.save(subtitleManagerState.emptyState());
+    await fs.rm(fx.baseDir, { recursive: true, force: true });
+  });
+
+  const lrclibTarget = path.join(fx.root, 'Muse', 'Season 01', 'Muse - S01E01 - Uprising.mp4');
+  await fs.mkdir(path.dirname(lrclibTarget), { recursive: true });
+  await fs.writeFile(lrclibTarget, 'video3');
+  fx.items.push({
+    id: 'Music:uprising', videoId: 'uprising', libraryFolder: 'Music', status: 'completed',
+    targetPath: lrclibTarget, mediaPath: lrclibTarget, mediaProfile: 'music_clips',
+    title: 'Muse - Uprising', trackTitle: 'Uprising', artist: 'Muse', fileSizeBytes: 4321,
+    subtitles: { status: 'complete', foundLanguages: ['es'] }
+  });
+
+  const state = subtitleManagerState.emptyState();
+  state.items['Music:holiday'] = {
+    tracks: {
+      'pt-BR': { provider: 'youtube', sourceType: 'manual' },
+      en: { provider: 'local', sourceType: 'unregistered' }
+    },
+    history: {}
+  };
+  state.items['Music:uprising'] = {
+    tracks: { es: { provider: 'lrclib', sourceType: 'synced' } },
+    history: {}
+  };
+  await subtitleManagerState.save(state);
+
+  const missing = await listLibraryContent({
+    config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items), view: 'subtitles-missing'
+  });
+  assert.deepEqual(missing.items.map((item) => item.videoId), ['takeonme']);
+  assert.equal(missing.library.specialCounts.subtitleMissing, 1);
+  assert.equal(missing.library.specialCounts.subtitlePresent, 2);
+
+  const present = await listLibraryContent({
+    config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items), view: 'subtitles-present'
+  });
+  assert.deepEqual(present.items.map((item) => item.videoId), ['holiday', 'uprising']);
+  assert.deepEqual(present.subtitleOriginCounts, { youtube: 1, lrclib: 1, local: 1 });
+
+  const youtube = await listLibraryContent({
+    config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items),
+    view: 'subtitles-present', subtitleOrigin: 'youtube'
+  });
+  assert.deepEqual(youtube.items.map((item) => item.videoId), ['holiday']);
+  assert.equal(youtube.subtitleOrigin, 'youtube');
+
+  const lrclib = await listLibraryContent({
+    config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items),
+    view: 'subtitles-present', subtitleOrigin: 'lrclib'
+  });
+  assert.deepEqual(lrclib.items.map((item) => item.videoId), ['uprising']);
+
+  const local = await listLibraryContent({
+    config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items),
+    view: 'subtitles-present', subtitleOrigin: 'local'
+  });
+  assert.deepEqual(local.items.map((item) => item.videoId), ['holiday']);
 });

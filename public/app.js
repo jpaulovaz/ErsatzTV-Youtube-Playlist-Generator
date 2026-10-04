@@ -22,6 +22,7 @@ let libraryContentState = {
   endpointBase: '',
   returnView: 'libraries',
   view: 'content',
+  subtitleOrigin: 'all',
   library: null,
   path: '',
   query: '',
@@ -800,20 +801,50 @@ function bindLibraryContentImages(container) {
 
 function updateLibraryContentViewControls() {
   const select = $('#libraryContentView');
+  const originLabel = $('#libraryContentSubtitleOriginLabel');
+  const originSelect = $('#libraryContentSubtitleOrigin');
   if (!select) return;
   const counts = libraryContentState.library && libraryContentState.library.specialCounts || {};
+  const countKeys = {
+    'subtitles-missing': 'subtitleMissing',
+    'subtitles-present': 'subtitlePresent',
+    orphans: 'orphans',
+    quarantine: 'quarantine',
+    ignored: 'ignored'
+  };
+  const labels = {
+    content: 'Conteúdo',
+    'subtitles-missing': 'Sem legendas',
+    'subtitles-present': 'Com legendas',
+    orphans: 'Órfãos',
+    quarantine: 'Quarentena',
+    ignored: 'Ignorados'
+  };
   for (const option of select.options) {
     if (option.value === 'content') {
       option.disabled = false;
-      option.textContent = 'Conteúdo';
-    } else {
-      const count = Number(counts[option.value]) || 0;
-      option.disabled = count === 0 && option.value !== libraryContentState.view;
-      const labels = { orphans: 'Órfãos', quarantine: 'Quarentena', ignored: 'Ignorados' };
-      option.textContent = `${labels[option.value]}${count ? ` (${count})` : ''}`;
+      option.textContent = labels.content;
+      continue;
     }
+    const count = Number(counts[countKeys[option.value]]) || 0;
+    option.disabled = count === 0 && option.value !== libraryContentState.view;
+    option.textContent = `${labels[option.value] || option.textContent}${count ? ` (${count})` : ''}`;
   }
   select.value = libraryContentState.view;
+
+  const showOrigin = libraryContentState.view === 'subtitles-present';
+  if (originLabel) originLabel.classList.toggle('hidden', !showOrigin);
+  if (originSelect) {
+    originSelect.value = libraryContentState.subtitleOrigin || 'all';
+    const originCounts = libraryContentState.subtitleOriginCounts || {};
+    const originLabels = { youtube: 'YouTube', lrclib: 'LRCLIB', local: 'Arquivo local / origem não registrada' };
+    for (const option of originSelect.options) {
+      if (option.value === 'all') { option.textContent = 'Todas as origens'; option.disabled = false; continue; }
+      const count = Number(originCounts[option.value]) || 0;
+      option.textContent = `${originLabels[option.value] || option.textContent}${count ? ` (${count})` : ''}`;
+      option.disabled = count === 0 && option.value !== libraryContentState.subtitleOrigin;
+    }
+  }
 }
 
 function updateLibraryContentBatchActions() {
@@ -837,7 +868,7 @@ function updateLibraryContentBatchActions() {
 
 function renderLibraryContent() {
   const library = libraryContentState.library || {};
-  const viewLabels = { content: 'Conteúdo', orphans: 'Órfãos', quarantine: 'Quarentena', ignored: 'Ignorados' };
+  const viewLabels = { content: 'Conteúdo', 'subtitles-missing': 'Sem legendas', 'subtitles-present': 'Com legendas', orphans: 'Órfãos', quarantine: 'Quarentena', ignored: 'Ignorados' };
   $('#libraryContentTitle').textContent = `${library.name || libraryContentState.libraryName || 'Conteúdo'} · ${viewLabels[libraryContentState.view] || 'Conteúdo'}`;
   $('#libraryContentCount').textContent = `${Number(library.totalVideos) || 0} vídeo(s) no acervo ativo`;
   updateLibraryContentViewControls();
@@ -864,7 +895,13 @@ function renderLibraryContent() {
 
   const pagination = libraryContentState.pagination || {};
   let status;
-  if (libraryContentState.view !== 'content') status = `${pagination.total || 0} item(ns) em ${String(viewLabels[libraryContentState.view] || '').toLowerCase()}`;
+  if (libraryContentState.view !== 'content') {
+    status = `${pagination.total || 0} item(ns) em ${String(viewLabels[libraryContentState.view] || '').toLowerCase()}`;
+    if (libraryContentState.view === 'subtitles-present' && libraryContentState.subtitleOrigin !== 'all') {
+      const originLabels = { youtube: 'YouTube', lrclib: 'LRCLIB', local: 'arquivo local/origem não registrada' };
+      status += ` · origem: ${originLabels[libraryContentState.subtitleOrigin] || libraryContentState.subtitleOrigin}`;
+    }
+  }
   else if (libraryContentState.query) status = `${pagination.total || 0} resultado(s) em toda a biblioteca`;
   else status = `${libraryContentState.directories.length} pasta(s) · ${pagination.total || 0} vídeo(s) diretamente neste nível`;
   $('#libraryContentStatus').textContent = status;
@@ -1008,6 +1045,9 @@ async function loadLibraryContent(options = {}) {
   params.set('limit', String(LIBRARY_CONTENT_PAGE_SIZE));
   params.set('offset', String(append ? libraryContentState.items.length : 0));
   params.set('view', libraryContentState.view);
+  if (libraryContentState.view === 'subtitles-present' && libraryContentState.subtitleOrigin !== 'all') {
+    params.set('subtitleOrigin', libraryContentState.subtitleOrigin);
+  }
   if (libraryContentState.view === 'content' && libraryContentState.path) params.set('path', libraryContentState.path);
   if (libraryContentState.query) params.set('q', libraryContentState.query);
 
@@ -1017,6 +1057,8 @@ async function loadLibraryContent(options = {}) {
     const result = response.result || {};
     libraryContentState.library = result.library || libraryContentState.library;
     libraryContentState.view = result.view || libraryContentState.view;
+    libraryContentState.subtitleOrigin = result.subtitleOrigin || (libraryContentState.view === 'subtitles-present' ? libraryContentState.subtitleOrigin : 'all');
+    libraryContentState.subtitleOriginCounts = result.subtitleOriginCounts || {};
     libraryContentState.path = result.path || '';
     libraryContentState.directories = result.directories || [];
     const nextItems = result.items || [];
@@ -1043,6 +1085,8 @@ async function openDestinationContent({ name, endpointBase, view = 'content', re
     endpointBase,
     returnView,
     view,
+    subtitleOrigin: 'all',
+    subtitleOriginCounts: {},
     library: null,
     path: '',
     query: '',
@@ -1054,6 +1098,8 @@ async function openDestinationContent({ name, endpointBase, view = 'content', re
   };
   $('#libraryContentSearch').value = '';
   $('#libraryContentView').value = view;
+  $('#libraryContentSubtitleOrigin').value = 'all';
+  $('#libraryContentSubtitleOriginLabel').classList.add('hidden');
   if (activeView !== 'libraries') setActiveView('libraries', { persist: false });
   setLibraryContentMode(true);
   $('#libraryContentBackBtn').textContent = returnView === 'channels' ? 'Voltar para Canais' : 'Voltar para Bibliotecas';
@@ -1807,8 +1853,16 @@ function bindEvents() {
     libraryContentState.view = event.currentTarget.value || 'content';
     libraryContentState.path = '';
     libraryContentState.query = '';
+    libraryContentState.subtitleOrigin = 'all';
+    libraryContentState.subtitleOriginCounts = {};
     libraryContentState.selectedIds.clear();
     $('#libraryContentSearch').value = '';
+    loadLibraryContent().catch((error) => showToast(error.message, true));
+  });
+
+  $('#libraryContentSubtitleOrigin').addEventListener('change', (event) => {
+    libraryContentState.subtitleOrigin = event.currentTarget.value || 'all';
+    libraryContentState.selectedIds.clear();
     loadLibraryContent().catch((error) => showToast(error.message, true));
   });
 
