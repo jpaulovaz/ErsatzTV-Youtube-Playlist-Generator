@@ -593,8 +593,18 @@ test('Ver conteúdo integra player e gerenciador manual de legendas', () => {
   assert.match(manager, /Salvar ajuste na legenda ativa/);
   assert.match(manager, /Restaurar dados originais/);
   assert.match(manager, /Aplicar e preservar anterior/);
+  assert.match(manager, /Português \(Brasil\)/);
+  assert.match(manager, /English/);
+  assert.match(manager, /Español/);
+  assert.match(manager, /<select id=\"subtitleManagerApplyLanguage\">/);
+  assert.doesNotMatch(manager, /subtitleManagerApplyLanguage\" type=\"text/);
+  assert.match(manager, /data-subtitle-local-delete/);
+  assert.match(manager, /video\.pause\(\)/);
+  assert.match(manager, /video\.removeAttribute\('src'\)/);
   assert.match(css, /\.subtitle-manager-player-card/);
   assert.match(css, /\.subtitle-manager-results/);
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.subtitle-manager-head[\s\S]*?flex-direction:\s*column/);
+  assert.match(css, /\.subtitle-manager-offset \.inline-actions[\s\S]*?grid-template-columns:/);
 });
 
 test('Subtitle Manager expõe pesquisa sem mídia e restringe preview/aplicação ao contexto seguro', () => {

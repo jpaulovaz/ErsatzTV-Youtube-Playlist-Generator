@@ -104,3 +104,18 @@ test('LRCLIB materialize rejeita instrumental e resultado sem syncedLyrics', asy
     await assert.rejects(() => lrclib.materialize({}, { candidateId: '2' }, {}), /nao possui letra sincronizada/i);
   } finally { global.fetch = previous; }
 });
+
+test('YouTube filtra candidatos pelo idioma desejado do gerenciador', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'yt-provider-language-'));
+  const stub = path.join(dir, 'yt-dlp');
+  await fs.writeFile(stub, `#!/usr/bin/env node\nconsole.log(JSON.stringify({subtitles:{'pt-BR':[ {ext:'vtt'} ],'en-US':[ {ext:'vtt'} ],'es-419':[ {ext:'vtt'} ]},automatic_captions:{pt:[{ext:'vtt'}],en:[{ext:'vtt'}],fr:[{ext:'vtt'}]}}));\n`, { mode: 0o755 });
+  try {
+    const context = { config: configWithYtDlp(stub), sourceConfig: {}, videoId: 'abc' };
+    const pt = await youtube.search(context, {}, { targetLanguage: 'pt-BR' });
+    assert.deepEqual(pt.candidates.map((item) => item.language).sort(), ['pt', 'pt-BR'].sort());
+    const en = await youtube.search(context, {}, { targetLanguage: 'en' });
+    assert.deepEqual(en.candidates.map((item) => item.language).sort(), ['en', 'en-US'].sort());
+    const es = await youtube.search(context, {}, { targetLanguage: 'es' });
+    assert.deepEqual(es.candidates.map((item) => item.language), ['es-419']);
+  } finally { await fs.rm(dir, { recursive: true, force: true }); }
+});

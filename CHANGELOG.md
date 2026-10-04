@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.6.1
+
+- O Gerenciador de Legendas passa a usar um seletor fechado de **Idioma desejado** com Português (Brasil) (`pt-BR`), English (`en`) e Español (`es`), eliminando a persistência acidental de novas faixas como `und`.
+- A consulta manual ao YouTube respeita o idioma escolhido e filtra as faixas compatíveis antes de exibi-las; variantes regionais de inglês/espanhol são aceitas e Português (Brasil) também pode usar a faixa genérica `pt` quando necessário.
+- Resultados LRCLIB continuam manuais, mas o sidecar final agora recebe sempre o idioma escolhido no seletor (`.pt-BR.srt`, `.en.srt` ou `.es.srt`), independentemente de o LRCLIB informar idioma indefinido.
+- Cada legenda local ganha **Excluir legenda**. A ação remove o SRT ativo somente após confirmação e preserva antes uma cópia no histórico, permitindo restauração posterior.
+- Fechar o Gerenciador de Legendas ou os detalhes do conteúdo agora pausa o player, remove sua fonte e descarrega a mídia, evitando reprodução de áudio/vídeo em segundo plano.
+- **Ver conteúdo** e o Gerenciador de Legendas recebem refinamentos responsivos para mobile: cabeçalhos e ações empilhados, player limitado à altura da tela, resultados/legendas com botões adequados ao toque e controles de offset reorganizados em telas estreitas.
+- Testes cobrem o idioma de destino, ausência de `.und.srt`, filtro de idiomas do YouTube, exclusão/restauração de legenda, interrupção do player e regras responsivas.
+- Aplicação **v3.6.1**; Universal **v1.3.1**; `configVersion` **9**; schema de Scripted Schedules **1**; estado persistente de downloads **5**; subtitle-manager state **1**.
+
 ## 3.6.0
 
 - **Ver conteúdo** ganha um Gerenciador de Legendas integrado com player local, disponível para Bibliotecas e Playlists selecionadas em Canais por meio do mesmo backend compartilhado.

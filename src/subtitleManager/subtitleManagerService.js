@@ -15,8 +15,20 @@ const lrclibProvider = require('../subtitleProviders/lrclibProvider');
 const mediaPreview = require('../mediaPreviewService');
 
 const providers = { youtube: youtubeProvider, lrclib: lrclibProvider };
+const TARGET_LANGUAGES = Object.freeze(['pt-BR', 'en', 'es']);
 
 function nowIso() { return new Date().toISOString(); }
+
+function normalizeTargetLanguage(value) {
+  const raw = String(value || '').trim();
+  const key = raw.toLowerCase().replace(/_/g, '-');
+  if (['pt-br', 'ptbr', 'portugues-brasil', 'portuguese-brazil'].includes(key)) return 'pt-BR';
+  if (['en', 'english', 'ingles'].includes(key)) return 'en';
+  if (['es', 'spanish', 'espanol'].includes(key)) return 'es';
+  const error = new Error('Idioma de destino invalido. Use pt-BR, en ou es.');
+  error.statusCode = 400;
+  throw error;
+}
 
 function normalizeLanguage(value) {
   const lang = String(value || '').trim().replace(/[^A-Za-z0-9._-]/g, '').slice(0, 40);
@@ -158,20 +170,22 @@ async function search(args, payload) {
   const context = await resolveContext(args);
   const providerName = String(payload.provider || '').toLowerCase();
   const provider = validateProvider(context, providerName);
-  const result = await provider.search(context, payload.query || {});
-  return { provider: providerName, ...result };
+  const targetLanguage = normalizeTargetLanguage(payload.language || 'pt-BR');
+  const result = await provider.search(context, payload.query || {}, { targetLanguage });
+  return { provider: providerName, targetLanguage, ...result };
 }
 
-async function materializeCandidate(context, payload) {
+async function materializeCandidate(context, payload, options = {}) {
   const providerName = String(payload.provider || '').toLowerCase();
   const provider = validateProvider(context, providerName);
   const candidate = { candidateId: String(payload.candidateId || ''), providerId: String(payload.candidateId || '') };
-  return provider.materialize(context, candidate, { language: payload.language });
+  const language = options.forApply ? normalizeTargetLanguage(payload.language) : undefined;
+  return provider.materialize(context, candidate, { language });
 }
 
 async function previewCandidate(args, payload) {
   const context = await resolveContext(args);
-  const normalized = await materializeCandidate(context, payload);
+  const normalized = await materializeCandidate(context, payload, { forApply: false });
   return {
     provider: normalized.provider,
     providerId: normalized.providerId,
@@ -235,8 +249,8 @@ async function applyCandidate(args, payload) {
   if (!context.activeWritable) {
     const error = new Error('Aplicar legenda exige um item ativo com arquivo local gravavel.'); error.statusCode = 409; throw error;
   }
-  const normalized = await materializeCandidate(context, payload);
-  const language = normalizeLanguage(payload.language || normalized.language);
+  const language = normalizeTargetLanguage(payload.language);
+  const normalized = await materializeCandidate(context, { ...payload, language }, { forApply: true });
   const initialOffsetMs = payload.offsetMs == null ? 0 : normalizeOffsetMs(payload.offsetMs);
   const appliedCues = initialOffsetMs ? shiftCues(normalized.cues, initialOffsetMs) : normalized.cues;
   const sidecarPath = getSubtitleSidecarPath(context.item.targetPath, language);
@@ -308,6 +322,33 @@ async function restoreHistory(args, payload) {
 }
 
 
+async function deleteLocalSubtitle(args, payload) {
+  const context = await resolveContext(args);
+  if (!context.activeWritable) {
+    const error = new Error('Excluir legenda exige um item ativo com arquivo local gravavel.'); error.statusCode = 409; throw error;
+  }
+  const language = normalizeLanguage(payload.language);
+  const sidecarPath = getSubtitleSidecarPath(context.item.targetPath, language);
+  if (!isPathInside(path.dirname(context.item.targetPath), sidecarPath)) {
+    const error = new Error('Caminho de legenda invalido.'); error.statusCode = 400; throw error;
+  }
+  try {
+    await fs.access(sidecarPath);
+  } catch (error) {
+    if (error.code === 'ENOENT') { const e = new Error('Legenda local nao encontrada.'); e.statusCode = 404; throw e; }
+    throw error;
+  }
+  const state = await stateStore.load();
+  const itemState = stateStore.ensureItem(state, context.item.id);
+  await backupAndRegister(state, itemState, context, language, sidecarPath, 'delete');
+  await fs.rm(sidecarPath, { force: true });
+  delete itemState.tracks[language];
+  await stateStore.save(state);
+  await syncDownloadSubtitleState(context);
+  return { language, historyCount: (itemState.history[language] || []).length, recoverable: (itemState.history[language] || []).length > 0 };
+}
+
+
 async function registerManagedDownload(item, movedEntries) {
   const entries = Array.isArray(movedEntries) ? movedEntries : [];
   if (!item || !item.id || !entries.length) return;
@@ -357,10 +398,13 @@ module.exports = {
   applyCandidate,
   applyOffset,
   restoreHistory,
+  deleteLocalSubtitle,
   registerManagedDownload,
   streamMedia,
   createCompatiblePreview,
   normalizeLanguage,
+  normalizeTargetLanguage,
+  TARGET_LANGUAGES,
   mediaPathForItem,
   languageFromSidecar
 };

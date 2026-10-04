@@ -15,6 +15,7 @@
     previewOffsetMs: 0,
     textTrack: null,
     activeLocalLanguage: '',
+    targetLanguage: 'pt-BR',
     provider: 'youtube',
     searchResults: [],
     defaults: { artist: '', track: '', album: '' },
@@ -36,6 +37,31 @@
     const value = Number(ms) || 0;
     const seconds = value / 1000;
     return `${seconds > 0 ? '+' : ''}${seconds.toFixed(3)} s`;
+  }
+
+  const TARGET_LANGUAGES = Object.freeze([
+    { value: 'pt-BR', label: 'Português (Brasil)' },
+    { value: 'en', label: 'English' },
+    { value: 'es', label: 'Español' }
+  ]);
+
+  function canonicalTargetLanguage(value) {
+    const key = String(value || '').trim().toLowerCase().replace(/_/g, '-');
+    if (key === 'pt-br' || key === 'pt') return 'pt-BR';
+    if (key === 'en' || key.startsWith('en-')) return 'en';
+    if (key === 'es' || key.startsWith('es-')) return 'es';
+    return '';
+  }
+
+  function targetLanguageOptions() {
+    return TARGET_LANGUAGES.map((entry) => `<option value="${entry.value}" ${state.targetLanguage === entry.value ? 'selected' : ''}>${entry.label}</option>`).join('');
+  }
+
+  function stopPlayer() {
+    const video = $('#subtitleManagerVideo');
+    if (!video) return;
+    try { video.pause(); } catch {}
+    try { video.removeAttribute('src'); video.load(); } catch {}
   }
 
   function panel() { return $('#subtitleManagerPanel'); }
@@ -81,7 +107,10 @@
       try { track.addCue(new Ctor(start, end, String(cue.text || ''))); } catch {}
     }
     const label = $('#subtitleManagerPreviewLabel');
-    if (label) label.textContent = `${state.preview.sourceLabel || 'Prévia'} · ${state.preview.language || 'und'}`;
+    const previewLanguage = state.preview.kind === 'candidate' && (!state.preview.language || state.preview.language === 'und')
+      ? state.targetLanguage
+      : (state.preview.language || state.targetLanguage);
+    if (label) label.textContent = `${state.preview.sourceLabel || 'Prévia'} · ${previewLanguage}`;
     updateOffsetUi();
   }
 
@@ -123,6 +152,7 @@
         <div><strong>${esc(track.language)}</strong><small>${esc(track.sourceLabel || 'Arquivo local')}</small></div>
         <div class="inline-actions">
           <button type="button" class="small" data-subtitle-local-preview="${esc(track.language)}">Testar no player</button>
+          <button type="button" class="small danger" data-subtitle-local-delete="${esc(track.language)}" ${!state.status?.canApply ? 'disabled title="A exclusão exige conteúdo ativo e gravável"' : ''}>Excluir legenda</button>
         </div>
       </div>`).join('');
   }
@@ -154,8 +184,8 @@
             ${lrclibAvailable ? `<option value="lrclib" ${state.provider === 'lrclib' ? 'selected' : ''}>LRCLIB</option>` : ''}
           </select>
         </label>
-        <label>Idioma de destino
-          <input id="subtitleManagerApplyLanguage" type="text" maxlength="40" value="${esc(state.preview?.language || state.activeLocalLanguage || 'und')}">
+        <label>Idioma desejado
+          <select id="subtitleManagerApplyLanguage">${targetLanguageOptions()}</select>
         </label>
       </div>
       <div id="subtitleManagerLrclibFields" class="subtitle-manager-query ${isLrclib ? '' : 'hidden'}">
@@ -263,7 +293,11 @@
     state.status = response.result || {};
     state.defaults = { ...(state.status.queryDefaults || {}) };
     if (!state.queryDraft.track && !state.queryDraft.artist && !state.queryDraft.album) state.queryDraft = { ...state.defaults };
-    if (state.activeLocalLanguage && !(state.status.tracks || []).some((track) => track.language === state.activeLocalLanguage)) state.activeLocalLanguage = '';
+    if (state.activeLocalLanguage) {
+      const stillLocal = (state.status.tracks || []).some((track) => track.language === state.activeLocalLanguage);
+      const hasHistory = Boolean((state.status.history?.[state.activeLocalLanguage] || []).length);
+      if (!stillLocal && !hasHistory) state.activeLocalLanguage = '';
+    }
   }
 
   async function open(options = {}) {
@@ -278,6 +312,7 @@
   }
 
   function close() {
+    stopPlayer();
     clearTextTrack();
     state.preview = null;
     state.previewOffsetMs = 0;
@@ -305,7 +340,6 @@
     state.preview = { ...(response.result || {}), kind: 'local' };
     state.previewOffsetMs = 0;
     state.activeLocalLanguage = language;
-    const applyLanguage = $('#subtitleManagerApplyLanguage'); if (applyLanguage) applyLanguage.value = language;
     render();
     renderPreviewCues();
     $('#subtitleManagerVideo')?.play().catch(() => {});
@@ -319,7 +353,7 @@
         artist: $('#subtitleManagerArtist')?.value || '', track: $('#subtitleManagerTrack')?.value || '', album: $('#subtitleManagerAlbum')?.value || ''
       } : {};
       const response = await state.api(`${state.endpointBase}/subtitle-search`, {
-        method: 'POST', body: JSON.stringify({ itemId: state.item.id, provider: state.provider, query })
+        method: 'POST', body: JSON.stringify({ itemId: state.item.id, provider: state.provider, language: state.targetLanguage, query })
       });
       state.searchResults = response.result?.candidates || [];
       const results = $('#subtitleManagerResults'); if (results) results.innerHTML = resultRows();
@@ -333,11 +367,10 @@
     if (!candidate) return;
     try {
       const response = await state.api(`${state.endpointBase}/subtitle-preview`, {
-        method: 'POST', body: JSON.stringify({ itemId: state.item.id, provider: state.provider, candidateId: candidate.candidateId, language: candidate.language })
+        method: 'POST', body: JSON.stringify({ itemId: state.item.id, provider: state.provider, candidateId: candidate.candidateId })
       });
       state.preview = { ...(response.result || {}), kind: 'candidate', candidate, provider: state.provider };
       state.previewOffsetMs = 0;
-      const applyLanguage = $('#subtitleManagerApplyLanguage'); if (applyLanguage) applyLanguage.value = state.preview.language || candidate.language || 'und';
       renderPreviewCues();
       $('#subtitleManagerVideo')?.play().catch(() => {});
     } catch (error) { toast(error.message, true); }
@@ -347,9 +380,7 @@
     const candidate = state.searchResults[index];
     if (!candidate) return;
     const previewingThisCandidate = state.preview?.kind === 'candidate' && state.preview.candidate?.candidateId === candidate.candidateId;
-    const language = (previewingThisCandidate
-      ? ($('#subtitleManagerApplyLanguage')?.value || candidate.language || 'und')
-      : (candidate.language || 'und')).trim();
+    const language = state.targetLanguage;
     let offsetMs = 0;
     if (previewingThisCandidate) offsetMs = state.previewOffsetMs;
     try {
@@ -399,6 +430,36 @@
     } catch (error) { toast(error.message, true); }
   }
 
+  async function deleteLocalSubtitle(language) {
+    let confirmed = true;
+    if (state.showDialog) {
+      const decision = await state.showDialog({
+        eyebrow: 'Legendas',
+        title: `Excluir legenda ${language}`,
+        message: 'O arquivo SRT ativo será removido. Uma cópia será preservada no histórico para restauração, quando disponível.',
+        confirmLabel: 'Excluir legenda',
+        danger: true
+      });
+      confirmed = decision.confirmed;
+    }
+    if (!confirmed) return;
+    try {
+      const response = await state.api(`${state.endpointBase}/subtitle-delete`, {
+        method: 'POST', body: JSON.stringify({ itemId: state.item.id, language })
+      });
+      stopPlayer();
+      clearTextTrack();
+      state.preview = null;
+      state.previewOffsetMs = 0;
+      state.activeLocalLanguage = response.result?.historyCount ? language : '';
+      await refreshStatus();
+      render();
+      toast(response.result?.recoverable
+        ? `Legenda ${language} excluída. A versão removida ficou disponível no histórico.`
+        : `Legenda ${language} excluída.`);
+    } catch (error) { toast(error.message, true); }
+  }
+
   async function createCompatiblePreview() {
     const button = $('#subtitleManagerCompatiblePreview');
     if (button) { button.disabled = true; button.textContent = 'Criando prévia...'; }
@@ -426,6 +487,8 @@
     if (event.target.closest('[data-subtitle-manager-close]')) { close(); return; }
     const local = event.target.closest('[data-subtitle-local-preview]');
     if (local) { previewLocal(local.dataset.subtitleLocalPreview); return; }
+    const localDelete = event.target.closest('[data-subtitle-local-delete]');
+    if (localDelete) { deleteLocalSubtitle(localDelete.dataset.subtitleLocalDelete); return; }
     const resultPreview = event.target.closest('[data-subtitle-result-preview]');
     if (resultPreview) { previewCandidate(Number(resultPreview.dataset.subtitleResultPreview)); return; }
     const resultApply = event.target.closest('[data-subtitle-result-apply]');
@@ -451,6 +514,13 @@
       state.provider = event.target.value;
       state.searchResults = [];
       const root = panel(); if (root) render();
+    } else if (event.target.id === 'subtitleManagerApplyLanguage') {
+      state.targetLanguage = canonicalTargetLanguage(event.target.value) || 'pt-BR';
+      if (state.provider === 'youtube') {
+        state.searchResults = [];
+        const results = $('#subtitleManagerResults');
+        if (results) results.innerHTML = resultRows();
+      }
     } else if (event.target.id === 'subtitleManagerOffsetInput') {
       setPreviewOffset(Number(event.target.value) * 1000);
     }

@@ -30,7 +30,17 @@ function formatLabel(language, entries, type) {
   return `${language}${name ? ` · ${name}` : ''} · ${typeLabel}`;
 }
 
-async function search(context) {
+function matchesTargetLanguage(language, targetLanguage) {
+  const source = normalizeLanguage(language).toLowerCase();
+  const target = String(targetLanguage || '').toLowerCase();
+  if (!target) return true;
+  if (target === 'pt-br') return source === 'pt-br' || source === 'pt';
+  if (target === 'en') return source === 'en' || source.startsWith('en-');
+  if (target === 'es') return source === 'es' || source.startsWith('es-');
+  return false;
+}
+
+async function search(context, query = {}, options = {}) {
   const url = videoUrl(context);
   if (!url) {
     const error = new Error('Video ID/URL nao disponivel para consultar o YouTube.');
@@ -66,8 +76,10 @@ async function search(context) {
       canPreview: true, canApply: true, warnings: ['Legenda gerada automaticamente pelo YouTube.'], formats: (entries || []).map((entry) => entry.ext).filter(Boolean)
     });
   }
-  candidates.sort((a, b) => a.language.localeCompare(b.language) || a.sourceType.localeCompare(b.sourceType));
-  return { candidates };
+  const targetLanguage = String(options.targetLanguage || '').trim();
+  const filtered = targetLanguage ? candidates.filter((candidate) => matchesTargetLanguage(candidate.language, targetLanguage)) : candidates;
+  filtered.sort((a, b) => a.language.localeCompare(b.language) || a.sourceType.localeCompare(b.sourceType));
+  return { candidates: filtered, requestedLanguage: targetLanguage || null };
 }
 
 async function materialize(context, candidate, options = {}) {
@@ -117,4 +129,4 @@ async function materialize(context, candidate, options = {}) {
   }
 }
 
-module.exports = { search, materialize, parseCandidateId, candidateId };
+module.exports = { search, materialize, parseCandidateId, candidateId, matchesTargetLanguage };

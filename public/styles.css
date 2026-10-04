@@ -1991,8 +1991,13 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
   .library-content-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .library-content-card-copy { padding: 8px; }
   .library-content-card-title { min-height: 30px; font-size: 10.5px; }
+  .library-content-details { padding: 10px; }
+  .library-content-details-head { align-items: stretch; flex-direction: column; gap: 8px; }
+  .library-content-details-head > button { width: 100%; }
   .library-content-details dl { grid-template-columns: 1fr; gap: 3px; }
   .library-content-details dd { margin-bottom: 7px; }
+  .library-content-details .library-actions { display: grid; grid-template-columns: 1fr; width: 100%; }
+  .library-content-details .library-actions > button { width: 100%; }
 }
 
 @media (max-width: 420px) {
@@ -2035,8 +2040,29 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
 .subtitle-manager-result .inline-actions { flex: 0 0 auto; }
 .subtitle-manager-section > .primary { justify-self: start; }
 @media (max-width: 760px) {
+  .subtitle-manager-panel { margin-top: 12px; padding-top: 12px; }
+  .subtitle-manager-head { align-items: stretch; flex-direction: column; gap: 8px; }
+  .subtitle-manager-head > button { width: 100%; }
+  .subtitle-manager-player-card { padding: 8px; }
+  .subtitle-manager-player-card video { width: 100%; max-height: min(56vh, 420px); }
+  .subtitle-manager-player-meta { align-items: stretch; flex-direction: column; }
+  .subtitle-manager-player-meta > button { width: 100%; }
   .subtitle-manager-grid { grid-template-columns: 1fr; }
+  .subtitle-manager-section { padding: 9px; }
   .subtitle-manager-query, .subtitle-manager-search-head { grid-template-columns: 1fr; }
+  .subtitle-manager-search-head select, .subtitle-manager-query input { width: 100%; }
   .subtitle-manager-track, .subtitle-manager-history-row, .subtitle-manager-result { align-items: stretch; flex-direction: column; }
-  .subtitle-manager-result .inline-actions, .subtitle-manager-track .inline-actions { justify-content: flex-start; }
+  .subtitle-manager-result .inline-actions, .subtitle-manager-track .inline-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .subtitle-manager-result .inline-actions > button, .subtitle-manager-track .inline-actions > button { width: 100%; }
+  .subtitle-manager-history-row > button { width: 100%; }
+  .subtitle-manager-offset .inline-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .subtitle-manager-offset .inline-actions > button { width: 100%; }
+  .subtitle-manager-offset [data-subtitle-offset-reset] { grid-column: 1 / -1; }
+  .subtitle-manager-offset label { max-width: none; }
+  .subtitle-manager-section > .primary { width: 100%; justify-self: stretch; }
+}
+
+@media (max-width: 420px) {
+  .subtitle-manager-result .inline-actions, .subtitle-manager-track .inline-actions, .subtitle-manager-offset .inline-actions { grid-template-columns: 1fr; }
+  .subtitle-manager-offset [data-subtitle-offset-reset] { grid-column: auto; }
 }

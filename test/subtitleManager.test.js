@@ -182,3 +182,53 @@ test('streamFile entrega Range 206 com o trecho exato da mídia', async () => {
     assert.equal(Buffer.concat(res.chunks).toString(), '2345');
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
+
+test('idioma de destino aceita apenas pt-BR, en e es', () => {
+  assert.equal(service.normalizeTargetLanguage('pt-BR'), 'pt-BR');
+  assert.equal(service.normalizeTargetLanguage('English'), 'en');
+  assert.equal(service.normalizeTargetLanguage('es'), 'es');
+  assert.throws(() => service.normalizeTargetLanguage('und'), /Idioma de destino invalido/);
+});
+
+test('excluir legenda remove SRT ativo e preserva cópia restaurável no histórico', async () => {
+  const f = await fixture();
+  f.item.id = `library::delete-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  try {
+    const result = await service.deleteLocalSubtitle(
+      { config: f.config, destination: f.destination, downloadManager: f.manager, itemId: f.item.id },
+      { language: 'pt-BR' }
+    );
+    await assert.rejects(() => fs.access(f.sidecar), (error) => error.code === 'ENOENT');
+    assert.equal(result.recoverable, true);
+    let status = await service.getStatus({ config: f.config, destination: f.destination, downloadManager: f.manager, itemId: f.item.id });
+    assert.equal(status.tracks.length, 0);
+    assert.equal(status.history['pt-BR'].length, 1);
+    assert.deepEqual(f.item.subtitles.foundLanguages, []);
+
+    await service.restoreHistory(
+      { config: f.config, destination: f.destination, downloadManager: f.manager, itemId: f.item.id },
+      { language: 'pt-BR', historyId: status.history['pt-BR'][0].id }
+    );
+    assert.match(await fs.readFile(f.sidecar, 'utf8'), /Olá/);
+    status = await service.getStatus({ config: f.config, destination: f.destination, downloadManager: f.manager, itemId: f.item.id });
+    assert.equal(status.tracks[0].language, 'pt-BR');
+  } finally { await fs.rm(f.root, { recursive: true, force: true }); }
+});
+
+test('apply LRCLIB usa o idioma de destino escolhido e nunca persiste UND', async () => {
+  const f = await fixture();
+  f.item.id = `library::target-language-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const previousFetch = global.fetch;
+  global.fetch = async () => ({ ok: true, status: 200, headers: new Map(), json: async () => ({ id: 109, trackName: 'Song', artistName: 'Artist', duration: 10, syncedLyrics: '[00:01.00]Line' }) });
+  try {
+    await service.applyCandidate(
+      { config: f.config, destination: f.destination, downloadManager: f.manager, itemId: f.item.id },
+      { provider: 'lrclib', candidateId: '109', language: 'en', offsetMs: 0 }
+    );
+    assert.match(await fs.readFile(path.join(f.root, 'video.en.srt'), 'utf8'), /Line/);
+    await assert.rejects(() => fs.access(path.join(f.root, 'video.und.srt')), (error) => error.code === 'ENOENT');
+    const status = await service.getStatus({ config: f.config, destination: f.destination, downloadManager: f.manager, itemId: f.item.id });
+    assert.ok(status.tracks.some((track) => track.language === 'en'));
+    assert.ok(!status.tracks.some((track) => track.language === 'und'));
+  } finally { global.fetch = previousFetch; await fs.rm(f.root, { recursive: true, force: true }); }
+});
