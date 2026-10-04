@@ -553,6 +553,7 @@ test('library content browser manages active and special content states', () => 
   assert.match(html, /id="libraryContentBrowser"/);
   assert.match(html, /id="libraryContentSearch"/);
   assert.match(app, /data-library-action="view-content"/);
+  assert.match(app, />Gerenciar conteúdo<\/button>/);
   assert.match(app, /LIBRARY_CONTENT_PAGE_SIZE = 60/);
   assert.match(app, /content-thumbnail\?id=/);
   assert.match(app, /content-folder-poster\?id=/);
@@ -578,7 +579,7 @@ test('library content browser manages active and special content states', () => 
   assert.match(css, /\.library-content-details/);
 });
 
-test('Ver conteúdo integra player e gerenciador manual de legendas', () => {
+test('Gerenciar conteúdo integra player e gerenciador manual de legendas', () => {
   const html = read('index.html');
   const app = read('app.js');
   const manager = read('js/subtitleManager.js');

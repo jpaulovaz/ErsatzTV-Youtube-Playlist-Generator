@@ -17,7 +17,10 @@ const { scanOnIdle, runLibraryAction } = require('./ersatztvService');
 const {
   getSubtitleSettings,
   findExistingSubtitleLanguages,
-  buildSubtitleDownloadArgs,
+  buildSubtitleDiscoveryArgs,
+  selectYoutubeSubtitleCandidates,
+  buildSubtitleCandidateDownloadArgs,
+  collectStagedSubtitles,
   finalizeStagedSubtitles
 } = require('./subtitleService');
 const {
@@ -60,7 +63,6 @@ const {
   buildDownloadArgs,
   parseProgressLine,
   parseFileLine,
-  isSubtitleUnavailableOutput,
   attachLineReader,
   appendTail
 } = require('./download/ytDlpDownload');
@@ -434,7 +436,6 @@ class DownloadManager {
     };
     this.current = context;
 
-    const args = buildSubtitleDownloadArgs(this.config, playlist, item, workDir, missing);
     await logger.info(`Buscando legendas SRT: ${item.title} (${item.videoId})`, {
       playlist: item.libraryFolder,
       languages: missing,
@@ -442,57 +443,107 @@ class DownloadManager {
       attempt: item.subtitles.attempts
     });
 
-    let stderrTail = '';
-    let stdoutTail = '';
+    const runSubtitleYtDlp = async (args, cwd) => {
+      try {
+        const result = await runCommand(this.config.paths.ytDlpPath, args, {
+          cwd,
+          detached: process.platform !== 'win32',
+          onSpawn: (child) => { context.child = child; }
+        });
+        return { ...result, error: null };
+      } catch (error) {
+        return { code: null, signal: null, stdout: '', stderr: '', error };
+      } finally {
+        context.child = null;
+      }
+    };
+
+    const interruptionResult = async () => {
+      if (!context.shutdownRequested && !context.cancelRequested) return false;
+      item.subtitles.status = 'pending';
+      item.subtitles.nextAttemptAt = null;
+      item.subtitles.lastError = context.shutdownRequested
+        ? 'Busca de legendas interrompida durante o encerramento; sera retomada depois.'
+        : 'Busca de legendas interrompida; sera retomada depois.';
+      item.subtitles.updatedAt = nowIso();
+      await this.saveNow();
+      return true;
+    };
+
+    const provenance = {};
     try {
-      const child = spawn(this.config.paths.ytDlpPath, args, {
-        cwd: workDir,
-        env: process.env,
-        shell: false,
-        detached: process.platform !== 'win32'
-      });
-      context.child = child;
-      attachLineReader(child.stdout, (line) => { stdoutTail = appendTail(stdoutTail, line); });
-      attachLineReader(child.stderr, (line) => { stderrTail = appendTail(stderrTail, line); });
-
-      const closeResult = await new Promise((resolve) => {
-        let resolved = false;
-        child.on('error', (error) => {
-          if (resolved) return;
-          resolved = true;
-          resolve({ code: null, signal: null, error });
-        });
-        child.on('close', (code, signal) => {
-          if (resolved) return;
-          resolved = true;
-          resolve({ code, signal, error: null });
-        });
-      });
-      context.child = null;
-
-      if (context.shutdownRequested) {
-        item.subtitles.status = 'pending';
-        item.subtitles.nextAttemptAt = null;
-        item.subtitles.lastError = 'Busca de legendas interrompida durante o encerramento; sera retomada depois.';
-        item.subtitles.updatedAt = nowIso();
-        await this.saveNow();
+      const discovery = await runSubtitleYtDlp(buildSubtitleDiscoveryArgs(this.config, playlist, item), workDir);
+      if (await interruptionResult()) return;
+      const discoveryOutput = [discovery.stderr, discovery.stdout].filter(Boolean).join('\n').trim();
+      if (discovery.error || discovery.code !== 0) {
+        const detail = discovery.error
+          ? discovery.error.message
+          : `yt-dlp terminou com codigo ${discovery.code}${discovery.signal ? ` (${discovery.signal})` : ''}`;
+        await this.handleSubtitleFailure(item, discoveryOutput ? `${detail}\n${discoveryOutput}` : detail);
         return;
       }
 
-      const output = [stderrTail, stdoutTail].filter(Boolean).join('\n').trim();
-      if (closeResult.error || closeResult.code !== 0) {
-        if (isSubtitleUnavailableOutput(output)) {
-          await this.finishSubtitleAttempt(item, playlist, workDir, settings, { unavailable: true });
+      let subtitleInfo;
+      try {
+        subtitleInfo = JSON.parse(String(discovery.stdout || '').trim());
+      } catch {
+        await this.handleSubtitleFailure(item, 'yt-dlp nao retornou metadados validos ao consultar as legendas disponiveis.');
+        return;
+      }
+
+      const selections = selectYoutubeSubtitleCandidates(subtitleInfo, missing, settings.includeAuto);
+      if (selections.length === 0) {
+        await this.finishSubtitleAttempt(item, playlist, workDir, settings, { unavailable: true });
+        return;
+      }
+
+      await logger.info(`Faixas de legenda selecionadas para ${item.title} (${item.videoId}).`, {
+        playlist: item.libraryFolder,
+        selections: selections.map((selection) => ({
+          targetLanguage: selection.targetLanguage,
+          sourceLanguage: selection.sourceLanguage,
+          sourceType: selection.sourceType
+        }))
+      });
+
+      for (let index = 0; index < selections.length; index += 1) {
+        const selection = selections[index];
+        const candidateDir = path.join(workDir, `candidate-${index + 1}`);
+        await fs.mkdir(candidateDir, { recursive: true });
+        const result = await runSubtitleYtDlp(
+          buildSubtitleCandidateDownloadArgs(this.config, playlist, item, candidateDir, selection),
+          candidateDir
+        );
+        if (await interruptionResult()) return;
+        const output = [result.stderr, result.stdout].filter(Boolean).join('\n').trim();
+        if (result.error || result.code !== 0) {
+          const detail = result.error
+            ? result.error.message
+            : `yt-dlp terminou com codigo ${result.code}${result.signal ? ` (${result.signal})` : ''}`;
+          await this.handleSubtitleFailure(item, output ? `${detail}\n${output}` : detail);
           return;
         }
-        const detail = closeResult.error
-          ? closeResult.error.message
-          : `yt-dlp terminou com codigo ${closeResult.code}${closeResult.signal ? ` (${closeResult.signal})` : ''}`;
-        await this.handleSubtitleFailure(item, output ? `${detail}\n${output}` : detail);
-        return;
+
+        const staged = await collectStagedSubtitles(candidateDir);
+        const selectedFile = staged.find((entry) => entry.language.toLowerCase() === selection.sourceLanguage.toLowerCase()) || staged[0];
+        if (!selectedFile) {
+          await this.handleSubtitleFailure(item, `O YouTube informou a faixa ${selection.sourceLanguage}, mas nao materializou o arquivo de legenda.`);
+          return;
+        }
+        const canonicalStagePath = path.join(workDir, `subtitle.${selection.targetLanguage}.srt`);
+        await fs.rm(canonicalStagePath, { force: true });
+        await moveAcrossFileSystems(selectedFile.filePath, canonicalStagePath);
+        provenance[selection.targetLanguage] = {
+          provider: 'youtube',
+          providerId: selection.providerId,
+          sourceType: selection.sourceType,
+          sourceLabel: selection.sourceLabel,
+          metadata: { youtubeLanguage: selection.sourceLanguage }
+        };
+        await fs.rm(candidateDir, { recursive: true, force: true });
       }
 
-      await this.finishSubtitleAttempt(item, playlist, workDir, settings, { unavailable: false });
+      await this.finishSubtitleAttempt(item, playlist, workDir, settings, { unavailable: false, provenance });
     } catch (error) {
       await this.handleSubtitleFailure(item, error.message);
     } finally {
@@ -520,7 +571,11 @@ class DownloadManager {
     item.subtitles.lastError = null;
 
     if (changed > 0) {
-      await registerManagedDownload(item, finalized.moved);
+      const registeredEntries = finalized.moved.map((entry) => ({
+        ...entry,
+        ...(options.provenance && options.provenance[entry.language] || {})
+      }));
+      await registerManagedDownload(item, registeredEntries);
       const libraryState = this.ensureLibraryState(item.libraryFolder);
       libraryState.dirty = true;
       if (libraryState.subtitleBackfill && libraryState.subtitleBackfill.active) {

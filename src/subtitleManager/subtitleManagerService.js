@@ -359,12 +359,13 @@ async function registerManagedDownload(item, movedEntries) {
     const language = String(entry && entry.language || '').trim();
     if (!language || itemState.tracks[language]) continue;
     itemState.tracks[language] = {
-      provider: 'youtube',
-      providerId: null,
-      sourceType: 'unknown',
-      sourceLabel: 'YouTube · tipo não identificado',
+      provider: String(entry.provider || 'youtube'),
+      providerId: entry.providerId || null,
+      sourceType: String(entry.sourceType || 'unknown'),
+      sourceLabel: String(entry.sourceLabel || 'YouTube · tipo não identificado'),
       appliedAt: nowIso(),
-      lastAppliedOffsetMs: 0
+      lastAppliedOffsetMs: 0,
+      metadata: entry.metadata && typeof entry.metadata === 'object' ? entry.metadata : {}
     };
     changed = true;
   }

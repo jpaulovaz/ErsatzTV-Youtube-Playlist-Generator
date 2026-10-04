@@ -85,10 +85,6 @@ function parseFileLine(line) {
   return String(line).slice(index + marker.length).trim();
 }
 
-function isSubtitleUnavailableOutput(output) {
-  return /there are no subtitles|no subtitles|requested subtitles?.*(?:not available|not found)|did not get any subtitles|no automatic captions/i.test(String(output || ''));
-}
-
 function attachLineReader(stream, callback) {
   let buffer = '';
   stream.on('data', (chunk) => {
@@ -113,7 +109,6 @@ module.exports = {
   buildDownloadArgs,
   parseProgressLine,
   parseFileLine,
-  isSubtitleUnavailableOutput,
   attachLineReader,
   appendTail
 };

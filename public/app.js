@@ -703,7 +703,7 @@ function renderLibraries() {
             <span class="library-action-group-title">Conteúdo</span>
             <div class="library-actions">
               <button class="small primary" type="button" data-library-action="run">Buscar novidades</button>
-              <button class="small" type="button" data-library-action="view-content">Ver conteúdo</button>
+              <button class="small" type="button" data-library-action="view-content">Gerenciar conteúdo</button>
               <button class="small" type="button" data-library-action="test-cookies">Testar cookies</button>
               <button class="small" type="button" data-library-action="refresh-subtitles">Buscar legendas ausentes</button>
               <span data-library-orphan-action-slot>${orphanAction}</span>

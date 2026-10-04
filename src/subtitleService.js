@@ -74,23 +74,106 @@ async function findExistingSubtitleLanguages(mediaPath, languages) {
   return found;
 }
 
-function buildSubtitleDownloadArgs(config, playlist, item, workDir, languages) {
-  const requested = normalizeSubtitleLanguages(languages);
-  if (requested.length === 0) throw new Error('Nenhum idioma de legenda foi solicitado.');
+function subtitleVideoUrl(item) {
+  return item.url || `https://www.youtube.com/watch?v=${item.videoId}`;
+}
 
-  const settings = getSubtitleSettings(playlist);
-  const outputTemplate = path.join(workDir, 'subtitle.%(ext)s');
-  const args = [...buildYtDlpCommonArgs(config, playlist)];
+function normalizeAvailableLanguage(value) {
+  return safeLanguageCode(value).toLowerCase();
+}
 
-  args.push(
+function languageMatchRank(availableLanguage, targetLanguage, requestedLanguages = []) {
+  const source = normalizeAvailableLanguage(availableLanguage);
+  const target = normalizeAvailableLanguage(targetLanguage);
+  const requested = new Set(normalizeSubtitleLanguages(requestedLanguages).map((value) => value.toLowerCase()));
+  if (!source || !target) return null;
+  if (source === target) return 0;
+
+  if (target === 'pt-br') {
+    if (source.startsWith('pt-br-')) return 1;
+    if (!requested.has('pt') && source === 'pt') return 2;
+    return null;
+  }
+  if (target === 'pt') return source.startsWith('pt-') ? 1 : null;
+  if (target === 'en') return source.startsWith('en-') ? 1 : null;
+  if (target === 'es') return source.startsWith('es-') ? 1 : null;
+  return null;
+}
+
+function collectYoutubeSubtitleCandidates(info, includeAuto = true) {
+  const candidates = [];
+  const add = (collection, sourceType) => {
+    for (const [language, entries] of Object.entries(collection || {})) {
+      const normalized = safeLanguageCode(language);
+      if (!normalized) continue;
+      const name = Array.isArray(entries) ? entries.map((entry) => entry && entry.name).find(Boolean) : '';
+      candidates.push({
+        sourceLanguage: normalized,
+        sourceType,
+        providerId: `${sourceType === 'manual' ? 'manual' : 'auto'}:${normalized}`,
+        sourceLabel: sourceType === 'manual' ? 'YouTube · enviada pelo canal' : 'YouTube · automatica',
+        name: name || ''
+      });
+    }
+  };
+  add(info && info.subtitles, 'manual');
+  if (includeAuto) add(info && info.automatic_captions, 'automatic');
+  return candidates;
+}
+
+function selectYoutubeSubtitleCandidates(info, requestedLanguages, includeAuto = true) {
+  const requested = normalizeSubtitleLanguages(requestedLanguages);
+  const candidates = collectYoutubeSubtitleCandidates(info, includeAuto);
+  const used = new Set();
+  const selections = [];
+
+  for (const targetLanguage of requested) {
+    const matches = candidates
+      .map((candidate) => ({
+        ...candidate,
+        matchRank: languageMatchRank(candidate.sourceLanguage, targetLanguage, requested)
+      }))
+      .filter((candidate) => candidate.matchRank !== null && !used.has(candidate.providerId))
+      .sort((a, b) => {
+        const typeRank = (a.sourceType === 'manual' ? 0 : 100) - (b.sourceType === 'manual' ? 0 : 100);
+        if (typeRank !== 0) return typeRank;
+        if (a.matchRank !== b.matchRank) return a.matchRank - b.matchRank;
+        return a.sourceLanguage.length - b.sourceLanguage.length || a.sourceLanguage.localeCompare(b.sourceLanguage);
+      });
+    const selected = matches[0];
+    if (!selected) continue;
+    used.add(selected.providerId);
+    selections.push({ ...selected, targetLanguage });
+  }
+
+  return selections;
+}
+
+function buildSubtitleDiscoveryArgs(config, playlist, item) {
+  return [
+    ...buildYtDlpCommonArgs(config, playlist),
     '--skip-download',
     '--no-playlist',
-    '--write-subs'
-  );
-  if (settings.includeAuto) args.push('--write-auto-subs');
+    '--dump-single-json',
+    '--no-color',
+    subtitleVideoUrl(item)
+  ];
+}
+
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildSubtitleCandidateDownloadArgs(config, playlist, item, workDir, selection) {
+  if (!selection || !selection.sourceLanguage || !selection.targetLanguage) {
+    throw new Error('Selecao de legenda do YouTube invalida.');
+  }
+  const args = [...buildYtDlpCommonArgs(config, playlist), '--skip-download', '--no-playlist'];
+  if (selection.sourceType === 'manual') args.push('--write-subs', '--no-write-auto-subs');
+  else args.push('--no-write-subs', '--write-auto-subs');
   args.push(
     '--sub-langs',
-    requested.join(','),
+    `^${escapeRegex(selection.sourceLanguage)}$`,
     '--sub-format',
     'srt/best',
     '--convert-subs',
@@ -99,10 +182,9 @@ function buildSubtitleDownloadArgs(config, playlist, item, workDir, languages) {
     '--newline',
     '--no-color',
     '-o',
-    outputTemplate,
-    item.url || `https://www.youtube.com/watch?v=${item.videoId}`
+    path.join(workDir, 'subtitle.%(ext)s'),
+    subtitleVideoUrl(item)
   );
-
   return args;
 }
 
@@ -163,7 +245,11 @@ module.exports = {
   getSubtitleSidecarPath,
   listSubtitleSidecars,
   findExistingSubtitleLanguages,
-  buildSubtitleDownloadArgs,
+  languageMatchRank,
+  collectYoutubeSubtitleCandidates,
+  selectYoutubeSubtitleCandidates,
+  buildSubtitleDiscoveryArgs,
+  buildSubtitleCandidateDownloadArgs,
   collectStagedSubtitles,
   finalizeStagedSubtitles
 };

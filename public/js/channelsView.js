@@ -365,7 +365,7 @@
                 <span class="library-action-group-title">Conteúdo</span>
                 <div class="library-actions">
                   <button class="small primary" type="button" data-channel-playlist-action="run">Buscar novidades</button>
-                  <button class="small" type="button" data-channel-playlist-action="view-content">Ver conteúdo</button>
+                  <button class="small" type="button" data-channel-playlist-action="view-content">Gerenciar conteúdo</button>
                   <button class="small" type="button" data-channel-playlist-action="test-cookies">Testar cookies</button>
                   <button class="small" type="button" data-channel-playlist-action="refresh-subtitles">Buscar legendas ausentes</button>
                   ${orphanAction}

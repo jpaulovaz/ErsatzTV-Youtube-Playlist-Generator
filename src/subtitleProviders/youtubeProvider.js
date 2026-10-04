@@ -3,7 +3,7 @@ const path = require('path');
 const os = require('os');
 const { runCommand } = require('../processUtils');
 const { buildYtDlpCommonArgs } = require('../ytDlpUtils');
-const { collectStagedSubtitles } = require('../subtitleService');
+const { collectStagedSubtitles, languageMatchRank } = require('../subtitleService');
 const { parseSrt } = require('../subtitleManager/subtitleFormats');
 
 function videoUrl(context) {
@@ -31,13 +31,9 @@ function formatLabel(language, entries, type) {
 }
 
 function matchesTargetLanguage(language, targetLanguage) {
-  const source = normalizeLanguage(language).toLowerCase();
-  const target = String(targetLanguage || '').toLowerCase();
+  const target = String(targetLanguage || '').trim();
   if (!target) return true;
-  if (target === 'pt-br') return source === 'pt-br' || source === 'pt';
-  if (target === 'en') return source === 'en' || source.startsWith('en-');
-  if (target === 'es') return source === 'es' || source.startsWith('es-');
-  return false;
+  return languageMatchRank(language, target, [target]) !== null;
 }
 
 async function search(context, query = {}, options = {}) {

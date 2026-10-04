@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.6.4
+
+- Corrige o download automático e **Buscar legendas ausentes** para consultar primeiro as faixas reais disponíveis no YouTube em vez de exigir tags literais como `en`, `pt-BR` ou `es`.
+- Tags específicas como `en-eEY6OEpapPo` passam a ser reconhecidas como compatíveis com `en`; o sidecar final continua canônico, por exemplo `.en.srt`.
+- Para cada idioma configurado, o fluxo prefere uma legenda **enviada pelo canal** e usa legenda automática somente quando permitido e necessário.
+- A origem conhecida pelo fluxo automático passa a ser registrada no Gerenciador de Legendas, em vez de ficar sempre como tipo não identificado.
+- O botão e a nomenclatura corrente **Ver conteúdo** passam a **Gerenciar conteúdo** em Bibliotecas e Playlists de Canais.
+- Aplicação **v3.6.4**; Universal **v1.3.1**; `configVersion` **9**; schema de Scripted Schedules **1**; estado persistente de downloads **5**; subtitle-manager state **1**.
+
 ## 3.6.3
 
 - O seletor **Exibir** do **Ver conteúdo** ganha as visões **Sem legendas** e **Com legendas**, disponíveis tanto para Bibliotecas quanto para Playlists selecionadas em Canais.

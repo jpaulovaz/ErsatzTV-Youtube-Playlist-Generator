@@ -8,7 +8,9 @@ const path = require('node:path');
 const { normalizeConfig, validateConfig } = require('../src/config');
 const {
   DEFAULT_SUBTITLE_LANGUAGES,
-  buildSubtitleDownloadArgs,
+  buildSubtitleDiscoveryArgs,
+  buildSubtitleCandidateDownloadArgs,
+  selectYoutubeSubtitleCandidates,
   getSubtitleSidecarPath,
   finalizeStagedSubtitles
 } = require('../src/subtitleService');
@@ -85,23 +87,41 @@ test('subtitle settings preserve multiple selected languages and reject an enabl
   assert.throws(() => validateConfig(invalid), /nenhum idioma/);
 });
 
-test('yt-dlp subtitle command requests manual and automatic SRT subtitles without downloading video', () => {
+test('automatic subtitle flow discovers real YouTube tags and prefers manual tracks', () => {
+  const info = {
+    subtitles: {
+      'en-eEY6OEpapPo': [{ ext: 'vtt', name: 'English - English' }],
+      'es-419': [{ ext: 'vtt', name: 'Español (Latinoamérica)' }]
+    },
+    automatic_captions: {
+      en: [{ ext: 'vtt', name: 'English' }],
+      es: [{ ext: 'vtt', name: 'Español' }]
+    }
+  };
+  const selected = selectYoutubeSubtitleCandidates(info, ['en', 'es'], true);
+  assert.deepEqual(selected.map((item) => [item.targetLanguage, item.sourceLanguage, item.sourceType]), [
+    ['en', 'en-eEY6OEpapPo', 'manual'],
+    ['es', 'es-419', 'manual']
+  ]);
+});
+
+test('yt-dlp subtitle flow uses metadata discovery then exact selected language tag', () => {
   const config = makeConfig('/tmp/ersatztv-subtitle-args', {
     cookiesPath: '/tmp/library-cookies.txt',
-    subtitles: { enabled: true, includeAuto: true, languages: ['pt-BR', 'en'] }
+    subtitles: { enabled: true, includeAuto: true, languages: ['en'] }
   });
   const playlist = config.playlists[0];
-  const args = buildSubtitleDownloadArgs(config, playlist, {
-    videoId: 'abcdefghijk',
-    url: 'https://www.youtube.com/watch?v=abcdefghijk'
-  }, '/tmp/work', ['pt-BR', 'en']);
+  const item = { videoId: 'abcdefghijk', url: 'https://www.youtube.com/watch?v=abcdefghijk' };
+  const discoveryArgs = buildSubtitleDiscoveryArgs(config, playlist, item);
+  assert.ok(discoveryArgs.includes('--dump-single-json'));
+  assert.equal(discoveryArgs[discoveryArgs.indexOf('--cookies') + 1], '/tmp/library-cookies.txt');
 
-  assert.ok(args.includes('--skip-download'));
-  assert.ok(args.includes('--write-subs'));
-  assert.ok(args.includes('--write-auto-subs'));
-  assert.equal(args[args.indexOf('--sub-langs') + 1], 'pt-BR,en');
-  assert.equal(args[args.indexOf('--convert-subs') + 1], 'srt');
-  assert.equal(args[args.indexOf('--cookies') + 1], '/tmp/library-cookies.txt');
+  const selected = selectYoutubeSubtitleCandidates({ subtitles: { 'en-eEY6OEpapPo': [{ ext: 'vtt' }] } }, ['en'], true)[0];
+  const downloadArgs = buildSubtitleCandidateDownloadArgs(config, playlist, item, '/tmp/work', selected);
+  assert.ok(downloadArgs.includes('--write-subs'));
+  assert.ok(downloadArgs.includes('--no-write-auto-subs'));
+  assert.equal(downloadArgs[downloadArgs.indexOf('--sub-langs') + 1], '^en-eEY6OEpapPo$');
+  assert.equal(downloadArgs[downloadArgs.indexOf('--convert-subs') + 1], 'srt');
 });
 
 test('staged subtitle files become sidecars with the same media base name', async (t) => {
@@ -142,7 +162,19 @@ test('backfill downloads only subtitles, preserves completed video and scans Ers
   const address = server.address();
 
   const fakeYtDlp = path.join(root, 'fake-yt-dlp');
-  await fs.writeFile(fakeYtDlp, `#!/usr/bin/env node\nconst fs = require('fs');\nconst path = require('path');\nfs.writeFileSync(path.join(process.cwd(), 'subtitle.pt-BR.srt'), '1\\n00:00:00,000 --> 00:00:01,000\\nOi\\n');\nfs.writeFileSync(path.join(process.cwd(), 'subtitle.en.srt'), '1\\n00:00:00,000 --> 00:00:01,000\\nHi\\n');\n`, 'utf8');
+  await fs.writeFile(fakeYtDlp, `#!/usr/bin/env node
+const fs = require('fs');
+const args = process.argv.slice(2);
+if (args.includes('--dump-single-json')) {
+  console.log(JSON.stringify({ subtitles: { 'pt-BR': [{ ext: 'vtt' }], 'en-eEY6OEpapPo': [{ ext: 'vtt', name: 'English - English' }] }, automatic_captions: {} }));
+  process.exit(0);
+}
+const out = args[args.indexOf('-o') + 1];
+const selector = args[args.indexOf('--sub-langs') + 1];
+const language = selector.includes('pt-BR') ? 'pt-BR' : 'en-eEY6OEpapPo';
+const text = language === 'pt-BR' ? 'Oi' : 'Hi';
+fs.writeFileSync(out.replace('%(ext)s', language + '.srt'), '1\\n00:00:00,000 --> 00:00:01,000\\n' + text + '\\n');
+`, 'utf8');
   await fs.chmod(fakeYtDlp, 0o755);
 
   const mediaDir = path.join(root, 'media');

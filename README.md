@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.6.3
+# ErsatzTV YouTube Downloader 3.6.4
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.6.3 amplia o **Ver conteúdo** com filtros específicos para legendas: **Sem legendas** localiza rapidamente vídeos que ainda não possuem faixa e **Com legendas** habilita um segundo seletor por origem (**YouTube**, **LRCLIB** ou **Arquivo local / origem não registrada**). O Gerenciador de Legendas e o player introduzidos na série 3.6 continuam inalterados. Universal permanece em v1.3.1, `configVersion` em 9, schema de Scripted Schedules em 1, estado de downloads em 5 e subtitle-manager state em 1.
+A versão 3.6.4 corrige o fluxo automático de legendas do YouTube para reconhecer tags reais e específicas de idioma (por exemplo `en-eEY6OEpapPo`), preferindo faixas enviadas pelo canal antes das automáticas e gravando o sidecar no idioma canônico configurado. A área anteriormente chamada **Ver conteúdo** passa a se chamar **Gerenciar conteúdo**, refletindo as ações atuais de acervo e legendas. Universal permanece em v1.3.1, `configVersion` em 9, schema de Scripted Schedules em 1, estado de downloads em 5 e subtitle-manager state em 1.
 
 ## Arquitetura
 
@@ -25,7 +25,7 @@ Biblioteca local do ErsatzTV
 ## Principais recursos
 
 - Uma ou mais bibliotecas, cada uma com várias fontes.
-- Gerenciador **Ver conteúdo** para Bibliotecas e Playlists de Canais, com pastas reais, thumbnails, pesquisa, metadata de NFO, paginação e visões de Órfãos, Quarentena e Ignorados.
+- Gerenciador **Gerenciar conteúdo** para Bibliotecas e Playlists de Canais, com pastas reais, thumbnails, pesquisa, metadata de NFO, paginação e visões de Órfãos, Quarentena e Ignorados.
 - Fontes do tipo playlist e vídeo individual.
 - YouTube Data API como modo preferencial, com fallback automático para `yt-dlp`.
 - Fila persistente em JSON; reiniciar o aplicativo não perde os itens pendentes.
@@ -38,7 +38,7 @@ Biblioteca local do ErsatzTV
 - NFOs novos incluem `year` + `premiered` em Movies e `aired` em episódios de Clipes musicais.
 - Thumbnail do vídeo como artwork de episódio (`-thumb.jpg`) e `poster.jpg` no nível do artista/Show.
 - Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
-- **Gerenciador manual de legendas** no Ver conteúdo: player, preview de SRT local/YouTube/LRCLIB, busca manual, offset e histórico de até cinco versões por idioma.
+- **Gerenciador manual de legendas** no Gerenciar conteúdo: player, preview de SRT local/YouTube/LRCLIB, busca manual, offset e histórico de até cinco versões por idioma.
 - Seleção múltipla de idiomas: `pt-BR`, `pt`, `en` e `es`.
 - Ação **Buscar legendas ausentes** para o acervo já baixado, sem baixar novamente os vídeos.
 - Deduplicação por ID do YouTube dentro de cada destino; o mesmo vídeo pode existir intencionalmente em destinos diferentes.
@@ -121,7 +121,7 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A v3.6.3 atualiza diretamente uma instalação **v3.6.2**. `configVersion` continua 9, o Universal continua 1.3.1 e o subtitle-manager state continua 1; não existe migração manual de configuração ou estado. Consulte [UPGRADE.md](UPGRADE.md).
+A v3.6.4 atualiza diretamente uma instalação **v3.6.3**. `configVersion` continua 9, o Universal continua 1.3.1 e o subtitle-manager state continua 1; não existe migração manual de configuração ou estado. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Estrutura dos arquivos
 
@@ -147,9 +147,9 @@ Em caso de colisão de nome, o ID do YouTube é acrescentado ao arquivo. O índi
 
 O nome da biblioteca também é sua identidade interna e define a pasta física. Renomeá-la depois que a fila já possui itens é tratado como a criação de outra biblioteca; não use uma simples renomeação para mover arquivos existentes. Mudanças de `paths.baseDir` também devem ser feitas com a fila parada e com migração planejada dos arquivos e do estado.
 
-## Ver conteúdo e gerenciamento do acervo
+## Gerenciar conteúdo e gerenciamento do acervo
 
-Em **Bibliotecas -> Conteúdo -> Ver conteúdo**, a tela de configuração dá lugar temporariamente ao gerenciador do acervo. Playlists selecionadas dentro de **Canais** usam o mesmo navegador e as mesmas ações; não existe uma segunda implementação paralela.
+Em **Bibliotecas -> Conteúdo -> Gerenciar conteúdo**, a tela de configuração dá lugar temporariamente ao gerenciador do acervo. Playlists selecionadas dentro de **Canais** usam o mesmo navegador e as mesmas ações; não existe uma segunda implementação paralela.
 
 A visão **Conteúdo** preserva a navegação derivada do caminho real de cada vídeo:
 
@@ -179,7 +179,7 @@ Fontes disponíveis:
 
 As fontes globais usam o perfil Genérico. Playlists selecionadas podem usar os mesmos três perfis de mídia de Bibliotecas e podem ter `Library ID`, **Canal no ErsatzTV** selecionado por nome, resolução, cookies e legendas próprios. Uma playlist é tratada como unidade editorial completa, inclusive quando contém vídeos publicados por outros canais.
 
-A identidade persistente é baseada em `channelId`, `playlistId` e `destinationId`. Renomes no YouTube atualizam o nome exibido, mas não movem automaticamente a pasta física. Cada Playlist selecionada recebe sua própria política de órfãos e o mesmo **Ver conteúdo** das Bibliotecas. As fontes globais do Canal (Todos os uploads, Vídeos, Shorts e Transmissões) permanecem fora dessa política configurável nesta versão.
+A identidade persistente é baseada em `channelId`, `playlistId` e `destinationId`. Renomes no YouTube atualizam o nome exibido, mas não movem automaticamente a pasta física. Cada Playlist selecionada recebe sua própria política de órfãos e o mesmo **Gerenciar conteúdo** das Bibliotecas. As fontes globais do Canal (Todos os uploads, Vídeos, Shorts e Transmissões) permanecem fora dessa política configurável nesta versão.
 
 Por padrão, os arquivos de Canais ficam abaixo de `paths.channelsBaseDir`:
 
@@ -228,13 +228,13 @@ Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando
 
 ## Scripted Schedules
 
-A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do **Universal v1.3.1**, único motor suportado pela v3.6.3.
+A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do **Universal v1.3.1**, único motor suportado pela v3.6.4.
 
 O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas. O valor **Nenhum** nos seletores de Presentation é interno e sempre vazio; ele não aparece como perfil editável.
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.6.3:
+Módulos disponíveis na v3.6.4:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -335,7 +335,7 @@ O `yt-dlp` usa `--write-subs`, `--write-auto-subs` quando habilitado, `--sub-lan
 
 ## Gerenciador manual de legendas e player
 
-Em **Ver conteúdo**, abra um item e use **Gerenciar legendas**. Quando existe mídia local, **Abrir player** inicia a mesma área já focada na reprodução. O gerenciador é compartilhado por Bibliotecas e Playlists selecionadas em Canais.
+Em **Gerenciar conteúdo**, abra um item e use **Gerenciar legendas**. Quando existe mídia local, **Abrir player** inicia a mesma área já focada na reprodução. O gerenciador é compartilhado por Bibliotecas e Playlists selecionadas em Canais.
 
 O fluxo é deliberadamente seguro:
 
@@ -364,7 +364,7 @@ Ao substituir, ajustar, restaurar ou **excluir** uma legenda, o gerenciador mant
 
 ### Player e compatibilidade
 
-O player transmite a mídia local por uma rota autenticada com suporte a HTTP Range, portanto seek não exige carregar o arquivo inteiro. As cues de preview são entregues ao player sem expor caminhos arbitrários do filesystem. Ao fechar o Gerenciador de Legendas ou os detalhes do conteúdo, a reprodução é pausada e a fonte do player é descarregada para impedir áudio em segundo plano. Se o navegador não reproduzir diretamente o codec do arquivo, a interface oferece **Criar prévia compatível**, gerada temporariamente por ffmpeg; essa prévia não substitui a mídia da biblioteca e é limpa automaticamente. O layout do Ver conteúdo e do gerenciador adapta player, ações, busca, resultados e controles de offset para telas estreitas.
+O player transmite a mídia local por uma rota autenticada com suporte a HTTP Range, portanto seek não exige carregar o arquivo inteiro. As cues de preview são entregues ao player sem expor caminhos arbitrários do filesystem. Ao fechar o Gerenciador de Legendas ou os detalhes do conteúdo, a reprodução é pausada e a fonte do player é descarregada para impedir áudio em segundo plano. Se o navegador não reproduzir diretamente o codec do arquivo, a interface oferece **Criar prévia compatível**, gerada temporariamente por ffmpeg; essa prévia não substitui a mídia da biblioteca e é limpa automaticamente. O layout do Gerenciar conteúdo e do gerenciador adapta player, ações, busca, resultados e controles de offset para telas estreitas.
 
 O gerenciador grava seu próprio estado em `data/subtitle-manager-state.json` (versão 1). Esse arquivo armazena proveniência, offset aplicado e referências de histórico; ele não substitui `download-state.json`.
 
@@ -455,7 +455,7 @@ Cada **Biblioteca** e cada **Playlist de Canal** possui a configuração **Arqui
 - **Marcar como órfão**: mantém o arquivo no lugar. **Limpar órfãos** só aparece quando esta política está selecionada e existem órfãos.
 - **Mover para quarentena recuperável**: retira o pacote da biblioteca ativa e o preserva fora da raiz escaneada. A retenção pode ser **Nunca**, 30, 90 ou 180 dias.
 
-Cada destino atual precisa ter uma política de órfãos válida. A v3.6.3 não executa migração automática de destinos antigos; configurações já atualizadas para `configVersion` 9 continuam preservadas.
+Cada destino atual precisa ter uma política de órfãos válida. A v3.6.4 não executa migração automática de destinos antigos; configurações já atualizadas para `configVersion` 9 continuam preservadas.
 
 A quarentena fica em uma pasta irmã da base de mídia, preferencialmente no mesmo filesystem, para que movimentos sejam feitos por `rename` quando possível. Em filesystems diferentes o aplicativo usa cópia, validação e só então remove o original. Nunca sobrescreve silenciosamente um arquivo existente durante restauração. MP4, NFO, thumbnail/poster e SRTs são tratados como um pacote; em Clipes musicais, assets compartilhados do Show só são retirados quando não resta outro episódio ativo/mantido.
 
