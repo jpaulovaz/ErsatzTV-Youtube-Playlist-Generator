@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.6.1 - pacote de atualização
+ErsatzTV YouTube Downloader 3.6.2 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.6.0.
+Extraia este ZIP sobre uma instalação v3.6.1.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
@@ -9,14 +9,11 @@ Preservado deliberadamente (não incluído):
 - arquivos de mídia das bibliotecas e canais
 
 Principais alterações:
-- seletor de idioma desejado restrito a pt-BR, en e es;
-- filtro da consulta YouTube pelo idioma selecionado;
-- correção para impedir novas aplicações manuais como .und.srt;
-- ação Excluir legenda com confirmação e cópia restaurável no histórico;
-- player pausado e descarregado ao fechar o gerenciador/detalhes;
-- refinamentos responsivos no Ver conteúdo e Gerenciador de Legendas;
-- testes adicionais de idioma, exclusão/restauração, player e mobile;
+- destaque visual da legenda atualmente em prévia no player;
+- botão da faixa ativa muda de "Testar no player" para "Em teste no player";
+- comportamento aplicado tanto às legendas locais quanto aos resultados YouTube/LRCLIB;
+- destaque migra imediatamente ao trocar de faixa sem reiniciar o player;
 - nenhuma alteração no Universal, configVersion, download state, subtitle-manager state ou schema de Scripted Schedules.
 
-Aplicação v3.6.1, Universal v1.3.1, configVersion 9, schema de Scripted Schedules 1, estado persistente 5 e subtitle-manager state 1.
+Aplicação v3.6.2, Universal v1.3.1, configVersion 9, schema de Scripted Schedules 1, estado persistente 5 e subtitle-manager state 1.
 Consulte UPGRADE.md antes da atualização.

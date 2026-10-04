@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.6.1
+ErsatzTV YouTube Downloader 3.6.2
 
-Arquivos alterados em relacao a v3.6.0:
+Arquivos alterados em relacao a v3.6.1:
 
 M	CHANGELOG.md
 M	MODIFIED_FILES.txt
@@ -13,15 +13,10 @@ M	public/js/subtitleManager.js
 M	public/login.html
 M	public/styles.css
 M	src/config.js
-M	src/routes/subtitleManagerRoutes.js
-M	src/subtitleManager/subtitleManagerService.js
-M	src/subtitleProviders/youtubeProvider.js
-M	test/subtitleManager.test.js
-M	test/subtitleProviders.test.js
 M	test/ui-v3.test.js
 
 Versionamento:
-- Aplicacao: v3.6.1
+- Aplicacao: v3.6.2
 - Universal: v1.3.1
 - configVersion: 9
 - Scripted Schedules schema: 1

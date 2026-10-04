@@ -587,6 +587,9 @@ test('Ver conteúdo integra player e gerenciador manual de legendas', () => {
   assert.match(manager, /Consultar faixas do YouTube/);
   assert.match(manager, /Pesquisar LRCLIB/);
   assert.match(manager, /Testar no player/);
+  assert.match(manager, /Em teste no player/);
+  assert.match(manager, /refreshPreviewSelectionUi/);
+  assert.match(manager, /aria-pressed=/);
   assert.match(manager, /Criar prévia compatível/);
   assert.match(manager, /Adiantar 100 ms/);
   assert.match(manager, /Atrasar 100 ms/);
@@ -603,6 +606,8 @@ test('Ver conteúdo integra player e gerenciador manual de legendas', () => {
   assert.match(manager, /video\.removeAttribute\('src'\)/);
   assert.match(css, /\.subtitle-manager-player-card/);
   assert.match(css, /\.subtitle-manager-results/);
+  assert.match(css, /\.subtitle-manager-result\.is-previewing/);
+  assert.match(css, /\.subtitle-preview-button\.is-previewing/);
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.subtitle-manager-head[\s\S]*?flex-direction:\s*column/);
   assert.match(css, /\.subtitle-manager-offset \.inline-actions[\s\S]*?grid-template-columns:/);
 });

@@ -147,14 +147,17 @@
   function localTrackRows() {
     const tracks = state.status?.tracks || [];
     if (!tracks.length) return '<div class="subtitle-manager-empty">Sem legenda local.</div>';
-    return tracks.map((track) => `
-      <div class="subtitle-manager-track ${state.activeLocalLanguage === track.language ? 'is-active' : ''}">
+    return tracks.map((track) => {
+      const isPreviewing = state.preview?.kind === 'local' && state.preview.language === track.language;
+      return `
+      <div class="subtitle-manager-track ${isPreviewing ? 'is-previewing' : ''}">
         <div><strong>${esc(track.language)}</strong><small>${esc(track.sourceLabel || 'Arquivo local')}</small></div>
         <div class="inline-actions">
-          <button type="button" class="small" data-subtitle-local-preview="${esc(track.language)}">Testar no player</button>
+          <button type="button" class="small subtitle-preview-button ${isPreviewing ? 'is-previewing' : ''}" aria-pressed="${isPreviewing ? 'true' : 'false'}" data-subtitle-local-preview="${esc(track.language)}">${isPreviewing ? 'Em teste no player' : 'Testar no player'}</button>
           <button type="button" class="small danger" data-subtitle-local-delete="${esc(track.language)}" ${!state.status?.canApply ? 'disabled title="A exclusão exige conteúdo ativo e gravável"' : ''}>Excluir legenda</button>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
   function historyRows() {
@@ -205,18 +208,28 @@
       const durationDelta = item.match?.durationDeltaSeconds != null ? `Diferença: ${Math.round(item.match.durationDeltaSeconds)} s` : '';
       const metadata = [item.artistName, item.albumName, duration, durationDelta, match].filter(Boolean).join(' · ');
       const warning = Array.isArray(item.warnings) && item.warnings.length ? `<small class="subtitle-manager-warning">${esc(item.warnings.join(' '))}</small>` : '';
+      const isPreviewing = state.preview?.kind === 'candidate'
+        && state.preview.provider === item.provider
+        && state.preview.candidate?.candidateId === item.candidateId;
       return `
-        <div class="subtitle-manager-result">
+        <div class="subtitle-manager-result ${isPreviewing ? 'is-previewing' : ''}">
           <div class="subtitle-manager-result-copy">
             <strong>${esc(item.label || item.trackName || item.language || `Resultado ${index + 1}`)}</strong>
             <small>${esc(metadata)}</small>${warning}
           </div>
           <div class="inline-actions">
-            <button type="button" class="small" data-subtitle-result-preview="${index}" ${item.canPreview === false || !state.status?.mediaAvailable ? 'disabled' : ''}>Testar no player</button>
+            <button type="button" class="small subtitle-preview-button ${isPreviewing ? 'is-previewing' : ''}" aria-pressed="${isPreviewing ? 'true' : 'false'}" data-subtitle-result-preview="${index}" ${item.canPreview === false || !state.status?.mediaAvailable ? 'disabled' : ''}>${isPreviewing ? 'Em teste no player' : 'Testar no player'}</button>
             <button type="button" class="small primary" data-subtitle-result-apply="${index}" ${item.canApply === false || !state.status?.canApply ? 'disabled' : ''}>Aplicar</button>
           </div>
         </div>`;
     }).join('');
+  }
+
+  function refreshPreviewSelectionUi() {
+    const localTracks = $('#subtitleManagerLocalTracks');
+    if (localTracks) localTracks.innerHTML = localTrackRows();
+    const results = $('#subtitleManagerResults');
+    if (results) results.innerHTML = resultRows();
   }
 
   function render() {
@@ -372,6 +385,7 @@
       state.preview = { ...(response.result || {}), kind: 'candidate', candidate, provider: state.provider };
       state.previewOffsetMs = 0;
       renderPreviewCues();
+      refreshPreviewSelectionUi();
       $('#subtitleManagerVideo')?.play().catch(() => {});
     } catch (error) { toast(error.message, true); }
   }

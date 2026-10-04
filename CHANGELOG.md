@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.6.2
+
+- O Gerenciador de Legendas passa a destacar visualmente a legenda que está carregada em prévia no player, tanto nas faixas locais quanto nos resultados de YouTube/LRCLIB.
+- O botão da faixa em teste muda de **Testar no player** para **Em teste no player**, recebe estado visual destacado e `aria-pressed=true`; ao testar outra faixa, o destaque migra imediatamente para a nova seleção.
+- A linha correspondente à faixa/candidato em prévia também recebe destaque, facilitando identificar a seleção atual quando há muitos resultados abaixo do player.
+- O estado visual é atualizado sem recarregar a página nem reiniciar o player ao alternar entre candidatos de pesquisa.
+- Aplicação **v3.6.2**; Universal **v1.3.1**; `configVersion` **9**; schema de Scripted Schedules **1**; estado persistente de downloads **5**; subtitle-manager state **1**.
+
 ## 3.6.1
 
 - O Gerenciador de Legendas passa a usar um seletor fechado de **Idioma desejado** com Português (Brasil) (`pt-BR`), English (`en`) e Español (`es`), eliminando a persistência acidental de novas faixas como `und`.

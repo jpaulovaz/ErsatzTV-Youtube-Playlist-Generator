@@ -363,7 +363,7 @@ async function loadConfig() {
   const content = await fs.readFile(CONFIG_PATH, 'utf8');
   const raw = JSON.parse(content);
   if (Number(raw.configVersion) !== CONFIG_VERSION) {
-    throw new Error(`config.json usa configVersion ${raw.configVersion ?? 'ausente'}. A v3.6.1 aceita somente configVersion ${CONFIG_VERSION}; conclua a migracao na v3.5.2 antes de atualizar.`);
+    throw new Error(`config.json usa configVersion ${raw.configVersion ?? 'ausente'}. A v3.6.2 aceita somente configVersion ${CONFIG_VERSION}; conclua a migracao na v3.5.2 antes de atualizar.`);
   }
   return validateConfig(normalizeConfig(raw));
 }
