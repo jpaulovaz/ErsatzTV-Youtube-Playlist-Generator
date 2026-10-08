@@ -42,6 +42,7 @@ function getSubtitleSidecarPath(mediaPath, language) {
   const parsed = path.parse(mediaPath);
   const safeLanguage = safeLanguageCode(language);
   if (!safeLanguage) throw new Error('Codigo de idioma de legenda invalido.');
+  if (safeLanguage.toLowerCase() === 'und') return path.join(parsed.dir, `${parsed.name}.srt`);
   return path.join(parsed.dir, `${parsed.name}.${safeLanguage}.srt`);
 }
 
@@ -55,10 +56,16 @@ async function listSubtitleSidecars(mediaPath) {
     throw error;
   }
 
+  const direct = `${parsed.name}.srt`;
   const prefix = `${parsed.name}.`;
   return entries
-    .filter((entry) => entry.isFile() && entry.name.startsWith(prefix) && entry.name.toLowerCase().endsWith('.srt'))
-    .map((entry) => path.join(parsed.dir, entry.name));
+    .filter((entry) => entry.isFile() && (entry.name === direct || (entry.name.startsWith(prefix) && entry.name.toLowerCase().endsWith('.srt'))))
+    .map((entry) => path.join(parsed.dir, entry.name))
+    .sort((a, b) => {
+      const aDirect = path.basename(a) === direct ? 0 : 1;
+      const bDirect = path.basename(b) === direct ? 0 : 1;
+      return aDirect - bDirect || a.localeCompare(b);
+    });
 }
 
 async function findExistingSubtitleLanguages(mediaPath, languages) {

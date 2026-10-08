@@ -7,7 +7,7 @@ const CONFIG_PATH = process.env.ERSATZTV_SUBTITLE_TRANSLATION_CONFIG_PATH
   ? path.resolve(process.env.ERSATZTV_SUBTITLE_TRANSLATION_CONFIG_PATH)
   : path.join(path.dirname(MAIN_CONFIG_PATH), 'subtitle-translation.json');
 const TARGET_LANGUAGES = Object.freeze(['pt-BR', 'en', 'es']);
-const OUTPUT_MODES = Object.freeze(['translated', 'bilingual']);
+const OUTPUT_MODES = Object.freeze(['translated', 'bilingual', 'both']);
 const DEFAULTS = Object.freeze({
   version: CONFIG_VERSION,
   provider: 'gemini',

@@ -12,6 +12,7 @@ const {
   buildSubtitleCandidateDownloadArgs,
   selectYoutubeSubtitleCandidates,
   getSubtitleSidecarPath,
+  listSubtitleSidecars,
   finalizeStagedSubtitles
 } = require('../src/subtitleService');
 const { DownloadManager, makeItemId } = require('../src/downloadManager');
@@ -122,6 +123,20 @@ test('yt-dlp subtitle flow uses metadata discovery then exact selected language 
   assert.ok(downloadArgs.includes('--no-write-auto-subs'));
   assert.equal(downloadArgs[downloadArgs.indexOf('--sub-langs') + 1], '^en-eEY6OEpapPo$');
   assert.equal(downloadArgs[downloadArgs.indexOf('--convert-subs') + 1], 'srt');
+});
+
+test('sidecar sem sufixo e reconhecido como faixa UND reservada ao bilingue', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ersatztv-subtitle-und-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const media = path.join(root, 'Artist - Song.mp4');
+  await fs.writeFile(media, 'video');
+  await fs.writeFile(path.join(root, 'Artist - Song.srt'), '1\n00:00:00,000 --> 00:00:01,000\nHello\nOlá\n');
+  await fs.writeFile(path.join(root, 'Artist - Song.en.srt'), '1\n00:00:00,000 --> 00:00:01,000\nHello\n');
+  await fs.writeFile(path.join(root, 'Other.srt'), 'ignore');
+
+  assert.equal(getSubtitleSidecarPath(media, 'und'), path.join(root, 'Artist - Song.srt'));
+  const sidecars = await listSubtitleSidecars(media);
+  assert.deepEqual(sidecars.map((file) => path.basename(file)), ['Artist - Song.srt', 'Artist - Song.en.srt']);
 });
 
 test('staged subtitle files become sidecars with the same media base name', async (t) => {

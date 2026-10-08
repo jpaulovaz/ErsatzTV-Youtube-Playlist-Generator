@@ -1,32 +1,32 @@
-# Atualização para 3.7.0
+# Atualização para 3.7.1
 
-A versão 3.7.0 atualiza diretamente a **v3.6.4** e adiciona tradução em massa de legendas locais com Gemini. O recurso é opcional e não altera o comportamento de download quando não é configurado.
+A versão 3.7.1 atualiza diretamente a **v3.7.0** e refina o módulo de tradução de legendas em dois pontos: acompanhamento da fila na **Visão geral** e suporte simultâneo a uma faixa traduzida e outra bilíngue compatível com seleção `und` no ErsatzTV.
 
 ## Versionamento
 
-- aplicação: **v3.7.0**;
+- aplicação: **v3.7.1**;
 - Universal: **v1.3.1**;
 - `configVersion`: **9**;
 - download state: **5**;
 - Scripted Schedules schema: **1**;
 - subtitle-manager state: **1**;
-- subtitle-translation config: **1** (novo);
-- subtitle-translation state: **1** (novo).
+- subtitle-translation config: **1**;
+- subtitle-translation state: **1**.
 
-Não existe migração do `config.json` nem do download state. Os novos arquivos de tradução são criados somente quando o recurso é utilizado.
+Não há migração de `config.json`, de download state nem dos estados de tradução.
 
 ## Antes de atualizar
 
-1. Confirme que a instalação atual está em **v3.6.4**.
-2. Faça backup de `config/`, `data/` e das mídias/sidecars `.srt`.
-3. Deixe downloads e manutenção de legendas terminarem.
+1. Confirme que a instalação está em **v3.7.0**.
+2. Faça backup de `config/`, `data/` e das pastas de mídia.
+3. Se houver tradução em massa em execução, prefira pausá-la antes de parar o serviço.
 4. Pare o serviço antes de substituir os arquivos.
 
 ## Aplicando o update
 
 ```bash
 sudo systemctl stop ersatztv-youtube-downloader
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.7.0-update.zip -d /caminho/da/aplicacao
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.7.1-update.zip -d /caminho/da/aplicacao
 cd /caminho/da/aplicacao
 npm run verify
 sudo systemctl start ersatztv-youtube-downloader
@@ -34,56 +34,84 @@ sudo systemctl start ersatztv-youtube-downloader
 
 O update não contém `config/config.json`, `config/auth.json`, `config/subtitle-translation.json`, `data/` nem mídia.
 
-## Configurando o Gemini
+## Visão geral
 
-A forma preferencial é definir a chave no ambiente do serviço:
+A página **Visão geral** passa a mostrar um card próprio para a fila de tradução de legendas. Ele acompanha:
 
-```bash
-GEMINI_API_KEY=SUA_CHAVE
+- estado do job;
+- item atual;
+- destino;
+- concluídas;
+- aguardando/em andamento;
+- falhas;
+- ignoradas;
+- progresso total.
+
+Quando existe job ativo, o card permite **Pausar/Retomar**. O botão **Gerenciar conteúdo** abre o destino do job quando ele foi criado pela v3.7.1 e possui o contexto de Biblioteca/Playlist salvo no estado.
+
+Jobs antigos da v3.7.0 continuam executáveis; como eles não gravavam metadados de navegação do destino, o atalho pode ficar indisponível para um job já existente antes do update.
+
+## Traduzida + bilíngue
+
+Em **Gerenciar conteúdo -> Traduzir legendas**, o seletor de saída passa a oferecer:
+
+- **Somente traduzida**;
+- **Somente bilíngue**;
+- **Traduzida + bilíngue**.
+
+Quando as duas saídas são escolhidas, o Gemini traduz os cues uma única vez. Após a validação, o aplicativo monta os dois SRTs localmente.
+
+Para um vídeo `Musica.mp4`, traduzindo `en -> pt-BR`:
+
+```text
+Musica.en.srt       original preservado
+Musica.pt-BR.srt    somente tradução em Português (Brasil)
+Musica.srt          bilíngue: original em cima + tradução embaixo
 ```
 
-Também é possível informar a chave em **Configurações -> Tradução de legendas**. Nesse caso ela é gravada em `config/subtitle-translation.json` (versão 1), separado do `config.json`, com permissões restritas. O navegador recebe somente o status Configurada/Não configurada.
+A faixa `Musica.srt` é tratada pelo aplicativo como idioma `und`. Essa convenção é reservada para a faixa bilíngue e permite selecioná-la no Custom Stream Selector do ErsatzTV, por exemplo:
 
-Depois de configurar:
+```yaml
+items:
+  - audio_language: ["*"]
+    subtitle_language: ["und*"]
+    disable_subtitles: false
+```
 
-1. use **Atualizar modelos**;
-2. escolha um modelo compatível com `generateContent`;
-3. use **Testar conexão**;
-4. mantenha concorrência 1 inicialmente, principalmente em contas com quota reduzida.
+Para a tradução pura em Português (Brasil), continue usando `pt*`; para a original em inglês, `en*`.
 
-## Traduzindo em massa
+## Preflight
 
-Abra **Gerenciar conteúdo -> Traduzir legendas**.
+A pré-análise agora mostra separadamente:
 
-1. Escolha uma legenda-fonte existente, por exemplo **English (`en`)**.
-2. Escolha o idioma de destino.
-3. Escolha **Somente traduzida** ou **Bilíngue**.
-4. Escolha o escopo atual filtrado ou todo o destino.
-5. Para destino existente, prefira **Ignorar** na primeira execução.
-6. Clique em **Pré-analisar** e confira as contagens.
-7. Inicie a tradução somente depois de revisar elegíveis e estimativa de tokens.
+- traduções a gerar;
+- bilíngues a gerar;
+- traduzidas existentes;
+- bilíngues existentes.
 
-A legenda-fonte nunca é modificada. A tradução só é publicada quando a timeline final é idêntica à fonte. Em caso de substituição, a versão anterior entra no histórico do Gerenciador de Legendas.
+Com política **Ignorar**, se `.pt-BR.srt` já existir mas `.srt` não existir, o item continua elegível e somente a bilíngue é criada. O inverso também vale. Com **Substituir com histórico**, as saídas solicitadas são regravadas preservando as versões anteriores no histórico.
 
-A fila pode ser pausada/retomada e sobrevive a restart por meio de `data/subtitle-translation-state.json` e checkpoints em `data/subtitle-translation-jobs/`. Cancelar afeta somente trabalho ainda não concluído.
+## Compatibilidade com bilíngues criadas na v3.7.0
 
-## Limpeza e redownload das legendas antigas
+Na v3.7.0 o modo bilíngue gravava a saída no próprio idioma-alvo, por exemplo `.pt-BR.srt`. A v3.7.1 **não renomeia nem apaga automaticamente** esse arquivo.
 
-Se você apagar SRTs antigos e usar **Buscar legendas ausentes** antes de traduzir, a v3.7.0 atualiza a metadata de procedência quando a nova faixa é recriada. Assim uma antiga faixa automática pode passar corretamente a **YouTube - enviada pelo canal** quando essa for a nova origem.
+Se você já gerou bilíngues na v3.7.0 e quer passar ao novo formato mantendo as duas opções, execute um job com:
 
-## Privacidade
+- saída **Traduzida + bilíngue**;
+- política **Substituir com histórico**.
 
-O texto dos cues selecionados é enviado ao Google Gemini. A aplicação não envia timestamps ao modelo e não registra a letra/prompt completo nem a API key no `app.log`. A chave é enviada à API por `x-goog-api-key`.
+O resultado será `.pt-BR.srt` como tradução pura e `.srt` como bilíngue, com a versão anterior preservada pelo histórico.
 
 ## Validação após o update
 
 1. Execute `npm run verify`.
-2. Abra **Configurações -> Tradução de legendas** e teste a conexão, se for usar Gemini.
-3. Em uma biblioteca pequena, faça uma pré-análise `en -> pt-BR`.
-4. Traduza um item em **Somente traduzida** e confirme que o `.en.srt` permanece intacto.
-5. Teste a nova `.pt-BR.srt` no player e confirme a origem **Gemini**.
-6. Teste o modo bilíngue em outro item e confira original acima/tradução abaixo.
+2. Abra a **Visão geral** e confirme que o card **Tradução de legendas** aparece.
+3. Em uma biblioteca pequena, faça o preflight `en -> pt-BR` com **Traduzida + bilíngue**.
+4. Confirme que a estimativa de tokens não é duplicada apenas por gerar os dois formatos.
+5. Traduza um item e confirme a presença de `.pt-BR.srt` e `.srt`.
+6. Abra o Gerenciador de Legendas e confirme que a faixa sem sufixo aparece como **Bilíngue** e **ErsatzTV: und**.
+7. No ErsatzTV, selecione `und*` para testar a bilíngue e `pt*` para testar a tradução pura.
 
 ## Rollback
 
-A v3.7.0 não muda os formatos principais existentes. Para rollback do aplicativo, restaure os arquivos da v3.6.4 preservando `config/`, `data/` e as mídias. Traduções `.srt` já concluídas são sidecars normais e não são removidas automaticamente pelo rollback.
+Para rollback do aplicativo, restaure os arquivos da v3.7.0 preservando `config/`, `data/` e a mídia. Sidecars `.srt` criados pela v3.7.1 são arquivos normais e não são removidos automaticamente pelo rollback; uma v3.7.0 pode não interpretar a convenção bilíngue sem sufixo da mesma forma dentro do seu Gerenciador de Legendas.

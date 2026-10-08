@@ -1,24 +1,23 @@
-ErsatzTV YouTube Downloader 3.7.0 - pacote de atualização
+ErsatzTV YouTube Downloader 3.7.1 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.6.4.
+Extraia este ZIP sobre uma instalacao v3.7.0.
 
-Preservado deliberadamente (não incluído):
+Preservado deliberadamente (nao incluido):
 - config/config.json
 - config/auth.json
 - config/subtitle-translation.json
 - data/
-- arquivos de mídia e sidecars existentes das bibliotecas e canais
+- arquivos de midia e sidecars existentes das bibliotecas e canais
 
-Principais alterações:
-- tradução em massa de SRT local com Gemini no Gerenciar conteúdo;
-- pré-análise, escopo filtrado/todo destino e política de destino existente;
-- saída somente traduzida ou bilíngue, sempre preservando a timeline da fonte;
-- fila de tradução persistente com checkpoints, pausa, retomada e cancelamento de pendentes;
-- configuração Gemini separada, chave mascarada, GEMINI_API_KEY, modelos e teste de conexão;
-- retry/backoff para 429/5xx/timeout e validação estrutural de IDs/cues;
-- origem Gemini, sourceHash e indicador de tradução desatualizada no Gerenciador de Legendas;
-- integração com histórico, player, exclusão/restauração e filtro de origem;
-- reconciliação da procedência quando um SRT apagado é baixado novamente.
+Principais alteracoes:
+- card de Traducao de legendas na Visao Geral com progresso, item atual, contagens e Pausar/Retomar;
+- atalho da Visao Geral para o Gerenciar conteudo do destino quando a metadata do job estiver disponivel;
+- suporte oficial a sidecar bilingue sem sufixo de idioma: <video>.srt, tratado internamente como und;
+- modo Traduzida + bilingue, gerando <video>.<idioma>.srt e <video>.srt a partir de uma unica traducao Gemini;
+- preflight separa traducao existente/a gerar e bilingue existente/a gerar;
+- Gerenciador de Legendas identifica a faixa sem sufixo como Bilingue e exibe idioma fonte + destino e ErsatzTV: und;
+- preview, exclusao, historico, restauracao e offset passam a resolver corretamente a faixa und sem sufixo;
+- jobs antigos da v3.7.0 permanecem compativeis; sidecars bilingues antigos nao sao migrados automaticamente.
 
-Aplicação v3.7.0, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1.
-Consulte UPGRADE.md antes da atualização.
+Aplicacao v3.7.1, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1.
+Consulte UPGRADE.md antes da atualizacao.

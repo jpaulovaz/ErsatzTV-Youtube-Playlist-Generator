@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.7.1
+
+- A **Visão geral** passa a exibir o estado global da fila de tradução de legendas: situação atual, item em execução, destino, concluídas, aguardando, falhas, ignoradas e barra de progresso, com ações rápidas **Pausar/Retomar** e **Gerenciar conteúdo**.
+- O formato de saída da tradução ganha **Traduzida + bilíngue**, gerando as duas faixas no mesmo job a partir de uma única tradução validada no Gemini, sem duplicar chamadas/tokens apenas por causa do segundo formato.
+- A faixa traduzida continua usando o idioma-alvo (`.pt-BR.srt`, `.en.srt` ou `.es.srt`); a faixa bilíngue passa a usar o sidecar sem sufixo de idioma (`<video>.srt`), tratado internamente como `und` para compatibilidade com o ErsatzTV.
+- O Gerenciador de Legendas passa a reconhecer formalmente a faixa `und` sem sufixo, exibindo-a como **Bilíngue**, com idiomas fonte/destino e indicação **ErsatzTV: und**, preservando preview, offset, exclusão, histórico e restauração.
+- O preflight da tradução separa **traduzidas existentes**, **bilíngues existentes**, **traduções a gerar** e **bilíngues a gerar**; com política Ignorar, um item ainda é elegível quando apenas uma das duas saídas já existe.
+- Jobs persistidos pela v3.7.0 continuam compatíveis. A convenção nova não migra silenciosamente sidecars bilíngues antigos; usando **Traduzida + bilíngue** com **Substituir com histórico**, a faixa no idioma-alvo vira a tradução pura e a nova bilíngue é criada como `.srt`.
+- Adiciona testes para sidecar `und` sem sufixo, gerenciamento da faixa bilíngue, geração simultânea com uma única chamada de tradução, preflight independente por saída e novo card da Visão geral.
+- Aplicação **v3.7.1**; Universal **v1.3.1**; `configVersion` **9**; Scripted Schedules schema **1**; download state **5**; subtitle-manager state **1**; subtitle-translation config/state **1**.
+
 ## 3.7.0
 
 - Adiciona **Tradução em massa de legendas com Gemini** em **Gerenciar conteúdo**, disponível para Bibliotecas e Playlists de Canais, com escopo do resultado filtrado atual ou de todo o destino.

@@ -215,6 +215,35 @@ test('excluir legenda remove SRT ativo e preserva cópia restaurável no histór
   } finally { await fs.rm(f.root, { recursive: true, force: true }); }
 });
 
+test('faixa gerada UND usa sidecar sem sufixo e continua gerenciavel', async () => {
+  const f = await fixture();
+  f.item.id = `library::bilingual-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  try {
+    await service.applyGeneratedSubtitle(
+      { config: f.config, destination: f.destination, downloadManager: f.manager, itemId: f.item.id },
+      {
+        language: 'und',
+        content: '1\n00:00:01,000 --> 00:00:03,000\nHello\nOlá\n',
+        replace: true,
+        track: { provider: 'gemini', sourceType: 'translation', sourceLabel: 'Gemini · bilíngue', metadata: { sourceLanguage: 'en', targetLanguage: 'pt-BR', outputMode: 'bilingual' } }
+      }
+    );
+    const direct = path.join(f.root, 'video.srt');
+    assert.match(await fs.readFile(direct, 'utf8'), /Hello\nOlá/);
+    const status = await service.getStatus({ config: f.config, destination: f.destination, downloadManager: f.manager, itemId: f.item.id });
+    const bilingual = status.tracks.find((track) => track.language === 'und');
+    assert.equal(bilingual.provider, 'gemini');
+    assert.equal(bilingual.metadata.outputMode, 'bilingual');
+    assert.ok(f.item.subtitles.foundLanguages.includes('und'));
+    const preview = await service.previewLocal(
+      { config: f.config, destination: f.destination, downloadManager: f.manager, itemId: f.item.id },
+      { language: 'und' }
+    );
+    assert.equal(preview.language, 'und');
+    assert.match(preview.cues[0].text, /Hello\nOlá/);
+  } finally { await fs.rm(f.root, { recursive: true, force: true }); }
+});
+
 test('apply LRCLIB usa o idioma de destino escolhido e nunca persiste UND', async () => {
   const f = await fixture();
   f.item.id = `library::target-language-${Date.now()}-${Math.random().toString(16).slice(2)}`;

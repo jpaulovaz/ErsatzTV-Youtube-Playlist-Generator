@@ -52,7 +52,7 @@
       <div class="subtitle-translation-grid">
         <label>Legenda-fonte<select id="translationSourceLanguage">${sourceCodes.length ? sourceCodes.map((code) => `<option value="${esc(code)}" ${code === defaultSource ? 'selected' : ''}>${esc(languageLabel(code))} (${esc(code)}) · ${counts[code]}</option>`).join('') : '<option value="">Nenhuma legenda identificada</option>'}</select></label>
         <label>Idioma de destino<select id="translationTargetLanguage"><option value="pt-BR">Português (Brasil)</option><option value="en">English</option><option value="es">Español</option></select></label>
-        <label>Formato de saída<select id="translationOutputMode"><option value="translated">Somente traduzida</option><option value="bilingual">Bilíngue (original + tradução)</option></select></label>
+        <label>Formato de saída<select id="translationOutputMode"><option value="translated">Somente traduzida</option><option value="bilingual">Somente bilíngue (original + tradução)</option><option value="both">Traduzida + bilíngue</option></select></label>
         <label>Escopo<select id="translationScope"><option value="filtered">Resultado filtrado atual</option><option value="all">Toda a biblioteca / playlist</option></select></label>
         <label>Se destino existir<select id="translationExistingPolicy"><option value="skip">Ignorar</option><option value="replace">Substituir com histórico</option></select></label>
       </div>
@@ -88,9 +88,15 @@
     const c = currentPlan.counts || {}; const t = currentPlan.totals || {};
     $('#translationPlanSummary').innerHTML = `
       <div class="translation-metrics">
-        <span><strong>${c.eligible || 0}</strong> elegíveis</span><span><strong>${c.targetExists || 0}</strong> destino existente</span>
-        <span><strong>${c.sourceMissing || 0}</strong> fonte ausente</span><span><strong>${c.sourceInvalid || 0}</strong> SRT inválido</span>
-        <span><strong>${t.translatableCues || 0}</strong> cues enviados</span><span><strong>~${t.estimatedTokens || 0}</strong> tokens estimados</span>
+        <span><strong>${c.eligible || 0}</strong> itens elegíveis</span>
+        <span><strong>${c.translatedToWrite || 0}</strong> traduções a gerar</span>
+        <span><strong>${c.bilingualToWrite || 0}</strong> bilíngues a gerar</span>
+        <span><strong>${c.translatedExists || 0}</strong> traduzidas existentes</span>
+        <span><strong>${c.bilingualExists || 0}</strong> bilíngues existentes</span>
+        <span><strong>${c.sourceMissing || 0}</strong> fonte ausente</span>
+        <span><strong>${c.sourceInvalid || 0}</strong> SRT inválido</span>
+        <span><strong>${t.translatableCues || 0}</strong> cues enviados</span>
+        <span><strong>~${t.estimatedTokens || 0}</strong> tokens estimados</span>
       </div>`;
     $('#translationStartBtn').disabled = !(c.eligible > 0);
   }

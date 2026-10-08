@@ -48,7 +48,14 @@ async function persist() {
 function publicJob(job) {
   if (!job) return null;
   const failed = (job.items || []).filter((item) => item.status === 'failed').slice(-20).map((item) => ({ itemId: item.itemId, title: item.title, error: item.error, code: item.code || null }));
-  return { ...job, items: undefined, counts: jobCounts(job), failures: failed };
+  const running = (job.items || []).find((item) => item.status === 'running') || null;
+  return {
+    ...job,
+    items: undefined,
+    counts: jobCounts(job),
+    failures: failed,
+    currentItem: running ? { itemId: running.itemId, title: running.title, startedAt: running.startedAt || null } : null
+  };
 }
 
 async function getStatus() {
@@ -62,7 +69,9 @@ async function startJob(plan) {
   if (!runtime || !runtime.getConfig || !runtime.downloadManager) throw new Error('Fila de traducao ainda nao foi inicializada.');
   const id = crypto.randomUUID();
   const job = {
-    id, destinationId: plan.destinationId, status: state.paused ? 'paused' : 'queued', createdAt: nowIso(), startedAt: null, completedAt: null,
+    id, destinationId: plan.destinationId, destinationType: plan.destinationType || '', destinationName: plan.destinationName || plan.destinationId,
+    channelId: plan.channelId || null, playlistId: plan.playlistId || null,
+    status: state.paused ? 'paused' : 'queued', createdAt: nowIso(), startedAt: null, completedAt: null,
     options: { sourceLanguage: plan.sourceLanguage, targetLanguage: plan.targetLanguage, outputMode: plan.outputMode, existingPolicy: plan.existingPolicy },
     scope: plan.scope, filter: plan.filter || {}, totals: plan.totals || {},
     cancelRequested: false,

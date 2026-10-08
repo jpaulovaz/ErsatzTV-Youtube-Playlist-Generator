@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.7.0
+# ErsatzTV YouTube Downloader 3.7.1
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.7.0 acrescenta **tradução em massa de legendas com Gemini** diretamente em **Gerenciar conteúdo**. A operação parte de um SRT local já validado, preserva integralmente sua timeline, gera saída somente traduzida ou bilíngue, trabalha com pré-análise e fila persistente e integra os resultados ao mesmo histórico/player do Gerenciador de Legendas. Universal permanece em v1.3.1, `configVersion` em 9, schema de Scripted Schedules em 1, estado de downloads em 5 e subtitle-manager state em 1; entram apenas subtitle-translation config/state v1.
+A versão 3.7.1 refina a tradução em massa de legendas: a **Visão geral** passa a acompanhar a fila de tradução, e o job pode gerar **traduzida, bilíngue ou as duas simultaneamente** com uma única tradução no Gemini. A faixa traduzida usa o idioma-alvo (`.pt-BR.srt`, por exemplo) e a bilíngue usa o sidecar sem sufixo de idioma (`.srt`), reconhecido pelo ErsatzTV como `und`. Universal permanece em v1.3.1, `configVersion` em 9 e todos os schemas/estados da v3.7.0 permanecem inalterados.
 
 ## Arquitetura
 
@@ -39,7 +39,7 @@ Biblioteca local do ErsatzTV
 - Thumbnail do vídeo como artwork de episódio (`-thumb.jpg`) e `poster.jpg` no nível do artista/Show.
 - Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
 - **Gerenciador manual de legendas** no Gerenciar conteúdo: player, preview de SRT local/YouTube/LRCLIB, busca manual, offset e histórico de até cinco versões por idioma.
-- **Tradução em massa de legendas com Gemini**: pré-análise por biblioteca/playlist, fonte local preservada, saída traduzida ou bilíngue, fila persistente com pausa/retomada/cancelamento e origem Gemini rastreável.
+- **Tradução em massa de legendas com Gemini**: pré-análise por biblioteca/playlist, fonte local preservada, saída traduzida, bilíngue ou ambas no mesmo job, fila persistente com pausa/retomada/cancelamento e origem Gemini rastreável. A Visão geral acompanha o progresso global da fila.
 - Seleção múltipla de idiomas: `pt-BR`, `pt`, `en` e `es`.
 - Ação **Buscar legendas ausentes** para o acervo já baixado, sem baixar novamente os vídeos.
 - Deduplicação por ID do YouTube dentro de cada destino; o mesmo vídeo pode existir intencionalmente em destinos diferentes.
@@ -123,7 +123,7 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A v3.7.0 atualiza diretamente uma instalação **v3.6.4**. `configVersion` continua 9, o Universal continua 1.3.1 e o subtitle-manager state continua 1. A tradução usa configuração e estado próprios (versão 1), criados sob demanda; não existe migração do `config.json`. Consulte [UPGRADE.md](UPGRADE.md).
+A v3.7.1 atualiza diretamente uma instalação **v3.7.0**. `configVersion` continua 9, o Universal continua 1.3.1 e o subtitle-manager state continua 1. A tradução usa configuração e estado próprios (versão 1), criados sob demanda; não existe migração do `config.json`. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Estrutura dos arquivos
 
@@ -230,13 +230,13 @@ Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando
 
 ## Scripted Schedules
 
-A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do **Universal v1.3.1**, único motor suportado pela v3.7.0.
+A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do **Universal v1.3.1**, único motor suportado pela v3.7.1.
 
 O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas. O valor **Nenhum** nos seletores de Presentation é interno e sempre vazio; ele não aparece como perfil editável.
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.7.0:
+Módulos disponíveis na v3.7.1:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -378,15 +378,25 @@ O fluxo recomendado é:
 
 1. selecione a **Legenda-fonte** realmente presente no acervo, normalmente `en`;
 2. escolha o destino entre **Português (Brasil)**, **English** e **Español**;
-3. escolha **Somente traduzida** ou **Bilíngue (original + tradução)**;
+3. escolha **Somente traduzida**, **Somente bilíngue** ou **Traduzida + bilíngue**;
 4. escolha **Resultado filtrado atual** ou **Toda a biblioteca / playlist**;
 5. para destino já existente, mantenha **Ignorar** ou use **Substituir com histórico**;
-6. execute **Pré-analisar** para ver elegíveis, destinos existentes, fontes ausentes, SRT inválidos, cues e estimativa de tokens;
+6. execute **Pré-analisar** para ver separadamente traduções e bilíngues existentes/a gerar, fontes ausentes, SRTs inválidos, cues e estimativa de tokens;
 7. confirme **Iniciar tradução**.
 
-No modo bilíngue, cada cue mantém o texto original acima e a tradução abaixo. O sidecar continua usando o idioma de destino, por exemplo `Musica.pt-BR.srt`. Não são criadas duas faixas concorrentes do mesmo idioma.
+Quando as duas saídas são solicitadas, o texto é traduzido **uma única vez**; o mesmo mapa de cues validado gera os dois arquivos, sem dobrar chamadas ao Gemini. A convenção de sidecars é:
 
-A fila de tradução é independente da fila de downloads. Ela pode ser pausada, retomada e ter pendentes cancelados; seu estado fica em `data/subtitle-translation-state.json` (versão 1) e checkpoints em `data/subtitle-translation-jobs/`. Após restart, trabalho que estava em execução volta de forma retomável; resultados parciais nunca são publicados como SRT final.
+```text
+Musica.en.srt       -> original em inglês
+Musica.pt-BR.srt    -> somente tradução em Português (Brasil)
+Musica.srt          -> bilíngue (original + tradução), idioma ErsatzTV: und
+```
+
+No modo bilíngue, cada cue mantém o original acima e a tradução abaixo. O Gerenciador de Legendas identifica `Musica.srt` como **Bilíngue**, registra `sourceLanguage`, `targetLanguage` e `ersatzTvLanguage=und`, e permite preview, exclusão, histórico e restauração normalmente. A convenção sem sufixo é reservada pelo aplicativo para a faixa bilíngue.
+
+A fila de tradução é independente da fila de downloads. Ela pode ser pausada, retomada e ter pendentes cancelados; seu estado fica em `data/subtitle-translation-state.json` (versão 1) e checkpoints em `data/subtitle-translation-jobs/`. Após restart, trabalho que estava em execução volta de forma retomável; resultados parciais nunca são publicados como SRT final. A **Visão geral** exibe o estado da fila, item atual, concluídas, aguardando, falhas e ignoradas, com ação rápida de pausar/retomar e atalho para **Gerenciar conteúdo**.
+
+Se uma instalação v3.7.0 já tiver criado uma faixa bilíngue em `.pt-BR.srt`, ela é preservada. Para adotar a nova convenção e manter as duas variantes, execute um novo job com **Traduzida + bilíngue** e **Substituir com histórico**: a `.pt-BR.srt` passa a ser a tradução pura e a bilíngue é criada como `.srt`.
 
 Cada tradução concluída é registrada no Gerenciador de Legendas com origem **Gemini**, modelo, idioma-fonte, idioma-alvo, modo de saída e SHA-256 do SRT de origem. Se a fonte for substituída depois, a faixa pode aparecer como **Tradução desatualizada**. Ela continua testável no player e usa as mesmas ações de excluir/restaurar/histórico.
 
@@ -491,7 +501,7 @@ Cada **Biblioteca** e cada **Playlist de Canal** possui a configuração **Arqui
 - **Marcar como órfão**: mantém o arquivo no lugar. **Limpar órfãos** só aparece quando esta política está selecionada e existem órfãos.
 - **Mover para quarentena recuperável**: retira o pacote da biblioteca ativa e o preserva fora da raiz escaneada. A retenção pode ser **Nunca**, 30, 90 ou 180 dias.
 
-Cada destino atual precisa ter uma política de órfãos válida. A v3.7.0 não executa migração automática de destinos antigos; configurações já atualizadas para `configVersion` 9 continuam preservadas.
+Cada destino atual precisa ter uma política de órfãos válida. A v3.7.1 não executa migração automática de destinos antigos; configurações já atualizadas para `configVersion` 9 continuam preservadas.
 
 A quarentena fica em uma pasta irmã da base de mídia, preferencialmente no mesmo filesystem, para que movimentos sejam feitos por `rename` quando possível. Em filesystems diferentes o aplicativo usa cópia, validação e só então remove o original. Nunca sobrescreve silenciosamente um arquivo existente durante restauração. MP4, NFO, thumbnail/poster e SRTs são tratados como um pacote; em Clipes musicais, assets compartilhados do Show só são retirados quando não resta outro episódio ativo/mantido.
 

@@ -57,6 +57,23 @@
     return TARGET_LANGUAGES.map((entry) => `<option value="${entry.value}" ${state.targetLanguage === entry.value ? 'selected' : ''}>${entry.label}</option>`).join('');
   }
 
+  function localTrackTitle(track) {
+    if (track?.language === 'und' && track?.metadata?.outputMode === 'bilingual') return 'Bilíngue';
+    return track?.language || 'und';
+  }
+
+  function localTrackSubtitle(track) {
+    const parts = [track?.sourceLabel || 'Arquivo local'];
+    if (track?.language === 'und' && track?.metadata?.outputMode === 'bilingual') {
+      const source = track.metadata.sourceLanguage || '?';
+      const target = track.metadata.targetLanguage || '?';
+      parts.push(`${source} + ${target}`);
+      parts.push('ErsatzTV: und');
+    }
+    if (track?.staleTranslation) parts.push('Tradução desatualizada');
+    return parts.join(' · ');
+  }
+
   function stopPlayer() {
     const video = $('#subtitleManagerVideo');
     if (!video) return;
@@ -151,7 +168,7 @@
       const isPreviewing = state.preview?.kind === 'local' && state.preview.language === track.language;
       return `
       <div class="subtitle-manager-track ${isPreviewing ? 'is-previewing' : ''}">
-        <div><strong>${esc(track.language)}</strong><small>${esc(track.sourceLabel || 'Arquivo local')}${track.staleTranslation ? ' · Tradução desatualizada' : ''}</small></div>
+        <div><strong>${esc(localTrackTitle(track))}</strong><small>${esc(localTrackSubtitle(track))}</small></div>
         <div class="inline-actions">
           <button type="button" class="small subtitle-preview-button ${isPreviewing ? 'is-previewing' : ''}" aria-pressed="${isPreviewing ? 'true' : 'false'}" data-subtitle-local-preview="${esc(track.language)}">${isPreviewing ? 'Em teste no player' : 'Testar no player'}</button>
           <button type="button" class="small danger" data-subtitle-local-delete="${esc(track.language)}" ${!state.status?.canApply ? 'disabled title="A exclusão exige conteúdo ativo e gravável"' : ''}>Excluir legenda</button>

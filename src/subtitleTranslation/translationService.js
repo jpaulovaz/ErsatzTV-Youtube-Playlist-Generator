@@ -35,24 +35,37 @@ function restoreCueTags(id, text, tagMap) {
   }
   return result;
 }
+
 function normalizeSourceLanguage(value) {
   const language = String(value || '').trim().replace(/[^A-Za-z0-9._-]/g, '').slice(0, 40);
   if (!language || language.toLowerCase() === 'und') { const e = new Error('Selecione uma legenda-fonte com idioma identificado.'); e.statusCode = 400; throw e; }
   return language;
 }
+
 function normalizeTargetLanguage(value) {
   if (!translationConfig.TARGET_LANGUAGES.includes(value)) { const e = new Error('Idioma de destino invalido.'); e.statusCode = 400; throw e; }
   return value;
 }
+
 function normalizeOutputMode(value) {
   if (!translationConfig.OUTPUT_MODES.includes(value)) { const e = new Error('Formato de saida invalido.'); e.statusCode = 400; throw e; }
   return value;
 }
+
 function normalizeExistingPolicy(value) { return value === 'replace' ? 'replace' : 'skip'; }
+
+function requestedOutputs(outputMode, targetLanguage) {
+  const mode = normalizeOutputMode(outputMode || 'translated');
+  const outputs = [];
+  if (mode === 'translated' || mode === 'both') outputs.push({ kind: 'translated', language: targetLanguage });
+  if (mode === 'bilingual' || mode === 'both') outputs.push({ kind: 'bilingual', language: 'und' });
+  return outputs;
+}
 
 function languageFromSidecar(mediaPath, sidecarPath) {
   const media = path.parse(mediaPath);
   const base = path.basename(sidecarPath);
+  if (base === `${media.name}.srt`) return 'und';
   const prefix = `${media.name}.`;
   if (!base.startsWith(prefix) || !base.toLowerCase().endsWith('.srt')) return 'und';
   return base.slice(prefix.length, -4) || 'und';
@@ -100,25 +113,29 @@ async function selectItems({ destination, downloadManager, scope = 'all', filter
   return items;
 }
 
-async function analyzeItem(item, destination, sourceLanguage, targetLanguage, existingPolicy) {
+async function analyzeItem(item, destination, sourceLanguage, targetLanguage, outputMode, existingPolicy) {
   if (!item.targetPath || !isPathInside(destination.rootPath, item.targetPath) || !await pathExists(item.targetPath)) return { status: 'inactive' };
   const sourcePath = getSubtitleSidecarPath(item.targetPath, sourceLanguage);
-  const targetPath = getSubtitleSidecarPath(item.targetPath, targetLanguage);
-  if (!isPathInside(destination.rootPath, sourcePath) || !isPathInside(destination.rootPath, targetPath)) return { status: 'invalid-path' };
+  const outputs = requestedOutputs(outputMode, targetLanguage).map((entry) => ({ ...entry, path: getSubtitleSidecarPath(item.targetPath, entry.language) }));
+  if (!isPathInside(destination.rootPath, sourcePath) || outputs.some((entry) => !isPathInside(destination.rootPath, entry.path))) return { status: 'invalid-path' };
   if (!await pathExists(sourcePath)) return { status: 'source-missing' };
   let content;
   try { content = await fs.readFile(sourcePath, 'utf8'); } catch { return { status: 'source-invalid' }; }
   let cues;
   try { cues = parseSrt(content); } catch { return { status: 'source-invalid' }; }
   if (!cues.length) return { status: 'source-invalid' };
-  const targetExists = await pathExists(targetPath);
-  if (targetExists && existingPolicy === 'skip') return { status: 'target-exists', cues: cues.length };
+
+  for (const output of outputs) output.exists = await pathExists(output.path);
+  const outputsToWrite = existingPolicy === 'replace' ? outputs : outputs.filter((entry) => !entry.exists);
+  const existence = Object.fromEntries(outputs.map((entry) => [entry.kind, Boolean(entry.exists)]));
+  if (!outputsToWrite.length) return { status: 'target-exists', cues: cues.length, existence };
+
   const translatable = cues.filter((cue) => isTranslatableText(cue.text));
   const textChars = translatable.reduce((sum, cue) => sum + cue.text.length, 0);
   return {
     status: 'eligible', cues: cues.length, translatableCues: translatable.length, textChars,
-    estimatedTokens: Math.max(1, Math.ceil(textChars / 4)), targetExists,
-    sourcePath, targetPath, sourceHash: hashText(content)
+    estimatedTokens: Math.max(1, Math.ceil(textChars / 4)), existence,
+    outputKinds: outputsToWrite.map((entry) => entry.kind), sourcePath, sourceHash: hashText(content)
   };
 }
 
@@ -131,21 +148,37 @@ async function buildPlan({ destination, downloadManager, payload = {} }) {
   const scope = payload.scope === 'filtered' ? 'filtered' : 'all';
   const filter = payload.filter && typeof payload.filter === 'object' ? payload.filter : {};
   const items = await selectItems({ destination, downloadManager, scope, filter });
-  const counts = { scanned: items.length, eligible: 0, sourceMissing: 0, sourceInvalid: 0, targetExists: 0, inactive: 0 };
+  const counts = {
+    scanned: items.length, eligible: 0, sourceMissing: 0, sourceInvalid: 0, targetExists: 0, inactive: 0,
+    translatedExists: 0, bilingualExists: 0, translatedToWrite: 0, bilingualToWrite: 0
+  };
   let totalCues = 0; let translatableCues = 0; let textChars = 0; let estimatedTokens = 0;
   const eligibleItems = [];
   for (const item of items) {
-    const analysis = await analyzeItem(item, destination, sourceLanguage, targetLanguage, existingPolicy);
+    const analysis = await analyzeItem(item, destination, sourceLanguage, targetLanguage, outputMode, existingPolicy);
+    if (analysis.existence?.translated) counts.translatedExists += 1;
+    if (analysis.existence?.bilingual) counts.bilingualExists += 1;
     if (analysis.status === 'eligible') {
-      counts.eligible += 1; totalCues += analysis.cues; translatableCues += analysis.translatableCues; textChars += analysis.textChars; estimatedTokens += analysis.estimatedTokens;
-      eligibleItems.push({ itemId: item.id, title: item.title || item.trackTitle || item.videoId || item.id, sourceHash: analysis.sourceHash, targetExists: analysis.targetExists });
+      counts.eligible += 1;
+      if (analysis.outputKinds.includes('translated')) counts.translatedToWrite += 1;
+      if (analysis.outputKinds.includes('bilingual')) counts.bilingualToWrite += 1;
+      totalCues += analysis.cues; translatableCues += analysis.translatableCues; textChars += analysis.textChars; estimatedTokens += analysis.estimatedTokens;
+      eligibleItems.push({
+        itemId: item.id, title: item.title || item.trackTitle || item.videoId || item.id,
+        sourceHash: analysis.sourceHash, outputKinds: analysis.outputKinds, existence: analysis.existence || {}
+      });
     } else if (analysis.status === 'source-missing') counts.sourceMissing += 1;
     else if (analysis.status === 'target-exists') counts.targetExists += 1;
     else if (analysis.status === 'source-invalid') counts.sourceInvalid += 1;
     else counts.inactive += 1;
   }
   return {
-    destinationId: destination.id, sourceLanguage, targetLanguage, outputMode, existingPolicy, scope, filter,
+    destinationId: destination.id,
+    destinationType: destination.type || '',
+    destinationName: destination.displayName || destination.folderName || destination.id,
+    channelId: destination.channelId || null,
+    playlistId: destination.playlistId || null,
+    sourceLanguage, targetLanguage, outputMode, existingPolicy, scope, filter,
     counts, totals: { totalCues, translatableCues, textChars, estimatedTokens }, eligibleItems
   };
 }
@@ -169,21 +202,27 @@ async function translateItem({ jobId, destination, downloadManager, itemId, opti
   const item = allItems(downloadManager, destination).find((entry) => entry.id === itemId);
   if (!item || !isActiveContentItem(item) || !item.targetPath || !await pathExists(item.targetPath)) throw new Error('Item deixou de estar ativo durante a traducao.');
   const sourcePath = getSubtitleSidecarPath(item.targetPath, options.sourceLanguage);
-  const targetPath = getSubtitleSidecarPath(item.targetPath, options.targetLanguage);
-  if (!isPathInside(destination.rootPath, sourcePath) || !isPathInside(destination.rootPath, targetPath)) throw new Error('Caminho de legenda fora do destino autorizado.');
+  const outputMode = normalizeOutputMode(options.outputMode || 'translated');
+  const outputs = requestedOutputs(outputMode, options.targetLanguage).map((entry) => ({ ...entry, path: getSubtitleSidecarPath(item.targetPath, entry.language) }));
+  if (!isPathInside(destination.rootPath, sourcePath) || outputs.some((entry) => !isPathInside(destination.rootPath, entry.path))) throw new Error('Caminho de legenda fora do destino autorizado.');
   const sourceContent = await fs.readFile(sourcePath, 'utf8');
   const sourceHash = hashText(sourceContent);
   const cues = parseSrt(sourceContent);
   if (!cues.length) throw new Error('Legenda-fonte nao possui cues validos.');
-  if (await pathExists(targetPath) && options.existingPolicy !== 'replace') return { skipped: true, reason: 'target-exists' };
+
+  const outputsToWrite = [];
+  for (const output of outputs) {
+    const exists = await pathExists(output.path);
+    if (options.existingPolicy === 'replace' || !exists) outputsToWrite.push({ ...output, exists });
+  }
+  if (!outputsToWrite.length) return { skipped: true, reason: 'target-exists' };
 
   const providerConfig = await translationConfig.load();
   const provider = providers[providerConfig.provider];
   if (!provider) throw new Error('Provider de traducao nao suportado.');
   const checkpoint = await translationState.loadCheckpoint(jobId, itemId);
   const validCheckpoint = checkpoint && checkpoint.sourceHash === sourceHash && checkpoint.model === providerConfig.model
-    && checkpoint.sourceLanguage === options.sourceLanguage && checkpoint.targetLanguage === options.targetLanguage
-    && checkpoint.outputMode === options.outputMode;
+    && checkpoint.sourceLanguage === options.sourceLanguage && checkpoint.targetLanguage === options.targetLanguage;
   const translations = new Map(validCheckpoint && Array.isArray(checkpoint.translations) ? checkpoint.translations.map((entry) => [String(entry.id), String(entry.text)]) : []);
   const pending = cues.map((cue, index) => ({ id: String(index + 1), text: cue.text })).filter((cue) => isTranslatableText(cue.text) && !translations.has(cue.id));
   const batchSize = Math.max(20, Math.min(1000, providerConfig.batchSize || 300));
@@ -200,7 +239,7 @@ async function translateItem({ jobId, destination, downloadManager, itemId, opti
     for (const [id, text] of translated) translations.set(id, restoreCueTags(id, text, tagMap));
     await translationState.saveCheckpoint(jobId, itemId, {
       version: 1, itemId, sourceHash, model: providerConfig.model, sourceLanguage: options.sourceLanguage,
-      targetLanguage: options.targetLanguage, outputMode: options.outputMode, updatedAt: nowIso(),
+      targetLanguage: options.targetLanguage, outputMode, updatedAt: nowIso(),
       translations: [...translations].map(([id, text]) => ({ id, text }))
     });
   }
@@ -208,18 +247,45 @@ async function translateItem({ jobId, destination, downloadManager, itemId, opti
     const id = String(index + 1);
     if (!translations.has(id)) translations.set(id, cues[index].text);
   }
-  const rendered = renderValidatedSrt(cues, translations, options.outputMode);
-  await subtitleManager.applyGeneratedSubtitle({ config: null, destination, downloadManager, itemId }, {
-    language: options.targetLanguage,
-    content: rendered.content,
-    replace: options.existingPolicy === 'replace',
-    reason: 'gemini-translation',
-    track: {
-      provider: 'gemini', providerId: providerConfig.model, sourceType: 'translation', sourceLabel: `Gemini · ${options.outputMode === 'bilingual' ? 'bilingue' : 'traduzida'}`,
-      metadata: { sourceLanguage: options.sourceLanguage, targetLanguage: options.targetLanguage, outputMode: options.outputMode, model: providerConfig.model, sourceHash, translatedAt: nowIso() }
-    }
-  });
-  return { skipped: false, sourceHash, model: providerConfig.model, cues: cues.length };
+
+  const renderedByKind = new Map();
+  for (const output of outputsToWrite) {
+    if (!renderedByKind.has(output.kind)) renderedByKind.set(output.kind, renderValidatedSrt(cues, translations, output.kind));
+  }
+
+  const written = [];
+  for (const output of outputsToWrite) {
+    const rendered = renderedByKind.get(output.kind);
+    const bilingual = output.kind === 'bilingual';
+    await subtitleManager.applyGeneratedSubtitle({ config: null, destination, downloadManager, itemId }, {
+      language: output.language,
+      content: rendered.content,
+      replace: options.existingPolicy === 'replace',
+      reason: 'gemini-translation',
+      track: {
+        provider: 'gemini', providerId: providerConfig.model, sourceType: 'translation',
+        sourceLabel: bilingual ? 'Gemini · bilíngue' : 'Gemini · traduzida',
+        metadata: {
+          sourceLanguage: options.sourceLanguage, targetLanguage: options.targetLanguage,
+          outputMode: output.kind, model: providerConfig.model, sourceHash, translatedAt: nowIso(),
+          ersatzTvLanguage: bilingual ? 'und' : options.targetLanguage
+        }
+      }
+    });
+    written.push(output.kind);
+  }
+  return { skipped: false, sourceHash, model: providerConfig.model, cues: cues.length, outputs: written };
 }
 
-module.exports = { hashText, getLanguageCounts, buildPlan, translateItem, normalizeSourceLanguage, normalizeTargetLanguage, normalizeOutputMode, normalizeExistingPolicy };
+module.exports = {
+  hashText,
+  getLanguageCounts,
+  buildPlan,
+  translateItem,
+  normalizeSourceLanguage,
+  normalizeTargetLanguage,
+  normalizeOutputMode,
+  normalizeExistingPolicy,
+  requestedOutputs,
+  languageFromSidecar
+};

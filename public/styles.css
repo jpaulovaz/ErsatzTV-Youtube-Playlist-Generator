@@ -2094,3 +2094,19 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
   .translation-queue-card .inline-actions { display: grid; grid-template-columns: 1fr; }
   .translation-queue-card .inline-actions > button { width: 100%; }
 }
+
+/* Subtitle translation - overview */
+.translation-overview-card { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.025); display: grid; gap: 9px; }
+.translation-overview-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.translation-overview-head > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.translation-overview-head small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.translation-overview-card progress { width: 100%; }
+.translation-overview-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.translation-overview-metrics span { padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,.025); color: var(--muted); font-size: 9px; }
+.translation-overview-metrics strong { color: var(--text); font-size: 11px; }
+@media (max-width: 720px) {
+  .translation-overview-head { flex-direction: column; }
+  .translation-overview-head .inline-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+  .translation-overview-head .inline-actions button { width: 100%; }
+  .translation-overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

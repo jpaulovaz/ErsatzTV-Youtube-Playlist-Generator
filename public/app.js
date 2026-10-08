@@ -1210,6 +1210,87 @@ function queueStateText(queue) {
   return 'Aguardando';
 }
 
+function translationOutputLabel(mode) {
+  if (mode === 'bilingual') return 'bilíngue';
+  if (mode === 'both') return 'traduzida + bilíngue';
+  return 'traduzida';
+}
+
+function currentTranslationOverviewJob() {
+  const status = statusData && statusData.subtitleTranslation || {};
+  return status.activeJob || (Array.isArray(status.jobs) ? status.jobs[0] : null) || null;
+}
+
+function renderTranslationOverview() {
+  const status = statusData && statusData.subtitleTranslation || {};
+  const job = currentTranslationOverviewJob();
+  const stateEl = $('#translationOverviewState');
+  const currentEl = $('#translationOverviewCurrent');
+  const progress = $('#translationOverviewProgress');
+  const toggle = $('#translationOverviewToggle');
+  const manage = $('#translationOverviewManage');
+  if (!stateEl || !currentEl || !progress) return;
+
+  if (!job) {
+    stateEl.textContent = 'Nenhuma tradução em andamento';
+    currentEl.textContent = 'Nenhum job registrado nesta execução.';
+    progress.max = 1; progress.value = 0;
+    $('#translationOverviewCompleted').textContent = '0';
+    $('#translationOverviewPending').textContent = '0';
+    $('#translationOverviewFailed').textContent = '0';
+    $('#translationOverviewSkipped').textContent = '0';
+    toggle?.classList.add('hidden'); manage?.classList.add('hidden');
+    return;
+  }
+
+  const counts = job.counts || {};
+  const total = Math.max(1, Number(counts.total) || 0);
+  const done = (Number(counts.completed) || 0) + (Number(counts.failed) || 0) + (Number(counts.skipped) || 0) + (Number(counts.cancelled) || 0);
+  progress.max = total; progress.value = Math.min(total, done);
+  $('#translationOverviewCompleted').textContent = counts.completed || 0;
+  $('#translationOverviewPending').textContent = (Number(counts.pending) || 0) + (Number(counts.running) || 0);
+  $('#translationOverviewFailed').textContent = counts.failed || 0;
+  $('#translationOverviewSkipped').textContent = counts.skipped || 0;
+
+  const active = Boolean(status.activeJob);
+  const labels = { queued: 'Na fila', running: 'Em execução', paused: 'Pausada', completed: 'Concluída', cancelled: 'Cancelada' };
+  stateEl.textContent = status.paused && active ? 'Pausada' : (labels[job.status] || job.status || 'Aguardando');
+  const currentTitle = job.currentItem && job.currentItem.title ? job.currentItem.title : '';
+  const destination = job.destinationName || job.destinationId || 'Destino';
+  currentEl.textContent = currentTitle
+    ? `${currentTitle} · ${destination} · ${translationOutputLabel(job.options && job.options.outputMode)}`
+    : `${destination} · ${translationOutputLabel(job.options && job.options.outputMode)}${active ? '' : ' · último job'}`;
+
+  if (toggle) {
+    toggle.classList.toggle('hidden', !active);
+    toggle.dataset.action = status.paused ? 'resume' : 'pause';
+    toggle.textContent = status.paused ? 'Retomar' : 'Pausar';
+  }
+  if (manage) manage.classList.toggle('hidden', !job.destinationType);
+}
+
+async function runTranslationOverviewAction(action) {
+  await api(`/api/subtitle-translation/${action}`, { method: 'POST', body: '{}' });
+  await refreshStatus();
+  if (window.SubtitleTranslationUI) window.SubtitleTranslationUI.refreshQueueStatus().catch(() => {});
+}
+
+async function openTranslationOverviewContent() {
+  const job = currentTranslationOverviewJob();
+  if (!job) return;
+  if (job.destinationType === 'library') {
+    const playlist = (config.playlists || []).find((entry) => entry.name === job.destinationName);
+    if (playlist) { await openLibraryContent(playlist); return; }
+  }
+  if (job.destinationType === 'channel-playlist' && job.channelId && job.playlistId) {
+    const channel = (config.channels || []).find((entry) => entry.channelId === job.channelId);
+    const playlist = channel && (channel.playlists || []).find((entry) => entry.playlistId === job.playlistId);
+    if (playlist) { await openChannelPlaylistContent(job.channelId, job.playlistId, playlist.name || job.destinationName); return; }
+  }
+  setActiveView('libraries');
+  showToast('Abra Gerenciar conteúdo no destino correspondente para ver os detalhes da tradução.');
+}
+
 function renderStatus() {
   if (!statusData) return;
   const discovery = statusData.discovery || {};
@@ -1324,6 +1405,7 @@ function renderStatus() {
     $('#cancelCurrentBtn').dataset.id = current.id;
   }
 
+  renderTranslationOverview();
   updateLibraryStats();
 }
 
@@ -1666,6 +1748,12 @@ function bindEvents() {
   }
   $('#runNowBtn').addEventListener('click', () => runDiscovery().catch((error) => showToast(error.message, true)));
   $('#refreshBtn').addEventListener('click', () => refreshAll(true, { forceDownloads: $('#downloadsAccordion').open }));
+  $('#translationOverviewToggle')?.addEventListener('click', (event) => {
+    runTranslationOverviewAction(event.currentTarget.dataset.action || 'pause').catch((error) => showToast(error.message, true));
+  });
+  $('#translationOverviewManage')?.addEventListener('click', () => {
+    openTranslationOverviewContent().catch((error) => showToast(error.message, true));
+  });
   $('#refreshDownloadsBtn').addEventListener('click', () => refreshDownloads({ force: true }).catch((error) => showToast(error.message, true)));
   $('#loadMoreDownloadsBtn').addEventListener('click', () => refreshDownloads({ append: true, force: true }).catch((error) => showToast(error.message, true)));
   $('#downloadFilter').addEventListener('change', () => {

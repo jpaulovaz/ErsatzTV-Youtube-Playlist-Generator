@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>ErsatzTV YouTube Downloader</title>
-  <link rel="icon" href="/brand-mark.svg?v=3.7.0" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=3.7.0&amp;rev=scripted-schedules-2">
-  <link rel="stylesheet" href="/scripted-schedules.css?v=3.7.0">
+  <link rel="icon" href="/brand-mark.svg?v=3.7.1" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=3.7.1&amp;rev=scripted-schedules-2">
+  <link rel="stylesheet" href="/scripted-schedules.css?v=3.7.1">
 </head>
 <body class="app-page">
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.7.0" alt=""></span>
+        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.7.1" alt=""></span>
         <div class="brand-copy">
           <div class="title-line">
             <h1>ErsatzTV YouTube Downloader</h1>
-            <span id="versionBadge" class="version-badge">v3.7.0</span>
+            <span id="versionBadge" class="version-badge">v3.7.1</span>
           </div>
         </div>
       </div>
@@ -193,6 +193,27 @@
               <span id="currentBytes">-</span>
               <span id="currentSpeed">-</span>
               <span id="currentEta">-</span>
+            </div>
+          </div>
+
+          <div id="subtitleTranslationOverview" class="translation-overview-card">
+            <div class="translation-overview-head">
+              <div>
+                <span class="eyebrow">Tradução de legendas</span>
+                <strong id="translationOverviewState">Nenhuma tradução em andamento</strong>
+                <small id="translationOverviewCurrent">-</small>
+              </div>
+              <div class="inline-actions">
+                <button id="translationOverviewToggle" type="button" class="small hidden">Pausar</button>
+                <button id="translationOverviewManage" type="button" class="small hidden">Gerenciar conteúdo</button>
+              </div>
+            </div>
+            <progress id="translationOverviewProgress" max="1" value="0">0%</progress>
+            <div class="translation-overview-metrics">
+              <span><strong id="translationOverviewCompleted">0</strong> concluídas</span>
+              <span><strong id="translationOverviewPending">0</strong> aguardando</span>
+              <span><strong id="translationOverviewFailed">0</strong> falhas</span>
+              <span><strong id="translationOverviewSkipped">0</strong> ignoradas</span>
             </div>
           </div>
 
@@ -610,7 +631,7 @@
                 <label>Timeout (segundos)<input id="translationSettingsTimeout" type="number" min="10" max="180" value="60"></label>
                 <label>Tentativas<input id="translationSettingsAttempts" type="number" min="1" max="6" value="3"></label>
                 <label>Destino padrão<select id="translationSettingsTarget"><option value="pt-BR">Português (Brasil)</option><option value="en">English</option><option value="es">Español</option></select></label>
-                <label>Saída padrão<select id="translationSettingsOutput"><option value="translated">Somente traduzida</option><option value="bilingual">Bilíngue</option></select></label>
+                <label>Saída padrão<select id="translationSettingsOutput"><option value="translated">Somente traduzida</option><option value="bilingual">Somente bilíngue</option><option value="both">Traduzida + bilíngue</option></select></label>
               </div>
               <div class="form-actions-inline"><button id="translationSettingsLoadModels" type="button">Atualizar modelos</button><button id="translationSettingsTest" type="button">Testar conexão</button><button id="translationSettingsSave" type="button" class="primary">Salvar tradução</button></div>
             </div>
@@ -678,13 +699,13 @@
   </dialog>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="/js/destinationForm.js?v=3.7.0"></script>
-  <script src="/js/channelsView.js?v=3.7.0&amp;rev=ersatztv-catalog-1"></script>
-  <script src="/js/scriptedScheduleEditorUtils.js?v=3.7.0"></script>
-  <script src="/js/scriptedSchedulesView.js?v=3.7.0"></script>
-  <script src="/js/helpView.js?v=3.7.0"></script>
-  <script src="/js/subtitleManager.js?v=3.7.0"></script>
-  <script src="/js/subtitleTranslation.js?v=3.7.0"></script>
-  <script src="/app.js?v=3.7.0"></script>
+  <script src="/js/destinationForm.js?v=3.7.1"></script>
+  <script src="/js/channelsView.js?v=3.7.1&amp;rev=ersatztv-catalog-1"></script>
+  <script src="/js/scriptedScheduleEditorUtils.js?v=3.7.1"></script>
+  <script src="/js/scriptedSchedulesView.js?v=3.7.1"></script>
+  <script src="/js/helpView.js?v=3.7.1"></script>
+  <script src="/js/subtitleManager.js?v=3.7.1"></script>
+  <script src="/js/subtitleTranslation.js?v=3.7.1"></script>
+  <script src="/app.js?v=3.7.1"></script>
 </body>
 </html>

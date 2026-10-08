@@ -285,6 +285,7 @@ async function handleApi(req, res, url) {
       channelDiscovery: channelSyncService.getState(),
       discoveryLock: discoveryLock.getStatus(),
       queue: downloadManager.getQueueStatus(),
+      subtitleTranslation: await translationQueue.getStatus(),
       scheduler: scheduler.getStatus(),
       channelScheduler: channelScheduler.getStatus(),
       health: getAllPlaylistHealth(config),

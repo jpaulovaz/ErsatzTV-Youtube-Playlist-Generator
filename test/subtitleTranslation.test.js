@@ -106,6 +106,50 @@ test('translation item preserves source, tags and timeline and registers Gemini 
   assert.match(state.items[f.item.id].tracks['pt-BR'].metadata.sourceHash, /^sha256:/);
 });
 
+test('modo both traduz uma vez e publica traduzida e bilingue UND simultaneamente', async (t) => {
+  const f = await fixture(); t.after(() => fs.rm(f.root, { recursive: true, force: true }));
+  f.item.id = `item-both-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  await translationConfig.save({ apiKey: 'secret-key', model: 'gemini-3.6-flash', batchSize: 300, concurrency: 1, maxAttempts: 1 });
+  const previous = global.fetch;
+  let calls = 0;
+  global.fetch = async () => {
+    calls += 1;
+    return { ok: true, status: 200, headers: new Headers(), text: async () => JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ translations: [{ id: '1', text: '__ETV_TAG_1_0__Olá mundo__ETV_TAG_1_1__' }] }) }] } }] }) };
+  };
+  try {
+    const result = await translationService.translateItem({ jobId: `job-both-${Date.now()}`, destination: f.destination, downloadManager: f.downloadManager, itemId: f.item.id, options: { sourceLanguage: 'en', targetLanguage: 'pt-BR', outputMode: 'both', existingPolicy: 'replace' } });
+    assert.deepEqual(result.outputs.sort(), ['bilingual', 'translated']);
+  } finally { global.fetch = previous; }
+  assert.equal(calls, 1);
+
+  const translated = await fs.readFile(path.join(f.root, 'Artist - Song.pt-BR.srt'), 'utf8');
+  const bilingual = await fs.readFile(path.join(f.root, 'Artist - Song.srt'), 'utf8');
+  assert.match(translated, /<i>Olá mundo<\/i>/);
+  assert.match(bilingual, /<i>Hello world<\/i>\n<i>Olá mundo<\/i>/);
+  const state = await managerState.load();
+  assert.equal(state.items[f.item.id].tracks['pt-BR'].metadata.outputMode, 'translated');
+  assert.equal(state.items[f.item.id].tracks.und.metadata.outputMode, 'bilingual');
+  assert.equal(state.items[f.item.id].tracks.und.metadata.ersatzTvLanguage, 'und');
+  assert.deepEqual([...f.item.subtitles.foundLanguages].sort(), ['en', 'pt-BR', 'und']);
+});
+
+test('preflight both separa existencia e geracao de traduzida e bilingue', async (t) => {
+  const f = await fixture(); t.after(() => fs.rm(f.root, { recursive: true, force: true }));
+  await fs.writeFile(path.join(f.root, 'Artist - Song.pt-BR.srt'), '1\n00:00:01,000 --> 00:00:02,000\nVelho\n');
+  let plan = await translationService.buildPlan({ destination: f.destination, downloadManager: f.downloadManager, payload: { sourceLanguage: 'en', targetLanguage: 'pt-BR', outputMode: 'both', existingPolicy: 'skip', scope: 'all' } });
+  assert.equal(plan.counts.eligible, 1);
+  assert.equal(plan.counts.translatedExists, 1);
+  assert.equal(plan.counts.translatedToWrite, 0);
+  assert.equal(plan.counts.bilingualToWrite, 1);
+  assert.equal(plan.destinationName, 'Library');
+
+  await fs.writeFile(path.join(f.root, 'Artist - Song.srt'), '1\n00:00:01,000 --> 00:00:02,000\nHello\nOlá\n');
+  plan = await translationService.buildPlan({ destination: f.destination, downloadManager: f.downloadManager, payload: { sourceLanguage: 'en', targetLanguage: 'pt-BR', outputMode: 'both', existingPolicy: 'skip', scope: 'all' } });
+  assert.equal(plan.counts.eligible, 0);
+  assert.equal(plan.counts.targetExists, 1);
+  assert.equal(plan.counts.bilingualExists, 1);
+});
+
 test('translation checkpoints survive save/load and Retry-After is parsed without exposing content', async () => {
   await translationState.saveCheckpoint('job-check', 'item-check', { sourceHash: 'sha256:x', translations: [{ id: '1', text: 'ok' }] });
   const loaded = await translationState.loadCheckpoint('job-check', 'item-check');

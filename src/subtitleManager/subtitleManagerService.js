@@ -386,7 +386,8 @@ async function registerManagedDownload(item, movedEntries) {
 async function applyGeneratedSubtitle(args, payload = {}) {
   const context = await resolveContext(args);
   if (!context.activeWritable) { const error = new Error('Aplicar legenda gerada exige um item ativo com arquivo local gravavel.'); error.statusCode = 409; throw error; }
-  const language = normalizeTargetLanguage(payload.language);
+  const rawLanguage = String(payload.language || '').trim();
+  const language = rawLanguage.toLowerCase() === 'und' ? 'und' : normalizeTargetLanguage(rawLanguage);
   const sidecarPath = getSubtitleSidecarPath(context.item.targetPath, language);
   if (!isPathInside(path.dirname(context.item.targetPath), sidecarPath)) { const error = new Error('Caminho de legenda invalido.'); error.statusCode = 400; throw error; }
   const cues = parseSrt(String(payload.content || ''));
