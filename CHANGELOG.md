@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.7.0
+
+- Adiciona **Tradução em massa de legendas com Gemini** em **Gerenciar conteúdo**, disponível para Bibliotecas e Playlists de Canais, com escopo do resultado filtrado atual ou de todo o destino.
+- A tradução parte exclusivamente de um SRT local existente: a legenda-fonte nunca é alterada e a quantidade de cues e todos os timestamps do resultado são validados contra a fonte antes da publicação.
+- Suporta saída **Somente traduzida** e **Bilíngue**, com original acima e tradução abaixo no mesmo cue; idiomas-alvo iniciais: Português (Brasil), English e Español.
+- Adiciona pré-análise determinística com contagem de elegíveis, destino existente, fonte ausente/SRT inválido, cues enviados e estimativa de tokens; destino existente é ignorado por padrão ou substituído com backup no histórico.
+- Cria fila de tradução independente e persistente (`subtitle-translation-state` v1), com checkpoints por item, pausa, retomada, cancelamento de pendentes e recuperação segura após restart.
+- Integra Gemini por API estruturada JSON, chave em `x-goog-api-key`, modelo configurável, retry/backoff para 429/5xx/timeout e divisão automática de lote quando a resposta não preserva os IDs esperados.
+- Adiciona **Configurações -> Tradução de legendas**, com chave mascarada, suporte preferencial a `GEMINI_API_KEY`, atualização de modelos, teste de conexão, batch size, concorrência, timeout/tentativas e padrões de destino/saída.
+- Traduções são registradas no Gerenciador de Legendas com origem **Gemini**, modelo, idiomas, modo e hash da fonte; quando o SRT-fonte muda, a tradução pode ser indicada como desatualizada.
+- Corrige a reconciliação de metadata quando um SRT antigo é apagado e posteriormente baixado de novo: a nova procedência substitui a origem histórica antiga.
+- Reforça histórico/restore para preservar metadata da faixa e centraliza a escrita da tradução no mesmo caminho seguro/atômico do Gerenciador de Legendas.
+- Adiciona testes para segredo/configuração, IDs string/número, timeline invariável, saída bilíngue, integração Gemini, preflight, checkpoints, procedência e cancelamento concorrente da fila.
+- Aplicação **v3.7.0**; Universal **v1.3.1**; `configVersion` **9**; schema de Scripted Schedules **1**; download state **5**; subtitle-manager state **1**; novos subtitle-translation config/state **1**.
+
 ## 3.6.4
 
 - Corrige o download automático e **Buscar legendas ausentes** para consultar primeiro as faixas reais disponíveis no YouTube em vez de exigir tags literais como `en`, `pt-BR` ou `es`.

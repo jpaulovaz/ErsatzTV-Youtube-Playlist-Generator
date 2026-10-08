@@ -138,7 +138,7 @@ test('parseRange aceita finais abertos e suffix ranges', () => {
   assert.deepEqual(parseRange('bytes=-10', 100), { start: 90, end: 99 });
 });
 
-test('download gerenciado registra origem YouTube sem sobrescrever proveniencia existente', async () => {
+test('download gerenciado atualiza proveniencia quando um SRT apagado e recriado recebe nova origem', async () => {
   const f = await fixture();
   f.item.id = `library::managed-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   try {
@@ -157,7 +157,7 @@ test('download gerenciado registra origem YouTube sem sobrescrever proveniencia 
     await stateStore.save(state);
     await service.registerManagedDownload(f.item, [{ language: 'pt-BR', targetPath: f.sidecar }]);
     state = await stateStore.load();
-    assert.equal(state.items[f.item.id].tracks['pt-BR'].provider, 'lrclib');
+    assert.equal(state.items[f.item.id].tracks['pt-BR'].provider, 'youtube');
   } finally { await fs.rm(f.root, { recursive: true, force: true }); }
 });
 

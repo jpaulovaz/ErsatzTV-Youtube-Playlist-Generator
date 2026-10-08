@@ -14,7 +14,7 @@ const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ersatztv-tests-'));
 const logDir = path.join(testRoot, 'logs');
 const scriptedSchedulesDir = path.join(testRoot, 'scripted-schedules');
 try {
-  const result = spawnSync(process.execPath, ['--test', ...tests], {
+  const result = spawnSync(process.execPath, ['--test', '--test-concurrency=1', ...tests], {
     cwd: ROOT,
     stdio: 'inherit',
     env: {
@@ -22,7 +22,9 @@ try {
       ERSATZTV_LOG_DIR: logDir,
       ERSATZTV_CONFIG_DIR: path.join(testRoot, 'config'),
       ERSATZTV_SCRIPTED_SCHEDULES_DIR: scriptedSchedulesDir,
-      ERSATZTV_SUBTITLE_MANAGER_DIR: path.join(testRoot, 'subtitle-manager')
+      ERSATZTV_SUBTITLE_MANAGER_DIR: path.join(testRoot, 'subtitle-manager'),
+      ERSATZTV_SUBTITLE_TRANSLATION_DIR: path.join(testRoot, 'subtitle-translation'),
+      ERSATZTV_SUBTITLE_TRANSLATION_CONFIG_PATH: path.join(testRoot, 'config', 'subtitle-translation.json')
     }
   });
   process.exitCode = result.status ?? 1;

@@ -6,6 +6,7 @@ const discoveryLock = require('../discovery/discoveryLock');
 const { listLibraryContent, getLibraryThumbnail, getLibraryFolderPoster } = require('../libraryContentService');
 const { libraryDestination } = require('../destinationService');
 const { handleSubtitleManagerAction } = require('./subtitleManagerRoutes');
+const { handleDestinationSubtitleTranslationAction } = require('./subtitleTranslationRoutes');
 const {
   runSync,
   runPlaylistApiAction,
@@ -82,6 +83,7 @@ async function handleLibraryRoutes(req, res, url, deps) {
 
   const subtitleDestination = libraryDestination(config, playlist);
   if (subtitleDestination && await handleSubtitleManagerAction({ req, res, url, deps, config, destination: subtitleDestination, action })) return true;
+  if (subtitleDestination && await handleDestinationSubtitleTranslationAction({ req, res, url, deps, destination: subtitleDestination, action })) return true;
 
   if (req.method !== 'POST') return false;
 

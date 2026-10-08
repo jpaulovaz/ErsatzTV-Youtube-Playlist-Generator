@@ -318,7 +318,7 @@ test('subtitle views separate missing tracks and filter present tracks by record
     config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items), view: 'subtitles-present'
   });
   assert.deepEqual(present.items.map((item) => item.videoId), ['holiday', 'uprising']);
-  assert.deepEqual(present.subtitleOriginCounts, { youtube: 1, lrclib: 1, local: 1 });
+  assert.deepEqual(present.subtitleOriginCounts, { youtube: 1, lrclib: 1, gemini: 0, local: 1 });
 
   const youtube = await listLibraryContent({
     config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items),

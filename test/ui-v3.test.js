@@ -627,3 +627,24 @@ test('Subtitle Manager expõe pesquisa sem mídia e restringe preview/aplicaçã
   assert.match(manager, /item\.canPreview === false \|\| !state\.status\?\.mediaAvailable/);
   assert.match(manager, /Diferença:/);
 });
+
+
+test('Gerenciar conteúdo expõe tradução em massa com Gemini e configuração isolada', () => {
+  const html = read('../public/index.html');
+  const app = read('../public/app.js');
+  const translation = read('../public/js/subtitleTranslation.js');
+  const css = read('../public/styles.css');
+  assert.match(html, /id="subtitleTranslationToggle"[^>]*>Traduzir legendas/);
+  assert.match(html, /id="subtitleTranslationPanel"/);
+  assert.match(html, /<option value="gemini">Gemini<\/option>/);
+  assert.match(html, /Tradução de legendas/);
+  assert.match(html, /translationSettingsApiKey/);
+  assert.match(html, /subtitleTranslation\.js\?v=3\.7\.0/);
+  assert.match(translation, /Resultado filtrado atual/);
+  assert.match(translation, /Bilíngue \(original \+ tradução\)/);
+  assert.match(translation, /subtitle-translation-plan/);
+  assert.match(translation, /subtitle-translation-start/);
+  assert.match(translation, /Pausar/);
+  assert.match(app, /SubtitleTranslationUI\.configure/);
+  assert.match(css, /\.subtitle-translation-panel/);
+});

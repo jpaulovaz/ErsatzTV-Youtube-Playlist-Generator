@@ -20,6 +20,8 @@ const { handleDownloadRoutes } = require('./routes/downloadRoutes');
 const { handleChannelRoutes } = require('./routes/channelRoutes');
 const { handleErsatzTvRoutes } = require('./routes/ersatztvRoutes');
 const { handleScriptedScheduleRoutes } = require('./routes/scriptedScheduleRoutes');
+const { handleGlobalSubtitleTranslationRoutes } = require('./routes/subtitleTranslationRoutes');
+const translationQueue = require('./subtitleTranslation/translationQueue');
 const auth = require('./auth');
 const logger = require('./logger');
 
@@ -233,6 +235,9 @@ async function handleApi(req, res, url) {
   if (url.pathname.startsWith('/api/scripted-schedules')) {
     if (await handleScriptedScheduleRoutes(req, res, url, routeDeps)) return;
   }
+  if (url.pathname.startsWith('/api/subtitle-translation/')) {
+    if (await handleGlobalSubtitleTranslationRoutes(req, res, url, routeDeps)) return;
+  }
 
   if (req.method === 'GET' && url.pathname === '/api/config') {
     sendJson(res, 200, await loadConfig());
@@ -398,6 +403,8 @@ function createServer() {
 
 async function startServer(config) {
   await auth.init();
+  translationQueue.configure({ getConfig: loadConfig, downloadManager });
+  await translationQueue.init();
   const server = createServer();
   const host = config.server.host || '0.0.0.0';
   const port = Number(config.server.port) || 3099;

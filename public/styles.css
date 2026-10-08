@@ -2068,3 +2068,29 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
   .subtitle-manager-result .inline-actions, .subtitle-manager-track .inline-actions, .subtitle-manager-offset .inline-actions { grid-template-columns: 1fr; }
   .subtitle-manager-offset [data-subtitle-offset-reset] { grid-column: auto; }
 }
+
+/* Subtitle translation */
+.subtitle-translation-panel { margin: 10px 0 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(5, 12, 22, .72); }
+.subtitle-translation-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.subtitle-translation-head h3 { margin: 2px 0 3px; font-size: 14px; }
+.subtitle-translation-head p { margin: 0; color: var(--muted); font-size: 10px; max-width: 760px; }
+.subtitle-translation-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.subtitle-translation-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.subtitle-translation-summary, .subtitle-translation-queue { margin-top: 10px; }
+.translation-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.translation-metrics span { display: grid; gap: 2px; padding: 7px 8px; border: 1px solid rgba(255,255,255,.07); border-radius: 8px; color: var(--muted); font-size: 9px; }
+.translation-metrics strong { color: var(--text); font-size: 12px; }
+.translation-queue-card { display: grid; gap: 8px; padding: 9px; border: 1px solid rgba(255,255,255,.07); border-radius: 8px; background: rgba(255,255,255,.025); }
+.translation-queue-card > div:first-child { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 10px; }
+.translation-queue-card progress { width: 100%; }
+.translation-queue-card ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 9px; }
+.settings-hint { color: var(--muted); font-size: 10px; margin: 0 0 10px; }
+@media (max-width: 760px) {
+  .subtitle-translation-head { flex-direction: column; align-items: stretch; }
+  .subtitle-translation-head > button, #subtitleTranslationToggle { width: 100%; }
+  .subtitle-translation-grid, .translation-metrics { grid-template-columns: 1fr; }
+  .subtitle-translation-actions { display: grid; grid-template-columns: 1fr; }
+  .subtitle-translation-actions > button { width: 100%; }
+  .translation-queue-card .inline-actions { display: grid; grid-template-columns: 1fr; }
+  .translation-queue-card .inline-actions > button { width: 100%; }
+}

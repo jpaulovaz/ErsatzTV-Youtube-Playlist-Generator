@@ -11,7 +11,7 @@ const DEFAULT_PAGE_SIZE = 60;
 const MAX_PAGE_SIZE = 120;
 const STATE_PAGE_SIZE = 500;
 const CONTENT_VIEWS = new Set(['content', 'subtitles-missing', 'subtitles-present', 'orphans', 'quarantine', 'ignored']);
-const SUBTITLE_ORIGINS = new Set(['all', 'youtube', 'lrclib', 'local']);
+const SUBTITLE_ORIGINS = new Set(['all', 'youtube', 'lrclib', 'gemini', 'local']);
 
 function decodeXmlEntities(value) {
   return String(value || '')
@@ -80,6 +80,7 @@ function subtitleOrigins(item, managerItemState = null) {
     const provider = String(tracks[language] && tracks[language].provider || '').trim().toLowerCase();
     if (provider === 'youtube') origins.add('youtube');
     else if (provider === 'lrclib') origins.add('lrclib');
+    else if (provider === 'gemini') origins.add('gemini');
     else origins.add('local');
   }
   return [...origins];
@@ -325,7 +326,7 @@ function specialCounts(items) {
 }
 
 function subtitleOriginCounts(entries, managerState) {
-  const counts = { youtube: 0, lrclib: 0, local: 0 };
+  const counts = { youtube: 0, lrclib: 0, gemini: 0, local: 0 };
   for (const entry of entries) {
     const itemState = managerState && managerState.items ? managerState.items[entry.item.id] : null;
     for (const origin of subtitleOrigins(entry.item, itemState)) counts[origin] += 1;
@@ -348,7 +349,7 @@ async function listDestinationContent({ destination, downloadManager, browserPat
   const allItems = getAllDestinationItems(downloadManager, destination.id);
   let entries = buildEntries(downloadManager, destination, selectedView);
   let managerState = null;
-  let originCounts = { youtube: 0, lrclib: 0, local: 0 };
+  let originCounts = { youtube: 0, lrclib: 0, gemini: 0, local: 0 };
   if (selectedView === 'subtitles-present') {
     managerState = await subtitleManagerState.load();
     originCounts = subtitleOriginCounts(entries, managerState);

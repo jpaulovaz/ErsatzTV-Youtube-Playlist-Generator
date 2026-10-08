@@ -1,20 +1,24 @@
-ErsatzTV YouTube Downloader 3.6.4 - pacote de atualização
+ErsatzTV YouTube Downloader 3.7.0 - pacote de atualização
 
-Extraia este ZIP sobre uma instalação v3.6.3.
+Extraia este ZIP sobre uma instalação v3.6.4.
 
 Preservado deliberadamente (não incluído):
 - config/config.json
 - config/auth.json
+- config/subtitle-translation.json
 - data/
-- arquivos de mídia das bibliotecas e canais
+- arquivos de mídia e sidecars existentes das bibliotecas e canais
 
 Principais alterações:
-- correção da descoberta automática de tags específicas de legenda do YouTube;
-- preferência por legendas enviadas pelo canal antes das automáticas;
-- gravação em código canônico configurado, como .en.srt;
-- mesma correção aplicada a novos downloads e a Buscar legendas ausentes;
-- origem manual/automática conhecida passa a ser registrada no Gerenciador de Legendas;
-- Ver conteúdo passa a se chamar Gerenciar conteúdo.
+- tradução em massa de SRT local com Gemini no Gerenciar conteúdo;
+- pré-análise, escopo filtrado/todo destino e política de destino existente;
+- saída somente traduzida ou bilíngue, sempre preservando a timeline da fonte;
+- fila de tradução persistente com checkpoints, pausa, retomada e cancelamento de pendentes;
+- configuração Gemini separada, chave mascarada, GEMINI_API_KEY, modelos e teste de conexão;
+- retry/backoff para 429/5xx/timeout e validação estrutural de IDs/cues;
+- origem Gemini, sourceHash e indicador de tradução desatualizada no Gerenciador de Legendas;
+- integração com histórico, player, exclusão/restauração e filtro de origem;
+- reconciliação da procedência quando um SRT apagado é baixado novamente.
 
-Aplicação v3.6.4, Universal v1.3.1, configVersion 9, schema de Scripted Schedules 1, estado persistente 5 e subtitle-manager state 1.
+Aplicação v3.7.0, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1.
 Consulte UPGRADE.md antes da atualização.

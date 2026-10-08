@@ -837,7 +837,7 @@ function updateLibraryContentViewControls() {
   if (originSelect) {
     originSelect.value = libraryContentState.subtitleOrigin || 'all';
     const originCounts = libraryContentState.subtitleOriginCounts || {};
-    const originLabels = { youtube: 'YouTube', lrclib: 'LRCLIB', local: 'Arquivo local / origem não registrada' };
+    const originLabels = { youtube: 'YouTube', lrclib: 'LRCLIB', gemini: 'Gemini', local: 'Arquivo local / origem não registrada' };
     for (const option of originSelect.options) {
       if (option.value === 'all') { option.textContent = 'Todas as origens'; option.disabled = false; continue; }
       const count = Number(originCounts[option.value]) || 0;
@@ -898,7 +898,7 @@ function renderLibraryContent() {
   if (libraryContentState.view !== 'content') {
     status = `${pagination.total || 0} item(ns) em ${String(viewLabels[libraryContentState.view] || '').toLowerCase()}`;
     if (libraryContentState.view === 'subtitles-present' && libraryContentState.subtitleOrigin !== 'all') {
-      const originLabels = { youtube: 'YouTube', lrclib: 'LRCLIB', local: 'arquivo local/origem não registrada' };
+      const originLabels = { youtube: 'YouTube', lrclib: 'LRCLIB', gemini: 'Gemini', local: 'arquivo local/origem não registrada' };
       status += ` · origem: ${originLabels[libraryContentState.subtitleOrigin] || libraryContentState.subtitleOrigin}`;
     }
   }
@@ -1073,6 +1073,7 @@ async function loadLibraryContent(options = {}) {
     libraryContentState.itemMap = new Map(libraryContentState.items.map((item) => [item.id, item]));
     libraryContentState.pagination = result.pagination || { total: libraryContentState.items.length, offset: 0, limit: LIBRARY_CONTENT_PAGE_SIZE, hasMore: false };
     renderLibraryContent();
+    if (window.SubtitleTranslationUI) window.SubtitleTranslationUI.setContext({ endpointBase: libraryContentState.endpointBase, name: libraryContentState.libraryName });
   } finally {
     if (requestId === libraryContentRequestId) browser.classList.remove('library-content-loading');
   }
@@ -1806,6 +1807,7 @@ function bindEvents() {
     libraryContentRequestId += 1;
     const returnView = libraryContentState.returnView || 'libraries';
     setLibraryContentMode(false);
+    if (window.SubtitleTranslationUI) window.SubtitleTranslationUI.close();
     if (returnView !== 'libraries') setActiveView(returnView, { persist: false });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
@@ -1927,6 +1929,17 @@ async function bootstrap() {
   updateSettingsAccordionToggle();
   if (window.SubtitleManagerUI) {
     window.SubtitleManagerUI.configure({ api, showToast, showDialog: showAppDialog, escapeHtml });
+  }
+  if (window.SubtitleTranslationUI) {
+    window.SubtitleTranslationUI.configure({
+      api, showToast, showDialog: showAppDialog, escapeHtml,
+      getContentContext: () => ({
+        view: libraryContentState.view,
+        query: libraryContentState.query,
+        path: libraryContentState.path,
+        subtitleOrigin: libraryContentState.subtitleOrigin
+      })
+    });
   }
   bindEvents();
   bindMobileNavBehavior();

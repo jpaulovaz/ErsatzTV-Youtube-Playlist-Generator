@@ -25,3 +25,6 @@ npm-debug.log*
 # Credenciais de acesso web
 /config/auth.json
 /config/auth*.backup-*.json
+
+# Credencial/configuracao local do tradutor
+/config/subtitle-translation.json

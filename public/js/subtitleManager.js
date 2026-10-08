@@ -151,7 +151,7 @@
       const isPreviewing = state.preview?.kind === 'local' && state.preview.language === track.language;
       return `
       <div class="subtitle-manager-track ${isPreviewing ? 'is-previewing' : ''}">
-        <div><strong>${esc(track.language)}</strong><small>${esc(track.sourceLabel || 'Arquivo local')}</small></div>
+        <div><strong>${esc(track.language)}</strong><small>${esc(track.sourceLabel || 'Arquivo local')}${track.staleTranslation ? ' · Tradução desatualizada' : ''}</small></div>
         <div class="inline-actions">
           <button type="button" class="small subtitle-preview-button ${isPreviewing ? 'is-previewing' : ''}" aria-pressed="${isPreviewing ? 'true' : 'false'}" data-subtitle-local-preview="${esc(track.language)}">${isPreviewing ? 'Em teste no player' : 'Testar no player'}</button>
           <button type="button" class="small danger" data-subtitle-local-delete="${esc(track.language)}" ${!state.status?.canApply ? 'disabled title="A exclusão exige conteúdo ativo e gravável"' : ''}>Excluir legenda</button>

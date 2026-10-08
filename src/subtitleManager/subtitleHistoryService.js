@@ -35,6 +35,7 @@ async function backupCurrent({ itemId, language, sidecarPath, trackState, metada
     sourceType: trackState && trackState.sourceType || 'unregistered',
     sourceLabel: trackState && trackState.sourceLabel || 'Arquivo local · origem não registrada',
     lastAppliedOffsetMs: Number(trackState && trackState.lastAppliedOffsetMs) || 0,
+    metadata: trackState && trackState.metadata && typeof trackState.metadata === 'object' ? trackState.metadata : {},
     reason: String(metadata.reason || 'replace')
   };
 }

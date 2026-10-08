@@ -6,6 +6,7 @@ const channelScheduler = require('./channelScheduler');
 const logger = require('./logger');
 const auth = require('./auth');
 const mediaPreviewService = require('./mediaPreviewService');
+const translationQueue = require('./subtitleTranslation/translationQueue');
 
 let server = null;
 let shuttingDown = false;
@@ -18,6 +19,7 @@ async function shutdown(signal) {
   channelScheduler.stopTimer();
   await downloadManager.stop({ terminateCurrent: true });
   await mediaPreviewService.clearAllPreviews();
+  await translationQueue.stop();
   auth.stop();
   if (server) {
     await new Promise((resolve) => server.close(resolve));

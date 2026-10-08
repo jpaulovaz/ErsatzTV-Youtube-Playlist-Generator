@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>ErsatzTV YouTube Downloader</title>
-  <link rel="icon" href="/brand-mark.svg?v=3.6.4" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=3.6.4&amp;rev=scripted-schedules-2">
-  <link rel="stylesheet" href="/scripted-schedules.css?v=3.6.4">
+  <link rel="icon" href="/brand-mark.svg?v=3.7.0" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=3.7.0&amp;rev=scripted-schedules-2">
+  <link rel="stylesheet" href="/scripted-schedules.css?v=3.7.0">
 </head>
 <body class="app-page">
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.6.4" alt=""></span>
+        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.7.0" alt=""></span>
         <div class="brand-copy">
           <div class="title-line">
             <h1>ErsatzTV YouTube Downloader</h1>
-            <span id="versionBadge" class="version-badge">v3.6.4</span>
+            <span id="versionBadge" class="version-badge">v3.7.0</span>
           </div>
         </div>
       </div>
@@ -346,12 +346,14 @@
                   <option value="all">Todas as origens</option>
                   <option value="youtube">YouTube</option>
                   <option value="lrclib">LRCLIB</option>
+                  <option value="gemini">Gemini</option>
                   <option value="local">Arquivo local / origem não registrada</option>
                 </select>
               </label>
               <label class="library-content-search">Pesquisar vídeos
                 <input id="libraryContentSearch" type="search" autocomplete="off" placeholder="Título, artista, episódio ou Video ID">
               </label>
+              <button id="subtitleTranslationToggle" type="button" class="small">Traduzir legendas</button>
               <div id="libraryContentBatchActions" class="library-content-batch-actions hidden">
                 <button id="libraryContentBatchPrimary" type="button" class="small"></button>
                 <button id="libraryContentBatchDelete" type="button" class="small danger">Excluir definitivamente</button>
@@ -360,6 +362,7 @@
 
             <nav id="libraryContentBreadcrumbs" class="library-content-breadcrumbs" aria-label="Caminho da biblioteca"></nav>
             <div id="libraryContentStatus" class="library-content-status"></div>
+            <section id="subtitleTranslationPanel" class="subtitle-translation-panel hidden" aria-live="polite"></section>
             <div id="libraryContentFolders" class="library-content-folders"></div>
             <div id="libraryContentItems" class="library-content-grid"></div>
             <div id="libraryContentEmpty" class="empty-state hidden">Nenhum vídeo encontrado.</div>
@@ -589,6 +592,29 @@
               </div>
             </div>
           </details>
+
+          <details class="settings-accordion">
+            <summary>
+              <span class="settings-index">07</span>
+              <span class="settings-summary-copy"><strong>Tradução de legendas</strong></span>
+              <span class="accordion-chevron" aria-hidden="true"></span>
+            </summary>
+            <div class="settings-panel">
+              <p class="settings-hint">O texto das legendas enviadas para tradução será processado pelo Google Gemini. A chave nunca é devolvida integralmente ao navegador nem registrada nos logs.</p>
+              <div class="form-grid three">
+                <label class="wide">API Key Gemini<input id="translationSettingsApiKey" type="password" autocomplete="off" placeholder="Deixe vazio para preservar a chave atual"></label>
+                <div class="wide"><span id="translationSettingsKeyStatus" class="muted">Carregando...</span></div>
+                <label class="wide">Modelo<input id="translationSettingsModel" type="text" list="translationSettingsModels" placeholder="gemini-3.6-flash"><datalist id="translationSettingsModels"></datalist></label>
+                <label>Batch size (cues)<input id="translationSettingsBatchSize" type="number" min="20" max="1000" value="300"></label>
+                <label>Concorrência<input id="translationSettingsConcurrency" type="number" min="1" max="3" value="1"></label>
+                <label>Timeout (segundos)<input id="translationSettingsTimeout" type="number" min="10" max="180" value="60"></label>
+                <label>Tentativas<input id="translationSettingsAttempts" type="number" min="1" max="6" value="3"></label>
+                <label>Destino padrão<select id="translationSettingsTarget"><option value="pt-BR">Português (Brasil)</option><option value="en">English</option><option value="es">Español</option></select></label>
+                <label>Saída padrão<select id="translationSettingsOutput"><option value="translated">Somente traduzida</option><option value="bilingual">Bilíngue</option></select></label>
+              </div>
+              <div class="form-actions-inline"><button id="translationSettingsLoadModels" type="button">Atualizar modelos</button><button id="translationSettingsTest" type="button">Testar conexão</button><button id="translationSettingsSave" type="button" class="primary">Salvar tradução</button></div>
+            </div>
+          </details>
         </form>
       </section>
 
@@ -652,12 +678,13 @@
   </dialog>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="/js/destinationForm.js?v=3.6.4"></script>
-  <script src="/js/channelsView.js?v=3.6.4&amp;rev=ersatztv-catalog-1"></script>
-  <script src="/js/scriptedScheduleEditorUtils.js?v=3.6.4"></script>
-  <script src="/js/scriptedSchedulesView.js?v=3.6.4"></script>
-  <script src="/js/helpView.js?v=3.6.4"></script>
-  <script src="/js/subtitleManager.js?v=3.6.4"></script>
-  <script src="/app.js?v=3.6.4"></script>
+  <script src="/js/destinationForm.js?v=3.7.0"></script>
+  <script src="/js/channelsView.js?v=3.7.0&amp;rev=ersatztv-catalog-1"></script>
+  <script src="/js/scriptedScheduleEditorUtils.js?v=3.7.0"></script>
+  <script src="/js/scriptedSchedulesView.js?v=3.7.0"></script>
+  <script src="/js/helpView.js?v=3.7.0"></script>
+  <script src="/js/subtitleManager.js?v=3.7.0"></script>
+  <script src="/js/subtitleTranslation.js?v=3.7.0"></script>
+  <script src="/app.js?v=3.7.0"></script>
 </body>
 </html>
