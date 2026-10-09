@@ -675,8 +675,13 @@ test('Gerenciador do YouTube expõe pesquisa, acervo local, playlists e OAuth na
   assert.match(manager, /\/api\/youtube-manager\/search/);
   assert.match(manager, /\/api\/youtube-manager\/oauth\/start/);
   assert.match(manager, /\/api\/youtube-manager\/playlists/);
-  assert.match(manager, /\/api\/youtube-manager\/scan/);
+  assert.match(manager, /\/api\/youtube-manager\/scan-start/);
+  assert.match(manager, /\/api\/youtube-manager\/scan-status/);
   assert.match(manager, /\/api\/youtube-manager\/item\/match/);
+  assert.match(manager, /\/api\/youtube-manager\/matches\/confirm-recovered/);
+  assert.match(html, /id="ytmConfirmRecovered"/);
+  assert.match(css, /toast\.loading/);
+  assert.match(css, /catalog.*card \+ \.card/);
   assert.match(manager, /youtube-manager/);
   assert.match(css, /YouTube Manager v3\.9/);
   assert.match(html, /Adotar mídia existente/);

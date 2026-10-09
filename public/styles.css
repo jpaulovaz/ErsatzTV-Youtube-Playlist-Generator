@@ -753,6 +753,31 @@ input[type="checkbox"] {
   font-size: 11.5px;
 }
 .toast.error { border-color: var(--danger-border); border-left-color: var(--danger); color: #fecaca; }
+.toast.loading { padding-left: 38px; }
+.toast.loading::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 13px;
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(255,255,255,.22);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: toast-spin .75s linear infinite;
+}
+.toast.has-progress { overflow: hidden; padding-bottom: 15px; }
+.toast.has-progress::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: var(--toast-progress, 0%);
+  height: 3px;
+  background: var(--accent);
+  transition: width .2s ease;
+}
+@keyframes toast-spin { to { transform: rotate(360deg); } }
 dialog {
   width: min(540px, calc(100vw - 28px));
   margin: auto;
@@ -2118,6 +2143,7 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
 .ytm-tab.active { border-color: var(--accent-border); color: var(--text); background: rgba(67,151,255,.10); }
 .ytm-panel { display: none; }
 .ytm-panel.active { display: block; }
+.ytm-panel[data-ytm-panel="catalog"] > .card + .card { margin-top: 1rem; }
 .ytm-search-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: end; }
 .ytm-search-options, .ytm-catalog-toolbar, .ytm-source-form, .ytm-playlist-create { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; margin-top: 1rem; align-items: end; }
 .ytm-search-options { grid-template-columns: minmax(220px, 1fr) minmax(260px, 1fr); }

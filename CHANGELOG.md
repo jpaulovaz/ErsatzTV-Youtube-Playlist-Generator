@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.9.2
+
+- A varredura do **Acervo local** passa a rodar como job em segundo plano, evitando a sensação de botão sem resposta enquanto o servidor executa `ffprobe` em centenas de arquivos.
+- Adiciona status persistente no canto inferior direito com animação, barra de progresso, fonte/pasta, arquivo atual, processados/total, IDs recuperados e erros; ao final, exibe confirmação explícita e atualiza o catálogo.
+- Impede varreduras concorrentes para evitar múltiplos `ffprobe` competindo por CPU/disco na mesma instalação.
+- Corrige o espaçamento vertical entre os cards do Acervo local, incluindo a **Fila de adoção**, que deixava o card visualmente colado ao conteúdo anterior.
+- Adiciona **Validar IDs recuperados** em lote para IDs exatos encontrados em filename, `.info.json`, NFO ou metadata embedded. A operação usa `videos.list` em lotes de até 50 IDs e não consome o bucket `search.list`.
+- A validação em lote continua conservadora: conflitos de Video ID, vídeos indisponíveis e diferença de duração acima de 45 s ficam para revisão manual; diferença entre 10 e 45 s é confirmada com aviso e continuará visível no preflight da adoção.
+- Mantém a revisão individual para matches por pesquisa e para qualquer item bloqueado na validação em lote; não existe aprovação silenciosa sem uma ação explícita do usuário.
+- Nenhuma mudança em `configVersion`, Download state, YouTube Manager state, YouTube Account state/config ou Adoption transaction state.
+- Aplicação **v3.9.2**; Universal **v1.3.1**; `configVersion` **9**; Scripted Schedules schema **1**; download state **5**; subtitle-manager state **1**; subtitle-translation config/state **1**; YouTube Manager state **1**; YouTube Account state/config **1**; Adoption transaction state **1**.
+
 ## 3.9.1
 
 - Corrige o retorno do Google OAuth quando o usuário autoriza a conta em `accounts.google.com` e volta para `/api/youtube-manager/oauth/callback`.

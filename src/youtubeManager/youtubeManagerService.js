@@ -7,6 +7,7 @@ const stateStore = require('./youtubeManagerState');
 const quotaTracker = require('./quotaTracker');
 const { scoreCandidate } = require('./matchScore');
 const adoptionQueue = require('./adoptionQueue');
+const { fetchVideoDetails } = require('../youtubeApi');
 
 async function getStatus() {
   const [account, sources, queue, quota, state, adoption] = await Promise.all([
@@ -100,6 +101,115 @@ async function updateMatch(config, { itemId, action, videoId = '', candidate = n
   return value;
 }
 
+
+async function confirmRecoveredMatches(config, { sourceId = '' } = {}) {
+  const state = await stateStore.load();
+  if (sourceId && !state.sources[sourceId]) throw Object.assign(new Error('Raiz de acervo nao encontrada.'), { statusCode: 404 });
+
+  const localItems = Object.values(state.localItems || {}).filter((item) =>
+    item && item.present !== false && (!sourceId || item.sourceId === sourceId) && /^[A-Za-z0-9_-]{11}$/.test(String(item.recoveredVideoId || ''))
+  );
+  const alreadyConfirmed = localItems.filter((item) => state.matches[item.id] && state.matches[item.id].status === 'confirmed').length;
+  const candidates = localItems.filter((item) => !state.matches[item.id] || state.matches[item.id].status !== 'confirmed');
+  if (!candidates.length) {
+    return { sourceId, candidates: 0, confirmed: 0, alreadyConfirmed, blocked: 0, warnings: 0, unavailable: 0, quotaUnitsUsed: 0, details: [] };
+  }
+
+  const candidateIdsByVideo = new Map();
+  for (const item of candidates) {
+    const videoId = String(item.recoveredVideoId || '');
+    if (!candidateIdsByVideo.has(videoId)) candidateIdsByVideo.set(videoId, []);
+    candidateIdsByVideo.get(videoId).push(item.id);
+  }
+  const confirmedIdsByVideo = new Map();
+  for (const [itemId, match] of Object.entries(state.matches || {})) {
+    if (!match || match.status !== 'confirmed' || !match.videoId) continue;
+    if (!confirmedIdsByVideo.has(match.videoId)) confirmedIdsByVideo.set(match.videoId, []);
+    confirmedIdsByVideo.get(match.videoId).push(itemId);
+  }
+
+  const duplicateIds = new Set();
+  for (const [videoId, itemIds] of candidateIdsByVideo.entries()) {
+    const otherConfirmed = (confirmedIdsByVideo.get(videoId) || []).filter((itemId) => !itemIds.includes(itemId));
+    if (itemIds.length > 1 || otherConfirmed.length) duplicateIds.add(videoId);
+  }
+
+  const idsToValidate = [...new Set(candidates.map((item) => item.recoveredVideoId).filter((videoId) => !duplicateIds.has(videoId)))];
+  const remote = await fetchVideoDetails(config, idsToValidate, { useCache: true });
+  if (remote.quotaUnitsUsed) await quotaTracker.record('videosList', remote.quotaUnitsUsed, { reason: 'youtube-manager-bulk-confirm-recovered' });
+
+  const updates = [];
+  const details = [];
+  let warnings = 0;
+  let unavailable = 0;
+  let blocked = 0;
+  const now = new Date().toISOString();
+
+  for (const item of candidates) {
+    const videoId = String(item.recoveredVideoId || '');
+    if (duplicateIds.has(videoId)) {
+      blocked += 1;
+      details.push({ itemId: item.id, videoId, status: 'blocked', reason: 'video-id-conflict' });
+      continue;
+    }
+    const remoteVideo = remote.videosById.get(videoId);
+    if (!remoteVideo) {
+      blocked += 1;
+      unavailable += 1;
+      details.push({ itemId: item.id, videoId, status: 'blocked', reason: 'video-unavailable' });
+      continue;
+    }
+    const localDuration = Number(item.duration) || null;
+    const remoteDuration = Number(remoteVideo.duration) || null;
+    const durationDifferenceSeconds = localDuration && remoteDuration ? Math.abs(localDuration - remoteDuration) : null;
+    if (durationDifferenceSeconds != null && durationDifferenceSeconds > 45) {
+      blocked += 1;
+      details.push({ itemId: item.id, videoId, status: 'blocked', reason: 'duration-difference', durationDifferenceSeconds });
+      continue;
+    }
+    const score = scoreCandidate(item, remoteVideo);
+    const hasWarning = durationDifferenceSeconds != null && durationDifferenceSeconds > 10;
+    if (hasWarning) warnings += 1;
+    const value = {
+      itemId: item.id,
+      status: 'confirmed',
+      videoId,
+      title: remoteVideo.title || '',
+      channelTitle: remoteVideo.channelTitle || '',
+      duration: remoteVideo.duration || null,
+      thumbnailUrl: remoteVideo.thumbnailUrl || '',
+      score,
+      source: item.matchSource || 'recovered',
+      confirmedAt: now,
+      confirmationMode: 'bulk-recovered',
+      durationWarning: hasWarning
+    };
+    updates.push(value);
+    details.push({ itemId: item.id, videoId, status: 'confirmed', durationDifferenceSeconds, warning: hasWarning });
+  }
+
+  if (updates.length) {
+    await stateStore.mutate((current) => {
+      for (const value of updates) {
+        current.matches[value.itemId] = value;
+        stateStore.appendAudit(current, { action: 'match-confirm-recovered-bulk', itemId: value.itemId, videoId: value.videoId, source: value.source, score: value.score.total });
+      }
+    });
+  }
+
+  return {
+    sourceId,
+    candidates: candidates.length,
+    confirmed: updates.length,
+    alreadyConfirmed,
+    blocked,
+    warnings,
+    unavailable,
+    quotaUnitsUsed: remote.quotaUnitsUsed || 0,
+    details
+  };
+}
+
 async function resolveEntries({ itemIds = [], videoIds = [] } = {}) {
   const state = await stateStore.load();
   const entries = [];
@@ -165,4 +275,4 @@ async function startPlaylistJob(plan) {
   return playlistQueue.start({ playlistId: plan.playlistId, playlistTitle: plan.playlistTitle || '', entries: plan.entries });
 }
 
-module.exports = { getStatus, searchPublic, searchForItem, updateMatch, resolveEntries, planPlaylist, startPlaylistJob };
+module.exports = { getStatus, searchPublic, searchForItem, updateMatch, confirmRecoveredMatches, resolveEntries, planPlaylist, startPlaylistJob };

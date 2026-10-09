@@ -267,13 +267,30 @@ async function api(url, options = {}) {
   return payload;
 }
 
-function showToast(message, error = false) {
+function showToast(message, error = false, options = {}) {
+  if (error && typeof error === 'object') {
+    options = error;
+    error = Boolean(options.error);
+  }
   const toast = $('#toast');
+  const settings = options && typeof options === 'object' ? options : {};
   toast.textContent = String(message || '');
-  toast.classList.toggle('error', error);
+  toast.classList.toggle('error', Boolean(error));
+  toast.classList.toggle('loading', Boolean(settings.loading));
+  const hasProgress = Number.isFinite(Number(settings.progress));
+  toast.classList.toggle('has-progress', hasProgress);
+  if (hasProgress) {
+    const progress = Math.max(0, Math.min(1, Number(settings.progress)));
+    toast.style.setProperty('--toast-progress', `${Math.round(progress * 100)}%`);
+  } else {
+    toast.style.removeProperty('--toast-progress');
+  }
   toast.classList.remove('hidden');
   if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.add('hidden'), 5500);
+  toastTimer = null;
+  if (!settings.persistent) {
+    toastTimer = setTimeout(() => toast.classList.add('hidden'), Math.max(1500, Number(settings.durationMs) || 5500));
+  }
 }
 
 function showAppDialog(options = {}) {

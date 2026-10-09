@@ -6,6 +6,21 @@ const stateStore = require('./youtubeManagerState');
 const identity = require('./localIdentityExtractor');
 
 const MEDIA_EXTENSIONS = new Set(['.mp4', '.mkv', '.webm', '.mov', '.m4v', '.avi', '.ts', '.m2ts', '.mpg', '.mpeg']);
+const scanJobs = new Map();
+const SCAN_JOB_TTL_MS = 60 * 60 * 1000;
+
+function scanJobSnapshot(job) {
+  if (!job) return null;
+  const { promise, ...value } = job;
+  return JSON.parse(JSON.stringify(value));
+}
+
+function pruneScanJobs(now = Date.now()) {
+  for (const [jobId, job] of scanJobs.entries()) {
+    const endedAt = job.finishedAt || job.failedAt || '';
+    if (endedAt && now - new Date(endedAt).getTime() > SCAN_JOB_TTL_MS) scanJobs.delete(jobId);
+  }
+}
 
 function stableItemId(sourceId, relativePath) {
   return `local_${crypto.createHash('sha256').update(`${sourceId}\n${relativePath}`).digest('hex').slice(0, 24)}`;
@@ -80,20 +95,27 @@ async function walk(rootPath, recursive) {
   return result;
 }
 
-async function scanSource(sourceId, config) {
+async function scanSource(sourceId, config, options = {}) {
   const state = await stateStore.load();
   const source = state.sources[sourceId];
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
   if (!source) throw Object.assign(new Error('Raiz de acervo nao encontrada.'), { statusCode: 404 });
   const realRoot = await validateRoot(source.rootPath);
   if (realRoot !== source.rootPath) throw Object.assign(new Error('A raiz cadastrada mudou de destino fisico. Cadastre novamente antes de varrer.'), { statusCode: 409 });
+  if (onProgress) onProgress({ phase: 'listing', sourceId, sourceName: source.name, rootPath: realRoot, processed: 0, total: 0, currentFile: '', recoveredIds: 0, scanErrors: 0 });
   const files = await walk(realRoot, source.recursive !== false);
   const scannedAt = new Date().toISOString();
   const seen = new Set();
   const items = [];
+  let recoveredIds = 0;
+  let scanErrors = 0;
+  if (onProgress) onProgress({ phase: 'scanning', total: files.length, processed: 0, currentFile: '', recoveredIds: 0, scanErrors: 0 });
 
-  for (const filePath of files) {
+  for (let index = 0; index < files.length; index += 1) {
+    const filePath = files[index];
     const relativePath = path.relative(realRoot, filePath);
     if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) continue;
+    if (onProgress) onProgress({ phase: 'scanning', total: files.length, processed: index, currentFile: relativePath, recoveredIds, scanErrors });
     const id = stableItemId(sourceId, relativePath);
     let details;
     try { details = await identity.inspect(filePath, config); }
@@ -111,6 +133,9 @@ async function scanSource(sourceId, config) {
     };
     seen.add(id);
     items.push(item);
+    if (item.recoveredVideoId) recoveredIds += 1;
+    if (item.scanError) scanErrors += 1;
+    if (onProgress) onProgress({ phase: 'scanning', total: files.length, processed: index + 1, currentFile: relativePath, recoveredIds, scanErrors });
   }
 
   const summary = await stateStore.mutate((current) => {
@@ -133,7 +158,63 @@ async function scanSource(sourceId, config) {
     stateStore.appendAudit(current, { action: 'source-scan', sourceId, files: items.length, recoveredIds: identified, scanErrors, missing });
     return value;
   });
+  if (onProgress) onProgress({ phase: 'completed', total: files.length, processed: files.length, currentFile: '', ...summary });
   return summary;
+}
+
+async function startScanSource(sourceId, config) {
+  pruneScanJobs();
+  const state = await stateStore.load();
+  const source = state.sources[sourceId];
+  if (!source) throw Object.assign(new Error('Raiz de acervo nao encontrada.'), { statusCode: 404 });
+  const running = [...scanJobs.values()].find((job) => job.status === 'running');
+  if (running) {
+    if (running.sourceId === sourceId) return scanJobSnapshot(running);
+    throw Object.assign(new Error(`Ja existe uma varredura em andamento: ${running.sourceName || running.sourceId}.`), { statusCode: 409 });
+  }
+
+  const startedAt = new Date().toISOString();
+  const job = {
+    id: `scan_${crypto.randomBytes(8).toString('hex')}`,
+    sourceId,
+    sourceName: source.name,
+    rootPath: source.rootPath,
+    status: 'running',
+    phase: 'starting',
+    processed: 0,
+    total: 0,
+    currentFile: '',
+    recoveredIds: 0,
+    scanErrors: 0,
+    startedAt,
+    updatedAt: startedAt,
+    finishedAt: null,
+    failedAt: null,
+    summary: null,
+    error: ''
+  };
+  scanJobs.set(job.id, job);
+
+  job.promise = scanSource(sourceId, config, {
+    onProgress(progress) {
+      Object.assign(job, progress, { updatedAt: new Date().toISOString() });
+    }
+  }).then((summary) => {
+    Object.assign(job, { status: 'completed', phase: 'completed', summary, processed: summary.files, total: summary.files, currentFile: '', finishedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+  }).catch((error) => {
+    Object.assign(job, { status: 'failed', phase: 'failed', error: error.message, currentFile: '', failedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+  });
+
+  return scanJobSnapshot(job);
+}
+
+function getScanStatus({ sourceId = '', jobId = '' } = {}) {
+  pruneScanJobs();
+  if (jobId && scanJobs.has(jobId)) return scanJobSnapshot(scanJobs.get(jobId));
+  const candidates = [...scanJobs.values()]
+    .filter((job) => !sourceId || job.sourceId === sourceId)
+    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+  return scanJobSnapshot(candidates[0] || null);
 }
 
 function matchesFilter(item, match, filters) {
@@ -168,4 +249,4 @@ async function getItem(itemId) {
   return { ...item, match: state.matches[itemId] || null, source: state.sources[item.sourceId] || null };
 }
 
-module.exports = { MEDIA_EXTENSIONS, stableItemId, sourceIdFor, validateRoot, addSource, removeSource, listSources, scanSource, listItems, getItem };
+module.exports = { MEDIA_EXTENSIONS, stableItemId, sourceIdFor, validateRoot, addSource, removeSource, listSources, scanSource, startScanSource, getScanStatus, listItems, getItem };

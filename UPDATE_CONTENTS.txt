@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.9.1 - pacote de atualização
+ErsatzTV YouTube Downloader 3.9.2 - pacote de atualização
 
-Extraia este ZIP sobre uma instalacao v3.9.0.
+Extraia este ZIP sobre uma instalacao v3.9.1.
 
 Preservado deliberadamente (nao incluido):
 - config/config.json
@@ -10,12 +10,13 @@ Preservado deliberadamente (nao incluido):
 - data/
 - arquivos de midia e sidecars existentes
 
-Correcao:
-- corrige AUTH_REQUIRED no callback do Google OAuth;
-- cookie da sessao administrativa passa de SameSite=Strict para SameSite=Lax, permitindo o GET de retorno vindo de accounts.google.com;
-- CSRF + validacao de origem permanecem nas operacoes mutaveis;
-- state OAuth continua obrigatorio no callback;
+Alteracoes:
+- varredura do Acervo local em segundo plano com progresso por arquivo e confirmacao final no canto inferior direito;
+- impede varreduras concorrentes;
+- corrige espacamento entre os cards do Acervo local e a Fila de adocao;
+- adiciona Validar IDs recuperados em lote via videos.list, sem consumir search.list;
+- conflitos, videos indisponiveis e diferenca de duracao acima de 45 s permanecem para revisao manual;
 - nenhuma migracao de config.json ou estados persistentes.
 
-Aplicacao v3.9.1, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v3.9.2, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 Consulte UPGRADE.md antes da atualizacao.

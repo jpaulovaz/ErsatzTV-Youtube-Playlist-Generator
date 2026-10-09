@@ -105,6 +105,12 @@ async function handleYouTubeManagerRoutes(req, res, url, deps) {
   if (req.method === 'POST' && action === 'scan') {
     const payload = await deps.readJson(req); deps.sendJson(res, 200, { ok: true, result: await localCatalog.scanSource(payload.sourceId, await deps.loadConfig()) }); return true;
   }
+  if (req.method === 'POST' && action === 'scan-start') {
+    const payload = await deps.readJson(req); deps.sendJson(res, 202, { ok: true, result: await localCatalog.startScanSource(payload.sourceId, await deps.loadConfig()) }); return true;
+  }
+  if (req.method === 'GET' && action === 'scan-status') {
+    deps.sendJson(res, 200, { ok: true, result: localCatalog.getScanStatus({ sourceId: url.searchParams.get('sourceId') || '', jobId: url.searchParams.get('jobId') || '' }) }); return true;
+  }
   if (req.method === 'GET' && action === 'items') {
     deps.sendJson(res, 200, { ok: true, result: await localCatalog.listItems(queryFilters(url)) }); return true;
   }
@@ -113,6 +119,9 @@ async function handleYouTubeManagerRoutes(req, res, url, deps) {
   }
   if (req.method === 'POST' && action === 'item/match') {
     deps.sendJson(res, 200, { ok: true, result: await managerService.updateMatch(await deps.loadConfig(), await deps.readJson(req)) }); return true;
+  }
+  if (req.method === 'POST' && action === 'matches/confirm-recovered') {
+    deps.sendJson(res, 200, { ok: true, result: await managerService.confirmRecoveredMatches(await deps.loadConfig(), await deps.readJson(req)) }); return true;
   }
 
   if (req.method === 'GET' && action === 'adoption-destinations') {

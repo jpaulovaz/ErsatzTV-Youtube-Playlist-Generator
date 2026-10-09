@@ -128,6 +128,72 @@ test('local catalog scan is read-only and recovers a YouTube ID from filename', 
   }
 });
 
+test('catalog scan exposes per-file progress and background job status', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ytm-scan-progress-'));
+  try {
+    await fs.writeFile(path.join(root, 'Artist - One [AAAAAAAAAAA].mp4'), 'x');
+    await fs.writeFile(path.join(root, 'Artist - Two [BBBBBBBBBBB].mp4'), 'y');
+    const source = await localCatalog.addSource({ rootPath: root, name: 'Acervo 300', recursive: true });
+    const events = [];
+    const summary = await localCatalog.scanSource(source.id, { paths: { ffprobePath: '/usr/bin/ffprobe' } }, { onProgress: (event) => events.push({ ...event }) });
+    assert.equal(summary.files, 2);
+    assert.ok(events.some((event) => event.phase === 'listing'));
+    assert.ok(events.some((event) => event.phase === 'scanning' && event.currentFile));
+    assert.ok(events.some((event) => event.phase === 'completed' && event.processed === 2));
+
+    const background = await localCatalog.startScanSource(source.id, { paths: { ffprobePath: '/usr/bin/ffprobe' } });
+    assert.equal(background.sourceName, 'Acervo 300');
+    let job = background;
+    for (let i = 0; i < 100 && job.status === 'running'; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      job = localCatalog.getScanStatus({ jobId: background.id });
+    }
+    assert.equal(job.status, 'completed');
+    assert.equal(job.summary.files, 2);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('bulk validation confirms strong recovered IDs and leaves large duration mismatches for manual review', async () => {
+  await managerState.save({
+    ...managerState.emptyState(),
+    sources: { src1: { id: 'src1', name: 'Clipes', rootPath: '/tmp/clipes' } },
+    localItems: {
+      a: { id: 'a', sourceId: 'src1', present: true, recoveredVideoId: 'AAAAAAAAAAA', matchSource: 'embedded', inferredArtist: 'Artist', inferredTitle: 'Song A', duration: 240 },
+      b: { id: 'b', sourceId: 'src1', present: true, recoveredVideoId: 'BBBBBBBBBBB', matchSource: 'filename', inferredArtist: 'Artist', inferredTitle: 'Song B', duration: 200 }
+    }
+  });
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+    assert.equal(parsed.pathname, '/youtube/v3/videos');
+    const requested = new Set((parsed.searchParams.get('id') || '').split(','));
+    const items = [];
+    if (requested.has('AAAAAAAAAAA')) items.push({
+      id: 'AAAAAAAAAAA',
+      snippet: { title: 'Artist - Song A', channelTitle: 'Artist', publishedAt: '2020-01-01T00:00:00Z', thumbnails: {} },
+      contentDetails: { duration: 'PT4M1S' },
+      status: { privacyStatus: 'public', uploadStatus: 'processed' }
+    });
+    if (requested.has('BBBBBBBBBBB')) items.push({
+      id: 'BBBBBBBBBBB',
+      snippet: { title: 'Artist - Song B', channelTitle: 'Artist', publishedAt: '2020-01-01T00:00:00Z', thumbnails: {} },
+      contentDetails: { duration: 'PT5M' },
+      status: { privacyStatus: 'public', uploadStatus: 'processed' }
+    });
+    return new Response(JSON.stringify({ items }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  const result = await managerService.confirmRecoveredMatches({ youtubeApi: { apiKey: 'key', timeoutSeconds: 5, cacheTtlHours: 1 } }, { sourceId: 'src1' });
+  assert.equal(result.candidates, 2);
+  assert.equal(result.confirmed, 1);
+  assert.equal(result.blocked, 1);
+  const state = await managerState.load();
+  assert.equal(state.matches.a.status, 'confirmed');
+  assert.equal(state.matches.a.confirmationMode, 'bulk-recovered');
+  assert.equal(state.matches.b, undefined);
+  assert.equal(result.details.find((item) => item.itemId === 'b').reason, 'duration-difference');
+});
+
 test('identity helper recognizes video IDs in filenames, URLs and metadata text', () => {
   assert.equal(identity.findVideoIdInText('Artist - Song [dQw4w9WgXcQ].mp4'), 'dQw4w9WgXcQ');
   assert.equal(identity.findVideoIdInText('https://www.youtube.com/watch?v=dQw4w9WgXcQ'), 'dQw4w9WgXcQ');

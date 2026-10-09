@@ -16,11 +16,125 @@
   let adoptionSelection = [];
   let adoptionPlan = null;
   let adoptionDestinations = [];
+  let scanPollTimer = null;
+  let activeScanJobId = '';
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const esc = (value) => deps && deps.escapeHtml ? deps.escapeHtml(value) : String(value ?? '');
   const duration = (seconds) => deps && deps.formatDuration ? deps.formatDuration(seconds) : (seconds ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : '-');
+
+  function clearScanPoll() {
+    if (scanPollTimer) window.clearTimeout(scanPollTimer);
+    scanPollTimer = null;
+  }
+
+  function setScanButtonBusy(busy) {
+    const button = $('#ytmScanBtn');
+    if (!button) return;
+    const active = Boolean(busy);
+    button.disabled = active;
+    button.textContent = active ? 'Varrendo...' : 'Atualizar varredura';
+    if ($('#ytmSourceSelect')) $('#ytmSourceSelect').disabled = active;
+    if ($('#ytmSourceRemove')) $('#ytmSourceRemove').disabled = active;
+    if ($('#ytmConfirmRecovered')) $('#ytmConfirmRecovered').disabled = active;
+  }
+
+  function showScanProgress(job) {
+    if (!job) return;
+    const total = Number(job.total) || 0;
+    const processed = Number(job.processed) || 0;
+    const progress = total > 0 ? processed / total : 0;
+    const phase = job.phase === 'listing'
+      ? 'Localizando arquivos de mídia...'
+      : total > 0
+        ? `${processed} de ${total} · IDs recuperados: ${Number(job.recoveredIds) || 0} · erros: ${Number(job.scanErrors) || 0}`
+        : 'Preparando varredura...';
+    const current = job.currentFile ? `\n${job.currentFile}` : '';
+    deps.showToast(`Varredura — ${job.sourceName || job.sourceId}\n${job.rootPath || ''}\n${phase}${current}`, { persistent: true, loading: true, progress });
+  }
+
+  async function pollScanProgress({ jobId = '', resumeOnly = false } = {}) {
+    clearScanPoll();
+    const query = jobId ? `?jobId=${encodeURIComponent(jobId)}` : '';
+    const response = await deps.api(`/api/youtube-manager/scan-status${query}`);
+    const job = response.result;
+    if (!job || (resumeOnly && job.status !== 'running')) {
+      if (!jobId) setScanButtonBusy(false);
+      return;
+    }
+    if (job.status === 'running') {
+      activeScanJobId = job.id;
+      setScanButtonBusy(true);
+      showScanProgress(job);
+      scanPollTimer = window.setTimeout(() => pollScanProgress({ jobId: job.id }).catch((error) => {
+        setScanButtonBusy(false);
+        deps.showToast(error.message, true);
+      }), 700);
+      return;
+    }
+
+    const tracked = Boolean(jobId || activeScanJobId === job.id);
+    activeScanJobId = '';
+    setScanButtonBusy(false);
+    if (!tracked) return;
+    if (job.status === 'completed') {
+      const summary = job.summary || {};
+      deps.showToast(`Varredura concluída — ${job.sourceName || job.sourceId}\n${summary.files || job.total || 0} arquivo(s) · ${summary.recoveredIds || 0} ID(s) recuperado(s) · ${summary.scanErrors || 0} erro(s).`, false, { durationMs: 8000 });
+      await refreshStatus({ light: true });
+      if (activeTab === 'catalog' && $('#ytmSourceSelect')?.value === job.sourceId) await refreshCatalog();
+    } else if (job.status === 'failed') {
+      deps.showToast(`Falha na varredura — ${job.sourceName || job.sourceId}\n${job.error || 'Erro desconhecido.'}`, true, { durationMs: 9000 });
+    }
+  }
+
+  async function startCatalogScan() {
+    const sourceId = $('#ytmSourceSelect').value;
+    if (!sourceId) return deps.showToast('Cadastre uma raiz primeiro.', true);
+    setScanButtonBusy(true);
+    try {
+      const response = await deps.api('/api/youtube-manager/scan-start', { method: 'POST', body: JSON.stringify({ sourceId }) });
+      activeScanJobId = response.result.id;
+      showScanProgress(response.result);
+      await pollScanProgress({ jobId: activeScanJobId });
+    } catch (error) {
+      activeScanJobId = '';
+      setScanButtonBusy(false);
+      deps.showToast(error.message, true);
+    }
+  }
+
+  async function confirmRecoveredBulk() {
+    const sourceId = $('#ytmSourceSelect').value;
+    if (!sourceId) return deps.showToast('Selecione uma fonte de acervo primeiro.', true);
+    const source = sources.find((item) => item.id === sourceId);
+    const dialog = await deps.showDialog({
+      eyebrow: 'Acervo local',
+      title: 'Validar IDs recuperados em lote?',
+      message: `Os IDs exatos recuperados de “${source && source.name || sourceId}” serão validados no YouTube e confirmados sem revisão individual quando forem seguros.`,
+      warning: 'A validação usa videos.list em lotes, não search.list. IDs duplicados, indisponíveis ou com diferença de duração acima de 45 s continuarão pendentes para revisão manual.',
+      confirmLabel: 'Validar IDs'
+    });
+    if (!dialog.confirmed) return;
+    const button = $('#ytmConfirmRecovered');
+    button.disabled = true;
+    deps.showToast(`Validando IDs recuperados — ${source && source.name || sourceId}...`, { persistent: true, loading: true });
+    try {
+      const response = await deps.api('/api/youtube-manager/matches/confirm-recovered', { method: 'POST', body: JSON.stringify({ sourceId }) });
+      const result = response.result;
+      await refreshStatus({ light: true });
+      await refreshCatalog();
+      const extras = [];
+      if (result.blocked) extras.push(`${result.blocked} para revisão`);
+      if (result.warnings) extras.push(`${result.warnings} com aviso de duração`);
+      if (result.alreadyConfirmed) extras.push(`${result.alreadyConfirmed} já confirmados`);
+      deps.showToast(`Validação concluída: ${result.confirmed} ID(s) confirmado(s)${extras.length ? ` · ${extras.join(' · ')}` : ''}.`, false, { durationMs: 9000 });
+    } catch (error) {
+      deps.showToast(error.message, true, { durationMs: 9000 });
+    } finally {
+      button.disabled = false;
+    }
+  }
 
   function setTab(tab) {
     activeTab = ['search', 'catalog', 'playlists', 'account'].includes(tab) ? tab : 'search';
@@ -463,10 +577,7 @@
         await refreshStatus({ light: true }); await refreshCatalog(); deps.showToast('Raiz de acervo cadastrada.');
       } catch (error) { deps.showToast(error.message, true); }
     });
-    $('#ytmScanBtn').addEventListener('click', async () => {
-      const sourceId = $('#ytmSourceSelect').value; if (!sourceId) return deps.showToast('Cadastre uma raiz primeiro.', true);
-      try { const response = await deps.api('/api/youtube-manager/scan', { method: 'POST', body: JSON.stringify({ sourceId }) }); await refreshStatus({ light: true }); await refreshCatalog(); deps.showToast(`Varredura concluída: ${response.result.files} arquivo(s).`); } catch (error) { deps.showToast(error.message, true); }
-    });
+    $('#ytmScanBtn').addEventListener('click', () => startCatalogScan());
     $('#ytmSourceRemove').addEventListener('click', async () => {
       const sourceId = $('#ytmSourceSelect').value; if (!sourceId) return;
       const dialog = await deps.showDialog({ eyebrow: 'Acervo local', title: 'Remover cadastro da raiz?', message: 'Isto remove apenas o catálogo do Gerenciador do YouTube. Nenhum arquivo do disco será apagado.', confirmLabel: 'Remover', danger: true });
@@ -475,6 +586,7 @@
     });
     $('#ytmSourceSelect').addEventListener('change', () => { selectedCatalog.clear(); refreshCatalog().catch((error) => deps.showToast(error.message, true)); });
     $('#ytmCatalogRefresh').addEventListener('click', () => refreshCatalog().catch((error) => deps.showToast(error.message, true)));
+    $('#ytmConfirmRecovered').addEventListener('click', () => confirmRecoveredBulk().catch((error) => deps.showToast(error.message, true)));
     $('#ytmCatalogMore').addEventListener('click', () => refreshCatalog({ append: true }).catch((error) => deps.showToast(error.message, true)));
     $('#ytmCatalogAddSelected').addEventListener('click', () => catalogBulkAdd().catch((error) => deps.showToast(error.message, true)));
     $('#ytmCatalogAdoptSelected').addEventListener('click', () => openAdoptionPanel([...selectedCatalog]).catch((error) => deps.showToast(error.message, true)));
@@ -524,6 +636,7 @@
       history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash || ''}`);
     }
     await refreshStatus();
+    await pollScanProgress({ resumeOnly: true }).catch(() => {});
     pollTimer = window.setInterval(() => {
       if ($('#view-youtube-manager')?.classList.contains('active')) refreshQueue().catch(() => {});
     }, 4000);
