@@ -1,117 +1,107 @@
-# Atualização para 3.7.1
+# Atualização para 3.8.0
 
-A versão 3.7.1 atualiza diretamente a **v3.7.0** e refina o módulo de tradução de legendas em dois pontos: acompanhamento da fila na **Visão geral** e suporte simultâneo a uma faixa traduzida e outra bilíngue compatível com seleção `und` no ErsatzTV.
+A versão 3.8.0 atualiza diretamente a **v3.7.1** e acrescenta a primeira fase do **Gerenciador do YouTube**. Não há migração do `config.json`, da fila de downloads, do Subtitle Manager, da tradução ou dos Scripted Schedules.
 
 ## Versionamento
 
-- aplicação: **v3.7.1**;
-- Universal: **v1.3.1**;
+- aplicação: **v3.8.0**;
+- Universal Scripted Schedules: **v1.3.1**;
 - `configVersion`: **9**;
 - download state: **5**;
 - Scripted Schedules schema: **1**;
-- subtitle-manager state: **1**;
-- subtitle-translation config: **1**;
-- subtitle-translation state: **1**.
-
-Não há migração de `config.json`, de download state nem dos estados de tradução.
+- Subtitle Manager state: **1**;
+- Subtitle Translation config/state: **1**;
+- YouTube Manager state: **1 (novo)**;
+- YouTube Account state/config: **1 (novo)**.
 
 ## Antes de atualizar
 
-1. Confirme que a instalação está em **v3.7.0**.
-2. Faça backup de `config/`, `data/` e das pastas de mídia.
-3. Se houver tradução em massa em execução, prefira pausá-la antes de parar o serviço.
-4. Pare o serviço antes de substituir os arquivos.
+1. Pare o serviço/aplicativo.
+2. Faça backup de `config/` e `data/`.
+3. Preserve normalmente suas bibliotecas e sidecars de mídia.
+4. Não crie manualmente `youtube-manager-state.json` nem `youtube-account-state.json`; eles serão criados sob demanda.
 
-## Aplicando o update
+## Aplicar o pacote update
+
+Extraia o ZIP sobre a instalação v3.7.1:
 
 ```bash
-sudo systemctl stop ersatztv-youtube-downloader
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.7.1-update.zip -d /caminho/da/aplicacao
-cd /caminho/da/aplicacao
-npm run verify
-sudo systemctl start ersatztv-youtube-downloader
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.8.0-update.zip -d /caminho/da/aplicacao
 ```
 
-O update não contém `config/config.json`, `config/auth.json`, `config/subtitle-translation.json`, `data/` nem mídia.
+O pacote de atualização não contém `config/config.json`, `config/auth.json`, `config/subtitle-translation.json`, `config/youtube-account.json`, `data/` nem arquivos de mídia.
 
-## Visão geral
+## Gerenciador do YouTube
 
-A página **Visão geral** passa a mostrar um card próprio para a fila de tradução de legendas. Ele acompanha:
+Após iniciar a v3.8.0, uma nova área **YouTube -> Gerenciador do YouTube** aparece na navegação. Ela possui Pesquisa, Acervo local, Minhas playlists e Conta.
 
-- estado do job;
-- item atual;
-- destino;
-- concluídas;
-- aguardando/em andamento;
-- falhas;
-- ignoradas;
-- progresso total.
+A pesquisa pública usa a mesma YouTube Data API Key já configurada para o restante do aplicativo. Não é necessário conectar uma conta Google para pesquisar.
 
-Quando existe job ativo, o card permite **Pausar/Retomar**. O botão **Gerenciar conteúdo** abre o destino do job quando ele foi criado pela v3.7.1 e possui o contexto de Biblioteca/Playlist salvo no estado.
+### OAuth da conta
 
-Jobs antigos da v3.7.0 continuam executáveis; como eles não gravavam metadados de navegação do destino, o atalho pode ficar indisponível para um job já existente antes do update.
-
-## Traduzida + bilíngue
-
-Em **Gerenciar conteúdo -> Traduzir legendas**, o seletor de saída passa a oferecer:
-
-- **Somente traduzida**;
-- **Somente bilíngue**;
-- **Traduzida + bilíngue**.
-
-Quando as duas saídas são escolhidas, o Gemini traduz os cues uma única vez. Após a validação, o aplicativo monta os dois SRTs localmente.
-
-Para um vídeo `Musica.mp4`, traduzindo `en -> pt-BR`:
+Para listar, criar e alterar playlists próprias, crie/obtenha no Google Cloud um OAuth Client do tipo **Web application** e cadastre exatamente:
 
 ```text
-Musica.en.srt       original preservado
-Musica.pt-BR.srt    somente tradução em Português (Brasil)
-Musica.srt          bilíngue: original em cima + tradução embaixo
+Authorized redirect URI:
+https://yt.johnflix.com.br/api/youtube-manager/oauth/callback
 ```
 
-A faixa `Musica.srt` é tratada pelo aplicativo como idioma `und`. Essa convenção é reservada para a faixa bilíngue e permite selecioná-la no Custom Stream Selector do ErsatzTV, por exemplo:
+Na aba **Conta**, informe Client ID e Client Secret. A URL pública padrão já é:
 
-```yaml
-items:
-  - audio_language: ["*"]
-    subtitle_language: ["und*"]
-    disable_subtitles: false
+```text
+https://yt.johnflix.com.br/
 ```
 
-Para a tradução pura em Português (Brasil), continue usando `pt*`; para a original em inglês, `en*`.
+O aplicativo solicita o escopo `https://www.googleapis.com/auth/youtube.force-ssl` e pede acesso offline para obter refresh token. A sessão administrativa do aplicativo deve continuar válida durante ida/volta ao Google, pois o callback também é protegido pela autenticação local.
 
-## Preflight
+Alternativamente, as credenciais podem vir do ambiente:
 
-A pré-análise agora mostra separadamente:
+```text
+YOUTUBE_OAUTH_CLIENT_ID
+YOUTUBE_OAUTH_CLIENT_SECRET
+YOUTUBE_PUBLIC_BASE_URL
+```
 
-- traduções a gerar;
-- bilíngues a gerar;
-- traduzidas existentes;
-- bilíngues existentes.
+O arquivo real `config/youtube-account.json` e os tokens de `data/youtube-account-state.json` ficam fora dos pacotes de distribuição. Ambos são gravados com permissão restrita quando criados pelo aplicativo.
 
-Com política **Ignorar**, se `.pt-BR.srt` já existir mas `.srt` não existir, o item continua elegível e somente a bilíngue é criada. O inverso também vale. Com **Substituir com histórico**, as saídas solicitadas são regravadas preservando as versões anteriores no histórico.
+> Se o projeto OAuth externo estiver em modo Testing, o Google pode limitar a duração das autorizações de usuários de teste. Para uso contínuo, configure o projeto/consentimento de acordo com as regras atuais da sua conta Google Cloud.
 
-## Compatibilidade com bilíngues criadas na v3.7.0
+## Acervo local: segurança
 
-Na v3.7.0 o modo bilíngue gravava a saída no próprio idioma-alvo, por exemplo `.pt-BR.srt`. A v3.7.1 **não renomeia nem apaga automaticamente** esse arquivo.
+A v3.8.0 trata as raízes cadastradas como **somente leitura**. O scanner:
 
-Se você já gerou bilíngues na v3.7.0 e quer passar ao novo formato mantendo as duas opções, execute um job com:
+- aceita somente diretórios explícitos e rejeita raízes amplas/perigosas;
+- não segue symlinks;
+- não renomeia, move, copia ou exclui mídia;
+- usa `ffprobe` e sidecars existentes somente para leitura;
+- tenta recuperar IDs confiáveis de `[videoId]`, URL/metadados, `info.json` e NFO;
+- exige confirmação antes de usar matches em operações em massa.
 
-- saída **Traduzida + bilíngue**;
-- política **Substituir com histórico**.
+A futura adoção sem redownload permanece fora desta versão.
 
-O resultado será `.pt-BR.srt` como tradução pura e `.srt` como bilíngue, com a versão anterior preservada pelo histórico.
+## Playlists e quota
 
-## Validação após o update
+A fila de playlist é persistente. Antes de inserir, o aplicativo reconsulta a playlist e ignora Video IDs já presentes. É possível pausar, retomar e cancelar os pendentes; itens já inseridos no YouTube não são removidos pelo cancelamento.
 
-1. Execute `npm run verify`.
-2. Abra a **Visão geral** e confirme que o card **Tradução de legendas** aparece.
-3. Em uma biblioteca pequena, faça o preflight `en -> pt-BR` com **Traduzida + bilíngue**.
-4. Confirme que a estimativa de tokens não é duplicada apenas por gerar os dois formatos.
-5. Traduza um item e confirme a presença de `.pt-BR.srt` e `.srt`.
-6. Abra o Gerenciador de Legendas e confirme que a faixa sem sufixo aparece como **Bilíngue** e **ErsatzTV: und**.
-7. No ErsatzTV, selecione `und*` para testar a bilíngue e `pt*` para testar a tradução pura.
+O painel de quota é uma estimativa local. O contador de pesquisas segue o dia do Pacífico e o aplicativo não presume conhecer o saldo exato do projeto caso outros clientes também usem as mesmas credenciais.
+
+## Validação após atualizar
+
+Execute:
+
+```bash
+npm run verify
+```
+
+Depois:
+
+1. abra **YouTube -> Gerenciador do YouTube**;
+2. teste uma pesquisa pública;
+3. em **Conta**, confira se o callback exibido é exatamente `https://yt.johnflix.com.br/api/youtube-manager/oauth/callback`;
+4. configure OAuth e use **Conectar com Google**;
+5. valide a conta e carregue **Minhas playlists**;
+6. antes de uma migração grande, cadastre uma pasta pequena de teste em **Acervo local** e confira os matches sugeridos.
 
 ## Rollback
 
-Para rollback do aplicativo, restaure os arquivos da v3.7.0 preservando `config/`, `data/` e a mídia. Sidecars `.srt` criados pela v3.7.1 são arquivos normais e não são removidos automaticamente pelo rollback; uma v3.7.0 pode não interpretar a convenção bilíngue sem sufixo da mesma forma dentro do seu Gerenciador de Legendas.
+Para rollback do aplicativo, restaure os arquivos da v3.7.1 preservando `config/`, `data/` e mídia. A v3.7.1 simplesmente ignora os novos arquivos `youtube-account.json`, `youtube-manager-state.json` e `youtube-account-state.json`; se quiser removê-los, faça isso somente depois de desconectar/revogar a conta e confirmar que não precisa do catálogo/fila do Gerenciador do YouTube.

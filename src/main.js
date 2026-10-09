@@ -7,6 +7,7 @@ const logger = require('./logger');
 const auth = require('./auth');
 const mediaPreviewService = require('./mediaPreviewService');
 const translationQueue = require('./subtitleTranslation/translationQueue');
+const youtubePlaylistQueue = require('./youtubeManager/playlistQueue');
 
 let server = null;
 let shuttingDown = false;
@@ -20,6 +21,7 @@ async function shutdown(signal) {
   await downloadManager.stop({ terminateCurrent: true });
   await mediaPreviewService.clearAllPreviews();
   await translationQueue.stop();
+  await youtubePlaylistQueue.stop();
   auth.stop();
   if (server) {
     await new Promise((resolve) => server.close(resolve));

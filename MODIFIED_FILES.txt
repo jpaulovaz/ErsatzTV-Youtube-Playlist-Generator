@@ -1,33 +1,44 @@
-ErsatzTV YouTube Downloader 3.7.1
+ErsatzTV YouTube Downloader 3.8.0
 
-Arquivos alterados em relacao a v3.7.0:
+Arquivos alterados em relacao a v3.7.1:
 
+M	.gitignore
 M	CHANGELOG.md
-M	MODIFIED_FILES.txt
 M	README.md
-M	UPDATE_CONTENTS.txt
 M	UPGRADE.md
+A	config/youtube-account.example.json
 M	package.json
 M	public/app.js
 M	public/index.html
-M	public/js/subtitleManager.js
-M	public/js/subtitleTranslation.js
+A	public/js/youtubeManager.js
 M	public/login.html
 M	public/styles.css
+M	scripts/run-tests.js
 M	src/config.js
+M	src/main.js
+A	src/routes/youtubeManagerRoutes.js
 M	src/server.js
-M	src/subtitleManager/subtitleManagerService.js
-M	src/subtitleService.js
-M	src/subtitleTranslation/translationConfig.js
-M	src/subtitleTranslation/translationQueue.js
-M	src/subtitleTranslation/translationService.js
-M	test/subtitleManager.test.js
-M	test/subtitleService.test.js
-M	test/subtitleTranslation.test.js
+M	src/youtubeApi.js
+A	src/youtubeManager/localCatalogScanner.js
+A	src/youtubeManager/localIdentityExtractor.js
+A	src/youtubeManager/matchScore.js
+A	src/youtubeManager/playlistQueue.js
+A	src/youtubeManager/quotaTracker.js
+A	src/youtubeManager/youtubeAccountConfig.js
+A	src/youtubeManager/youtubeAccountService.js
+A	src/youtubeManager/youtubeAccountState.js
+A	src/youtubeManager/youtubeManagerService.js
+A	src/youtubeManager/youtubeManagerState.js
+A	src/youtubeManager/youtubeOAuthService.js
+A	src/youtubeManager/youtubePlaylistService.js
+A	src/youtubeManager/youtubeSearchService.js
 M	test/ui-v3.test.js
+A	test/youtubeManager.test.js
+M	MODIFIED_FILES.txt
+M	UPDATE_CONTENTS.txt
 
 Versionamento:
-- Aplicacao: v3.7.1
+- Aplicacao: v3.8.0
 - Universal: v1.3.1
 - configVersion: 9
 - Scripted Schedules schema: 1
@@ -35,5 +46,7 @@ Versionamento:
 - subtitle-manager state: 1
 - subtitle-translation config: 1
 - subtitle-translation state: 1
+- youtube-manager state: 1 (novo)
+- youtube-account config/state: 1 (novo)
 
-O pacote update preserva config/config.json, config/auth.json, config/subtitle-translation.json, data/ e arquivos de midia.
+O pacote update preserva config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/ e arquivos de midia.

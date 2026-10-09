@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.8.0
+
+- Adiciona a área independente **YouTube -> Gerenciador do YouTube**, com abas **Pesquisa**, **Acervo local**, **Minhas playlists** e **Conta**, sem alterar o fluxo atual de Bibliotecas/Canais/Scripted Schedules.
+- A pesquisa pública aceita termo, URL ou Video ID, reutiliza a YouTube Data API Key atual, enriquece resultados com duração/metadados, mantém cache persistente por 24 horas e evita `search.list` quando o Video ID já é conhecido.
+- Implementa conexão da própria conta via Google OAuth 2.0 com URL pública padrão `https://yt.johnflix.com.br/` e callback canônico `https://yt.johnflix.com.br/api/youtube-manager/oauth/callback`; Client Secret/tokens permanecem somente no servidor, com arquivos locais 0600 e suporte a variáveis de ambiente.
+- Permite listar playlists próprias, criar playlists e adicionar vídeos por uma fila persistente/serializada; a fila reindexa a playlist antes de inserir, ignora duplicatas, sobrevive a restart, permite pausar/retomar/cancelar pendentes e pausa em erro de quota.
+- Cria catálogo de **acervo local somente leitura**: raízes explícitas, scanner recursivo opcional sem symlinks, ffprobe, `info.json`, NFO e metadados embutidos; nenhum arquivo é movido, renomeado, copiado ou removido na v3.8.0.
+- Recupera Video IDs confiáveis de URLs, IDs explícitos/metadados e nomes no formato `[videoId]`, evitando interpretar palavras arbitrárias de 11 caracteres como ID.
+- Adiciona matching assistido por título, artista/canal e duração, com scores **alta/provável/fraca**; a correspondência continua sob confirmação do usuário e o Video ID confirmado é revalidado na API.
+- Operações em massa bloqueiam conflitos quando dois arquivos locais confirmados apontam para o mesmo Video ID, evitando migrar matches ambíguos silenciosamente.
+- Adiciona estimativa local de quota separando bucket de pesquisa e unidades gerais, contabilizada pelo dia do Pacífico; a interface deixa explícito que o saldo é estimado quando o mesmo projeto Google pode ser usado fora do aplicativo.
+- Introduz `youtube-manager-state` v1 e `youtube-account-state/config` v1, todos separados do `config.json`; `config/youtube-account.json` real e tokens não entram nos pacotes de distribuição.
+- A adoção da mídia existente sem redownload permanece deliberadamente fora desta release e está planejada para a v3.9.0 após validação do catálogo e dos matches no acervo real.
+- Aplicação **v3.8.0**; Universal **v1.3.1**; `configVersion` **9**; Scripted Schedules schema **1**; download state **5**; subtitle-manager state **1**; subtitle-translation config/state **1**; YouTube Manager state **1**; YouTube Account state/config **1**.
+
 ## 3.7.1
 
 - A **Visão geral** passa a exibir o estado global da fila de tradução de legendas: situação atual, item em execução, destino, concluídas, aguardando, falhas, ignoradas e barra de progresso, com ações rápidas **Pausar/Retomar** e **Gerenciar conteúdo**.

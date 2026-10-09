@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.7.1
+# ErsatzTV YouTube Downloader 3.8.0
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.7.1 refina a tradução em massa de legendas: a **Visão geral** passa a acompanhar a fila de tradução, e o job pode gerar **traduzida, bilíngue ou as duas simultaneamente** com uma única tradução no Gemini. A faixa traduzida usa o idioma-alvo (`.pt-BR.srt`, por exemplo) e a bilíngue usa o sidecar sem sufixo de idioma (`.srt`), reconhecido pelo ErsatzTV como `und`. Universal permanece em v1.3.1, `configVersion` em 9 e todos os schemas/estados da v3.7.0 permanecem inalterados.
+A versão 3.8.0 acrescenta uma área independente **Gerenciador do YouTube** para pesquisar vídeos pela API oficial, conectar a própria conta via Google OAuth, listar/criar playlists, adicionar vídeos com fila persistente e catalogar um acervo local antigo em modo somente leitura para recuperar Video IDs e confirmar correspondências. A URL pública canônica do OAuth é `https://yt.johnflix.com.br/`, com callback `https://yt.johnflix.com.br/api/youtube-manager/oauth/callback`. Universal permanece em v1.3.1, `configVersion` em 9 e os estados existentes continuam inalterados; o Gerenciador do YouTube introduz estado próprio versão 1.
 
 ## Arquitetura
 
@@ -40,6 +40,7 @@ Biblioteca local do ErsatzTV
 - Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
 - **Gerenciador manual de legendas** no Gerenciar conteúdo: player, preview de SRT local/YouTube/LRCLIB, busca manual, offset e histórico de até cinco versões por idioma.
 - **Tradução em massa de legendas com Gemini**: pré-análise por biblioteca/playlist, fonte local preservada, saída traduzida, bilíngue ou ambas no mesmo job, fila persistente com pausa/retomada/cancelamento e origem Gemini rastreável. A Visão geral acompanha o progresso global da fila.
+- **Gerenciador do YouTube** independente: pesquisa pública, conexão OAuth da conta, playlists próprias, criação/inserção com fila persistente, catálogo somente leitura de acervo local, recuperação de Video ID e matching assistido por título/artista/duração.
 - Seleção múltipla de idiomas: `pt-BR`, `pt`, `en` e `es`.
 - Ação **Buscar legendas ausentes** para o acervo já baixado, sem baixar novamente os vídeos.
 - Deduplicação por ID do YouTube dentro de cada destino; o mesmo vídeo pode existir intencionalmente em destinos diferentes.
@@ -72,7 +73,8 @@ Biblioteca local do ErsatzTV
 - API Key do ErsatzTV quando a versão instalada exigir autenticação em `/api` (`X-Etv-Api-Key`).
 - Opcional: Deno para os desafios JavaScript atuais do YouTube.
 - Para usar **Scripted Schedules**: Python 3 recomendado no host do aplicativo para validar o arquivo gerado; o processo do ErsatzTV precisa conseguir executar o script e gravar seu arquivo de estado.
-- Opcional: uma YouTube Data API Key.
+- Opcional: uma YouTube Data API Key. Ela também alimenta a pesquisa pública do **Gerenciador do YouTube**.
+- Para gerenciar playlists da própria conta: credenciais OAuth 2.0 do Google para aplicação Web, com `https://yt.johnflix.com.br/api/youtube-manager/oauth/callback` cadastrado como URI de redirecionamento autorizada.
 - Para buscar letras sincronizadas no **LRCLIB**, o servidor precisa ter saída HTTPS para `https://lrclib.net`; nenhuma API key do LRCLIB é necessária.
 - Opcional, para **Tradução de legendas**: uma Gemini API key (`GEMINI_API_KEY` recomendado) e saída HTTPS para `https://generativelanguage.googleapis.com`.
 - Opcional: `cookies.txt` em formato Netscape para vídeos que exigem sessão.
@@ -123,7 +125,40 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A v3.7.1 atualiza diretamente uma instalação **v3.7.0**. `configVersion` continua 9, o Universal continua 1.3.1 e o subtitle-manager state continua 1. A tradução usa configuração e estado próprios (versão 1), criados sob demanda; não existe migração do `config.json`. Consulte [UPGRADE.md](UPGRADE.md).
+A v3.8.0 atualiza diretamente uma instalação **v3.7.1**. `configVersion` continua 9, o Universal continua 1.3.1 e os estados de download, Scripted Schedules, Subtitle Manager e tradução permanecem nas versões atuais. O Gerenciador do YouTube cria sob demanda `data/youtube-manager-state.json` e `data/youtube-account-state.json`, ambos versão 1, e usa configuração OAuth separada em `config/youtube-account.json`; não existe migração do `config.json`. Consulte [UPGRADE.md](UPGRADE.md).
+
+## Gerenciador do YouTube
+
+A área **YouTube -> Gerenciador do YouTube** é independente das Bibliotecas, Canais e Scripted Schedules. A v3.8.0 entrega a primeira fase da migração de acervo; ela **não move, renomeia, substitui nem exclui mídia local**.
+
+A interface possui quatro abas:
+
+- **Pesquisa**: consulta vídeos pela YouTube Data API, aceita termo, URL ou Video ID, mostra título/canal/thumbnail/duração e permite enviar o resultado escolhido a uma playlist própria.
+- **Acervo local**: cadastra raízes explícitas, percorre arquivos de mídia sem seguir symlinks, tenta recuperar Video ID de nome/`info.json`/NFO/metadados e permite revisar candidatos ordenados por correspondência de título, artista e duração.
+- **Minhas playlists**: lista playlists da conta autenticada, cria novas playlists e acompanha a fila persistente de inserções, com pausa, retomada, cancelamento dos pendentes e prevenção de duplicatas.
+- **Conta**: configura Client ID/Secret OAuth, exibe a URL pública/callback, conecta/desconecta a conta e valida a identidade do canal autenticado.
+
+A URL pública padrão desta instalação é:
+
+```text
+https://yt.johnflix.com.br/
+```
+
+Cadastre no projeto Google OAuth exatamente este redirect URI:
+
+```text
+https://yt.johnflix.com.br/api/youtube-manager/oauth/callback
+```
+
+O Client Secret nunca é devolvido integralmente à interface. As credenciais podem ficar em `config/youtube-account.json` (permissão 0600) ou ser fornecidas por `YOUTUBE_OAUTH_CLIENT_ID`, `YOUTUBE_OAUTH_CLIENT_SECRET` e `YOUTUBE_PUBLIC_BASE_URL`. Os tokens ficam somente no servidor em `data/youtube-account-state.json` (0600). O pacote full inclui apenas `config/youtube-account.example.json`; o arquivo real nunca é distribuído.
+
+A pesquisa pública reutiliza a YouTube Data API Key já configurada no aplicativo. Pesquisas idênticas são armazenadas em cache por 24 horas; uma URL/Video ID direto evita `search.list` e consulta somente os metadados do vídeo. O painel de quota é **estimativo** porque outras aplicações podem usar o mesmo projeto Google; o dia é contabilizado pelo fuso do Pacífico, compatível com o reset oficial da API.
+
+No catálogo local, uma correspondência só entra em operações em massa depois de **Confirmação**. Um ID recuperado automaticamente é uma pista forte, mas pode ser revisado; resultados de pesquisa exibem score de título/artista/duração. Se dois arquivos confirmados apontarem para o mesmo Video ID, o conflito bloqueia a inclusão em massa até ser resolvido. Esta proteção evita transformar uma associação errada em centenas de operações de playlist.
+
+A fila de playlist reconsulta o conteúdo atual da playlist antes de inserir: IDs já existentes são ignorados, itens concluídos não são revertidos ao cancelar e uma interrupção/restart não perde o job. Erros permanentes de um item não interrompem os demais; erro de quota pausa a fila para retomada posterior.
+
+A **adoção de mídia existente sem redownload** continua deliberadamente fora da v3.8.0 e está planejada para a v3.9.0, após validação do catálogo/matching com o acervo real.
 
 ## Estrutura dos arquivos
 
@@ -230,13 +265,13 @@ Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando
 
 ## Scripted Schedules
 
-A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do **Universal v1.3.1**, único motor suportado pela v3.7.1.
+A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do **Universal v1.3.1**, único motor suportado pela v3.8.0.
 
 O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas. O valor **Nenhum** nos seletores de Presentation é interno e sempre vazio; ele não aparece como perfil editável.
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.7.1:
+Módulos disponíveis na v3.8.0:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -501,7 +536,7 @@ Cada **Biblioteca** e cada **Playlist de Canal** possui a configuração **Arqui
 - **Marcar como órfão**: mantém o arquivo no lugar. **Limpar órfãos** só aparece quando esta política está selecionada e existem órfãos.
 - **Mover para quarentena recuperável**: retira o pacote da biblioteca ativa e o preserva fora da raiz escaneada. A retenção pode ser **Nunca**, 30, 90 ou 180 dias.
 
-Cada destino atual precisa ter uma política de órfãos válida. A v3.7.1 não executa migração automática de destinos antigos; configurações já atualizadas para `configVersion` 9 continuam preservadas.
+Cada destino atual precisa ter uma política de órfãos válida. A v3.8.0 não executa migração automática de destinos antigos; configurações já atualizadas para `configVersion` 9 continuam preservadas.
 
 A quarentena fica em uma pasta irmã da base de mídia, preferencialmente no mesmo filesystem, para que movimentos sejam feitos por `rename` quando possível. Em filesystems diferentes o aplicativo usa cópia, validação e só então remove o original. Nunca sobrescreve silenciosamente um arquivo existente durante restauração. MP4, NFO, thumbnail/poster e SRTs são tratados como um pacote; em Clipes musicais, assets compartilhados do Show só são retirados quando não resta outro episódio ativo/mantido.
 
@@ -584,9 +619,12 @@ A segunda ação é destrutiva e não possui restauração automática.
 ```text
 config/config.json                  configuração ativa
 config/auth.json                    credencial derivada e parâmetros de sessão
+config/youtube-account.json         credenciais OAuth da conta YouTube (opcional; 0600)
 data/download-state.json            fila, histórico e índice por videoId
 data/channel-state.json             estado de descoberta/sincronização dos Canais
 data/youtube-cache.json             cache da YouTube Data API
+data/youtube-manager-state.json     fontes locais, matches, cache de pesquisa, fila e quota estimada
+data/youtube-account-state.json     tokens OAuth e identidade da conta (0600)
 data/subtitle-manager-state.json    proveniência, offsets e histórico lógico do gerenciador de legendas
 data/subtitle-history/              cópias restauráveis de SRT substituídos/ajustados
 data/.subtitle-preview/             prévias temporárias do player; limpeza automática

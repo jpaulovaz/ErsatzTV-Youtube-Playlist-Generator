@@ -639,7 +639,7 @@ test('Gerenciar conteúdo expõe tradução em massa com Gemini e configuração
   assert.match(html, /<option value="gemini">Gemini<\/option>/);
   assert.match(html, /Tradução de legendas/);
   assert.match(html, /translationSettingsApiKey/);
-  assert.match(html, /subtitleTranslation\.js\?v=3\.7\.1/);
+  assert.match(html, /subtitleTranslation\.js\?v=3\.8\.0/);
   assert.match(translation, /Resultado filtrado atual/);
   assert.match(translation, /Traduzida \+ bilíngue/);
   assert.match(translation, /subtitle-translation-plan/);
@@ -654,4 +654,30 @@ test('Gerenciar conteúdo expõe tradução em massa com Gemini e configuração
   assert.match(translation, /bilingualToWrite/);
   assert.match(css, /\.subtitle-translation-panel/);
   assert.match(css, /\.translation-overview-card/);
+});
+
+test('Gerenciador do YouTube expõe pesquisa, acervo local, playlists e OAuth na URL pública canônica', () => {
+  const html = read('index.html');
+  const app = read('app.js');
+  const manager = read('js/youtubeManager.js');
+  const css = read('styles.css');
+
+  assert.match(html, /data-view="youtube-manager"/);
+  assert.match(html, /id="view-youtube-manager"/);
+  assert.match(html, /Pesquisa/);
+  assert.match(html, /Acervo local/);
+  assert.match(html, /Minhas playlists/);
+  assert.match(html, /Conta/);
+  assert.match(html, /https:\/\/yt\.johnflix\.com\.br\//);
+  assert.match(html, /youtubeManager\.js\?v=3\.8\.0/);
+  assert.match(app, /youtube-manager/);
+  assert.match(app, /YouTubeManagerView\.init/);
+  assert.match(manager, /\/api\/youtube-manager\/search/);
+  assert.match(manager, /\/api\/youtube-manager\/oauth\/start/);
+  assert.match(manager, /\/api\/youtube-manager\/playlists/);
+  assert.match(manager, /\/api\/youtube-manager\/scan/);
+  assert.match(manager, /\/api\/youtube-manager\/item\/match/);
+  assert.match(manager, /youtube-manager/);
+  assert.match(css, /YouTube Manager v3\.8/);
+  assert.doesNotMatch(html, /Adotar arquivo existente/);
 });

@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>ErsatzTV YouTube Downloader</title>
-  <link rel="icon" href="/brand-mark.svg?v=3.7.1" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=3.7.1&amp;rev=scripted-schedules-2">
-  <link rel="stylesheet" href="/scripted-schedules.css?v=3.7.1">
+  <link rel="icon" href="/brand-mark.svg?v=3.8.0" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=3.8.0&amp;rev=scripted-schedules-2">
+  <link rel="stylesheet" href="/scripted-schedules.css?v=3.8.0">
 </head>
 <body class="app-page">
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.7.1" alt=""></span>
+        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=3.8.0" alt=""></span>
         <div class="brand-copy">
           <div class="title-line">
             <h1>ErsatzTV YouTube Downloader</h1>
-            <span id="versionBadge" class="version-badge">v3.7.1</span>
+            <span id="versionBadge" class="version-badge">v3.8.0</span>
           </div>
         </div>
       </div>
@@ -114,6 +114,15 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM9.5 9 15 12l-5.5 3Z"/></svg>
           <span>Canais</span>
           <span id="navChannelsBadge" class="nav-count">0</span>
+        </button>
+      </div>
+
+
+      <div class="nav-group">
+        <span class="nav-label">YouTube</span>
+        <button type="button" class="nav-button" data-view="youtube-manager">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4zM10 9l5 3-5 3zM7 3v3M17 3v3"/></svg>
+          <span>Gerenciador do YouTube</span>
         </button>
       </div>
 
@@ -430,6 +439,118 @@
         </section>
       </section>
 
+
+      <section id="view-youtube-manager" class="view-panel" data-view-panel="youtube-manager">
+        <div class="page-header">
+          <div>
+            <span class="page-kicker">YouTube</span>
+            <h2>Gerenciador do YouTube</h2>
+            <p class="page-subtitle">Pesquise vídeos, organize playlists da sua conta e identifique um acervo local sem alterar a mídia.</p>
+          </div>
+          <button id="ytmRefreshBtn" type="button">Atualizar</button>
+        </div>
+
+        <div class="ytm-tabs" role="tablist" aria-label="Áreas do Gerenciador do YouTube">
+          <button type="button" class="ytm-tab active" data-ytm-tab="search">Pesquisa</button>
+          <button type="button" class="ytm-tab" data-ytm-tab="catalog">Acervo local</button>
+          <button type="button" class="ytm-tab" data-ytm-tab="playlists">Minhas playlists</button>
+          <button type="button" class="ytm-tab" data-ytm-tab="account">Conta</button>
+        </div>
+
+        <section class="ytm-panel active" data-ytm-panel="search">
+          <section class="card">
+            <div class="section-heading"><div><h3>Pesquisar no YouTube</h3><p>Termo, URL ou Video ID. URLs/IDs diretos não consomem o bucket de pesquisa.</p></div></div>
+            <div class="ytm-search-row">
+              <input id="ytmSearchInput" type="search" placeholder="Queen - I Want To Break Free" autocomplete="off">
+              <button id="ytmSearchBtn" type="button" class="primary">Pesquisar</button>
+            </div>
+            <div class="ytm-search-options">
+              <label class="check-row"><input id="ytmSearchForce" type="checkbox"><span>Forçar nova pesquisa, ignorando cache</span></label>
+              <label>Playlist destino<select id="ytmSearchPlaylist"><option value="">Conecte a conta para adicionar</option></select></label>
+            </div>
+            <div id="ytmSearchMeta" class="muted"></div>
+            <div id="ytmSearchResults" class="ytm-results"></div>
+            <button id="ytmSearchMore" type="button" class="small hidden">Mais resultados</button>
+          </section>
+        </section>
+
+        <section class="ytm-panel" data-ytm-panel="catalog">
+          <section class="card">
+            <div class="section-heading">
+              <div><h3>Acervo local</h3><p>Na v3.8.0 o scanner é somente leitura. Nenhum arquivo local é movido, renomeado ou apagado.</p></div>
+            </div>
+            <div class="ytm-source-form">
+              <label>Nome<input id="ytmSourceName" type="text" placeholder="Videoclipes antigos"></label>
+              <label class="wide">Pasta raiz<input id="ytmSourcePath" type="text" placeholder="/media/clipes-antigos"></label>
+              <label class="check-row"><input id="ytmSourceRecursive" type="checkbox" checked><span>Varrer subpastas</span></label>
+              <button id="ytmSourceAdd" type="button">Cadastrar raiz</button>
+            </div>
+            <div class="ytm-catalog-toolbar">
+              <label>Fonte<select id="ytmSourceSelect"><option value="">Nenhuma raiz cadastrada</option></select></label>
+              <button id="ytmScanBtn" type="button" class="primary">Atualizar varredura</button>
+              <button id="ytmSourceRemove" type="button" class="danger">Remover cadastro</button>
+              <label>Status<select id="ytmCatalogStatus"><option value="all">Todos</option><option value="recovered">ID recuperado</option><option value="confirmed">Confirmado</option><option value="ignored">Ignorado</option><option value="unmatched">Sem correspondência</option><option value="scan-error">Erro de leitura</option></select></label>
+              <label class="wide">Filtrar<input id="ytmCatalogQuery" type="search" placeholder="Artista, título ou arquivo"></label>
+              <button id="ytmCatalogRefresh" type="button">Aplicar filtros</button>
+              <label>Playlist destino<select id="ytmCatalogPlaylist"><option value="">Conecte a conta</option></select></label>
+              <button id="ytmCatalogAddSelected" type="button" class="primary">Adicionar selecionados</button>
+            </div>
+            <div id="ytmCatalogMetrics" class="metrics metrics-wide ytm-metrics"></div>
+            <div id="ytmCatalogList" class="ytm-catalog-list"></div>
+            <button id="ytmCatalogMore" type="button" class="small hidden">Carregar mais</button>
+          </section>
+
+          <section id="ytmMatchPanel" class="card ytm-match-card hidden">
+            <div class="section-heading"><div><span class="eyebrow">Correspondência</span><h3 id="ytmMatchTitle">Revisar vídeo</h3><p id="ytmMatchMeta"></p></div><button id="ytmMatchClose" type="button" class="small">Fechar</button></div>
+            <div class="ytm-search-row"><input id="ytmMatchQuery" type="search"><button id="ytmMatchSearch" type="button" class="primary">Pesquisar candidatos</button></div>
+            <div id="ytmMatchResults" class="ytm-results"></div>
+          </section>
+        </section>
+
+        <section class="ytm-panel" data-ytm-panel="playlists">
+          <section class="card">
+            <div class="section-heading"><div><h3>Minhas playlists</h3><p>Somente playlists pertencentes à conta OAuth conectada.</p></div></div>
+            <div class="ytm-playlist-create">
+              <label>Nome<input id="ytmPlaylistTitle" type="text" placeholder="MIGRAÇÃO CLIPES ANTIGOS"></label>
+              <label>Privacidade<select id="ytmPlaylistPrivacy"><option value="private">Privada</option><option value="unlisted">Não listada</option><option value="public">Pública</option></select></label>
+              <label class="wide">Descrição<input id="ytmPlaylistDescription" type="text" placeholder="Opcional"></label>
+              <button id="ytmPlaylistCreate" type="button">Criar playlist</button>
+            </div>
+            <div id="ytmPlaylistList" class="ytm-playlist-list"></div>
+          </section>
+
+          <section class="card">
+            <div class="section-heading"><div><h3>Fila de inserção</h3><p id="ytmQueueSubtitle">Nenhuma fila ativa.</p></div><div class="inline-actions"><button id="ytmQueueToggle" type="button" class="small hidden">Pausar</button><button id="ytmQueueCancel" type="button" class="small danger hidden">Cancelar pendentes</button></div></div>
+            <progress id="ytmQueueProgress" max="1" value="0">0%</progress>
+            <div id="ytmQueueMetrics" class="translation-overview-metrics"></div>
+          </section>
+        </section>
+
+        <section class="ytm-panel" data-ytm-panel="account">
+          <section class="card">
+            <div class="section-heading"><div><h3>Conta do YouTube</h3><p>As pesquisas públicas usam a API key existente. OAuth é necessário apenas para ler e alterar playlists da sua conta.</p></div></div>
+            <div id="ytmAccountStatus" class="ytm-account-status"></div>
+            <div class="form-grid two">
+              <label class="wide">URL pública<input id="ytmPublicBaseUrl" type="url" value="https://yt.johnflix.com.br/"></label>
+              <label class="wide">Redirect URI<input id="ytmRedirectUri" type="text" readonly></label>
+              <label class="wide">OAuth Client ID<input id="ytmClientId" type="text" autocomplete="off" placeholder="...apps.googleusercontent.com"></label>
+              <label class="wide">OAuth Client Secret<input id="ytmClientSecret" type="password" autocomplete="off" placeholder="Deixe vazio para preservar o segredo atual"></label>
+            </div>
+            <p class="settings-hint">Cadastre exatamente o Redirect URI acima no Google Cloud. Para uso persistente, não deixe o projeto OAuth indefinidamente em modo Testing.</p>
+            <div class="form-actions-inline">
+              <button id="ytmAccountSave" type="button">Salvar OAuth</button>
+              <button id="ytmAccountConnect" type="button" class="primary">Conectar com Google</button>
+              <button id="ytmAccountTest" type="button">Testar conexão</button>
+              <button id="ytmAccountDisconnect" type="button" class="danger">Desconectar</button>
+            </div>
+          </section>
+          <section class="card">
+            <div class="section-heading"><div><h3>Quota estimada</h3><p>Contador local do que este aplicativo executou; não representa o saldo oficial do projeto Google.</p></div></div>
+            <div id="ytmQuotaMetrics" class="metrics"></div>
+          </section>
+        </section>
+      </section>
+
       <section id="view-scripted-schedules" class="view-panel" data-view-panel="scripted-schedules">
         <div id="scriptedSchedulesRoot"></div>
       </section>
@@ -699,13 +820,14 @@
   </dialog>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="/js/destinationForm.js?v=3.7.1"></script>
-  <script src="/js/channelsView.js?v=3.7.1&amp;rev=ersatztv-catalog-1"></script>
-  <script src="/js/scriptedScheduleEditorUtils.js?v=3.7.1"></script>
-  <script src="/js/scriptedSchedulesView.js?v=3.7.1"></script>
-  <script src="/js/helpView.js?v=3.7.1"></script>
-  <script src="/js/subtitleManager.js?v=3.7.1"></script>
-  <script src="/js/subtitleTranslation.js?v=3.7.1"></script>
-  <script src="/app.js?v=3.7.1"></script>
+  <script src="/js/destinationForm.js?v=3.8.0"></script>
+  <script src="/js/channelsView.js?v=3.8.0&amp;rev=ersatztv-catalog-1"></script>
+  <script src="/js/scriptedScheduleEditorUtils.js?v=3.8.0"></script>
+  <script src="/js/scriptedSchedulesView.js?v=3.8.0"></script>
+  <script src="/js/helpView.js?v=3.8.0"></script>
+  <script src="/js/subtitleManager.js?v=3.8.0"></script>
+  <script src="/js/subtitleTranslation.js?v=3.8.0"></script>
+  <script src="/js/youtubeManager.js?v=3.8.0"></script>
+  <script src="/app.js?v=3.8.0"></script>
 </body>
 </html>

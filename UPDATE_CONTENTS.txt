@@ -1,23 +1,26 @@
-ErsatzTV YouTube Downloader 3.7.1 - pacote de atualização
+ErsatzTV YouTube Downloader 3.8.0 - pacote de atualização
 
-Extraia este ZIP sobre uma instalacao v3.7.0.
+Extraia este ZIP sobre uma instalacao v3.7.1.
 
 Preservado deliberadamente (nao incluido):
 - config/config.json
 - config/auth.json
 - config/subtitle-translation.json
+- config/youtube-account.json
 - data/
 - arquivos de midia e sidecars existentes das bibliotecas e canais
 
 Principais alteracoes:
-- card de Traducao de legendas na Visao Geral com progresso, item atual, contagens e Pausar/Retomar;
-- atalho da Visao Geral para o Gerenciar conteudo do destino quando a metadata do job estiver disponivel;
-- suporte oficial a sidecar bilingue sem sufixo de idioma: <video>.srt, tratado internamente como und;
-- modo Traduzida + bilingue, gerando <video>.<idioma>.srt e <video>.srt a partir de uma unica traducao Gemini;
-- preflight separa traducao existente/a gerar e bilingue existente/a gerar;
-- Gerenciador de Legendas identifica a faixa sem sufixo como Bilingue e exibe idioma fonte + destino e ErsatzTV: und;
-- preview, exclusao, historico, restauracao e offset passam a resolver corretamente a faixa und sem sufixo;
-- jobs antigos da v3.7.0 permanecem compativeis; sidecars bilingues antigos nao sao migrados automaticamente.
+- nova area YouTube -> Gerenciador do YouTube com Pesquisa, Acervo local, Minhas playlists e Conta;
+- pesquisa publica por termo, URL ou Video ID reutilizando a YouTube Data API Key atual e cache persistente;
+- OAuth Google da propria conta, com URL publica https://yt.johnflix.com.br/ e callback https://yt.johnflix.com.br/api/youtube-manager/oauth/callback;
+- credenciais/tokens OAuth armazenados apenas no servidor, com configuracao separada e arquivo example distribuido;
+- listagem/criacao de playlists e fila persistente para insercao de videos, com pausa, retomada, cancelamento de pendentes e protecao contra duplicatas;
+- catalogo de acervo local somente leitura, com roots explicitas, ffprobe, info.json, NFO, metadata embutida e recuperacao de Video ID;
+- matching assistido por titulo, artista/canal e duracao, confirmacao manual e bloqueio de conflitos de Video ID;
+- estimativa local de quota separando pesquisas e unidades gerais, contabilizada pelo dia do Pacifico;
+- novos youtube-manager state v1 e youtube-account config/state v1;
+- a adocao de midia existente sem redownload permanece fora da v3.8.0 e esta planejada para a v3.9.0.
 
-Aplicacao v3.7.1, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1.
+Aplicacao v3.8.0, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1.
 Consulte UPGRADE.md antes da atualizacao.

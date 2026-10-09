@@ -24,7 +24,11 @@ try {
       ERSATZTV_SCRIPTED_SCHEDULES_DIR: scriptedSchedulesDir,
       ERSATZTV_SUBTITLE_MANAGER_DIR: path.join(testRoot, 'subtitle-manager'),
       ERSATZTV_SUBTITLE_TRANSLATION_DIR: path.join(testRoot, 'subtitle-translation'),
-      ERSATZTV_SUBTITLE_TRANSLATION_CONFIG_PATH: path.join(testRoot, 'config', 'subtitle-translation.json')
+      ERSATZTV_SUBTITLE_TRANSLATION_CONFIG_PATH: path.join(testRoot, 'config', 'subtitle-translation.json'),
+      ERSATZTV_YOUTUBE_MANAGER_STATE_PATH: path.join(testRoot, 'data', 'youtube-manager-state.json'),
+      ERSATZTV_YOUTUBE_ACCOUNT_STATE_PATH: path.join(testRoot, 'data', 'youtube-account-state.json'),
+      ERSATZTV_YOUTUBE_ACCOUNT_CONFIG_PATH: path.join(testRoot, 'config', 'youtube-account.json'),
+      ERSATZTV_YOUTUBE_CACHE_PATH: path.join(testRoot, 'data', 'youtube-cache.json')
     }
   });
   process.exitCode = result.status ?? 1;

@@ -28,3 +28,6 @@ npm-debug.log*
 
 # Credencial/configuracao local do tradutor
 /config/subtitle-translation.json
+
+# Credenciais OAuth da conta YouTube
+/config/youtube-account.json

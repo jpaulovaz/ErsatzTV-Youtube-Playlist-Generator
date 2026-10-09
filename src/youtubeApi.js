@@ -3,7 +3,9 @@ const path = require('path');
 const { ROOT_DIR } = require('./config');
 
 const API_BASE = 'https://www.googleapis.com/youtube/v3';
-const CACHE_PATH = path.join(ROOT_DIR, 'data', 'youtube-cache.json');
+const CACHE_PATH = process.env.ERSATZTV_YOUTUBE_CACHE_PATH
+  ? path.resolve(process.env.ERSATZTV_YOUTUBE_CACHE_PATH)
+  : path.join(ROOT_DIR, 'data', 'youtube-cache.json');
 const VIDEO_BATCH_SIZE = 50;
 const DEFAULT_TIMEOUT_MS = 20000;
 const THUMBNAIL_PRIORITY = ['maxres', 'standard', 'high', 'medium', 'default'];

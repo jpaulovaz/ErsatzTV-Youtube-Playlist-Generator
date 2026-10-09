@@ -36,7 +36,7 @@ let libraryContentState = {
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
-const APP_VIEWS = new Set(['overview', 'downloads', 'libraries', 'channels', 'scripted-schedules', 'help', 'settings', 'logs']);
+const APP_VIEWS = new Set(['overview', 'downloads', 'libraries', 'channels', 'youtube-manager', 'scripted-schedules', 'help', 'settings', 'logs']);
 const MOBILE_NAV_BREAKPOINT = 760;
 const MOBILE_NAV_IDLE_MS = 3600;
 const MOBILE_NAV_SCROLL_THRESHOLD = 8;
@@ -191,6 +191,8 @@ async function goToViewHome(view) {
     $$('.library-accordion').forEach((item) => { item.open = false; });
   } else if (nextView === 'channels') {
     await window.ChannelView?.home?.();
+  } else if (nextView === 'youtube-manager') {
+    await window.YouTubeManagerView?.home?.();
   } else if (nextView === 'scripted-schedules') {
     await window.ScriptedSchedulesView?.home?.();
   } else if (nextView === 'help') {
@@ -2032,6 +2034,12 @@ async function bootstrap() {
   bindEvents();
   bindMobileNavBehavior();
   syncMobileNavForViewport();
+  if (window.YouTubeManagerView) {
+    await window.YouTubeManagerView.init({
+      api, showToast, showDialog: showAppDialog, escapeHtml, formatDuration,
+      activateView: () => setActiveView('youtube-manager', { persist: true, scroll: true })
+    });
+  }
   if (window.ChannelView) {
     window.ChannelView.init({
       api,

@@ -21,7 +21,9 @@ const { handleChannelRoutes } = require('./routes/channelRoutes');
 const { handleErsatzTvRoutes } = require('./routes/ersatztvRoutes');
 const { handleScriptedScheduleRoutes } = require('./routes/scriptedScheduleRoutes');
 const { handleGlobalSubtitleTranslationRoutes } = require('./routes/subtitleTranslationRoutes');
+const { handleYouTubeManagerRoutes } = require('./routes/youtubeManagerRoutes');
 const translationQueue = require('./subtitleTranslation/translationQueue');
+const youtubePlaylistQueue = require('./youtubeManager/playlistQueue');
 const auth = require('./auth');
 const logger = require('./logger');
 
@@ -219,7 +221,7 @@ async function getVersion() {
 }
 
 async function handleApi(req, res, url) {
-  const routeDeps = { readJson, sendJson, sendBuffer, loadConfig, saveConfig, downloadManager, channelScheduler, libraryScheduler: scheduler };
+  const routeDeps = { readJson, sendJson, sendBuffer, redirect, loadConfig, saveConfig, downloadManager, channelScheduler, libraryScheduler: scheduler };
   if (url.pathname.startsWith('/api/playlists/')) {
     if (await handleLibraryRoutes(req, res, url, routeDeps)) return;
   }
@@ -237,6 +239,9 @@ async function handleApi(req, res, url) {
   }
   if (url.pathname.startsWith('/api/subtitle-translation/')) {
     if (await handleGlobalSubtitleTranslationRoutes(req, res, url, routeDeps)) return;
+  }
+  if (url.pathname.startsWith('/api/youtube-manager/')) {
+    if (await handleYouTubeManagerRoutes(req, res, url, routeDeps)) return;
   }
 
   if (req.method === 'GET' && url.pathname === '/api/config') {
@@ -406,6 +411,7 @@ async function startServer(config) {
   await auth.init();
   translationQueue.configure({ getConfig: loadConfig, downloadManager });
   await translationQueue.init();
+  await youtubePlaylistQueue.init();
   const server = createServer();
   const host = config.server.host || '0.0.0.0';
   const port = Number(config.server.port) || 3099;

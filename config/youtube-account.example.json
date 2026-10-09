@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "clientId": "SEU_CLIENT_ID.apps.googleusercontent.com",
+  "clientSecret": "SEU_CLIENT_SECRET",
+  "publicBaseUrl": "https://yt.johnflix.com.br/"
+}
