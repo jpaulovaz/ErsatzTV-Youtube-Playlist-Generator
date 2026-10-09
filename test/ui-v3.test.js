@@ -669,7 +669,7 @@ test('Gerenciador do YouTube expõe pesquisa, acervo local, playlists e OAuth na
   assert.match(html, /Minhas playlists/);
   assert.match(html, /Conta/);
   assert.match(html, /https:\/\/yt\.johnflix\.com\.br\//);
-  assert.match(html, /youtubeManager\.js\?v=3\.9\.0/);
+  assert.match(html, new RegExp(`youtubeManager\\.js\\?v=${APP_VERSION_RE}`));
   assert.match(app, /youtube-manager/);
   assert.match(app, /YouTubeManagerView\.init/);
   assert.match(manager, /\/api\/youtube-manager\/search/);

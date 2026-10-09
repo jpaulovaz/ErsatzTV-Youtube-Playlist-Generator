@@ -375,7 +375,7 @@ class AuthManager {
       `${COOKIE_NAME}=${encodeURIComponent(value)}`,
       'Path=/',
       'HttpOnly',
-      'SameSite=Strict',
+      'SameSite=Lax',
       `Max-Age=${Math.max(0, Math.floor(maxAgeSeconds))}`,
       'Priority=High'
     ];

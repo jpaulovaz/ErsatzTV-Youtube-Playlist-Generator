@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.9.1
+
+- Corrige o retorno do Google OAuth quando o usuário autoriza a conta em `accounts.google.com` e volta para `/api/youtube-manager/oauth/callback`.
+- O cookie administrativo passa de `SameSite=Strict` para **`SameSite=Lax`**, permitindo que o navegador envie a sessão no GET de retorno do provedor OAuth; com `Strict`, o callback era bloqueado antes do processamento e devolvia `AUTH_REQUIRED`.
+- A proteção contra CSRF permanece ativa para operações mutáveis por token + validação de origem; o callback OAuth continua validando o `state` aleatório persistido no servidor.
+- Nenhuma mudança em `configVersion`, Download state, YouTube Manager state, YouTube Account state/config ou Adoption transaction state.
+- Aplicação **v3.9.1**; Universal **v1.3.1**; `configVersion` **9**; Scripted Schedules schema **1**; download state **5**; subtitle-manager state **1**; subtitle-translation config/state **1**; YouTube Manager state **1**; YouTube Account state/config **1**; Adoption transaction state **1**.
+
 ## 3.9.0
 
 - Implementa a **Fase 2 do Gerenciador do YouTube**: adoção de mídia local já existente sem redownload, disponível para itens com correspondência YouTube confirmada.

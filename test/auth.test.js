@@ -59,7 +59,7 @@ test('login creates a signed HttpOnly session and CSRF is required for mutations
   const login = await manager.login('joao', 'Senha-local-bem-forte-2026!', request);
   assert.match(login.cookie, /^ersatztv_session=/);
   assert.match(login.cookie, /HttpOnly/);
-  assert.match(login.cookie, /SameSite=Strict/);
+  assert.match(login.cookie, /SameSite=Lax/);
   assert.equal(login.cookie.includes('Secure'), false);
 
   const cookiePair = login.cookie.split(';')[0];

@@ -1,39 +1,29 @@
-ErsatzTV YouTube Downloader 3.9.0
+ErsatzTV YouTube Downloader 3.9.1
 
-Arquivos alterados em relacao a v3.8.0:
+Arquivos alterados em relacao a v3.9.0:
 
 M	CHANGELOG.md
 M	README.md
 M	UPGRADE.md
 M	package.json
 M	public/index.html
-M	public/js/youtubeManager.js
 M	public/login.html
-M	public/styles.css
-M	scripts/run-tests.js
-M	src/downloadManager.js
-M	src/main.js
-M	src/routes/youtubeManagerRoutes.js
-A	src/youtubeManager/adoptionQueue.js
-A	src/youtubeManager/adoptionService.js
-A	src/youtubeManager/youtubeAdoptionState.js
-M	src/youtubeManager/youtubeManagerService.js
+M	src/auth.js
+M	test/auth.test.js
 M	test/ui-v3.test.js
-M	test/youtubeManager.test.js
 M	MODIFIED_FILES.txt
 M	UPDATE_CONTENTS.txt
 
 Versionamento:
-- Aplicacao: v3.9.0
+- Aplicacao: v3.9.1
 - Universal: v1.3.1
 - configVersion: 9
 - Scripted Schedules schema: 1
 - download state: 5
 - subtitle-manager state: 1
-- subtitle-translation config: 1
-- subtitle-translation state: 1
+- subtitle-translation config/state: 1
 - youtube-manager state: 1
 - youtube-account config/state: 1
-- adoption transaction state: 1 (novo)
+- adoption transaction state: 1
 
 O pacote update preserva config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/ e arquivos de midia/sidecars.
