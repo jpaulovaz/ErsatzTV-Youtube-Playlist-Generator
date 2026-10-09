@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.9.0
+
+- Implementa a **Fase 2 do Gerenciador do YouTube**: adoção de mídia local já existente sem redownload, disponível para itens com correspondência YouTube confirmada.
+- A adoção só oferece destinos em que o mesmo Video ID já existe como item ativo gerenciado; o fluxo não cria conteúdo órfão artificialmente e pede sincronização do destino quando necessário.
+- Adiciona preflight transacional com revalidação do vídeo na YouTube Data API, caminho final, colisões, disponibilidade do arquivo, compatibilidade MP4/H.264/AAC, filesystem, espaço livre e diferença de duração.
+- Define limites fixos de duração: **acima de 10 segundos** gera aviso; **acima de 45 segundos** bloqueia o commit.
+- Adiciona modos **Hardlink**, **Copy** e **Move**: Hardlink é preferencial no mesmo filesystem; Copy preserva a origem; Move exige confirmação reforçada e remove somente o arquivo de vídeo da origem no commit final.
+- Sidecars antigos do acervo (`.nfo`, imagens, `.srt` etc.) permanecem intactos. No destino, NFO, artwork e release metadata reutilizam os serviços atuais; legendas/traduções continuam sob comando do usuário.
+- Introduz `youtube-adoption-state` v1 com manifesto por transação, fila persistente/serializada, pausa/retomada/cancelamento de pendentes, rollback e recuperação de transações interrompidas após restart.
+- O Download Manager passa a respeitar uma trava de mutação externa durante a adoção; se já existir download ativo, a adoção aguarda/reagenda em vez de concorrer sobre os mesmos caminhos.
+- O estado de download permanece v5: itens adotados usam campos opcionais de aquisição `adopted-local`, sem migração de schema. YouTube Manager e YouTube Account permanecem v1 e `configVersion` continua 9.
+- Amplia a UI do Acervo local com adoção individual/em massa, seletor de destino/modo, resumo de preflight, confirmação reforçada para Move e acompanhamento da fila de adoção.
+- Adiciona testes para limites de duração, Hardlink, Move, preservação de sidecars e rollback após falha.
+- Aplicação **v3.9.0**; Universal **v1.3.1**; `configVersion` **9**; Scripted Schedules schema **1**; download state **5**; subtitle-manager state **1**; subtitle-translation config/state **1**; YouTube Manager state **1**; YouTube Account state/config **1**; Adoption transaction state **1 (novo)**.
+
 ## 3.8.0
 
 - Adiciona a área independente **YouTube -> Gerenciador do YouTube**, com abas **Pesquisa**, **Acervo local**, **Minhas playlists** e **Conta**, sem alterar o fluxo atual de Bibliotecas/Canais/Scripted Schedules.

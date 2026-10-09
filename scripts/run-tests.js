@@ -28,6 +28,7 @@ try {
       ERSATZTV_YOUTUBE_MANAGER_STATE_PATH: path.join(testRoot, 'data', 'youtube-manager-state.json'),
       ERSATZTV_YOUTUBE_ACCOUNT_STATE_PATH: path.join(testRoot, 'data', 'youtube-account-state.json'),
       ERSATZTV_YOUTUBE_ACCOUNT_CONFIG_PATH: path.join(testRoot, 'config', 'youtube-account.json'),
+      ERSATZTV_YOUTUBE_ADOPTION_STATE_PATH: path.join(testRoot, 'data', 'youtube-adoption-state.json'),
       ERSATZTV_YOUTUBE_CACHE_PATH: path.join(testRoot, 'data', 'youtube-cache.json')
     }
   });

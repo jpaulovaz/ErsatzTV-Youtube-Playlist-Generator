@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.8.0 - pacote de atualização
+ErsatzTV YouTube Downloader 3.9.0 - pacote de atualização
 
-Extraia este ZIP sobre uma instalacao v3.7.1.
+Extraia este ZIP sobre uma instalacao v3.8.0.
 
 Preservado deliberadamente (nao incluido):
 - config/config.json
@@ -8,19 +8,20 @@ Preservado deliberadamente (nao incluido):
 - config/subtitle-translation.json
 - config/youtube-account.json
 - data/
-- arquivos de midia e sidecars existentes das bibliotecas e canais
+- arquivos de midia e sidecars existentes das bibliotecas, canais e acervo local
 
 Principais alteracoes:
-- nova area YouTube -> Gerenciador do YouTube com Pesquisa, Acervo local, Minhas playlists e Conta;
-- pesquisa publica por termo, URL ou Video ID reutilizando a YouTube Data API Key atual e cache persistente;
-- OAuth Google da propria conta, com URL publica https://yt.johnflix.com.br/ e callback https://yt.johnflix.com.br/api/youtube-manager/oauth/callback;
-- credenciais/tokens OAuth armazenados apenas no servidor, com configuracao separada e arquivo example distribuido;
-- listagem/criacao de playlists e fila persistente para insercao de videos, com pausa, retomada, cancelamento de pendentes e protecao contra duplicatas;
-- catalogo de acervo local somente leitura, com roots explicitas, ffprobe, info.json, NFO, metadata embutida e recuperacao de Video ID;
-- matching assistido por titulo, artista/canal e duracao, confirmacao manual e bloqueio de conflitos de Video ID;
-- estimativa local de quota separando pesquisas e unidades gerais, contabilizada pelo dia do Pacifico;
-- novos youtube-manager state v1 e youtube-account config/state v1;
-- a adocao de midia existente sem redownload permanece fora da v3.8.0 e esta planejada para a v3.9.0.
+- Fase 2 do Gerenciador do YouTube: adocao de midia local confirmada sem redownload;
+- somente destinos que ja possuem o Video ID como item ativo gerenciado podem receber a adocao;
+- preflight revalida arquivo, destino, colisao, formato de midia, YouTube, duracao, filesystem e espaco livre;
+- diferenca de duracao acima de 10s gera aviso; acima de 45s bloqueia;
+- Hardlink e o modo preferencial no mesmo filesystem, Copy e fallback/alternativa segura e Move exige confirmacao reforcada;
+- Move remove somente o arquivo de video da origem no commit final; NFO, imagens e SRTs antigos permanecem intactos;
+- midia local incompatível com o padrao atual MP4/H.264/AAC e bloqueada em vez de ser transcodificada silenciosamente;
+- NFO, artwork e release metadata do destino reutilizam o pipeline atual; legendas/traducoes permanecem sob comando do usuario;
+- novo adoption transaction state v1 com manifesto, rollback, recuperacao apos restart e fila persistente/serializada;
+- Download Manager e adocao recebem exclusao mutua para evitar concorrencia sobre arquivos gerenciados;
+- nenhuma migracao de config.json ou dos estados existentes.
 
-Aplicacao v3.8.0, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1.
+Aplicacao v3.9.0, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1 (novo).
 Consulte UPGRADE.md antes da atualizacao.

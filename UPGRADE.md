@@ -1,89 +1,89 @@
-# Atualização para 3.8.0
+# Atualização para 3.9.0
 
-A versão 3.8.0 atualiza diretamente a **v3.7.1** e acrescenta a primeira fase do **Gerenciador do YouTube**. Não há migração do `config.json`, da fila de downloads, do Subtitle Manager, da tradução ou dos Scripted Schedules.
+A versão 3.9.0 atualiza diretamente a **v3.8.0** e entrega a segunda fase do **Gerenciador do YouTube**: adoção de mídia local já existente sem redownload. A v3.8.0 continua sendo a base obrigatória do pacote update. Não há migração do `config.json`, da fila de downloads, do Subtitle Manager, da tradução, dos Scripted Schedules, do YouTube Manager state nem do YouTube Account state.
 
 ## Versionamento
 
-- aplicação: **v3.8.0**;
+- aplicação: **v3.9.0**;
 - Universal Scripted Schedules: **v1.3.1**;
 - `configVersion`: **9**;
 - download state: **5**;
 - Scripted Schedules schema: **1**;
 - Subtitle Manager state: **1**;
 - Subtitle Translation config/state: **1**;
-- YouTube Manager state: **1 (novo)**;
-- YouTube Account state/config: **1 (novo)**.
+- YouTube Manager state: **1**;
+- YouTube Account state/config: **1**;
+- Adoption transaction state: **1 (novo)**.
 
 ## Antes de atualizar
 
 1. Pare o serviço/aplicativo.
 2. Faça backup de `config/` e `data/`.
-3. Preserve normalmente suas bibliotecas e sidecars de mídia.
-4. Não crie manualmente `youtube-manager-state.json` nem `youtube-account-state.json`; eles serão criados sob demanda.
+3. Preserve normalmente suas bibliotecas e o acervo local de origem.
+4. Não crie manualmente `youtube-adoption-state.json`; ele será criado sob demanda.
+5. Para adotar um vídeo, confirme primeiro a correspondência no **Acervo local** e sincronize o destino gerenciado para que o mesmo Video ID já exista como item ativo da fonte. A adoção não cria itens órfãos artificialmente.
 
 ## Aplicar o pacote update
 
-Extraia o ZIP sobre a instalação v3.7.1:
+Extraia o ZIP sobre a instalação v3.8.0:
 
 ```bash
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.8.0-update.zip -d /caminho/da/aplicacao
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.8.0-to-v3.9.0-update.zip -d /caminho/da/aplicacao
 ```
 
 O pacote de atualização não contém `config/config.json`, `config/auth.json`, `config/subtitle-translation.json`, `config/youtube-account.json`, `data/` nem arquivos de mídia.
 
-## Gerenciador do YouTube
+## Adoção de mídia existente
 
-Após iniciar a v3.8.0, uma nova área **YouTube -> Gerenciador do YouTube** aparece na navegação. Ela possui Pesquisa, Acervo local, Minhas playlists e Conta.
+Na aba **Acervo local**, itens com correspondência YouTube confirmada passam a oferecer **Adotar**. Também é possível selecionar vários itens confirmados e abrir o preflight em massa.
 
-A pesquisa pública usa a mesma YouTube Data API Key já configurada para o restante do aplicativo. Não é necessário conectar uma conta Google para pesquisar.
+A adoção só é liberada quando:
 
-### OAuth da conta
+- o arquivo continua dentro da raiz de acervo autorizada;
+- a correspondência está confirmada e não existe conflito do mesmo Video ID com outro arquivo local;
+- o vídeo já existe como item ativo no destino gerenciado escolhido;
+- o arquivo local atende ao padrão de mídia já usado pelo aplicativo (MP4/H.264/AAC); a v3.9.0 não transcodifica silenciosamente durante a adoção;
+- o caminho final pode ser determinado e não existe mídia/sidecar conflitante no destino;
+- o vídeo confirmado continua disponível na YouTube Data API;
+- a diferença entre duração local e YouTube não supera **45 segundos**.
 
-Para listar, criar e alterar playlists próprias, crie/obtenha no Google Cloud um OAuth Client do tipo **Web application** e cadastre exatamente:
+Diferença de duração **acima de 10 segundos até 45 segundos** gera aviso no preflight, mas não bloqueia. Acima de 45 segundos bloqueia a adoção. Esses limites são fixos nesta versão.
+
+### Modos
+
+- **Hardlink**: padrão preferencial. Exige origem e destino no mesmo filesystem; não duplica os bytes e não remove a origem.
+- **Copy**: copia a mídia para o caminho gerenciado e preserva a origem. O preflight verifica espaço livre/reserva antes do commit.
+- **Move**: opção destrutiva explícita com confirmação reforçada. O aplicativo cria/valida primeiro a cópia gerenciada e remove **somente o arquivo de vídeo da origem** no commit final.
+
+Ninguém dos três modos sobrescreve silenciosamente um arquivo existente.
+
+### Sidecars antigos
+
+NFO, imagens, SRTs e demais sidecars encontrados junto ao arquivo antigo permanecem **intactos na origem**. Eles servem apenas como sinais de identificação durante o catálogo.
+
+No destino gerenciado, a v3.9.0 usa os mesmos perfis e geradores atuais para criar NFO/artwork/metadata. Legendas e traduções **não são disparadas automaticamente pela adoção**; depois do commit, o item passa a usar normalmente o Subtitle Manager e os demais fluxos já existentes.
+
+## Transação, rollback e restart
+
+Cada adoção cria um manifesto persistente em `data/youtube-adoption-state.json` antes de tocar o destino. Se uma etapa posterior falhar:
+
+- somente os artefatos criados por aquela transação são removidos;
+- o estado gerenciado anterior é restaurado;
+- o estado de adoção do catálogo é restaurado;
+- a origem é preservada;
+- em Move, se a remoção final da origem já tiver ocorrido, a transação tenta restaurá-la a partir da mídia gerenciada antes de encerrar o rollback.
+
+Ao iniciar a aplicação, transações interrompidas são recuperadas/rollbackadas antes da fila de adoção voltar a operar. A fila é persistente, serializada e pode ser pausada, retomada ou ter pendentes cancelados.
+
+Enquanto uma transação de adoção altera o destino, o Download Manager não inicia outro download. Se já houver download ativo, a adoção aguarda/reagenda em vez de disputar os mesmos caminhos.
+
+## OAuth, pesquisa e playlists
+
+A Fase 1 permanece inalterada. Pesquisa pública, OAuth, catálogo/matching e fila de playlists continuam usando os estados v1 existentes. O callback padrão permanece:
 
 ```text
-Authorized redirect URI:
 https://yt.johnflix.com.br/api/youtube-manager/oauth/callback
 ```
-
-Na aba **Conta**, informe Client ID e Client Secret. A URL pública padrão já é:
-
-```text
-https://yt.johnflix.com.br/
-```
-
-O aplicativo solicita o escopo `https://www.googleapis.com/auth/youtube.force-ssl` e pede acesso offline para obter refresh token. A sessão administrativa do aplicativo deve continuar válida durante ida/volta ao Google, pois o callback também é protegido pela autenticação local.
-
-Alternativamente, as credenciais podem vir do ambiente:
-
-```text
-YOUTUBE_OAUTH_CLIENT_ID
-YOUTUBE_OAUTH_CLIENT_SECRET
-YOUTUBE_PUBLIC_BASE_URL
-```
-
-O arquivo real `config/youtube-account.json` e os tokens de `data/youtube-account-state.json` ficam fora dos pacotes de distribuição. Ambos são gravados com permissão restrita quando criados pelo aplicativo.
-
-> Se o projeto OAuth externo estiver em modo Testing, o Google pode limitar a duração das autorizações de usuários de teste. Para uso contínuo, configure o projeto/consentimento de acordo com as regras atuais da sua conta Google Cloud.
-
-## Acervo local: segurança
-
-A v3.8.0 trata as raízes cadastradas como **somente leitura**. O scanner:
-
-- aceita somente diretórios explícitos e rejeita raízes amplas/perigosas;
-- não segue symlinks;
-- não renomeia, move, copia ou exclui mídia;
-- usa `ffprobe` e sidecars existentes somente para leitura;
-- tenta recuperar IDs confiáveis de `[videoId]`, URL/metadados, `info.json` e NFO;
-- exige confirmação antes de usar matches em operações em massa.
-
-A futura adoção sem redownload permanece fora desta versão.
-
-## Playlists e quota
-
-A fila de playlist é persistente. Antes de inserir, o aplicativo reconsulta a playlist e ignora Video IDs já presentes. É possível pausar, retomar e cancelar os pendentes; itens já inseridos no YouTube não são removidos pelo cancelamento.
-
-O painel de quota é uma estimativa local. O contador de pesquisas segue o dia do Pacífico e o aplicativo não presume conhecer o saldo exato do projeto caso outros clientes também usem as mesmas credenciais.
 
 ## Validação após atualizar
 
@@ -93,15 +93,19 @@ Execute:
 npm run verify
 ```
 
-Depois:
+Depois, para validar a nova função com baixo risco:
 
-1. abra **YouTube -> Gerenciador do YouTube**;
-2. teste uma pesquisa pública;
-3. em **Conta**, confira se o callback exibido é exatamente `https://yt.johnflix.com.br/api/youtube-manager/oauth/callback`;
-4. configure OAuth e use **Conectar com Google**;
-5. valide a conta e carregue **Minhas playlists**;
-6. antes de uma migração grande, cadastre uma pasta pequena de teste em **Acervo local** e confira os matches sugeridos.
+1. abra **YouTube -> Gerenciador do YouTube -> Acervo local**;
+2. escolha um item pequeno cuja correspondência esteja confirmada;
+3. confirme que esse Video ID já aparece como item ativo no destino gerenciado;
+4. abra **Adotar** e execute primeiro o preflight em **Hardlink**;
+5. confira origem, caminho de destino, duração e avisos;
+6. conclua a adoção e valide mídia, NFO/artwork e estado gerenciado;
+7. confirme que os sidecars antigos na origem permanecem intactos;
+8. somente depois teste Copy ou Move, se necessários.
 
-## Rollback
+## Rollback da atualização
 
-Para rollback do aplicativo, restaure os arquivos da v3.7.1 preservando `config/`, `data/` e mídia. A v3.7.1 simplesmente ignora os novos arquivos `youtube-account.json`, `youtube-manager-state.json` e `youtube-account-state.json`; se quiser removê-los, faça isso somente depois de desconectar/revogar a conta e confirmar que não precisa do catálogo/fila do Gerenciador do YouTube.
+Para voltar à v3.8.0, pare a aplicação e restaure os arquivos da v3.8.0 preservando `config/`, `data/` e mídia. A v3.8.0 ignora o novo `data/youtube-adoption-state.json` e os campos opcionais de aquisição/adoção mantidos nos estados existentes.
+
+A restauração do software **não desfaz adoções já concluídas**. Se uma mídia já foi adotada para uma biblioteca, trate os arquivos resultantes como conteúdo normal desse destino antes de qualquer rollback manual de dados.

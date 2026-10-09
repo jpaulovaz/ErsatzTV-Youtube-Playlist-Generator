@@ -16,22 +16,29 @@ const matchScore = require('../src/youtubeManager/matchScore');
 const managerService = require('../src/youtubeManager/youtubeManagerService');
 const playlistService = require('../src/youtubeManager/youtubePlaylistService');
 const playlistQueue = require('../src/youtubeManager/playlistQueue');
+const adoptionService = require('../src/youtubeManager/adoptionService');
+const adoptionState = require('../src/youtubeManager/youtubeAdoptionState');
+const adoptionQueue = require('../src/youtubeManager/adoptionQueue');
 
 const originalFetch = global.fetch;
 const originalGetIndex = playlistService.getIndex;
 const originalInsertVideo = playlistService.insertVideo;
+const originalAdopt = adoptionService.adopt;
 
 async function resetState() {
   await playlistQueue.stop().catch(() => {});
+  await adoptionQueue.stop().catch(() => {});
   await Promise.all([
     fs.rm(managerState.STATE_PATH, { force: true }),
     fs.rm(accountState.STATE_PATH, { force: true }),
     fs.rm(accountConfig.CONFIG_PATH, { force: true }),
+    fs.rm(adoptionState.STATE_PATH, { force: true }),
     fs.rm(process.env.ERSATZTV_YOUTUBE_CACHE_PATH, { force: true })
   ]);
   global.fetch = originalFetch;
   playlistService.getIndex = originalGetIndex;
   playlistService.insertVideo = originalInsertVideo;
+  adoptionService.adopt = originalAdopt;
 }
 
 test.beforeEach(resetState);
@@ -229,4 +236,180 @@ test('cancelling a playlist job while one insert is running keeps the finished i
   assert.equal(final.status, 'cancelled');
   assert.equal(final.counts.completed, 1);
   assert.equal(final.counts.cancelled, 1);
+});
+
+test('adoption preflight warns above 10 seconds and blocks above 45 seconds', async () => {
+  const adoption = require('../src/youtubeManager/adoptionService');
+  assert.deepEqual(adoption.durationAssessment(271, 272), { differenceSeconds: 1, level: 'ok' });
+  assert.deepEqual(adoption.durationAssessment(271, 286), { differenceSeconds: 15, level: 'warning' });
+  assert.deepEqual(adoption.durationAssessment(271, 317), { differenceSeconds: 46, level: 'block' });
+});
+
+test('hardlink adoption creates managed media and NFO while preserving the original and legacy sidecars', async () => {
+  const adoption = require('../src/youtubeManager/adoptionService');
+  const adoptionState = require('../src/youtubeManager/youtubeAdoptionState');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ytm-adopt-hardlink-'));
+  const sourceRoot = path.join(root, 'source');
+  const baseDir = path.join(root, 'managed');
+  await fs.mkdir(sourceRoot, { recursive: true });
+  await fs.mkdir(baseDir, { recursive: true });
+  const sourcePath = path.join(sourceRoot, 'Artist - Song.mp4');
+  const legacyNfo = path.join(sourceRoot, 'Artist - Song.nfo');
+  await fs.writeFile(sourcePath, 'media-bytes');
+  await fs.writeFile(legacyNfo, '<legacy/>');
+  const targetPath = path.join(baseDir, 'Managed', 'Artist', 'Artist - Song.mp4');
+  const nfoPath = path.join(baseDir, 'Managed', 'Artist', 'Artist - Song.nfo');
+  const itemId = 'local_adopt_hardlink';
+  const videoId = 'AAAAAAAAAAA';
+  await managerState.save({
+    ...managerState.emptyState(),
+    sources: { src: { id: 'src', rootPath: sourceRoot, name: 'Source' } },
+    localItems: { [itemId]: { id: itemId, sourceId: 'src', path: sourcePath, relativePath: 'Artist - Song.mp4', present: true, duration: 200, inferredArtist: 'Artist', inferredTitle: 'Song', sidecars: { nfo: legacyNfo } } },
+    matches: { [itemId]: { itemId, status: 'confirmed', videoId, title: 'Artist - Song', channelTitle: 'Artist', duration: 200 } }
+  });
+  await fs.rm(adoptionState.STATE_PATH, { force: true });
+  const managedId = `Managed::${videoId}`;
+  const fakeManager = {
+    initialized: true, config: null, current: null, currentPromise: null,
+    state: { items: { [managedId]: { id: managedId, libraryFolder: 'Managed', destinationId: 'Managed', videoId, title: 'Artist - Song', channelTitle: 'Artist', targetPath, nfoPath, thumbnailPath: path.join(baseDir, 'Managed', 'Artist', 'Artist - Song.jpg'), sourceActive: true, status: 'pending' } }, libraries: {} },
+    configure(config) { this.config = config; },
+    async validateMedia() { return { formatName: 'mov,mp4,m4a,3gp,3g2,mj2', video: { codec_name: 'h264' }, audio: { codec_name: 'aac' } }; },
+    async ensureReleaseMetadata(item) { return item; },
+    ensureLibraryState(id) { this.state.libraries[id] ||= {}; return this.state.libraries[id]; },
+    async saveNow() {}, beginExternalMutation() {}, endExternalMutation() {}
+  };
+  const config = { paths: { baseDir }, downloads: { writeThumbnails: false, minFreeSpaceGb: 0 }, playlists: [{ name: 'Managed', enabled: true, mediaProfile: 'generic', url: 'https://www.youtube.com/playlist?list=PLX' }], channels: [] };
+  const result = await adoption.adopt(config, { itemId, destinationId: 'Managed', mode: 'hardlink', confirmed: true }, { manager: fakeManager, remoteVideo: { id: videoId, title: 'Artist - Song', channelTitle: 'Artist', duration: 200 } });
+  assert.equal(result.status, 'completed');
+  assert.equal(await fs.readFile(sourcePath, 'utf8'), 'media-bytes');
+  assert.equal(await fs.readFile(legacyNfo, 'utf8'), '<legacy/>');
+  assert.match(await fs.readFile(nfoPath, 'utf8'), /AAAAAAAAAAA/);
+  const [sourceStat, targetStat] = await Promise.all([fs.stat(sourcePath), fs.stat(targetPath)]);
+  assert.equal(sourceStat.ino, targetStat.ino);
+  assert.equal(fakeManager.state.items[managedId].acquisition.type, 'adopted-local');
+  const catalog = await localCatalog.getItem(itemId);
+  assert.equal(catalog.adoptionState.status, 'adopted');
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test('failed adoption rolls back created media and restores the managed item', async () => {
+  const adoption = require('../src/youtubeManager/adoptionService');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ytm-adopt-rollback-'));
+  const sourceRoot = path.join(root, 'source'); const baseDir = path.join(root, 'managed');
+  await fs.mkdir(sourceRoot, { recursive: true }); await fs.mkdir(baseDir, { recursive: true });
+  const sourcePath = path.join(sourceRoot, 'Artist - Broken.mp4'); await fs.writeFile(sourcePath, 'media-bytes');
+  const targetPath = path.join(baseDir, 'Managed', 'Artist', 'Artist - Broken.mp4'); const nfoPath = path.join(baseDir, 'Managed', 'Artist', 'Artist - Broken.nfo');
+  const itemId = 'local_adopt_rollback'; const videoId = 'BBBBBBBBBBB'; const managedId = `Managed::${videoId}`;
+  await managerState.save({ ...managerState.emptyState(), sources: { src: { id: 'src', rootPath: sourceRoot } }, localItems: { [itemId]: { id: itemId, sourceId: 'src', path: sourcePath, relativePath: 'Artist - Broken.mp4', present: true, duration: 200 } }, matches: { [itemId]: { itemId, status: 'confirmed', videoId, title: 'Artist - Broken', duration: 200 } } });
+  const original = { id: managedId, libraryFolder: 'Managed', destinationId: 'Managed', videoId, title: 'Artist - Broken', targetPath, nfoPath, thumbnailPath: path.join(baseDir, 'Managed', 'Artist', 'Artist - Broken.jpg'), sourceActive: true, status: 'pending' };
+  const fakeManager = { initialized: true, current: null, currentPromise: null, state: { items: { [managedId]: JSON.parse(JSON.stringify(original)) }, libraries: {} }, configure() {}, async validateMedia() { return { formatName: 'mp4', video: { codec_name: 'h264' }, audio: { codec_name: 'aac' } }; }, async ensureReleaseMetadata() { throw new Error('metadata failure'); }, ensureLibraryState(id) { this.state.libraries[id] ||= {}; return this.state.libraries[id]; }, async saveNow() {}, beginExternalMutation() {}, endExternalMutation() {} };
+  const config = { paths: { baseDir }, downloads: { writeThumbnails: false, minFreeSpaceGb: 0 }, playlists: [{ name: 'Managed', enabled: true, mediaProfile: 'generic', url: 'https://www.youtube.com/playlist?list=PLX' }], channels: [] };
+  await assert.rejects(() => adoption.adopt(config, { itemId, destinationId: 'Managed', mode: 'copy', confirmed: true }, { manager: fakeManager, remoteVideo: { id: videoId, title: 'Artist - Broken', duration: 200 } }), /metadata failure/);
+  assert.equal(await fs.readFile(sourcePath, 'utf8'), 'media-bytes');
+  await assert.rejects(() => fs.stat(targetPath), /ENOENT/);
+  assert.equal(fakeManager.state.items[managedId].status, 'pending');
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test('move adoption removes only the source video at final commit and preserves old sidecars', async () => {
+  const adoption = require('../src/youtubeManager/adoptionService');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ytm-adopt-move-'));
+  const sourceRoot = path.join(root, 'source'); const baseDir = path.join(root, 'managed');
+  await fs.mkdir(sourceRoot, { recursive: true }); await fs.mkdir(baseDir, { recursive: true });
+  const sourcePath = path.join(sourceRoot, 'Artist - Move.mp4'); const oldSubtitle = path.join(sourceRoot, 'Artist - Move.pt-BR.srt');
+  await fs.writeFile(sourcePath, 'move-media'); await fs.writeFile(oldSubtitle, 'legacy subtitle');
+  const targetPath = path.join(baseDir, 'Managed', 'Artist', 'Artist - Move.mp4'); const nfoPath = path.join(baseDir, 'Managed', 'Artist', 'Artist - Move.nfo');
+  const itemId = 'local_adopt_move'; const videoId = 'CCCCCCCCCCC'; const managedId = `Managed::${videoId}`;
+  await managerState.save({ ...managerState.emptyState(), sources: { src: { id: 'src', rootPath: sourceRoot } }, localItems: { [itemId]: { id: itemId, sourceId: 'src', path: sourcePath, relativePath: 'Artist - Move.mp4', present: true, duration: 210 } }, matches: { [itemId]: { itemId, status: 'confirmed', videoId, title: 'Artist - Move', duration: 210 } } });
+  const fakeManager = { initialized: true, current: null, currentPromise: null, state: { items: { [managedId]: { id: managedId, libraryFolder: 'Managed', destinationId: 'Managed', videoId, title: 'Artist - Move', targetPath, nfoPath, thumbnailPath: path.join(baseDir, 'Managed', 'Artist', 'Artist - Move.jpg'), sourceActive: true, status: 'pending' } }, libraries: {} }, configure() {}, async validateMedia() { return { formatName: 'mp4', video: { codec_name: 'h264' }, audio: { codec_name: 'aac' } }; }, async ensureReleaseMetadata(item) { return item; }, ensureLibraryState(id) { this.state.libraries[id] ||= {}; return this.state.libraries[id]; }, async saveNow() {}, beginExternalMutation() {}, endExternalMutation() {} };
+  const config = { paths: { baseDir }, downloads: { writeThumbnails: false, minFreeSpaceGb: 0 }, playlists: [{ name: 'Managed', enabled: true, mediaProfile: 'generic', url: 'https://www.youtube.com/playlist?list=PLX' }], channels: [] };
+  await adoption.adopt(config, { itemId, destinationId: 'Managed', mode: 'move', confirmed: true, moveConfirmed: true }, { manager: fakeManager, remoteVideo: { id: videoId, title: 'Artist - Move', duration: 210 } });
+  await assert.rejects(() => fs.stat(sourcePath), /ENOENT/);
+  assert.equal(await fs.readFile(targetPath, 'utf8'), 'move-media');
+  assert.equal(await fs.readFile(oldSubtitle, 'utf8'), 'legacy subtitle');
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+
+test('restart recovery restores a Move source and removes transaction-owned artifacts even before createdPaths was checkpointed', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ytm-adopt-recover-'));
+  try {
+    const sourceRoot = path.join(root, 'source'); const baseDir = path.join(root, 'managed');
+    await fs.mkdir(sourceRoot, { recursive: true }); await fs.mkdir(baseDir, { recursive: true });
+    const sourcePath = path.join(sourceRoot, 'Artist - Crash.mp4');
+    const targetPath = path.join(baseDir, 'Managed', 'Artist', 'Artist - Crash.mp4');
+    const nfoPath = path.join(baseDir, 'Managed', 'Artist', 'Artist - Crash.nfo');
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    await fs.writeFile(targetPath, 'recover-media'); await fs.writeFile(nfoPath, '<nfo/>');
+    const itemId = 'local_adopt_recover'; const videoId = 'DDDDDDDDDDD'; const managedId = `Managed::${videoId}`;
+    await managerState.save({
+      ...managerState.emptyState(),
+      localItems: { [itemId]: { id: itemId, adoptionState: { status: 'adopting', transactionId: 'tx-crash' } } }
+    });
+    const previousManagedItem = { id: managedId, libraryFolder: 'Managed', destinationId: 'Managed', videoId, targetPath, nfoPath, sourceActive: true, status: 'pending' };
+    const fakeManager = {
+      initialized: true,
+      state: { items: { [managedId]: { ...previousManagedItem, status: 'completed' } }, libraries: {} },
+      configure() {}, async saveNow() {}
+    };
+    await adoptionState.save({
+      ...adoptionState.emptyState(),
+      transactions: {
+        'tx-crash': {
+          id: 'tx-crash', itemId, managedItemId: managedId, destinationId: 'Managed', videoId, mode: 'move', status: 'running',
+          sourcePath, targetPath,
+          manifest: { ownedPaths: [targetPath, nfoPath], createdPaths: [], sourceRemoved: false, previousManagedItem, previousCatalogAdoptionState: null }
+        }
+      }
+    });
+    const recovered = await adoptionService.recover({}, { manager: fakeManager });
+    assert.deepEqual(recovered, [{ id: 'tx-crash', status: 'rolled-back' }]);
+    assert.equal(await fs.readFile(sourcePath, 'utf8'), 'recover-media');
+    await assert.rejects(() => fs.stat(targetPath), /ENOENT/);
+    await assert.rejects(() => fs.stat(nfoPath), /ENOENT/);
+    assert.equal(fakeManager.state.items[managedId].status, 'pending');
+    assert.equal((await localCatalog.getItem(itemId)).adoptionState, null);
+    assert.equal((await adoptionState.load()).transactions['tx-crash'].status, 'rolled-back');
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('adoption queue honors a pending cancellation after restart', async () => {
+  await adoptionState.save({
+    ...adoptionState.emptyState(),
+    queue: {
+      paused: true,
+      activeJobId: 'job-cancelled',
+      jobs: {
+        'job-cancelled': {
+          id: 'job-cancelled', destinationId: 'Managed', mode: 'copy', status: 'running', cancelRequested: true, createdAt: new Date().toISOString(),
+          items: [{ id: 'queued-item', itemId: 'local-one', status: 'running', createdAt: new Date().toISOString() }]
+        }
+      }
+    }
+  });
+  await adoptionQueue.init(async () => ({}));
+  const status = await adoptionQueue.getStatus();
+  const job = status.jobs.find((entry) => entry.id === 'job-cancelled');
+  assert.equal(job.status, 'cancelled');
+  assert.equal(job.counts.cancelled, 1);
+  assert.equal(job.counts.pending, 0);
+  await adoptionQueue.stop();
+});
+
+test('adoption queue defers instead of busy-spinning while a download is active', async () => {
+  let calls = 0;
+  adoptionService.adopt = async () => {
+    calls += 1;
+    const error = new Error('download busy'); error.code = 'DOWNLOAD_BUSY'; throw error;
+  };
+  await adoptionQueue.init(async () => ({}));
+  await adoptionQueue.start({ itemIds: ['local-busy'], destinationId: 'Managed', mode: 'copy', confirmed: true });
+  for (let i = 0; i < 20 && calls === 0; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.equal(calls, 1);
+  const status = await adoptionQueue.getStatus();
+  assert.equal(status.latestJob.items[0].status, 'pending');
+  await adoptionQueue.stop();
 });

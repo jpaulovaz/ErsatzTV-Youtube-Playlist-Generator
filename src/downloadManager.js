@@ -175,6 +175,7 @@ class DownloadManager {
     this.idleActionRunning = false;
     this.nextIdleActionAtMs = 0;
     this.lastOrphanMaintenanceAtMs = 0;
+    this.externalMutationDepth = 0;
   }
 
   async init(config) {
@@ -256,7 +257,7 @@ class DownloadManager {
       if (!this.initialized || !this.config) return;
       await this.refreshStorage(false);
 
-      if (this.current || this.currentPromise || this.idleActionRunning) return;
+      if (this.current || this.currentPromise || this.idleActionRunning || this.externalMutationDepth > 0) return;
       if (this.state.paused) return;
 
       const lowDisk = this.isLowDisk();
@@ -1342,6 +1343,21 @@ class DownloadManager {
     }
 
     await this.saveNow();
+  }
+
+  beginExternalMutation() {
+    if (this.current || this.currentPromise) {
+      const error = new Error('Existe um download em andamento; aguarde antes de alterar arquivos gerenciados.');
+      error.statusCode = 409;
+      error.code = 'DOWNLOAD_BUSY';
+      throw error;
+    }
+    this.externalMutationDepth += 1;
+  }
+
+  endExternalMutation() {
+    this.externalMutationDepth = Math.max(0, this.externalMutationDepth - 1);
+    this.kick();
   }
 
   ensureLibraryState(libraryFolder) {

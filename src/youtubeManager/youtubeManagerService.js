@@ -6,14 +6,16 @@ const localCatalog = require('./localCatalogScanner');
 const stateStore = require('./youtubeManagerState');
 const quotaTracker = require('./quotaTracker');
 const { scoreCandidate } = require('./matchScore');
+const adoptionQueue = require('./adoptionQueue');
 
 async function getStatus() {
-  const [account, sources, queue, quota, state] = await Promise.all([
+  const [account, sources, queue, quota, state, adoption] = await Promise.all([
     accountService.getStatus({ verify: false }),
     localCatalog.listSources(),
     playlistQueue.getStatus(),
     quotaTracker.getToday(),
-    stateStore.load()
+    stateStore.load(),
+    adoptionQueue.getStatus()
   ]);
   const counts = { total: 0, recovered: 0, confirmed: 0, probable: 0, ignored: 0, unmatched: 0, missing: 0, errors: 0, conflicts: 0 };
   const videoIdToItems = new Map();
@@ -35,7 +37,7 @@ async function getStatus() {
     }
   }
   counts.conflicts = [...videoIdToItems.values()].filter((ids) => ids.length > 1).reduce((total, ids) => total + ids.length, 0);
-  return { account, sources, queue, quota, counts };
+  return { account, sources, queue, quota, counts, adoption };
 }
 
 async function searchPublic(config, options) {

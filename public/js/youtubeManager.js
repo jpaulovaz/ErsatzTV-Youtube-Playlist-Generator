@@ -13,6 +13,9 @@
   let currentMatchItem = null;
   let searchState = { query: '', nextPageToken: '', results: [] };
   let pollTimer = null;
+  let adoptionSelection = [];
+  let adoptionPlan = null;
+  let adoptionDestinations = [];
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -175,6 +178,8 @@
   }
 
   function sourceStatusLabel(item) {
+    if (item.adoptionState && item.adoptionState.status === 'adopted') return ['Adotado', 'ok'];
+    if (item.adoptionState && item.adoptionState.status === 'adopting') return ['Adotando', 'info'];
     if (item.match && item.match.status === 'confirmed') return ['Confirmado', 'ok'];
     if (item.match && item.match.status === 'ignored') return ['Ignorado', 'muted'];
     if (item.scanError) return ['Erro de leitura', 'danger'];
@@ -216,8 +221,8 @@
       return `<article class="ytm-catalog-row" data-ytm-item="${esc(item.id)}">
         <label class="ytm-select"><input type="checkbox" data-ytm-select-item="${esc(item.id)}" ${selectedCatalog.has(item.id) ? 'checked' : ''} ${confirmed ? '' : 'disabled'}></label>
         <div class="ytm-catalog-main"><strong>${esc(item.inferredArtist || 'Outros')} — ${esc(item.inferredTitle || item.filename)}</strong><small>${esc(item.relativePath)} · ${duration(item.duration)}</small>${item.scanError ? `<span class="error-text">${esc(item.scanError)}</span>` : ''}</div>
-        <div><span class="badge ${cls}">${esc(label)}</span>${item.recoveredVideoId && !confirmed ? `<small>${esc(item.recoveredVideoId)} · ${esc(item.matchSource || '')}</small>` : ''}${confirmed ? `<small>${esc(match.videoId)} · ${esc(match.channelTitle || '')}</small>` : ''}</div>
-        <div class="row-actions"><button type="button" class="small" data-ytm-review="${esc(item.id)}">Revisar</button>${confirmed || item.match && item.match.status === 'ignored' ? `<button type="button" class="small" data-ytm-clear-match="${esc(item.id)}">Limpar</button>` : `<button type="button" class="small" data-ytm-ignore="${esc(item.id)}">Ignorar</button>`}</div>
+        <div><span class="badge ${cls}">${esc(label)}</span>${item.recoveredVideoId && !confirmed ? `<small>${esc(item.recoveredVideoId)} · ${esc(item.matchSource || '')}</small>` : ''}${confirmed ? `<small>${esc(match.videoId)} · ${esc(match.channelTitle || '')}</small>` : ''}${item.adoptionState && item.adoptionState.status === 'adopted' ? `<small>${esc(item.adoptionState.mode || '')} · ${esc(item.adoptionState.destinationId || '')}</small>` : ''}</div>
+        <div class="row-actions"><button type="button" class="small" data-ytm-review="${esc(item.id)}">Revisar</button>${confirmed ? `<button type="button" class="small primary" data-ytm-adopt="${esc(item.id)}">Adotar</button>` : ''}${confirmed || item.match && item.match.status === 'ignored' ? `<button type="button" class="small" data-ytm-clear-match="${esc(item.id)}">Limpar</button>` : `<button type="button" class="small" data-ytm-ignore="${esc(item.id)}">Ignorar</button>`}</div>
       </article>`;
     }).join('');
     $('#ytmCatalogMore')?.classList.toggle('hidden', !catalogPagination.hasMore);
@@ -272,6 +277,81 @@
     $('#ytmMatchPanel').classList.add('hidden');
   }
 
+  function formatBytes(value) {
+    const bytes = Number(value) || 0;
+    if (!bytes) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+    return `${(bytes / (1024 ** index)).toFixed(index > 1 ? 2 : 0)} ${units[index]}`;
+  }
+
+  async function openAdoptionPanel(itemIds) {
+    adoptionSelection = [...new Set((itemIds || []).filter(Boolean))];
+    if (!adoptionSelection.length) throw new Error('Selecione ao menos um item confirmado.');
+    adoptionPlan = null;
+    $('#ytmAdoptionStart').disabled = true;
+    $('#ytmAdoptionPlan').innerHTML = '';
+    $('#ytmAdoptionMoveConfirm').checked = false;
+    const params = new URLSearchParams({ itemIds: adoptionSelection.join(',') });
+    const response = await deps.api(`/api/youtube-manager/adoption-destinations?${params}`);
+    adoptionDestinations = response.result.destinations || [];
+    const select = $('#ytmAdoptionDestination');
+    select.innerHTML = '<option value="">Selecione um destino gerenciado</option>' + adoptionDestinations.map((item) => `<option value="${esc(item.id)}">${esc(item.displayName)} · ${esc(item.mediaProfile || 'generic')}${item.hasMedia ? ' · já possui mídia' : ''}</option>`).join('');
+    $('#ytmAdoptionTitle').textContent = adoptionSelection.length === 1 ? 'Adotar mídia existente' : `Adotar ${adoptionSelection.length} mídias existentes`;
+    $('#ytmAdoptionMeta').textContent = adoptionDestinations.length ? 'Escolha o destino e o modo; nenhum arquivo será tocado antes do preflight.' : 'Nenhum destino contém todos os vídeos selecionados como itens ativos. Sincronize a fonte gerenciada antes de adotar.';
+    $('#ytmAdoptionPanel').classList.remove('hidden');
+    $('#ytmAdoptionPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderAdoptionPlan(plan) {
+    const root = $('#ytmAdoptionPlan');
+    if (!root) return;
+    const entries = plan && plan.items || [];
+    root.innerHTML = `<div class="ytm-adoption-summary"><strong>${plan.eligible || 0} elegível(is)</strong><span>${plan.blocked || 0} bloqueado(s) · ${plan.warnings || 0} aviso(s)</span></div>` + entries.map((entry) => {
+      const blockers = (entry.blockers || []).map((value) => `<li class="error-text">${esc(value.message)}</li>`).join('');
+      const warnings = (entry.warnings || []).map((value) => `<li>${esc(value.message)}</li>`).join('');
+      return `<article class="ytm-adoption-item ${entry.canCommit ? 'ok' : 'blocked'}"><strong>${esc(entry.youtube && entry.youtube.title || entry.videoId)}</strong><small>Origem: ${esc(entry.source.relativePath || entry.source.path)} · ${formatBytes(entry.source.sizeBytes)}</small><small>Destino: ${esc(entry.destination.targetPath || '-')}</small><small>Duração: local ${duration(entry.source.duration)} · YouTube ${duration(entry.youtube && entry.youtube.duration)}${entry.durationDifferenceSeconds != null ? ` · Δ ${entry.durationDifferenceSeconds}s` : ''}</small>${blockers || warnings ? `<ul>${blockers}${warnings}</ul>` : '<small>Preflight aprovado.</small>'}</article>`;
+    }).join('');
+    const allEligible = entries.length > 0 && entries.every((entry) => entry.canCommit);
+    $('#ytmAdoptionStart').disabled = !allEligible;
+  }
+
+  async function analyzeAdoption() {
+    const destinationId = $('#ytmAdoptionDestination').value;
+    if (!destinationId) throw new Error('Selecione o destino gerenciado.');
+    const mode = $('#ytmAdoptionMode').value;
+    const response = await deps.api('/api/youtube-manager/adoption-plan', { method: 'POST', body: JSON.stringify({ itemIds: adoptionSelection, destinationId, mode }) });
+    adoptionPlan = response.result;
+    renderAdoptionPlan(adoptionPlan);
+  }
+
+  async function startAdoption() {
+    if (!adoptionPlan || !adoptionPlan.items || !adoptionPlan.items.length || adoptionPlan.items.some((entry) => !entry.canCommit)) throw new Error('Execute novamente o preflight antes de iniciar.');
+    const mode = $('#ytmAdoptionMode').value;
+    if (mode === 'move' && !$('#ytmAdoptionMoveConfirm').checked) throw new Error('Confirme que entende a remoção da mídia de origem no commit final.');
+    const dialog = await deps.showDialog({ eyebrow: 'Adoção de mídia', title: mode === 'move' ? 'Mover e adotar mídia?' : 'Adotar mídia existente?', message: `${adoptionSelection.length} item(ns) serão processados em modo ${mode}. O destino nunca será sobrescrito e falhas executam rollback.`, warning: mode === 'move' ? 'Somente o arquivo de vídeo da origem será removido no commit final. Sidecars antigos permanecem intactos.' : 'Legendas e traduções continuam sob comando do usuário.', confirmLabel: mode === 'move' ? 'Mover e adotar' : 'Iniciar adoção', danger: mode === 'move' });
+    if (!dialog.confirmed) return;
+    await deps.api('/api/youtube-manager/adoption-start', { method: 'POST', body: JSON.stringify({ itemIds: adoptionSelection, destinationId: $('#ytmAdoptionDestination').value, mode, confirmed: true, moveConfirmed: mode === 'move' && $('#ytmAdoptionMoveConfirm').checked }) });
+    deps.showToast('Fila de adoção criada.');
+    await refreshQueue();
+  }
+
+  function renderAdoptionQueue(queue) {
+    const job = queue && (queue.activeJob || queue.latestJob);
+    const toggle = $('#ytmAdoptionQueueToggle'); const cancel = $('#ytmAdoptionQueueCancel'); const progress = $('#ytmAdoptionQueueProgress');
+    if (!job) {
+      $('#ytmAdoptionQueueSubtitle').textContent = 'Nenhuma adoção ativa.';
+      $('#ytmAdoptionQueueMetrics').innerHTML = '<span><strong>0</strong> concluídos</span><span><strong>0</strong> pendentes</span><span><strong>0</strong> falhas</span>';
+      progress.max = 1; progress.value = 0; toggle.classList.add('hidden'); cancel.classList.add('hidden'); return;
+    }
+    const counts = job.counts || {}; const total = (job.items || []).length || 1; const done = (counts.completed || 0) + (counts.failed || 0) + (counts.cancelled || 0);
+    $('#ytmAdoptionQueueSubtitle').textContent = `${job.destinationId} · ${job.mode} · ${job.status}`;
+    progress.max = total; progress.value = Math.min(total, done);
+    $('#ytmAdoptionQueueMetrics').innerHTML = `<span><strong>${counts.completed || 0}</strong> concluídos</span><span><strong>${counts.pending || 0}</strong> pendentes</span><span><strong>${counts.failed || 0}</strong> falhas</span><span><strong>${counts.cancelled || 0}</strong> cancelados</span>`;
+    toggle.classList.toggle('hidden', !['queued', 'running'].includes(job.status)); cancel.classList.toggle('hidden', !['queued', 'running'].includes(job.status));
+    toggle.textContent = queue.paused ? 'Retomar' : 'Pausar'; toggle.dataset.action = queue.paused ? 'resume' : 'pause';
+  }
+
   async function catalogBulkAdd() {
     const playlistId = $('#ytmCatalogPlaylist').value;
     const playlist = playlists.find((item) => item.id === playlistId);
@@ -311,6 +391,7 @@
     const response = await deps.api('/api/youtube-manager/status');
     status = response.result;
     renderQueue(status.queue);
+    renderAdoptionQueue(status.adoption);
     renderQuota();
   }
 
@@ -334,7 +415,7 @@
     status = statusResponse.result;
     accountConfig = configResponse.result;
     sources = status.sources || [];
-    renderAccount(); renderSources(); renderCatalogMetrics(); renderQueue(status.queue);
+    renderAccount(); renderSources(); renderCatalogMetrics(); renderQueue(status.queue); renderAdoptionQueue(status.adoption);
     if (!light) await refreshPlaylists();
   }
 
@@ -396,15 +477,24 @@
     $('#ytmCatalogRefresh').addEventListener('click', () => refreshCatalog().catch((error) => deps.showToast(error.message, true)));
     $('#ytmCatalogMore').addEventListener('click', () => refreshCatalog({ append: true }).catch((error) => deps.showToast(error.message, true)));
     $('#ytmCatalogAddSelected').addEventListener('click', () => catalogBulkAdd().catch((error) => deps.showToast(error.message, true)));
+    $('#ytmCatalogAdoptSelected').addEventListener('click', () => openAdoptionPanel([...selectedCatalog]).catch((error) => deps.showToast(error.message, true)));
     $('#ytmCatalogList').addEventListener('change', (event) => { const box = event.target.closest('[data-ytm-select-item]'); if (!box) return; if (box.checked) selectedCatalog.add(box.dataset.ytmSelectItem); else selectedCatalog.delete(box.dataset.ytmSelectItem); });
     $('#ytmCatalogList').addEventListener('click', (event) => {
       const review = event.target.closest('[data-ytm-review]'); if (review) return reviewItem(review.dataset.ytmReview).catch((error) => deps.showToast(error.message, true));
+      const adopt = event.target.closest('[data-ytm-adopt]'); if (adopt) return openAdoptionPanel([adopt.dataset.ytmAdopt]).catch((error) => deps.showToast(error.message, true));
       const ignore = event.target.closest('[data-ytm-ignore]'); if (ignore) return deps.api('/api/youtube-manager/item/match', { method: 'POST', body: JSON.stringify({ itemId: ignore.dataset.ytmIgnore, action: 'ignore' }) }).then(() => refreshCatalog()).catch((error) => deps.showToast(error.message, true));
       const clear = event.target.closest('[data-ytm-clear-match]'); if (clear) return deps.api('/api/youtube-manager/item/match', { method: 'POST', body: JSON.stringify({ itemId: clear.dataset.ytmClearMatch, action: 'clear' }) }).then(() => refreshCatalog()).catch((error) => deps.showToast(error.message, true));
     });
     $('#ytmMatchClose').addEventListener('click', () => $('#ytmMatchPanel').classList.add('hidden'));
     $('#ytmMatchSearch').addEventListener('click', async () => { if (!currentMatchItem) return; try { const response = await deps.api('/api/youtube-manager/item/search', { method: 'POST', body: JSON.stringify({ itemId: currentMatchItem.id, query: $('#ytmMatchQuery').value.trim(), force: true }) }); renderMatchResults(response.result); } catch (error) { deps.showToast(error.message, true); } });
     $('#ytmMatchResults').addEventListener('click', (event) => { const button = event.target.closest('[data-ytm-confirm-video]'); if (button) confirmMatch(button.dataset.ytmConfirmVideo).catch((error) => deps.showToast(error.message, true)); });
+    $('#ytmAdoptionClose').addEventListener('click', () => $('#ytmAdoptionPanel').classList.add('hidden'));
+    $('#ytmAdoptionMode').addEventListener('change', () => { adoptionPlan = null; $('#ytmAdoptionStart').disabled = true; $('#ytmAdoptionPlan').innerHTML = ''; $('#ytmAdoptionMoveConfirmRow').classList.toggle('hidden', $('#ytmAdoptionMode').value !== 'move'); $('#ytmAdoptionMoveConfirm').checked = false; });
+    $('#ytmAdoptionDestination').addEventListener('change', () => { adoptionPlan = null; $('#ytmAdoptionStart').disabled = true; $('#ytmAdoptionPlan').innerHTML = ''; });
+    $('#ytmAdoptionAnalyze').addEventListener('click', () => analyzeAdoption().catch((error) => deps.showToast(error.message, true)));
+    $('#ytmAdoptionStart').addEventListener('click', () => startAdoption().catch((error) => deps.showToast(error.message, true)));
+    $('#ytmAdoptionQueueToggle').addEventListener('click', async () => { try { const action = $('#ytmAdoptionQueueToggle').dataset.action === 'resume' ? 'resume' : 'pause'; await deps.api(`/api/youtube-manager/adoption-${action}`, { method: 'POST', body: '{}' }); await refreshQueue(); } catch (error) { deps.showToast(error.message, true); } });
+    $('#ytmAdoptionQueueCancel').addEventListener('click', async () => { const dialog = await deps.showDialog({ eyebrow: 'Fila de adoção', title: 'Cancelar adoções pendentes?', message: 'Itens já concluídos permanecem adotados. O item em execução termina sua transação.', confirmLabel: 'Cancelar pendentes', danger: true }); if (!dialog.confirmed) return; await deps.api('/api/youtube-manager/adoption-cancel', { method: 'POST', body: '{}' }); await refreshQueue(); });
 
     $('#ytmPlaylistCreate').addEventListener('click', async () => { try { await deps.api('/api/youtube-manager/playlists', { method: 'POST', body: JSON.stringify({ title: $('#ytmPlaylistTitle').value.trim(), description: $('#ytmPlaylistDescription').value.trim(), privacyStatus: $('#ytmPlaylistPrivacy').value }) }); $('#ytmPlaylistTitle').value = ''; $('#ytmPlaylistDescription').value = ''; await refreshStatus(); deps.showToast('Playlist criada.'); } catch (error) { deps.showToast(error.message, true); } });
     $('#ytmPlaylistList').addEventListener('click', (event) => { const button = event.target.closest('[data-ytm-use-playlist]'); if (!button) return; $('#ytmSearchPlaylist').value = button.dataset.ytmUsePlaylist; $('#ytmCatalogPlaylist').value = button.dataset.ytmUsePlaylist; deps.showToast('Playlist definida como destino.'); });

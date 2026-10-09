@@ -639,7 +639,7 @@ test('Gerenciar conteúdo expõe tradução em massa com Gemini e configuração
   assert.match(html, /<option value="gemini">Gemini<\/option>/);
   assert.match(html, /Tradução de legendas/);
   assert.match(html, /translationSettingsApiKey/);
-  assert.match(html, /subtitleTranslation\.js\?v=3\.8\.0/);
+  assert.match(html, new RegExp(`subtitleTranslation\\.js\\?v=${APP_VERSION_RE}`));
   assert.match(translation, /Resultado filtrado atual/);
   assert.match(translation, /Traduzida \+ bilíngue/);
   assert.match(translation, /subtitle-translation-plan/);
@@ -669,7 +669,7 @@ test('Gerenciador do YouTube expõe pesquisa, acervo local, playlists e OAuth na
   assert.match(html, /Minhas playlists/);
   assert.match(html, /Conta/);
   assert.match(html, /https:\/\/yt\.johnflix\.com\.br\//);
-  assert.match(html, /youtubeManager\.js\?v=3\.8\.0/);
+  assert.match(html, /youtubeManager\.js\?v=3\.9\.0/);
   assert.match(app, /youtube-manager/);
   assert.match(app, /YouTubeManagerView\.init/);
   assert.match(manager, /\/api\/youtube-manager\/search/);
@@ -678,6 +678,8 @@ test('Gerenciador do YouTube expõe pesquisa, acervo local, playlists e OAuth na
   assert.match(manager, /\/api\/youtube-manager\/scan/);
   assert.match(manager, /\/api\/youtube-manager\/item\/match/);
   assert.match(manager, /youtube-manager/);
-  assert.match(css, /YouTube Manager v3\.8/);
-  assert.doesNotMatch(html, /Adotar arquivo existente/);
+  assert.match(css, /YouTube Manager v3\.9/);
+  assert.match(html, /Adotar mídia existente/);
+  assert.match(manager, /\/api\/youtube-manager\/adoption-plan/);
+  assert.match(manager, /\/api\/youtube-manager\/adoption-start/);
 });

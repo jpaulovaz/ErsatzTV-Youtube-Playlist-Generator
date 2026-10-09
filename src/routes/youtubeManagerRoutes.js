@@ -5,6 +5,8 @@ const playlistService = require('../youtubeManager/youtubePlaylistService');
 const playlistQueue = require('../youtubeManager/playlistQueue');
 const localCatalog = require('../youtubeManager/localCatalogScanner');
 const managerService = require('../youtubeManager/youtubeManagerService');
+const adoptionService = require('../youtubeManager/adoptionService');
+const adoptionQueue = require('../youtubeManager/adoptionQueue');
 
 function queryFilters(url) {
   return {
@@ -111,6 +113,26 @@ async function handleYouTubeManagerRoutes(req, res, url, deps) {
   }
   if (req.method === 'POST' && action === 'item/match') {
     deps.sendJson(res, 200, { ok: true, result: await managerService.updateMatch(await deps.loadConfig(), await deps.readJson(req)) }); return true;
+  }
+
+  if (req.method === 'GET' && action === 'adoption-destinations') {
+    const itemIds = (url.searchParams.get('itemIds') || url.searchParams.get('itemId') || '').split(',').map((value) => value.trim()).filter(Boolean);
+    deps.sendJson(res, 200, { ok: true, result: await adoptionService.listDestinations(await deps.loadConfig(), { itemIds }) }); return true;
+  }
+  if (req.method === 'POST' && action === 'adoption-plan') {
+    deps.sendJson(res, 200, { ok: true, result: await adoptionService.plan(await deps.loadConfig(), await deps.readJson(req)) }); return true;
+  }
+  if (req.method === 'POST' && action === 'adoption-start') {
+    deps.sendJson(res, 202, { ok: true, result: await adoptionQueue.start(await deps.readJson(req)) }); return true;
+  }
+  if (req.method === 'POST' && action === 'adoption-pause') {
+    deps.sendJson(res, 200, { ok: true, result: await adoptionQueue.pause() }); return true;
+  }
+  if (req.method === 'POST' && action === 'adoption-resume') {
+    deps.sendJson(res, 200, { ok: true, result: await adoptionQueue.resume() }); return true;
+  }
+  if (req.method === 'POST' && action === 'adoption-cancel') {
+    const payload = await deps.readJson(req); deps.sendJson(res, 200, { ok: true, result: await adoptionQueue.cancelPending(payload.jobId || '') }); return true;
   }
 
   deps.sendJson(res, 404, { ok: false, error: 'Endpoint do Gerenciador do YouTube nao encontrado.' });

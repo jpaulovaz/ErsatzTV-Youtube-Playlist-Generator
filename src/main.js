@@ -8,6 +8,8 @@ const auth = require('./auth');
 const mediaPreviewService = require('./mediaPreviewService');
 const translationQueue = require('./subtitleTranslation/translationQueue');
 const youtubePlaylistQueue = require('./youtubeManager/playlistQueue');
+const adoptionService = require('./youtubeManager/adoptionService');
+const adoptionQueue = require('./youtubeManager/adoptionQueue');
 
 let server = null;
 let shuttingDown = false;
@@ -18,6 +20,7 @@ async function shutdown(signal) {
   await logger.info(`Encerramento solicitado por ${signal}.`);
   scheduler.stopTimer();
   channelScheduler.stopTimer();
+  await adoptionQueue.stop();
   await downloadManager.stop({ terminateCurrent: true });
   await mediaPreviewService.clearAllPreviews();
   await translationQueue.stop();
@@ -32,7 +35,10 @@ async function shutdown(signal) {
 async function main() {
   const config = await loadConfig();
   await mediaPreviewService.ensureCleanPreviewDir();
+  await downloadManager.init(config);
+  await adoptionService.recover(config);
   await downloadManager.start(config);
+  await adoptionQueue.init(loadConfig);
   server = await startServer(config);
   scheduler.start(config);
   channelScheduler.start(config);
