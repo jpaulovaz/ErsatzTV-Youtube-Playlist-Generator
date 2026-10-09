@@ -2163,11 +2163,17 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
 .ytm-playlist-card img { width: 72px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; }
 .ytm-playlist-card > div:nth-child(2) { display: grid; gap: .2rem; }
 .ytm-playlist-card small { color: var(--muted); }
-.ytm-catalog-row { grid-template-columns: auto minmax(0, 1fr) minmax(150px, 220px) auto; }
+.ytm-catalog-row { grid-template-columns: auto minmax(0, 1fr) minmax(270px, 390px) auto; }
 .ytm-catalog-main { min-width: 0; display: grid; gap: .25rem; }
 .ytm-catalog-main small { color: var(--muted); overflow-wrap: anywhere; }
-.ytm-catalog-row > div:nth-child(3) { display: grid; gap: .25rem; }
+.ytm-catalog-row > div:nth-child(3) { display: grid; gap: .45rem; }
 .ytm-catalog-row > div:nth-child(3) small { color: var(--muted); overflow-wrap: anywhere; }
+.ytm-catalog-states { min-width: 0; }
+.ytm-identity-state, .ytm-flow-state { display: grid; gap: .2rem; }
+.ytm-flow-state { padding-top: .4rem; border-top: 1px solid rgba(255,255,255,.07); }
+.ytm-flow-state strong { font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.ytm-flow-state small { display: block; line-height: 1.3; }
+.muted-text { color: var(--muted); }
 .ytm-select { align-self: center; }
 .ytm-catalog-flow-help { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-top: 1rem; }
 .ytm-catalog-flow-help > div { display: grid; gap: .25rem; padding: .75rem .85rem; border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,.025); }

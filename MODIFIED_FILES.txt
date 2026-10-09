@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.9.3
+ErsatzTV YouTube Downloader 3.9.4
 
-Arquivos alterados em relacao a v3.9.2:
+Arquivos alterados em relacao a v3.9.3:
 
 M	CHANGELOG.md
 M	README.md
@@ -11,13 +11,17 @@ M	public/login.html
 M	public/js/youtubeManager.js
 M	public/styles.css
 M	src/routes/youtubeManagerRoutes.js
-M	src/youtubeManager/adoptionService.js
+M	src/youtubeManager/localCatalogScanner.js
+M	src/youtubeManager/playlistQueue.js
+M	src/youtubeManager/youtubeManagerService.js
+M	src/youtubeManager/youtubeManagerState.js
 M	test/ui-v3.test.js
+M	test/youtubeManager.test.js
 M	MODIFIED_FILES.txt
 M	UPDATE_CONTENTS.txt
 
 Versionamento:
-- Aplicacao: v3.9.3
+- Aplicacao: v3.9.4
 - Universal: v1.3.1
 - configVersion: 9
 - Scripted Schedules schema: 1

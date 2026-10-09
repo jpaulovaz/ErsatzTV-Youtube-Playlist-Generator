@@ -101,6 +101,28 @@ function appendAudit(state, entry) {
   return target;
 }
 
+
+function setLocalPlaylistState(state, localItemId, playlistId, patch = {}) {
+  const target = state || emptyState();
+  const item = target.localItems && target.localItems[localItemId];
+  const pid = String(playlistId || '').trim();
+  if (!item || !pid) return null;
+  if (!item.playlistState || typeof item.playlistState !== 'object') item.playlistState = { playlists: {} };
+  if (!item.playlistState.playlists || typeof item.playlistState.playlists !== 'object') item.playlistState.playlists = {};
+  const previous = item.playlistState.playlists[pid] && typeof item.playlistState.playlists[pid] === 'object'
+    ? item.playlistState.playlists[pid]
+    : {};
+  const value = {
+    ...previous,
+    ...patch,
+    playlistId: pid,
+    updatedAt: patch.updatedAt || new Date().toISOString()
+  };
+  item.playlistState.playlists[pid] = value;
+  item.playlistState.updatedAt = value.updatedAt;
+  return value;
+}
+
 function pruneSearchCache(state, { maxEntries = 500, now = Date.now() } = {}) {
   const target = state || emptyState();
   const entries = Object.entries(target.searchCache || {})
@@ -120,5 +142,6 @@ module.exports = {
   save,
   mutate,
   appendAudit,
+  setLocalPlaylistState,
   pruneSearchCache
 };

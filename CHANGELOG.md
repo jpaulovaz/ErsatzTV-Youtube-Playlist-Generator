@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.9.4
+
+- Mantém **Confirmado** como estado exclusivo da identidade local ↔ YouTube e separa visualmente os estados posteriores de playlist e Biblioteca no catálogo do Acervo local.
+- O catálogo passa a cruzar o Video ID com o Download State e mostra todas as Bibliotecas, Playlists de Canal e Fontes de Canal em que o item já existe, distinguindo item sincronizado aguardando mídia, mídia presente e mídia adotada.
+- A presença em destino gerenciado também é exibida para IDs exatos ainda apenas recuperados de filename, NFO, `.info.json` ou metadata embedded; essa indicação não confirma automaticamente o match.
+- A fila de inserção em playlists passa a persistir no item local o estado por playlist: Em fila, Adicionando, Adicionado, Já estava na playlist, Falha ou Cancelado. Jobs antigos ainda presentes no estado são usados como fallback para reconstruir o histórico visível.
+- O preflight de playlist registra **Já estava na playlist** mesmo quando nenhum `playlistItems.insert` precisa ser criado.
+- Adiciona filtros **Biblioteca: Já presente/Ainda não presente** e **Playlist: Adicionado/Ainda não adicionado/Erro**, combináveis com Fonte, Status e pesquisa textual e respeitados por **Selecionar todos confirmados**.
+- A tela do Acervo local atualiza os estados quando as filas de playlist/adoção avançam, sem apagar a seleção corrente.
+- Nenhuma migração de `config.json` ou schema: os novos dados de playlist são campos opcionais dentro do YouTube Manager state v1; Download state permanece v5 e Adoption transaction state permanece v1.
+- Aplicação **v3.9.4**; Universal **v1.3.1**; `configVersion` **9**; Scripted Schedules schema **1**; download state **5**; subtitle-manager state **1**; subtitle-translation config/state **1**; YouTube Manager state **1**; YouTube Account state/config **1**; Adoption transaction state **1**.
+
 ## 3.9.3
 
 - Clarifica o fluxo do Acervo local: **Adicionar à playlist YouTube** atua somente na playlist da conta; **Adotar na biblioteca** reutiliza a mídia local em um destino gerenciado já sincronizado, evitando redownload.

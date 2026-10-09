@@ -18,6 +18,7 @@
   let adoptionDestinations = [];
   let scanPollTimer = null;
   let activeScanJobId = '';
+  let catalogFlowSignature = '';
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -292,14 +293,43 @@
   }
 
   function sourceStatusLabel(item) {
-    if (item.adoptionState && item.adoptionState.status === 'adopted') return ['Adotado', 'ok'];
-    if (item.adoptionState && item.adoptionState.status === 'adopting') return ['Adotando', 'info'];
     if (item.match && item.match.status === 'confirmed') return ['Confirmado', 'ok'];
     if (item.match && item.match.status === 'ignored') return ['Ignorado', 'muted'];
     if (item.scanError) return ['Erro de leitura', 'danger'];
     if (item.recoveredVideoId) return ['ID recuperado', 'info'];
     if (item.present === false) return ['Arquivo ausente', 'warn'];
     return ['Sem correspondência', 'warn'];
+  }
+
+  function playlistMembershipText(entry) {
+    const title = entry.playlistTitle || entry.playlistId || 'Playlist';
+    if (entry.status === 'added') return `✓ ${title} · Adicionado`;
+    if (entry.status === 'already-existing') return `✓ ${title} · Já estava na playlist`;
+    if (entry.status === 'running') return `● ${title} · Adicionando`;
+    if (entry.status === 'queued') return `● ${title} · Em fila`;
+    if (entry.status === 'failed') return `! ${title} · Falha${entry.lastError ? `: ${entry.lastError}` : ''}`;
+    if (entry.status === 'cancelled') return `— ${title} · Cancelado`;
+    return `${title} · ${entry.status || 'estado desconhecido'}`;
+  }
+
+  function managedDestinationText(item, entry) {
+    const type = adoptionDestinationTypeLabel(entry.type);
+    const name = `${type}: ${entry.displayName || entry.destinationId}`;
+    if (entry.adopted) return `✓ ${name} · Adotado${entry.adoptionMode ? ` por ${entry.adoptionMode}` : ''}`;
+    if (entry.hasMedia) return `✓ ${name} · Mídia presente`;
+    return `● ${name} · Item sincronizado · aguardando mídia`;
+  }
+
+  function renderCatalogFlowState(item) {
+    const playlists = Array.isArray(item.playlistMemberships) ? item.playlistMemberships : [];
+    const destinations = Array.isArray(item.managedDestinations) ? item.managedDestinations : [];
+    const youtubeLines = playlists.length
+      ? playlists.map((entry) => `<small class="${entry.status === 'failed' ? 'error-text' : ''}">${esc(playlistMembershipText(entry))}</small>`).join('')
+      : '<small class="muted-text">— Nenhuma operação de playlist registrada</small>';
+    const libraryLines = destinations.length
+      ? destinations.map((entry) => `<small>${esc(managedDestinationText(item, entry))}</small>`).join('')
+      : '<small class="muted-text">— Ainda não presente em destino gerenciado</small>';
+    return `<div class="ytm-flow-state"><strong>YouTube</strong>${youtubeLines}</div><div class="ytm-flow-state"><strong>Biblioteca</strong>${libraryLines}</div>`;
   }
 
   function renderCatalogMetrics() {
@@ -325,6 +355,8 @@
     return new URLSearchParams({
       sourceId: $('#ytmSourceSelect')?.value || '',
       status: $('#ytmCatalogStatus').value,
+      libraryPresence: $('#ytmCatalogLibraryPresence')?.value || 'all',
+      playlistStatus: $('#ytmCatalogPlaylistStatus')?.value || 'all',
       q: $('#ytmCatalogQuery').value.trim(),
       offset: String(offset),
       limit: String(limit),
@@ -391,7 +423,7 @@
       return `<article class="ytm-catalog-row" data-ytm-item="${esc(item.id)}">
         <label class="ytm-select"><input type="checkbox" data-ytm-select-item="${esc(item.id)}" ${selectedCatalog.has(item.id) ? 'checked' : ''} ${confirmed ? '' : 'disabled'}></label>
         <div class="ytm-catalog-main"><strong>${esc(item.inferredArtist || 'Outros')} — ${esc(item.inferredTitle || item.filename)}</strong><small>${esc(item.relativePath)} · ${duration(item.duration)}</small>${item.scanError ? `<span class="error-text">${esc(item.scanError)}</span>` : ''}</div>
-        <div><span class="badge ${cls}">${esc(label)}</span>${item.recoveredVideoId && !confirmed ? `<small>${esc(item.recoveredVideoId)} · ${esc(item.matchSource || '')}</small>` : ''}${confirmed ? `<small>${esc(match.videoId)} · ${esc(match.channelTitle || '')}</small>` : ''}${item.adoptionState && item.adoptionState.status === 'adopted' ? `<small>${esc(item.adoptionState.mode || '')} · ${esc(item.adoptionState.destinationId || '')}</small>` : ''}</div>
+        <div class="ytm-catalog-states"><div class="ytm-identity-state"><span class="badge ${cls}">${esc(label)}</span>${item.recoveredVideoId && !confirmed ? `<small>${esc(item.recoveredVideoId)} · ${esc(item.matchSource || '')}</small>` : ''}${confirmed ? `<small>${esc(match.videoId)} · ${esc(match.channelTitle || '')}</small>` : ''}</div>${renderCatalogFlowState(item)}</div>
         <div class="row-actions"><button type="button" class="small" data-ytm-review="${esc(item.id)}">Revisar</button>${confirmed ? `<button type="button" class="small primary" data-ytm-adopt="${esc(item.id)}">Adotar</button>` : ''}${confirmed || item.match && item.match.status === 'ignored' ? `<button type="button" class="small" data-ytm-clear-match="${esc(item.id)}">Limpar</button>` : `<button type="button" class="small" data-ytm-ignore="${esc(item.id)}">Ignorar</button>`}</div>
       </article>`;
     }).join('');
@@ -574,12 +606,25 @@
     toggle.dataset.action = queue.paused ? 'resume' : 'pause';
   }
 
+  function flowStatusSignature(value) {
+    const playlist = value && value.queue && (value.queue.activeJob || value.queue.latestJob);
+    const adoption = value && value.adoption && (value.adoption.activeJob || value.adoption.latestJob);
+    return [
+      playlist && playlist.id || '', playlist && playlist.status || '', playlist && playlist.updatedAt || '',
+      adoption && adoption.id || '', adoption && adoption.status || '', adoption && adoption.updatedAt || ''
+    ].join('|');
+  }
+
   async function refreshQueue() {
     const response = await deps.api('/api/youtube-manager/status');
     status = response.result;
     renderQueue(status.queue);
     renderAdoptionQueue(status.adoption);
     renderQuota();
+    const signature = flowStatusSignature(status);
+    const changed = signature !== catalogFlowSignature;
+    catalogFlowSignature = signature;
+    if (changed && activeTab === 'catalog') await refreshCatalog();
   }
 
   async function refreshPlaylists() {

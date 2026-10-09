@@ -223,18 +223,37 @@ function matchesFilter(item, match, filters) {
   if (status !== 'all' && effective !== status) return false;
   if (filters.sourceId && item.sourceId !== filters.sourceId) return false;
   if (filters.present === 'true' && item.present === false) return false;
+
+  const libraryPresence = String(filters.libraryPresence || 'all');
+  const managedDestinations = Array.isArray(item.managedDestinations) ? item.managedDestinations : [];
+  if (libraryPresence === 'present' && managedDestinations.length === 0) return false;
+  if (libraryPresence === 'absent' && managedDestinations.length > 0) return false;
+
+  const playlistStatus = String(filters.playlistStatus || 'all');
+  const playlistMemberships = Array.isArray(item.playlistMemberships) ? item.playlistMemberships : [];
+  const added = playlistMemberships.some((entry) => ['added', 'already-existing'].includes(entry.status));
+  const failed = playlistMemberships.some((entry) => entry.status === 'failed');
+  if (playlistStatus === 'added' && !added) return false;
+  if (playlistStatus === 'not-added' && added) return false;
+  if (playlistStatus === 'error' && !failed) return false;
+
   const q = String(filters.q || '').trim().toLowerCase();
   if (q) {
-    const haystack = [item.filename, item.relativePath, item.inferredArtist, item.inferredTitle, item.recoveredVideoId, match && match.videoId].join(' ').toLowerCase();
+    const haystack = [
+      item.filename, item.relativePath, item.inferredArtist, item.inferredTitle, item.recoveredVideoId, match && match.videoId,
+      ...managedDestinations.flatMap((entry) => [entry.displayName, entry.destinationId]),
+      ...playlistMemberships.flatMap((entry) => [entry.playlistTitle, entry.playlistId])
+    ].join(' ').toLowerCase();
     if (!haystack.includes(q)) return false;
   }
   return true;
 }
 
-async function listItems(filters = {}) {
+async function listItems(filters = {}, options = {}) {
   const state = await stateStore.load();
+  const decorateItem = typeof options.decorateItem === 'function' ? options.decorateItem : (item) => item;
   const all = Object.values(state.localItems || {})
-    .map((item) => ({ ...item, match: state.matches[item.id] || null }))
+    .map((item) => decorateItem({ ...item, match: state.matches[item.id] || null }))
     .filter((item) => matchesFilter(item, item.match, filters))
     .sort((a, b) => String(a.relativePath).localeCompare(String(b.relativePath), 'pt-BR'));
   const offset = Math.max(0, Math.floor(Number(filters.offset) || 0));

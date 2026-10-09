@@ -682,6 +682,10 @@ test('Gerenciador do YouTube expõe pesquisa, acervo local, playlists e OAuth na
   assert.match(html, /id="ytmConfirmRecovered"/);
   assert.match(html, /id="ytmCatalogSelectAll"/);
   assert.match(html, /Selecionar todos confirmados/);
+  assert.match(html, /id="ytmCatalogLibraryPresence"/);
+  assert.match(html, /id="ytmCatalogPlaylistStatus"/);
+  assert.match(html, /Já presente/);
+  assert.match(html, /Ainda não adicionado/);
   assert.match(html, /Playlist YouTube destino/);
   assert.match(html, /Adicionar à playlist YouTube/);
   assert.match(html, /Adotar na biblioteca/);
@@ -689,6 +693,9 @@ test('Gerenciador do YouTube expõe pesquisa, acervo local, playlists e OAuth na
   assert.match(manager, /async function selectAllConfirmedCatalog/);
   assert.match(manager, /const limit = 200/);
   assert.match(manager, /item\.match && item\.match\.status === 'confirmed'/);
+  assert.match(manager, /playlistMemberships/);
+  assert.match(manager, /managedDestinations/);
+  assert.match(manager, /Item sincronizado · aguardando mídia/);
   assert.match(manager, /adoption-destinations', \{ method: 'POST'/);
   assert.match(manager, /Biblioteca\/Playlist de Canal gerenciada/);
   assert.match(css, /toast\.loading/);

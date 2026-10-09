@@ -1,10 +1,10 @@
-# Atualização para 3.9.3
+# Atualização para 3.9.4
 
-A versão 3.9.3 é uma atualização incremental sobre a **v3.9.2** focada em clareza do fluxo de migração e seleção em massa do Acervo local. Não há migração de configuração nem de estado.
+A versão 3.9.4 é uma atualização incremental sobre a **v3.9.3** focada em tornar visível, no próprio Acervo local, cada etapa da migração entre identidade, playlist do YouTube e destinos gerenciados. Não há migração de configuração nem alteração de schema.
 
 ## Versionamento
 
-- aplicação: **v3.9.3**;
+- aplicação: **v3.9.4**;
 - Universal Scripted Schedules: **v1.3.1**;
 - `configVersion`: **9**;
 - download state: **5**;
@@ -23,45 +23,45 @@ A versão 3.9.3 é uma atualização incremental sobre a **v3.9.2** focada em cl
 
 ## Aplicar o pacote update
 
-Extraia o ZIP sobre uma instalação v3.9.2:
+Extraia o ZIP sobre uma instalação v3.9.3:
 
 ```bash
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.9.2-to-v3.9.3-update.zip -d /caminho/da/aplicacao
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.9.3-to-v3.9.4-update.zip -d /caminho/da/aplicacao
 ```
 
 O pacote update não contém `config/config.json`, `config/auth.json`, `config/subtitle-translation.json`, `config/youtube-account.json`, `data/` nem mídia.
 
 Reinicie o serviço depois da atualização.
 
-## Diferença entre as duas ações do Acervo local
+## Estados independentes no Acervo local
 
-**Adicionar à playlist YouTube** insere os Video IDs selecionados na playlist da conta Google escolhida. Essa ação não copia arquivos e não cria diretamente mídia na pasta da Biblioteca interna. Se essa playlist estiver configurada como fonte de uma Biblioteca/Playlist de Canal, a próxima sincronização fará o aplicativo reconhecer os vídeos e eles poderão entrar no fluxo normal de download.
+A partir desta versão, **Confirmado** não é substituído quando o vídeo avança no fluxo. Ele continua significando exclusivamente que a identidade local ↔ YouTube foi validada.
 
-**Adotar na biblioteca** reutiliza o arquivo que já existe no Acervo local. Ela só oferece Bibliotecas/Playlists de Canal/Fonte de Canal nas quais os Video IDs já existam como itens ativos. Depois do preflight, Hardlink/Copy/Move coloca a mídia no caminho gerenciado e evita o redownload.
+Cada item passa a exibir também:
 
-Para um vídeo que acabou de ser migrado para uma playlist da sua conta, o fluxo típico é:
+- **YouTube**: playlist, estado em fila/adicionando, Adicionado, Já estava na playlist, Falha ou Cancelado;
+- **Biblioteca**: todas as Bibliotecas, Playlists de Canal ou Fontes de Canal em que o mesmo Video ID já existe como item ativo, indicando se aguarda mídia, já possui mídia ou foi adotado.
 
-```text
-Adicionar à playlist YouTube
-        ↓
-Sincronizar a Biblioteca/Playlist de Canal que usa essa playlist
-        ↓
-Adotar na biblioteca
-```
+A presença em Biblioteca é calculada diretamente do Download State atual. Quando um Video ID exato foi recuperado de filename, NFO, `.info.json` ou metadata embedded, essa presença já pode ser mostrada antes da confirmação; isso é apenas informação e não transforma o ID recuperado em match confirmado.
 
-Se você quiser baixar normalmente pelo aplicativo, não precisa adotar: basta sincronizar e deixar o Download Manager processar o item.
+## Rastreamento de inserções em playlists
 
-## Selecionar todos confirmados
+Itens enviados pelo Acervo local agora registram o resultado da fila por playlist. O histórico existente da fila também é usado para reconstruir estados de operações anteriores quando possível.
 
-O novo botão **Selecionar todos confirmados** percorre todo o resultado correspondente aos filtros atuais — inclusive itens ainda não carregados pelo botão **Carregar mais** — e seleciona apenas matches com status Confirmado.
+Quando o preflight constata que um vídeo **já estava na playlist**, esse fato também é persistido no item local mesmo que nenhuma inserção precise ser criada.
 
-A interface exibe a quantidade total selecionada e oferece **Limpar seleção**. Paginar ou receber uma atualização interna do catálogo preserva os IDs selecionados; trocar de fonte ou aplicar um novo filtro limpa a seleção para evitar operações sobre itens ocultos.
+## Novos filtros
 
-Para permitir centenas de itens na adoção sem ultrapassar limites de URL do proxy/navegador, a consulta de destinos para adoção passa a usar POST com corpo JSON.
+O Acervo local ganha:
 
-## Clareza do destino gerenciado
+- **Biblioteca**: Todos / Já presente / Ainda não presente;
+- **Playlist**: Todos / Adicionado / Ainda não adicionado / Erro.
 
-Ao abrir **Adotar na biblioteca**, o seletor identifica o tipo de destino (Biblioteca, Playlist de canal ou Fonte de canal). Depois de escolher um destino, a interface mostra a pasta raiz gerenciada; o preflight continua mostrando o caminho final de cada arquivo antes do commit.
+Os filtros funcionam junto com Fonte, Status e pesquisa textual e também são respeitados por **Selecionar todos confirmados**.
+
+## Atualização automática
+
+Enquanto a tela do Acervo local estiver aberta, mudanças das filas de playlist e de adoção atualizam os estados exibidos sem alterar a seleção atual. Assim, um item pode permanecer **Confirmado** e, ao mesmo tempo, passar de **Em fila** para **Adicionado**, depois aparecer como **Item sincronizado** e finalmente **Adotado**.
 
 ## Validação
 

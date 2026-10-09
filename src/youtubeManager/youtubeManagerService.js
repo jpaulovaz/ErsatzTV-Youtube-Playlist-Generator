@@ -1,3 +1,4 @@
+const fs = require('fs');
 const youtubeSearch = require('./youtubeSearchService');
 const accountService = require('./youtubeAccountService');
 const playlistService = require('./youtubePlaylistService');
@@ -8,6 +9,134 @@ const quotaTracker = require('./quotaTracker');
 const { scoreCandidate } = require('./matchScore');
 const adoptionQueue = require('./adoptionQueue');
 const { fetchVideoDetails } = require('../youtubeApi');
+const downloadManager = require('../downloadManager');
+const { getAllDestinations } = require('../destinationService');
+
+function queuePlaylistStatus(item) {
+  if (!item) return '';
+  if (item.status === 'completed') return 'added';
+  if (item.status === 'skipped' && item.reason === 'already-in-playlist') return 'already-existing';
+  if (item.status === 'failed') return 'failed';
+  if (item.status === 'cancelled') return 'cancelled';
+  if (item.status === 'running') return 'running';
+  if (item.status === 'pending') return 'queued';
+  return String(item.status || '');
+}
+
+function membershipTimestamp(value) {
+  const time = new Date(value && value.updatedAt || value && value.completedAt || value && value.startedAt || value && value.createdAt || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function mergeMembership(target, membership) {
+  if (!membership || !membership.playlistId) return;
+  const current = target.get(membership.playlistId);
+  if (!current || membershipTimestamp(membership) >= membershipTimestamp(current)) target.set(membership.playlistId, membership);
+}
+
+function buildPlaylistMembershipIndex(state) {
+  const byLocalItem = new Map();
+  const ensure = (itemId) => {
+    if (!byLocalItem.has(itemId)) byLocalItem.set(itemId, new Map());
+    return byLocalItem.get(itemId);
+  };
+
+  for (const item of Object.values(state.localItems || {})) {
+    const playlists = item && item.playlistState && item.playlistState.playlists;
+    if (!playlists || typeof playlists !== 'object') continue;
+    for (const value of Object.values(playlists)) {
+      if (!value || !value.playlistId) continue;
+      mergeMembership(ensure(item.id), { ...value });
+    }
+  }
+
+  const jobs = Object.values(state.playlistQueue && state.playlistQueue.jobs || {})
+    .sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+  for (const job of jobs) {
+    for (const item of job.items || []) {
+      if (!item.localItemId) continue;
+      mergeMembership(ensure(item.localItemId), {
+        playlistId: job.playlistId,
+        playlistTitle: job.playlistTitle || job.playlistId,
+        status: queuePlaylistStatus(item),
+        jobId: job.id,
+        playlistItemId: item.playlistItemId || '',
+        reason: item.reason || '',
+        lastError: item.lastError || '',
+        createdAt: item.createdAt || job.createdAt,
+        startedAt: item.startedAt || null,
+        completedAt: item.completedAt || null,
+        updatedAt: item.completedAt || item.startedAt || job.updatedAt || job.createdAt
+      });
+    }
+  }
+  return byLocalItem;
+}
+
+async function ensureManagedState(config, manager) {
+  if (!manager.initialized && typeof manager.init === 'function') await manager.init(config);
+}
+
+function buildManagedDestinationIndex(config, manager) {
+  const destinationById = new Map(getAllDestinations(config, { includeDisabled: true }).map((destination) => [destination.id, destination]));
+  const byVideoId = new Map();
+  for (const managedItem of Object.values(manager.state && manager.state.items || {})) {
+    if (!managedItem || managedItem.sourceActive === false || managedItem.suppressed) continue;
+    const destinationId = String(managedItem.destinationId || managedItem.libraryFolder || '').trim();
+    const destination = destinationById.get(destinationId);
+    if (!destination) continue;
+    const fallbackId = String(managedItem.id || '').split('::').pop();
+    const videoId = String(managedItem.videoId || fallbackId || '').trim();
+    if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) continue;
+    let hasMedia = false;
+    try { hasMedia = Boolean(managedItem.targetPath && fs.existsSync(managedItem.targetPath)); } catch {}
+    const entry = {
+      destinationId,
+      displayName: destination.displayName,
+      type: destination.type,
+      mediaProfile: destination.mediaProfile,
+      rootPath: destination.rootPath || '',
+      enabled: destination.enabled !== false,
+      managedStatus: managedItem.status || '',
+      targetPath: managedItem.targetPath || '',
+      hasMedia
+    };
+    if (!byVideoId.has(videoId)) byVideoId.set(videoId, []);
+    byVideoId.get(videoId).push(entry);
+  }
+  for (const entries of byVideoId.values()) entries.sort((a, b) => String(a.displayName).localeCompare(String(b.displayName), 'pt-BR'));
+  return byVideoId;
+}
+
+function catalogIdentityVideoId(item) {
+  const confirmed = item.match && item.match.status === 'confirmed' ? String(item.match.videoId || '') : '';
+  if (/^[A-Za-z0-9_-]{11}$/.test(confirmed)) return confirmed;
+  const recovered = String(item.recoveredVideoId || '');
+  return /^[A-Za-z0-9_-]{11}$/.test(recovered) ? recovered : '';
+}
+
+async function listCatalogItems(config, filters = {}, options = {}) {
+  const manager = options.manager || downloadManager;
+  await ensureManagedState(config, manager);
+  const state = await stateStore.load();
+  const managedByVideoId = buildManagedDestinationIndex(config, manager);
+  const playlistByLocalItem = buildPlaylistMembershipIndex(state);
+
+  return localCatalog.listItems(filters, {
+    decorateItem(item) {
+      const videoId = catalogIdentityVideoId(item);
+      const adoption = item.adoptionState && typeof item.adoptionState === 'object' ? item.adoptionState : null;
+      const managedDestinations = (managedByVideoId.get(videoId) || []).map((entry) => ({
+        ...entry,
+        adopted: Boolean(adoption && adoption.status === 'adopted' && adoption.destinationId === entry.destinationId),
+        adoptionMode: adoption && adoption.destinationId === entry.destinationId ? adoption.mode || '' : ''
+      }));
+      const playlistMemberships = [...(playlistByLocalItem.get(item.id) || new Map()).values()]
+        .sort((a, b) => String(a.playlistTitle || a.playlistId).localeCompare(String(b.playlistTitle || b.playlistId), 'pt-BR'));
+      return { ...item, identityVideoId: videoId, managedDestinations, playlistMemberships };
+    }
+  });
+}
 
 async function getStatus() {
   const [account, sources, queue, quota, state, adoption] = await Promise.all([
@@ -257,6 +386,20 @@ async function planPlaylist({ playlistId, playlistTitle = '', itemIds = [], vide
     if (index.videoIds.has(entry.videoId)) existing.push(entry);
     else pending.push(entry);
   }
+  if (existing.some((entry) => entry.localItemId)) {
+    const checkedAt = new Date().toISOString();
+    await stateStore.mutate((state) => {
+      for (const entry of existing) {
+        if (!entry.localItemId) continue;
+        stateStore.setLocalPlaylistState(state, entry.localItemId, playlistId, {
+          playlistTitle: playlistTitle || playlistId,
+          status: 'already-existing',
+          checkedAt,
+          updatedAt: checkedAt
+        });
+      }
+    });
+  }
   return {
     playlistId,
     playlistTitle,
@@ -275,4 +418,4 @@ async function startPlaylistJob(plan) {
   return playlistQueue.start({ playlistId: plan.playlistId, playlistTitle: plan.playlistTitle || '', entries: plan.entries });
 }
 
-module.exports = { getStatus, searchPublic, searchForItem, updateMatch, confirmRecoveredMatches, resolveEntries, planPlaylist, startPlaylistJob };
+module.exports = { getStatus, listCatalogItems, searchPublic, searchForItem, updateMatch, confirmRecoveredMatches, resolveEntries, planPlaylist, startPlaylistJob, buildPlaylistMembershipIndex, buildManagedDestinationIndex };

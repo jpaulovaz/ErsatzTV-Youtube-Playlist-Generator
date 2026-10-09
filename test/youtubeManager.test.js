@@ -479,3 +479,103 @@ test('adoption queue defers instead of busy-spinning while a download is active'
   assert.equal(status.latestJob.items[0].status, 'pending');
   await adoptionQueue.stop();
 });
+
+test('catalog shows managed destinations for recovered or confirmed IDs and filters library presence', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ytm-catalog-managed-'));
+  try {
+    const baseDir = path.join(root, 'managed');
+    const targetPath = path.join(baseDir, 'Managed', 'Artist - Confirmed.mp4');
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    await fs.writeFile(targetPath, 'managed-media');
+    await managerState.save({
+      ...managerState.emptyState(),
+      sources: { src: { id: 'src', name: 'Clipes', rootPath: root } },
+      localItems: {
+        recovered: { id: 'recovered', sourceId: 'src', present: true, relativePath: 'Recovered.mp4', recoveredVideoId: 'AAAAAAAAAAA', matchSource: 'embedded' },
+        confirmed: { id: 'confirmed', sourceId: 'src', present: true, relativePath: 'Confirmed.mp4' },
+        absent: { id: 'absent', sourceId: 'src', present: true, relativePath: 'Absent.mp4', recoveredVideoId: 'CCCCCCCCCCC', matchSource: 'filename' }
+      },
+      matches: { confirmed: { itemId: 'confirmed', status: 'confirmed', videoId: 'BBBBBBBBBBB', title: 'Artist - Confirmed' } }
+    });
+    const fakeManager = {
+      initialized: true,
+      state: {
+        items: {
+          'Managed::AAAAAAAAAAA': { id: 'Managed::AAAAAAAAAAA', destinationId: 'Managed', libraryFolder: 'Managed', videoId: 'AAAAAAAAAAA', sourceActive: true, status: 'pending', targetPath: '' },
+          'Managed::BBBBBBBBBBB': { id: 'Managed::BBBBBBBBBBB', destinationId: 'Managed', libraryFolder: 'Managed', videoId: 'BBBBBBBBBBB', sourceActive: true, status: 'completed', targetPath }
+        }
+      }
+    };
+    const config = { paths: { baseDir }, playlists: [{ name: 'Managed', enabled: true, mediaProfile: 'generic', url: 'https://www.youtube.com/playlist?list=PLX' }], channels: [] };
+    const present = await managerService.listCatalogItems(config, { sourceId: 'src', present: 'true', libraryPresence: 'present', limit: 20 }, { manager: fakeManager });
+    assert.deepEqual(present.items.map((item) => item.id).sort(), ['confirmed', 'recovered']);
+    const recovered = present.items.find((item) => item.id === 'recovered');
+    assert.equal(recovered.match, null);
+    assert.equal(recovered.identityVideoId, 'AAAAAAAAAAA');
+    assert.equal(recovered.managedDestinations[0].displayName, 'Managed');
+    assert.equal(recovered.managedDestinations[0].hasMedia, false);
+    const confirmed = present.items.find((item) => item.id === 'confirmed');
+    assert.equal(confirmed.managedDestinations[0].hasMedia, true);
+
+    const missing = await managerService.listCatalogItems(config, { sourceId: 'src', present: 'true', libraryPresence: 'absent', limit: 20 }, { manager: fakeManager });
+    assert.deepEqual(missing.items.map((item) => item.id), ['absent']);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('playlist queue persists catalog-facing playlist status for local items', async () => {
+  await managerState.save({
+    ...managerState.emptyState(),
+    localItems: {
+      existing: { id: 'existing', present: true, relativePath: 'Existing.mp4' },
+      inserted: { id: 'inserted', present: true, relativePath: 'Inserted.mp4' }
+    }
+  });
+  playlistService.getIndex = async () => ({ items: [], videoIds: new Set(['AAAAAAAAAAA']) });
+  playlistService.insertVideo = async (playlistId, videoId) => ({ playlistItemId: `${playlistId}-${videoId}` });
+  await playlistQueue.init();
+  const job = await playlistQueue.start({
+    playlistId: 'PLSTATUS', playlistTitle: 'Migracao',
+    entries: [
+      { videoId: 'AAAAAAAAAAA', localItemId: 'existing' },
+      { videoId: 'BBBBBBBBBBB', localItemId: 'inserted' }
+    ]
+  });
+  for (let i = 0; i < 100; i += 1) {
+    const queue = await playlistQueue.getStatus();
+    const current = queue.jobs.find((value) => value.id === job.id);
+    if (current && current.status === 'completed') break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  const state = await managerState.load();
+  assert.equal(state.localItems.existing.playlistState.playlists.PLSTATUS.status, 'already-existing');
+  assert.equal(state.localItems.inserted.playlistState.playlists.PLSTATUS.status, 'added');
+  assert.equal(state.localItems.inserted.playlistState.playlists.PLSTATUS.playlistTitle, 'Migracao');
+
+  const fakeManager = { initialized: true, state: { items: {} } };
+  const config = { paths: { baseDir: os.tmpdir() }, playlists: [], channels: [] };
+  const page = await managerService.listCatalogItems(config, { playlistStatus: 'added', limit: 20 }, { manager: fakeManager });
+  assert.deepEqual(page.items.map((item) => item.id).sort(), ['existing', 'inserted']);
+});
+
+test('playlist preflight records already-existing membership even when no insert job is created', async () => {
+  await accountConfig.save({ clientId: 'client-id', clientSecret: 'client-secret', publicBaseUrl: 'https://yt.johnflix.com.br/' });
+  await accountState.save({
+    ...accountState.emptyState(),
+    tokens: { accessToken: 'access', refreshToken: 'refresh', tokenType: 'Bearer', expiresAt: new Date(Date.now() + 3600000).toISOString() },
+    scopes: [oauth.YOUTUBE_SCOPE]
+  });
+  await managerState.save({
+    ...managerState.emptyState(),
+    localItems: { local: { id: 'local', present: true, relativePath: 'Local.mp4' } },
+    matches: { local: { itemId: 'local', status: 'confirmed', videoId: 'AAAAAAAAAAA', title: 'Local' } }
+  });
+  playlistService.getIndex = async () => ({ items: [], videoIds: new Set(['AAAAAAAAAAA']) });
+  const plan = await managerService.planPlaylist({ playlistId: 'PLKNOWN', playlistTitle: 'Ja existente', itemIds: ['local'] });
+  assert.equal(plan.eligible, 0);
+  assert.equal(plan.alreadyExists, 1);
+  const state = await managerState.load();
+  assert.equal(state.localItems.local.playlistState.playlists.PLKNOWN.status, 'already-existing');
+  assert.equal(state.localItems.local.playlistState.playlists.PLKNOWN.playlistTitle, 'Ja existente');
+});

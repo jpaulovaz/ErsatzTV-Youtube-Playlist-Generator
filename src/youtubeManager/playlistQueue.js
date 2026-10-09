@@ -10,6 +10,33 @@ let wakeTimer = null;
 function nowIso() { return new Date().toISOString(); }
 function jobId() { return `playlist_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`; }
 
+function publicPlaylistStatus(item) {
+  if (!item) return '';
+  if (item.status === 'completed') return 'added';
+  if (item.status === 'skipped' && item.reason === 'already-in-playlist') return 'already-existing';
+  if (item.status === 'failed') return 'failed';
+  if (item.status === 'cancelled') return 'cancelled';
+  if (item.status === 'running') return 'running';
+  if (item.status === 'pending') return 'queued';
+  return String(item.status || '');
+}
+
+function syncLocalPlaylistState(state, job, item) {
+  if (!job || !item || !item.localItemId) return null;
+  return stateStore.setLocalPlaylistState(state, item.localItemId, job.playlistId, {
+    playlistTitle: job.playlistTitle || job.playlistId,
+    status: publicPlaylistStatus(item),
+    jobId: job.id,
+    playlistItemId: item.playlistItemId || '',
+    reason: item.reason || '',
+    lastError: item.lastError || '',
+    createdAt: item.createdAt || job.createdAt || null,
+    startedAt: item.startedAt || null,
+    completedAt: item.completedAt || null,
+    updatedAt: item.completedAt || item.startedAt || job.updatedAt || nowIso()
+  });
+}
+
 function summarize(job) {
   const counts = { pending: 0, running: 0, completed: 0, skipped: 0, failed: 0, cancelled: 0 };
   for (const item of job && job.items || []) {
@@ -25,13 +52,19 @@ async function init() {
   await stateStore.mutate((state) => {
     for (const job of Object.values(state.playlistQueue.jobs || {})) {
       if (job.cancelRequested) {
-        for (const item of job.items || []) if (['running', 'pending'].includes(item.status)) item.status = 'cancelled';
+        for (const item of job.items || []) {
+          if (['running', 'pending'].includes(item.status)) { item.status = 'cancelled'; item.completedAt = item.completedAt || nowIso(); }
+          syncLocalPlaylistState(state, job, item);
+        }
         job.status = 'cancelled';
         job.updatedAt = nowIso();
         job.counts = summarize(job);
         continue;
       }
-      for (const item of job.items || []) if (item.status === 'running') item.status = 'pending';
+      for (const item of job.items || []) {
+        if (item.status === 'running') item.status = 'pending';
+        syncLocalPlaylistState(state, job, item);
+      }
       if (job.status === 'running') job.status = 'queued';
     }
   });
@@ -67,6 +100,7 @@ async function setItem(jobIdValue, itemId, patch, jobPatch = {}) {
     Object.assign(job, jobPatch);
     job.updatedAt = nowIso();
     job.counts = summarize(job);
+    if (item) syncLocalPlaylistState(state, job, item);
     return JSON.parse(JSON.stringify(job));
   });
 }
@@ -87,7 +121,14 @@ async function processJob(job) {
   catch (error) {
     await stateStore.mutate((state) => {
       const live = state.playlistQueue.jobs[job.id];
-      if (live) { live.status = 'failed'; live.lastError = error.message; live.updatedAt = nowIso(); }
+      if (live) {
+        live.status = 'failed'; live.lastError = error.message; live.updatedAt = nowIso();
+        for (const item of live.items || []) {
+          if (['pending', 'running'].includes(item.status)) { item.status = 'failed'; item.lastError = error.message; item.completedAt = nowIso(); }
+          syncLocalPlaylistState(state, live, item);
+        }
+        live.counts = summarize(live);
+      }
       state.playlistQueue.activeJobId = null;
     });
     return;
@@ -130,7 +171,10 @@ async function processJob(job) {
           const liveJob = current.playlistQueue.jobs[job.id];
           const liveItem = liveJob && liveJob.items.find((item) => item.id === next.id);
           if (liveItem) { liveItem.status = 'pending'; liveItem.lastError = error.message; }
-          if (liveJob) { liveJob.status = 'queued'; liveJob.pauseReason = 'quota'; liveJob.lastError = error.message; liveJob.updatedAt = nowIso(); liveJob.counts = summarize(liveJob); }
+          if (liveJob) {
+            liveJob.status = 'queued'; liveJob.pauseReason = 'quota'; liveJob.lastError = error.message; liveJob.updatedAt = nowIso(); liveJob.counts = summarize(liveJob);
+            if (liveItem) syncLocalPlaylistState(current, liveJob, liveItem);
+          }
           current.playlistQueue.activeJobId = null;
         });
         return;
@@ -187,6 +231,7 @@ async function start({ playlistId, playlistTitle = '', entries = [] } = {}) {
   };
   await stateStore.mutate((state) => {
     state.playlistQueue.jobs[id] = job;
+    for (const item of job.items) syncLocalPlaylistState(state, job, item);
     stateStore.appendAudit(state, { action: 'playlist-job-start', jobId: id, playlistId: job.playlistId, count: normalizedEntries.length });
   });
   scheduleWorker(0);
@@ -212,7 +257,10 @@ async function cancelPending(jobIdValue = '') {
     const targets = jobIdValue ? [state.playlistQueue.jobs[jobIdValue]].filter(Boolean) : Object.values(state.playlistQueue.jobs || {});
     for (const job of targets) {
       job.cancelRequested = true;
-      for (const item of job.items || []) if (item.status === 'pending') { item.status = 'cancelled'; item.completedAt = nowIso(); }
+      for (const item of job.items || []) {
+        if (item.status === 'pending') { item.status = 'cancelled'; item.completedAt = nowIso(); }
+        syncLocalPlaylistState(state, job, item);
+      }
       const active = (job.items || []).some((item) => item.status === 'running');
       job.status = active ? 'running' : 'cancelled';
       job.updatedAt = nowIso();
@@ -244,4 +292,4 @@ async function stop() {
   initialized = false;
 }
 
-module.exports = { init, start, pause, resume, cancelPending, getStatus, stop, summarize, quotaError };
+module.exports = { init, start, pause, resume, cancelPending, getStatus, stop, summarize, quotaError, publicPlaylistStatus };

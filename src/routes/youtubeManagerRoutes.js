@@ -14,6 +14,8 @@ function queryFilters(url) {
     status: url.searchParams.get('status') || 'all',
     q: url.searchParams.get('q') || '',
     present: url.searchParams.get('present') || '',
+    libraryPresence: url.searchParams.get('libraryPresence') || 'all',
+    playlistStatus: url.searchParams.get('playlistStatus') || 'all',
     offset: url.searchParams.get('offset') || 0,
     limit: url.searchParams.get('limit') || 100
   };
@@ -112,7 +114,7 @@ async function handleYouTubeManagerRoutes(req, res, url, deps) {
     deps.sendJson(res, 200, { ok: true, result: localCatalog.getScanStatus({ sourceId: url.searchParams.get('sourceId') || '', jobId: url.searchParams.get('jobId') || '' }) }); return true;
   }
   if (req.method === 'GET' && action === 'items') {
-    deps.sendJson(res, 200, { ok: true, result: await localCatalog.listItems(queryFilters(url)) }); return true;
+    deps.sendJson(res, 200, { ok: true, result: await managerService.listCatalogItems(await deps.loadConfig(), queryFilters(url)) }); return true;
   }
   if (req.method === 'POST' && action === 'item/search') {
     deps.sendJson(res, 200, { ok: true, result: await managerService.searchForItem(await deps.loadConfig(), await deps.readJson(req)) }); return true;
