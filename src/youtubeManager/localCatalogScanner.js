@@ -226,8 +226,15 @@ function matchesFilter(item, match, filters) {
 
   const libraryPresence = String(filters.libraryPresence || 'all');
   const managedDestinations = Array.isArray(item.managedDestinations) ? item.managedDestinations : [];
-  if (libraryPresence === 'present' && managedDestinations.length === 0) return false;
-  if (libraryPresence === 'absent' && managedDestinations.length > 0) return false;
+  const hasManagedDestination = managedDestinations.length > 0;
+  const hasAwaitingMedia = managedDestinations.some((entry) => !entry.hasMedia);
+  const hasAdopted = managedDestinations.some((entry) => entry.adopted);
+  const hasMedia = managedDestinations.some((entry) => entry.hasMedia && !entry.adopted);
+  if (libraryPresence === 'present' && !hasManagedDestination) return false;
+  if (libraryPresence === 'absent' && hasManagedDestination) return false;
+  if (libraryPresence === 'awaiting-media' && !hasAwaitingMedia) return false;
+  if (libraryPresence === 'media-present' && !hasMedia) return false;
+  if (libraryPresence === 'adopted' && !hasAdopted) return false;
 
   const playlistStatus = String(filters.playlistStatus || 'all');
   const playlistMemberships = Array.isArray(item.playlistMemberships) ? item.playlistMemberships : [];

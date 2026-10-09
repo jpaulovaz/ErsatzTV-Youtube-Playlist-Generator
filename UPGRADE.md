@@ -1,72 +1,60 @@
-# Atualização para 3.9.4
+# Atualização para 3.9.5
 
-A versão 3.9.4 é uma atualização incremental sobre a **v3.9.3** focada em tornar visível, no próprio Acervo local, cada etapa da migração entre identidade, playlist do YouTube e destinos gerenciados. Não há migração de configuração nem alteração de schema.
+A versão 3.9.5 é uma atualização incremental sobre a **v3.9.4**, focada em deixar inequívocos os estados de Biblioteca no Acervo local e permitir validar um Video ID recuperado diretamente no item, sem abrir Revisar. Não há migração de configuração nem alteração de schema.
 
 ## Versionamento
 
-- aplicação: **v3.9.4**;
+- aplicação: **v3.9.5**;
 - Universal Scripted Schedules: **v1.3.1**;
 - `configVersion`: **9**;
-- download state: **5**;
+- Download state: **5**;
 - Scripted Schedules schema: **1**;
 - Subtitle Manager state: **1**;
 - Subtitle Translation config/state: **1**;
 - YouTube Manager state: **1**;
-- YouTube Account state/config: **1**;
+- YouTube Account config/state: **1**;
 - Adoption transaction state: **1**.
 
-## Antes de atualizar
+## Atualização
 
-1. Pare o serviço/aplicativo.
-2. Faça o backup normal de `config/` e `data/`.
-3. Preserve `config/youtube-account.json`, `data/youtube-account-state.json` e os estados do Gerenciador do YouTube.
-
-## Aplicar o pacote update
-
-Extraia o ZIP sobre uma instalação v3.9.3:
+Pare o serviço, faça backup da instalação e extraia o pacote incremental sobre a instalação v3.9.4:
 
 ```bash
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.9.3-to-v3.9.4-update.zip -d /caminho/da/aplicacao
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.9.4-to-v3.9.5-update.zip -d /caminho/da/aplicacao
 ```
 
-O pacote update não contém `config/config.json`, `config/auth.json`, `config/subtitle-translation.json`, `config/youtube-account.json`, `data/` nem mídia.
+Depois reinicie o serviço. Não substitua `config/config.json`, `config/auth.json`, `config/youtube-account.json`, `data/` ou arquivos de mídia; eles não fazem parte do pacote de atualização.
 
-Reinicie o serviço depois da atualização.
+## Mudanças visíveis no Acervo local
 
-## Estados independentes no Acervo local
+O filtro **Biblioteca** agora oferece:
 
-A partir desta versão, **Confirmado** não é substituído quando o vídeo avança no fluxo. Ele continua significando exclusivamente que a identidade local ↔ YouTube foi validada.
+- Todos;
+- **Não está em nenhuma Biblioteca**;
+- **Já está em alguma Biblioteca**;
+- **Sincronizado, aguardando mídia**;
+- **Mídia presente**;
+- **Adotado**.
 
-Cada item passa a exibir também:
+Os estados são calculados comparando o Video ID do item com o Download State real. `Mídia presente` representa um destino com arquivo físico já existente e que não está marcado como adoção; `Adotado` representa explicitamente um destino concluído pelo fluxo de adoção. Um mesmo vídeo pode aparecer em mais de um destino e, nesse caso, pode satisfazer mais de um filtro conforme o estado de cada destino.
 
-- **YouTube**: playlist, estado em fila/adicionando, Adicionado, Já estava na playlist, Falha ou Cancelado;
-- **Biblioteca**: todas as Bibliotecas, Playlists de Canal ou Fontes de Canal em que o mesmo Video ID já existe como item ativo, indicando se aguarda mídia, já possui mídia ou foi adotado.
+Itens com **ID recuperado** passam a exibir **Validar ID** diretamente no card. Essa ação valida o ID encontrado em filename/sidecar/metadata embedded e, quando aprovado, transforma o item em **Confirmado** sem abrir o painel Revisar. As regras são as mesmas da validação em lote:
 
-A presença em Biblioteca é calculada diretamente do Download State atual. Quando um Video ID exato foi recuperado de filename, NFO, `.info.json` ou metadata embedded, essa presença já pode ser mostrada antes da confirmação; isso é apenas informação e não transforma o ID recuperado em match confirmado.
+- conflito do mesmo Video ID entre arquivos: bloqueado;
+- vídeo indisponível: bloqueado;
+- diferença de duração acima de 45 s: bloqueada e encaminhada para Revisar;
+- diferença acima de 10 s e até 45 s: confirmada com aviso;
+- demais casos válidos: confirmados diretamente.
 
-## Rastreamento de inserções em playlists
+O botão individual **Adotar** aparece somente quando o item está Confirmado e existe ao menos um destino gerenciado sincronizado que ainda aguarda mídia. Se a mídia já está presente, ou se o Video ID ainda não pertence a nenhum destino gerenciado, não há adoção útil a executar naquele momento.
 
-Itens enviados pelo Acervo local agora registram o resultado da fila por playlist. O histórico existente da fila também é usado para reconstruir estados de operações anteriores quando possível.
+## Validação após atualizar
 
-Quando o preflight constata que um vídeo **já estava na playlist**, esse fato também é persistido no item local mesmo que nenhuma inserção precise ser criada.
+1. Abra **YouTube → Gerenciador do YouTube → Acervo local**.
+2. Escolha uma fonte já varrida.
+3. Teste **Biblioteca → Não está em nenhuma Biblioteca** e confirme que só aparecem IDs sem destino gerenciado.
+4. Teste **Sincronizado, aguardando mídia**, **Mídia presente** e **Adotado** conforme os estados existentes.
+5. Em um item **ID recuperado**, clique em **Validar ID**; quando aprovado, ele deve mudar para **Confirmado** sem abrir Revisar.
+6. Se o item confirmado possuir destino sincronizado sem mídia, o botão **Adotar** deve aparecer.
 
-## Novos filtros
-
-O Acervo local ganha:
-
-- **Biblioteca**: Todos / Já presente / Ainda não presente;
-- **Playlist**: Todos / Adicionado / Ainda não adicionado / Erro.
-
-Os filtros funcionam junto com Fonte, Status e pesquisa textual e também são respeitados por **Selecionar todos confirmados**.
-
-## Atualização automática
-
-Enquanto a tela do Acervo local estiver aberta, mudanças das filas de playlist e de adoção atualizam os estados exibidos sem alterar a seleção atual. Assim, um item pode permanecer **Confirmado** e, ao mesmo tempo, passar de **Em fila** para **Adicionado**, depois aparecer como **Item sincronizado** e finalmente **Adotado**.
-
-## Validação
-
-Para validar o pacote localmente:
-
-```bash
-npm run verify
-```
+Não é necessário recriar OAuth, revarrer o acervo ou refazer matches já confirmados.

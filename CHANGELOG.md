@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.9.5
+
+- Expande o filtro **Biblioteca** do Acervo local para distinguir: **Não está em nenhuma Biblioteca**, **Já está em alguma Biblioteca**, **Sincronizado, aguardando mídia**, **Mídia presente** e **Adotado**.
+- Os filtros de estado da Biblioteca usam o mesmo cruzamento entre Video ID e Download State que alimenta a indicação visual de cada item; **Mídia presente** e **Adotado** ficam separados conforme o estado exibido no destino.
+- Adiciona **Validar ID** diretamente em cada item que possui Video ID recuperado, permitindo confirmar o ID sem abrir o painel **Revisar**.
+- A validação individual mantém exatamente as proteções da validação em lote: bloqueia conflito de Video ID, vídeo indisponível e diferença de duração acima de 45 segundos; diferenças acima de 10 e até 45 segundos são confirmadas com aviso.
+- O botão **Adotar** individual só é exibido depois da confirmação e quando existe ao menos um destino gerenciado sincronizado ainda sem mídia; se a mídia já existe ou o vídeo ainda não pertence a nenhum destino, a ação não é oferecida.
+- **Revisar** continua disponível para pesquisa manual, conflitos, IDs indisponíveis e demais casos que não podem ser aprovados com segurança pela validação direta.
+- Nenhuma migração de `config.json` ou schema: Download state permanece v5, YouTube Manager state v1, YouTube Account config/state v1 e Adoption transaction state v1.
+- Aplicação **v3.9.5**; Universal **v1.3.1**; `configVersion` **9**; Scripted Schedules schema **1**; download state **5**; subtitle-manager state **1**; subtitle-translation config/state **1**; YouTube Manager state **1**; YouTube Account state/config **1**; Adoption transaction state **1**.
+
 ## 3.9.4
 
 - Mantém **Confirmado** como estado exclusivo da identidade local ↔ YouTube e separa visualmente os estados posteriores de playlist e Biblioteca no catálogo do Acervo local.

@@ -122,6 +122,9 @@ async function handleYouTubeManagerRoutes(req, res, url, deps) {
   if (req.method === 'POST' && action === 'item/match') {
     deps.sendJson(res, 200, { ok: true, result: await managerService.updateMatch(await deps.loadConfig(), await deps.readJson(req)) }); return true;
   }
+  if (req.method === 'POST' && action === 'matches/confirm-recovered-item') {
+    deps.sendJson(res, 200, { ok: true, result: await managerService.confirmRecoveredItem(await deps.loadConfig(), await deps.readJson(req)) }); return true;
+  }
   if (req.method === 'POST' && action === 'matches/confirm-recovered') {
     deps.sendJson(res, 200, { ok: true, result: await managerService.confirmRecoveredMatches(await deps.loadConfig(), await deps.readJson(req)) }); return true;
   }

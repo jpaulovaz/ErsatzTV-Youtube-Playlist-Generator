@@ -231,6 +231,63 @@ async function updateMatch(config, { itemId, action, videoId = '', candidate = n
 }
 
 
+async function confirmRecoveredItem(config, { itemId = '' } = {}) {
+  const state = await stateStore.load();
+  const item = state.localItems[itemId];
+  if (!item) throw Object.assign(new Error('Item do acervo nao encontrado.'), { statusCode: 404, code: 'CATALOG_ITEM_NOT_FOUND' });
+  if (item.present === false) throw Object.assign(new Error('O arquivo local nao esta mais presente.'), { statusCode: 409, code: 'LOCAL_FILE_MISSING' });
+  const videoId = String(item.recoveredVideoId || '').trim();
+  if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) throw Object.assign(new Error('Este item nao possui um Video ID recuperado valido.'), { statusCode: 409, code: 'RECOVERED_VIDEO_ID_REQUIRED' });
+
+  const existing = state.matches[itemId];
+  if (existing && existing.status === 'confirmed' && existing.videoId === videoId) {
+    return { match: existing, alreadyConfirmed: true, warning: Boolean(existing.durationWarning), durationDifferenceSeconds: existing.score && existing.score.durationDifferenceSeconds != null ? existing.score.durationDifferenceSeconds : null, quotaUnitsUsed: 0 };
+  }
+
+  const conflicts = [];
+  for (const other of Object.values(state.localItems || {})) {
+    if (!other || other.id === itemId || other.present === false) continue;
+    const otherMatch = state.matches[other.id];
+    const otherVideoId = otherMatch && otherMatch.status === 'confirmed' ? otherMatch.videoId : other.recoveredVideoId;
+    if (otherVideoId === videoId) conflicts.push(other.id);
+  }
+  if (conflicts.length) throw Object.assign(new Error('Este Video ID tambem esta associado a outro arquivo do acervo. Resolva o conflito antes de confirmar.'), { statusCode: 409, code: 'VIDEO_ID_CONFLICT', conflicts });
+
+  const remote = await fetchVideoDetails(config, [videoId], { useCache: true });
+  if (remote.quotaUnitsUsed) await quotaTracker.record('videosList', remote.quotaUnitsUsed, { reason: 'youtube-manager-confirm-recovered-item' });
+  const remoteVideo = remote.videosById.get(videoId);
+  if (!remoteVideo) throw Object.assign(new Error('O Video ID recuperado nao esta disponivel na YouTube Data API.'), { statusCode: 409, code: 'VIDEO_UNAVAILABLE' });
+
+  const localDuration = Number(item.duration) || null;
+  const remoteDuration = Number(remoteVideo.duration) || null;
+  const durationDifferenceSeconds = localDuration && remoteDuration ? Math.abs(localDuration - remoteDuration) : null;
+  if (durationDifferenceSeconds != null && durationDifferenceSeconds > 45) {
+    throw Object.assign(new Error(`A diferenca de duracao e ${durationDifferenceSeconds}s, acima do limite de 45s. Revise manualmente este item.`), { statusCode: 409, code: 'DURATION_DIFFERENCE_BLOCKED', durationDifferenceSeconds });
+  }
+
+  const score = scoreCandidate(item, remoteVideo);
+  const hasWarning = durationDifferenceSeconds != null && durationDifferenceSeconds > 10;
+  const value = {
+    itemId,
+    status: 'confirmed',
+    videoId,
+    title: remoteVideo.title || '',
+    channelTitle: remoteVideo.channelTitle || '',
+    duration: remoteVideo.duration || null,
+    thumbnailUrl: remoteVideo.thumbnailUrl || '',
+    score,
+    source: item.matchSource || 'recovered',
+    confirmedAt: new Date().toISOString(),
+    confirmationMode: 'single-recovered',
+    durationWarning: hasWarning
+  };
+  await stateStore.mutate((current) => {
+    current.matches[itemId] = value;
+    stateStore.appendAudit(current, { action: 'match-confirm-recovered-item', itemId, videoId, source: value.source, score: score.total });
+  });
+  return { match: value, alreadyConfirmed: false, warning: hasWarning, durationDifferenceSeconds, quotaUnitsUsed: remote.quotaUnitsUsed || 0 };
+}
+
 async function confirmRecoveredMatches(config, { sourceId = '' } = {}) {
   const state = await stateStore.load();
   if (sourceId && !state.sources[sourceId]) throw Object.assign(new Error('Raiz de acervo nao encontrada.'), { statusCode: 404 });
@@ -418,4 +475,4 @@ async function startPlaylistJob(plan) {
   return playlistQueue.start({ playlistId: plan.playlistId, playlistTitle: plan.playlistTitle || '', entries: plan.entries });
 }
 
-module.exports = { getStatus, listCatalogItems, searchPublic, searchForItem, updateMatch, confirmRecoveredMatches, resolveEntries, planPlaylist, startPlaylistJob, buildPlaylistMembershipIndex, buildManagedDestinationIndex };
+module.exports = { getStatus, listCatalogItems, searchPublic, searchForItem, updateMatch, confirmRecoveredItem, confirmRecoveredMatches, resolveEntries, planPlaylist, startPlaylistJob, buildPlaylistMembershipIndex, buildManagedDestinationIndex };

@@ -137,6 +137,19 @@
     }
   }
 
+  async function confirmRecoveredItem(itemId) {
+    const item = catalogItems.find((value) => value.id === itemId);
+    if (!item || !item.recoveredVideoId) throw new Error('Este item não possui um Video ID recuperado válido.');
+    deps.showToast(`Validando ID ${item.recoveredVideoId}...`, { persistent: true, loading: true });
+    const response = await deps.api('/api/youtube-manager/matches/confirm-recovered-item', { method: 'POST', body: JSON.stringify({ itemId }) });
+    const result = response.result || {};
+    await refreshStatus({ light: true });
+    await refreshCatalog();
+    if (result.alreadyConfirmed) return deps.showToast(`ID ${item.recoveredVideoId} já estava confirmado.`);
+    const warning = result.warning && result.durationDifferenceSeconds != null ? ` · aviso: diferença de duração de ${result.durationDifferenceSeconds}s` : '';
+    deps.showToast(`ID ${item.recoveredVideoId} confirmado${warning}.`, false, { durationMs: 8000 });
+  }
+
   function setTab(tab) {
     activeTab = ['search', 'catalog', 'playlists', 'account'].includes(tab) ? tab : 'search';
     $$('.ytm-tab').forEach((button) => button.classList.toggle('active', button.dataset.ytmTab === activeTab));
@@ -328,7 +341,7 @@
       : '<small class="muted-text">— Nenhuma operação de playlist registrada</small>';
     const libraryLines = destinations.length
       ? destinations.map((entry) => `<small>${esc(managedDestinationText(item, entry))}</small>`).join('')
-      : '<small class="muted-text">— Ainda não presente em destino gerenciado</small>';
+      : '<small class="muted-text">— Não está em nenhuma Biblioteca/Playlist de Canal gerenciada</small>';
     return `<div class="ytm-flow-state"><strong>YouTube</strong>${youtubeLines}</div><div class="ytm-flow-state"><strong>Biblioteca</strong>${libraryLines}</div>`;
   }
 
@@ -424,7 +437,7 @@
         <label class="ytm-select"><input type="checkbox" data-ytm-select-item="${esc(item.id)}" ${selectedCatalog.has(item.id) ? 'checked' : ''} ${confirmed ? '' : 'disabled'}></label>
         <div class="ytm-catalog-main"><strong>${esc(item.inferredArtist || 'Outros')} — ${esc(item.inferredTitle || item.filename)}</strong><small>${esc(item.relativePath)} · ${duration(item.duration)}</small>${item.scanError ? `<span class="error-text">${esc(item.scanError)}</span>` : ''}</div>
         <div class="ytm-catalog-states"><div class="ytm-identity-state"><span class="badge ${cls}">${esc(label)}</span>${item.recoveredVideoId && !confirmed ? `<small>${esc(item.recoveredVideoId)} · ${esc(item.matchSource || '')}</small>` : ''}${confirmed ? `<small>${esc(match.videoId)} · ${esc(match.channelTitle || '')}</small>` : ''}</div>${renderCatalogFlowState(item)}</div>
-        <div class="row-actions"><button type="button" class="small" data-ytm-review="${esc(item.id)}">Revisar</button>${confirmed ? `<button type="button" class="small primary" data-ytm-adopt="${esc(item.id)}">Adotar</button>` : ''}${confirmed || item.match && item.match.status === 'ignored' ? `<button type="button" class="small" data-ytm-clear-match="${esc(item.id)}">Limpar</button>` : `<button type="button" class="small" data-ytm-ignore="${esc(item.id)}">Ignorar</button>`}</div>
+        <div class="row-actions">${item.recoveredVideoId && !confirmed && !(item.match && item.match.status === 'ignored') ? `<button type="button" class="small primary" data-ytm-validate-id="${esc(item.id)}">Validar ID</button>` : ''}<button type="button" class="small" data-ytm-review="${esc(item.id)}">Revisar</button>${confirmed && Array.isArray(item.managedDestinations) && item.managedDestinations.some((entry) => !entry.hasMedia) ? `<button type="button" class="small primary" data-ytm-adopt="${esc(item.id)}">Adotar</button>` : ''}${confirmed || item.match && item.match.status === 'ignored' ? `<button type="button" class="small" data-ytm-clear-match="${esc(item.id)}">Limpar</button>` : `<button type="button" class="small" data-ytm-ignore="${esc(item.id)}">Ignorar</button>`}</div>
       </article>`;
     }).join('');
     $('#ytmCatalogMore')?.classList.toggle('hidden', !catalogPagination.hasMore);
@@ -712,6 +725,7 @@
     $('#ytmCatalogAdoptSelected').addEventListener('click', () => openAdoptionPanel([...selectedCatalog]).catch((error) => deps.showToast(error.message, true)));
     $('#ytmCatalogList').addEventListener('change', (event) => { const box = event.target.closest('[data-ytm-select-item]'); if (!box) return; if (box.checked) selectedCatalog.add(box.dataset.ytmSelectItem); else selectedCatalog.delete(box.dataset.ytmSelectItem); renderCatalogSelection(); });
     $('#ytmCatalogList').addEventListener('click', (event) => {
+      const validate = event.target.closest('[data-ytm-validate-id]'); if (validate) return confirmRecoveredItem(validate.dataset.ytmValidateId).catch((error) => deps.showToast(error.message, true));
       const review = event.target.closest('[data-ytm-review]'); if (review) return reviewItem(review.dataset.ytmReview).catch((error) => deps.showToast(error.message, true));
       const adopt = event.target.closest('[data-ytm-adopt]'); if (adopt) return openAdoptionPanel([adopt.dataset.ytmAdopt]).catch((error) => deps.showToast(error.message, true));
       const ignore = event.target.closest('[data-ytm-ignore]'); if (ignore) { selectedCatalog.delete(ignore.dataset.ytmIgnore); return deps.api('/api/youtube-manager/item/match', { method: 'POST', body: JSON.stringify({ itemId: ignore.dataset.ytmIgnore, action: 'ignore' }) }).then(() => refreshCatalog()).catch((error) => deps.showToast(error.message, true)); }

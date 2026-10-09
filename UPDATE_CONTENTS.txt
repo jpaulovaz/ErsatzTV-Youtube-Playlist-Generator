@@ -1,25 +1,28 @@
-ErsatzTV YouTube Downloader 3.9.4 - pacote de atualização
+ErsatzTV YouTube Downloader 3.9.5 - pacote de atualização
+Base: v3.9.4
 
-Extraia este ZIP sobre uma instalacao v3.9.3.
+Este update incrementa a interface/serviço do Gerenciador do YouTube para:
+- filtros de Biblioteca explícitos: sem Biblioteca, presente em Biblioteca, aguardando mídia, mídia presente e adotado;
+- validação individual de Video ID recuperado diretamente no card, sem abrir Revisar;
+- mesmas travas da validação em lote para conflito, disponibilidade e diferença de duração;
+- exibição individual de Adotar somente quando existe destino sincronizado ainda sem mídia.
 
-Preservado deliberadamente (nao incluido):
-- config/config.json
-- config/auth.json
-- config/subtitle-translation.json
-- config/youtube-account.json
-- data/
-- arquivos de midia e sidecars existentes
+Arquivos incluídos:
+CHANGELOG.md
+README.md
+UPGRADE.md
+package.json
+public/index.html
+public/js/youtubeManager.js
+public/login.html
+src/routes/youtubeManagerRoutes.js
+src/youtubeManager/localCatalogScanner.js
+src/youtubeManager/youtubeManagerService.js
+test/ui-v3.test.js
+test/youtubeManager.test.js
+MODIFIED_FILES.txt
+UPDATE_CONTENTS.txt
 
-Alteracoes:
-- preserva Confirmado como estado exclusivo da identidade do arquivo local;
-- mostra separadamente o estado em playlists da conta YouTube e em destinos gerenciados do aplicativo;
-- detecta Bibliotecas, Playlists de Canal e Fontes de Canal que ja contem o Video ID, inclusive para IDs exatos apenas recuperados de filename/sidecar/metadata embedded;
-- registra no catalogo os estados Em fila, Adicionando, Adicionado, Ja estava na playlist, Falha e Cancelado;
-- reaproveita historico de filas da v3.9.3 para exibir operacoes anteriores quando houver localItemId;
-- registra Ja estava na playlist ainda no preflight quando nenhuma insercao e necessaria;
-- adiciona filtros Biblioteca (Todos/Ja presente/Ainda nao presente) e Playlist (Todos/Adicionado/Ainda nao adicionado/Erro);
-- atualiza automaticamente o catalogo quando filas de playlist ou adocao mudam de estado;
-- nenhuma migracao de config.json ou estados persistentes.
+Aplicacao v3.9.5, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 
-Aplicacao v3.9.4, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
-Consulte UPGRADE.md antes da atualizacao.
+O pacote nao inclui config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/, tokens, estados operacionais, arquivos de midia ou sidecars.

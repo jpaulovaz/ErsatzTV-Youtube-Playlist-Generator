@@ -480,20 +480,52 @@ test('adoption queue defers instead of busy-spinning while a download is active'
   await adoptionQueue.stop();
 });
 
+test('single recovered ID validation confirms safely without opening review and keeps duration guardrails', async () => {
+  await managerState.save({
+    ...managerState.emptyState(),
+    localItems: {
+      safe: { id: 'safe', sourceId: 'src', present: true, relativePath: 'Safe.mp4', recoveredVideoId: 'AAAAAAAAAAA', matchSource: 'embedded', duration: 197 },
+      blocked: { id: 'blocked', sourceId: 'src', present: true, relativePath: 'Blocked.mp4', recoveredVideoId: 'BBBBBBBBBBB', matchSource: 'filename', duration: 100 }
+    }
+  });
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+    assert.equal(parsed.pathname, '/youtube/v3/videos');
+    const id = parsed.searchParams.get('id');
+    const items = [];
+    if (id && id.includes('AAAAAAAAAAA')) items.push({ id: 'AAAAAAAAAAA', snippet: { title: 'Ace of Base - The Sign', channelTitle: 'Ace of Base', thumbnails: {} }, contentDetails: { duration: 'PT3M17S' }, status: { privacyStatus: 'public', embeddable: true, uploadStatus: 'processed' } });
+    if (id && id.includes('BBBBBBBBBBB')) items.push({ id: 'BBBBBBBBBBB', snippet: { title: 'Wrong Cut', channelTitle: 'Artist', thumbnails: {} }, contentDetails: { duration: 'PT2M30S' }, status: { privacyStatus: 'public', embeddable: true, uploadStatus: 'processed' } });
+    return new Response(JSON.stringify({ items }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  const config = { youtubeApi: { apiKey: 'key', timeoutSeconds: 5, cacheTtlHours: 1 } };
+  const confirmed = await managerService.confirmRecoveredItem(config, { itemId: 'safe' });
+  assert.equal(confirmed.match.status, 'confirmed');
+  assert.equal(confirmed.match.videoId, 'AAAAAAAAAAA');
+  assert.equal(confirmed.match.confirmationMode, 'single-recovered');
+  assert.equal(confirmed.warning, false);
+  await assert.rejects(
+    () => managerService.confirmRecoveredItem(config, { itemId: 'blocked' }),
+    (error) => error && error.code === 'DURATION_DIFFERENCE_BLOCKED' && /45s/.test(error.message)
+  );
+});
+
 test('catalog shows managed destinations for recovered or confirmed IDs and filters library presence', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ytm-catalog-managed-'));
   try {
     const baseDir = path.join(root, 'managed');
     const targetPath = path.join(baseDir, 'Managed', 'Artist - Confirmed.mp4');
+    const adoptedPath = path.join(baseDir, 'Managed', 'Artist - Adopted.mp4');
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
     await fs.writeFile(targetPath, 'managed-media');
+    await fs.writeFile(adoptedPath, 'adopted-media');
     await managerState.save({
       ...managerState.emptyState(),
       sources: { src: { id: 'src', name: 'Clipes', rootPath: root } },
       localItems: {
         recovered: { id: 'recovered', sourceId: 'src', present: true, relativePath: 'Recovered.mp4', recoveredVideoId: 'AAAAAAAAAAA', matchSource: 'embedded' },
         confirmed: { id: 'confirmed', sourceId: 'src', present: true, relativePath: 'Confirmed.mp4' },
-        absent: { id: 'absent', sourceId: 'src', present: true, relativePath: 'Absent.mp4', recoveredVideoId: 'CCCCCCCCCCC', matchSource: 'filename' }
+        absent: { id: 'absent', sourceId: 'src', present: true, relativePath: 'Absent.mp4', recoveredVideoId: 'CCCCCCCCCCC', matchSource: 'filename' },
+        adopted: { id: 'adopted', sourceId: 'src', present: true, relativePath: 'Adopted.mp4', recoveredVideoId: 'DDDDDDDDDDD', matchSource: 'embedded', adoptionState: { status: 'adopted', destinationId: 'Managed', mode: 'hardlink' } }
       },
       matches: { confirmed: { itemId: 'confirmed', status: 'confirmed', videoId: 'BBBBBBBBBBB', title: 'Artist - Confirmed' } }
     });
@@ -502,13 +534,14 @@ test('catalog shows managed destinations for recovered or confirmed IDs and filt
       state: {
         items: {
           'Managed::AAAAAAAAAAA': { id: 'Managed::AAAAAAAAAAA', destinationId: 'Managed', libraryFolder: 'Managed', videoId: 'AAAAAAAAAAA', sourceActive: true, status: 'pending', targetPath: '' },
-          'Managed::BBBBBBBBBBB': { id: 'Managed::BBBBBBBBBBB', destinationId: 'Managed', libraryFolder: 'Managed', videoId: 'BBBBBBBBBBB', sourceActive: true, status: 'completed', targetPath }
+          'Managed::BBBBBBBBBBB': { id: 'Managed::BBBBBBBBBBB', destinationId: 'Managed', libraryFolder: 'Managed', videoId: 'BBBBBBBBBBB', sourceActive: true, status: 'completed', targetPath },
+          'Managed::DDDDDDDDDDD': { id: 'Managed::DDDDDDDDDDD', destinationId: 'Managed', libraryFolder: 'Managed', videoId: 'DDDDDDDDDDD', sourceActive: true, status: 'completed', targetPath: adoptedPath }
         }
       }
     };
     const config = { paths: { baseDir }, playlists: [{ name: 'Managed', enabled: true, mediaProfile: 'generic', url: 'https://www.youtube.com/playlist?list=PLX' }], channels: [] };
     const present = await managerService.listCatalogItems(config, { sourceId: 'src', present: 'true', libraryPresence: 'present', limit: 20 }, { manager: fakeManager });
-    assert.deepEqual(present.items.map((item) => item.id).sort(), ['confirmed', 'recovered']);
+    assert.deepEqual(present.items.map((item) => item.id).sort(), ['adopted', 'confirmed', 'recovered']);
     const recovered = present.items.find((item) => item.id === 'recovered');
     assert.equal(recovered.match, null);
     assert.equal(recovered.identityVideoId, 'AAAAAAAAAAA');
@@ -519,6 +552,15 @@ test('catalog shows managed destinations for recovered or confirmed IDs and filt
 
     const missing = await managerService.listCatalogItems(config, { sourceId: 'src', present: 'true', libraryPresence: 'absent', limit: 20 }, { manager: fakeManager });
     assert.deepEqual(missing.items.map((item) => item.id), ['absent']);
+
+    const awaitingMedia = await managerService.listCatalogItems(config, { sourceId: 'src', present: 'true', libraryPresence: 'awaiting-media', limit: 20 }, { manager: fakeManager });
+    assert.deepEqual(awaitingMedia.items.map((item) => item.id), ['recovered']);
+
+    const mediaPresent = await managerService.listCatalogItems(config, { sourceId: 'src', present: 'true', libraryPresence: 'media-present', limit: 20 }, { manager: fakeManager });
+    assert.deepEqual(mediaPresent.items.map((item) => item.id), ['confirmed']);
+
+    const adopted = await managerService.listCatalogItems(config, { sourceId: 'src', present: 'true', libraryPresence: 'adopted', limit: 20 }, { manager: fakeManager });
+    assert.deepEqual(adopted.items.map((item) => item.id), ['adopted']);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
