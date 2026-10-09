@@ -1,10 +1,10 @@
-# Atualização para 3.9.2
+# Atualização para 3.9.3
 
-A versão 3.9.2 é uma atualização incremental sobre a **v3.9.1** focada no Acervo local. Não há migração de configuração nem de estado.
+A versão 3.9.3 é uma atualização incremental sobre a **v3.9.2** focada em clareza do fluxo de migração e seleção em massa do Acervo local. Não há migração de configuração nem de estado.
 
 ## Versionamento
 
-- aplicação: **v3.9.2**;
+- aplicação: **v3.9.3**;
 - Universal Scripted Schedules: **v1.3.1**;
 - `configVersion`: **9**;
 - download state: **5**;
@@ -19,59 +19,49 @@ A versão 3.9.2 é uma atualização incremental sobre a **v3.9.1** focada no Ac
 
 1. Pare o serviço/aplicativo.
 2. Faça o backup normal de `config/` e `data/`.
-3. Não altere nem apague `config/youtube-account.json`, `data/youtube-account-state.json` ou os estados do Gerenciador do YouTube.
+3. Preserve `config/youtube-account.json`, `data/youtube-account-state.json` e os estados do Gerenciador do YouTube.
 
 ## Aplicar o pacote update
 
-Extraia o ZIP sobre uma instalação v3.9.1:
+Extraia o ZIP sobre uma instalação v3.9.2:
 
 ```bash
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.9.1-to-v3.9.2-update.zip -d /caminho/da/aplicacao
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.9.2-to-v3.9.3-update.zip -d /caminho/da/aplicacao
 ```
 
 O pacote update não contém `config/config.json`, `config/auth.json`, `config/subtitle-translation.json`, `config/youtube-account.json`, `data/` nem mídia.
 
-Reinicie o serviço depois da atualização e faça login novamente se a sessão administrativa tiver sido encerrada pelo restart.
+Reinicie o serviço depois da atualização.
 
-## Nova varredura com progresso
+## Diferença entre as duas ações do Acervo local
 
-Em **YouTube -> Gerenciador do YouTube -> Acervo local**, **Atualizar varredura** agora inicia um job em segundo plano. A notificação fixa no canto inferior direito mostra:
+**Adicionar à playlist YouTube** insere os Video IDs selecionados na playlist da conta Google escolhida. Essa ação não copia arquivos e não cria diretamente mídia na pasta da Biblioteca interna. Se essa playlist estiver configurada como fonte de uma Biblioteca/Playlist de Canal, a próxima sincronização fará o aplicativo reconhecer os vídeos e eles poderão entrar no fluxo normal de download.
 
-- nome da fonte e pasta raiz;
-- arquivo atualmente inspecionado;
-- quantidade processada e total;
-- IDs recuperados;
-- erros de leitura;
-- barra de progresso e animação enquanto estiver ativo.
+**Adotar na biblioteca** reutiliza o arquivo que já existe no Acervo local. Ela só oferece Bibliotecas/Playlists de Canal/Fonte de Canal nas quais os Video IDs já existam como itens ativos. Depois do preflight, Hardlink/Copy/Move coloca a mídia no caminho gerenciado e evita o redownload.
 
-Ao concluir, a notificação muda para um resumo final e o catálogo é recarregado. Uma segunda varredura não é iniciada enquanto outra estiver ativa.
+Para um vídeo que acabou de ser migrado para uma playlist da sua conta, o fluxo típico é:
 
-## Validar IDs recuperados
+```text
+Adicionar à playlist YouTube
+        ↓
+Sincronizar a Biblioteca/Playlist de Canal que usa essa playlist
+        ↓
+Adotar na biblioteca
+```
 
-O novo botão **Validar IDs recuperados** elimina a necessidade de abrir centenas de itens individualmente quando o arquivo já contém um Video ID exato.
+Se você quiser baixar normalmente pelo aplicativo, não precisa adotar: basta sincronizar e deixar o Download Manager processar o item.
 
-A ação considera IDs recuperados de:
+## Selecionar todos confirmados
 
-- filename;
-- `.info.json`;
-- NFO;
-- metadata embedded do contêiner.
+O novo botão **Selecionar todos confirmados** percorre todo o resultado correspondente aos filtros atuais — inclusive itens ainda não carregados pelo botão **Carregar mais** — e seleciona apenas matches com status Confirmado.
 
-Depois da confirmação do usuário, o backend valida os IDs via `videos.list` em lotes de até 50. Isso **não usa `search.list`**.
+A interface exibe a quantidade total selecionada e oferece **Limpar seleção**. Paginar ou receber uma atualização interna do catálogo preserva os IDs selecionados; trocar de fonte ou aplicar um novo filtro limpa a seleção para evitar operações sobre itens ocultos.
 
-A confirmação em lote segue estas regras:
+Para permitir centenas de itens na adoção sem ultrapassar limites de URL do proxy/navegador, a consulta de destinos para adoção passa a usar POST com corpo JSON.
 
-- Video ID duplicado/conflitante: fica para revisão manual;
-- vídeo indisponível: fica para revisão manual;
-- diferença de duração **acima de 45 s**: fica para revisão manual;
-- diferença **acima de 10 s e até 45 s**: pode ser confirmada, mas é registrada com aviso;
-- demais IDs válidos ficam com status **Confirmado** e passam a poder participar das ações em massa existentes.
+## Clareza do destino gerenciado
 
-A pesquisa/matching tradicional continua sem autoaprovação: o comportamento em lote vale apenas para um ID exato já recuperado do próprio acervo e somente depois da ação explícita **Validar IDs recuperados**.
-
-## Correção visual
-
-Foi adicionado espaçamento vertical consistente entre os cards do Acervo local. A **Fila de adoção** não fica mais encostada no card imediatamente acima.
+Ao abrir **Adotar na biblioteca**, o seletor identifica o tipo de destino (Biblioteca, Playlist de canal ou Fonte de canal). Depois de escolher um destino, a interface mostra a pasta raiz gerenciada; o preflight continua mostrando o caminho final de cada arquivo antes do commit.
 
 ## Validação
 

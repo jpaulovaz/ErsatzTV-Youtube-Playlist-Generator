@@ -680,11 +680,31 @@ test('Gerenciador do YouTube expõe pesquisa, acervo local, playlists e OAuth na
   assert.match(manager, /\/api\/youtube-manager\/item\/match/);
   assert.match(manager, /\/api\/youtube-manager\/matches\/confirm-recovered/);
   assert.match(html, /id="ytmConfirmRecovered"/);
+  assert.match(html, /id="ytmCatalogSelectAll"/);
+  assert.match(html, /Selecionar todos confirmados/);
+  assert.match(html, /Playlist YouTube destino/);
+  assert.match(html, /Adicionar à playlist YouTube/);
+  assert.match(html, /Adotar na biblioteca/);
+  assert.match(html, /inclusive itens ainda não carregados na tela/);
+  assert.match(manager, /async function selectAllConfirmedCatalog/);
+  assert.match(manager, /const limit = 200/);
+  assert.match(manager, /item\.match && item\.match\.status === 'confirmed'/);
+  assert.match(manager, /adoption-destinations', \{ method: 'POST'/);
+  assert.match(manager, /Biblioteca\/Playlist de Canal gerenciada/);
   assert.match(css, /toast\.loading/);
   assert.match(css, /catalog.*card \+ \.card/);
+  assert.match(css, /ytm-catalog-flow-help/);
   assert.match(manager, /youtube-manager/);
   assert.match(css, /YouTube Manager v3\.9/);
   assert.match(html, /Adotar mídia existente/);
   assert.match(manager, /\/api\/youtube-manager\/adoption-plan/);
   assert.match(manager, /\/api\/youtube-manager\/adoption-start/);
+});
+
+test('YouTube Manager accepts adoption destination selection by POST for large batches', () => {
+  const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'youtubeManagerRoutes.js'), 'utf8');
+  const adoption = fs.readFileSync(path.join(__dirname, '..', 'src', 'youtubeManager', 'adoptionService.js'), 'utf8');
+  assert.match(routes, /req\.method === 'POST' && action === 'adoption-destinations'/);
+  assert.match(routes, /payload\.itemIds \|\| \[\]/);
+  assert.match(adoption, /rootPath: destination\.rootPath \|\| ''/);
 });

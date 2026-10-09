@@ -270,7 +270,7 @@
   async function addVideoToPlaylist(videoId, title = '') {
     const playlistId = $('#ytmSearchPlaylist').value;
     const playlist = playlists.find((item) => item.id === playlistId);
-    if (!playlist) throw new Error('Selecione a playlist destino.');
+    if (!playlist) throw new Error('Selecione a playlist YouTube destino.');
     const planResponse = await deps.api('/api/youtube-manager/playlist-plan', {
       method: 'POST', body: JSON.stringify({ playlistId, playlistTitle: playlist.title, videoIds: [{ videoId, title }] })
     });
@@ -321,11 +321,67 @@
     if (sources.some((source) => source.id === current)) select.value = current;
   }
 
+  function catalogQueryParams({ offset = 0, limit = 100 } = {}) {
+    return new URLSearchParams({
+      sourceId: $('#ytmSourceSelect')?.value || '',
+      status: $('#ytmCatalogStatus').value,
+      q: $('#ytmCatalogQuery').value.trim(),
+      offset: String(offset),
+      limit: String(limit),
+      present: 'true'
+    });
+  }
+
+  function renderCatalogSelection() {
+    const count = selectedCatalog.size;
+    if ($('#ytmCatalogSelectionMeta')) $('#ytmCatalogSelectionMeta').textContent = `${count} selecionado(s)`;
+    if ($('#ytmCatalogClearSelection')) $('#ytmCatalogClearSelection').disabled = count === 0;
+  }
+
+  async function selectAllConfirmedCatalog() {
+    const sourceId = $('#ytmSourceSelect')?.value || '';
+    if (!sourceId) throw new Error('Selecione uma fonte de acervo primeiro.');
+    const button = $('#ytmCatalogSelectAll');
+    button.disabled = true;
+    const before = selectedCatalog.size;
+    let offset = 0;
+    const limit = 200;
+    let total = 0;
+    try {
+      do {
+        const response = await deps.api(`/api/youtube-manager/items?${catalogQueryParams({ offset, limit })}`);
+        const page = response.result || {};
+        const items = page.items || [];
+        for (const item of items) {
+          if (item.match && item.match.status === 'confirmed') selectedCatalog.add(item.id);
+        }
+        total = Number(page.total) || 0;
+        offset += Number(page.limit) || limit;
+        if (!page.hasMore) break;
+      } while (offset < total);
+      renderCatalog();
+      const added = selectedCatalog.size - before;
+      deps.showToast(added
+        ? `${added} item(ns) confirmado(s) adicionados à seleção. Total selecionado: ${selectedCatalog.size}.`
+        : `Nenhum novo item confirmado encontrado no filtro atual. Total selecionado: ${selectedCatalog.size}.`);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function clearCatalogSelection() {
+    selectedCatalog.clear();
+    renderCatalog();
+  }
+
   function renderCatalog({ append = false } = {}) {
     const root = $('#ytmCatalogList');
     if (!root) return;
     if (!catalogItems.length) {
       root.innerHTML = '<div class="empty-state"><strong>Nenhum arquivo neste filtro.</strong></div>';
+      $('#ytmCatalogMore')?.classList.add('hidden');
+      renderCatalogMetrics();
+      renderCatalogSelection();
       return;
     }
     root.innerHTML = catalogItems.map((item) => {
@@ -341,17 +397,16 @@
     }).join('');
     $('#ytmCatalogMore')?.classList.toggle('hidden', !catalogPagination.hasMore);
     renderCatalogMetrics();
+    renderCatalogSelection();
   }
 
   async function refreshCatalog({ append = false } = {}) {
     const sourceId = $('#ytmSourceSelect')?.value || '';
     if (!sourceId) { catalogItems = []; catalogPagination = { total: 0, offset: 0, limit: 100, hasMore: false }; renderCatalog(); return; }
     const offset = append ? catalogPagination.offset + catalogPagination.limit : 0;
-    const params = new URLSearchParams({ sourceId, status: $('#ytmCatalogStatus').value, q: $('#ytmCatalogQuery').value.trim(), offset: String(offset), limit: '100', present: 'true' });
-    const response = await deps.api(`/api/youtube-manager/items?${params}`);
+    const response = await deps.api(`/api/youtube-manager/items?${catalogQueryParams({ offset, limit: 100 })}`);
     catalogPagination = response.result;
     catalogItems = append ? [...catalogItems, ...(response.result.items || [])] : (response.result.items || []);
-    selectedCatalog = new Set([...selectedCatalog].filter((id) => catalogItems.some((item) => item.id === id && item.match && item.match.status === 'confirmed')));
     renderCatalog();
   }
 
@@ -399,6 +454,25 @@
     return `${(bytes / (1024 ** index)).toFixed(index > 1 ? 2 : 0)} ${units[index]}`;
   }
 
+  function adoptionDestinationTypeLabel(type) {
+    if (type === 'library') return 'Biblioteca';
+    if (type === 'channel-playlist') return 'Playlist de canal';
+    if (type === 'channel-global') return 'Fonte de canal';
+    return 'Destino';
+  }
+
+  function renderAdoptionDestinationMeta() {
+    const destinationId = $('#ytmAdoptionDestination')?.value || '';
+    const selected = adoptionDestinations.find((item) => item.id === destinationId);
+    if (selected) {
+      $('#ytmAdoptionMeta').textContent = `${adoptionDestinationTypeLabel(selected.type)} “${selected.displayName}” · pasta ${selected.rootPath || 'gerenciada pelo aplicativo'}. O preflight mostrará o caminho final de cada arquivo antes de qualquer alteração.`;
+      return;
+    }
+    $('#ytmAdoptionMeta').textContent = adoptionDestinations.length
+      ? 'Escolha a Biblioteca/Playlist de Canal gerenciada e o modo. A mídia será colocada no caminho final que esse destino já usa; nenhum arquivo será tocado antes do preflight.'
+      : 'Nenhuma Biblioteca/Playlist de Canal gerenciada contém todos os vídeos selecionados como itens ativos. Se acabou de adicioná-los à playlist do YouTube, sincronize primeiro o destino correspondente e depois volte para adotar.';
+  }
+
   async function openAdoptionPanel(itemIds) {
     adoptionSelection = [...new Set((itemIds || []).filter(Boolean))];
     if (!adoptionSelection.length) throw new Error('Selecione ao menos um item confirmado.');
@@ -406,13 +480,12 @@
     $('#ytmAdoptionStart').disabled = true;
     $('#ytmAdoptionPlan').innerHTML = '';
     $('#ytmAdoptionMoveConfirm').checked = false;
-    const params = new URLSearchParams({ itemIds: adoptionSelection.join(',') });
-    const response = await deps.api(`/api/youtube-manager/adoption-destinations?${params}`);
+    const response = await deps.api('/api/youtube-manager/adoption-destinations', { method: 'POST', body: JSON.stringify({ itemIds: adoptionSelection }) });
     adoptionDestinations = response.result.destinations || [];
     const select = $('#ytmAdoptionDestination');
-    select.innerHTML = '<option value="">Selecione um destino gerenciado</option>' + adoptionDestinations.map((item) => `<option value="${esc(item.id)}">${esc(item.displayName)} · ${esc(item.mediaProfile || 'generic')}${item.hasMedia ? ' · já possui mídia' : ''}</option>`).join('');
+    select.innerHTML = '<option value="">Selecione um destino gerenciado</option>' + adoptionDestinations.map((item) => `<option value="${esc(item.id)}">${esc(adoptionDestinationTypeLabel(item.type))}: ${esc(item.displayName)} · ${esc(item.mediaProfile || 'generic')}${item.hasMedia ? ' · já possui mídia' : ''}</option>`).join('');
     $('#ytmAdoptionTitle').textContent = adoptionSelection.length === 1 ? 'Adotar mídia existente' : `Adotar ${adoptionSelection.length} mídias existentes`;
-    $('#ytmAdoptionMeta').textContent = adoptionDestinations.length ? 'Escolha o destino e o modo; nenhum arquivo será tocado antes do preflight.' : 'Nenhum destino contém todos os vídeos selecionados como itens ativos. Sincronize a fonte gerenciada antes de adotar.';
+    renderAdoptionDestinationMeta();
     $('#ytmAdoptionPanel').classList.remove('hidden');
     $('#ytmAdoptionPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -473,10 +546,10 @@
     if (!selectedCatalog.size) throw new Error('Selecione ao menos um item confirmado.');
     const planResponse = await deps.api('/api/youtube-manager/playlist-plan', { method: 'POST', body: JSON.stringify({ playlistId, playlistTitle: playlist.title, itemIds: [...selectedCatalog] }) });
     const plan = planResponse.result;
-    const dialog = await deps.showDialog({ eyebrow: 'Migração de acervo', title: 'Adicionar vídeos à playlist?', message: `${plan.eligible} vídeo(s) serão inseridos em “${playlist.title}”. ${plan.alreadyExists} já existem e serão ignorados.`, warning: plan.estimatedGeneralQuotaUnits ? `Custo estimado: ${plan.estimatedGeneralQuotaUnits} unidades da quota geral.` : '', confirmLabel: 'Iniciar fila' });
+    const dialog = await deps.showDialog({ eyebrow: 'Migração de acervo', title: 'Adicionar vídeos à playlist do YouTube?', message: `${plan.eligible} vídeo(s) serão inseridos em “${playlist.title}”. ${plan.alreadyExists} já existem e serão ignorados.`, warning: plan.estimatedGeneralQuotaUnits ? `Custo estimado: ${plan.estimatedGeneralQuotaUnits} unidades da quota geral.` : '', confirmLabel: 'Iniciar fila' });
     if (!dialog.confirmed || !plan.eligible) return;
     await deps.api('/api/youtube-manager/playlist-start', { method: 'POST', body: JSON.stringify({ plan }) });
-    deps.showToast('Fila de inserção criada.');
+    deps.showToast('Fila de inserção na playlist do YouTube criada.');
     setTab('playlists');
     await refreshQueue();
   }
@@ -585,24 +658,26 @@
       await deps.api('/api/youtube-manager/sources', { method: 'DELETE', body: JSON.stringify({ sourceId }) }); selectedCatalog.clear(); await refreshStatus({ light: true }); await refreshCatalog();
     });
     $('#ytmSourceSelect').addEventListener('change', () => { selectedCatalog.clear(); refreshCatalog().catch((error) => deps.showToast(error.message, true)); });
-    $('#ytmCatalogRefresh').addEventListener('click', () => refreshCatalog().catch((error) => deps.showToast(error.message, true)));
+    $('#ytmCatalogRefresh').addEventListener('click', () => { selectedCatalog.clear(); refreshCatalog().catch((error) => deps.showToast(error.message, true)); });
     $('#ytmConfirmRecovered').addEventListener('click', () => confirmRecoveredBulk().catch((error) => deps.showToast(error.message, true)));
+    $('#ytmCatalogSelectAll').addEventListener('click', () => selectAllConfirmedCatalog().catch((error) => deps.showToast(error.message, true)));
+    $('#ytmCatalogClearSelection').addEventListener('click', () => clearCatalogSelection());
     $('#ytmCatalogMore').addEventListener('click', () => refreshCatalog({ append: true }).catch((error) => deps.showToast(error.message, true)));
     $('#ytmCatalogAddSelected').addEventListener('click', () => catalogBulkAdd().catch((error) => deps.showToast(error.message, true)));
     $('#ytmCatalogAdoptSelected').addEventListener('click', () => openAdoptionPanel([...selectedCatalog]).catch((error) => deps.showToast(error.message, true)));
-    $('#ytmCatalogList').addEventListener('change', (event) => { const box = event.target.closest('[data-ytm-select-item]'); if (!box) return; if (box.checked) selectedCatalog.add(box.dataset.ytmSelectItem); else selectedCatalog.delete(box.dataset.ytmSelectItem); });
+    $('#ytmCatalogList').addEventListener('change', (event) => { const box = event.target.closest('[data-ytm-select-item]'); if (!box) return; if (box.checked) selectedCatalog.add(box.dataset.ytmSelectItem); else selectedCatalog.delete(box.dataset.ytmSelectItem); renderCatalogSelection(); });
     $('#ytmCatalogList').addEventListener('click', (event) => {
       const review = event.target.closest('[data-ytm-review]'); if (review) return reviewItem(review.dataset.ytmReview).catch((error) => deps.showToast(error.message, true));
       const adopt = event.target.closest('[data-ytm-adopt]'); if (adopt) return openAdoptionPanel([adopt.dataset.ytmAdopt]).catch((error) => deps.showToast(error.message, true));
-      const ignore = event.target.closest('[data-ytm-ignore]'); if (ignore) return deps.api('/api/youtube-manager/item/match', { method: 'POST', body: JSON.stringify({ itemId: ignore.dataset.ytmIgnore, action: 'ignore' }) }).then(() => refreshCatalog()).catch((error) => deps.showToast(error.message, true));
-      const clear = event.target.closest('[data-ytm-clear-match]'); if (clear) return deps.api('/api/youtube-manager/item/match', { method: 'POST', body: JSON.stringify({ itemId: clear.dataset.ytmClearMatch, action: 'clear' }) }).then(() => refreshCatalog()).catch((error) => deps.showToast(error.message, true));
+      const ignore = event.target.closest('[data-ytm-ignore]'); if (ignore) { selectedCatalog.delete(ignore.dataset.ytmIgnore); return deps.api('/api/youtube-manager/item/match', { method: 'POST', body: JSON.stringify({ itemId: ignore.dataset.ytmIgnore, action: 'ignore' }) }).then(() => refreshCatalog()).catch((error) => deps.showToast(error.message, true)); }
+      const clear = event.target.closest('[data-ytm-clear-match]'); if (clear) { selectedCatalog.delete(clear.dataset.ytmClearMatch); return deps.api('/api/youtube-manager/item/match', { method: 'POST', body: JSON.stringify({ itemId: clear.dataset.ytmClearMatch, action: 'clear' }) }).then(() => refreshCatalog()).catch((error) => deps.showToast(error.message, true)); }
     });
     $('#ytmMatchClose').addEventListener('click', () => $('#ytmMatchPanel').classList.add('hidden'));
     $('#ytmMatchSearch').addEventListener('click', async () => { if (!currentMatchItem) return; try { const response = await deps.api('/api/youtube-manager/item/search', { method: 'POST', body: JSON.stringify({ itemId: currentMatchItem.id, query: $('#ytmMatchQuery').value.trim(), force: true }) }); renderMatchResults(response.result); } catch (error) { deps.showToast(error.message, true); } });
     $('#ytmMatchResults').addEventListener('click', (event) => { const button = event.target.closest('[data-ytm-confirm-video]'); if (button) confirmMatch(button.dataset.ytmConfirmVideo).catch((error) => deps.showToast(error.message, true)); });
     $('#ytmAdoptionClose').addEventListener('click', () => $('#ytmAdoptionPanel').classList.add('hidden'));
     $('#ytmAdoptionMode').addEventListener('change', () => { adoptionPlan = null; $('#ytmAdoptionStart').disabled = true; $('#ytmAdoptionPlan').innerHTML = ''; $('#ytmAdoptionMoveConfirmRow').classList.toggle('hidden', $('#ytmAdoptionMode').value !== 'move'); $('#ytmAdoptionMoveConfirm').checked = false; });
-    $('#ytmAdoptionDestination').addEventListener('change', () => { adoptionPlan = null; $('#ytmAdoptionStart').disabled = true; $('#ytmAdoptionPlan').innerHTML = ''; });
+    $('#ytmAdoptionDestination').addEventListener('change', () => { adoptionPlan = null; $('#ytmAdoptionStart').disabled = true; $('#ytmAdoptionPlan').innerHTML = ''; renderAdoptionDestinationMeta(); });
     $('#ytmAdoptionAnalyze').addEventListener('click', () => analyzeAdoption().catch((error) => deps.showToast(error.message, true)));
     $('#ytmAdoptionStart').addEventListener('click', () => startAdoption().catch((error) => deps.showToast(error.message, true)));
     $('#ytmAdoptionQueueToggle').addEventListener('click', async () => { try { const action = $('#ytmAdoptionQueueToggle').dataset.action === 'resume' ? 'resume' : 'pause'; await deps.api(`/api/youtube-manager/adoption-${action}`, { method: 'POST', body: '{}' }); await refreshQueue(); } catch (error) { deps.showToast(error.message, true); } });

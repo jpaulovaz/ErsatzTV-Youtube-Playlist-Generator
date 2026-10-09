@@ -1,6 +1,6 @@
-ErsatzTV YouTube Downloader 3.9.2 - pacote de atualização
+ErsatzTV YouTube Downloader 3.9.3 - pacote de atualização
 
-Extraia este ZIP sobre uma instalacao v3.9.1.
+Extraia este ZIP sobre uma instalacao v3.9.2.
 
 Preservado deliberadamente (nao incluido):
 - config/config.json
@@ -11,12 +11,12 @@ Preservado deliberadamente (nao incluido):
 - arquivos de midia e sidecars existentes
 
 Alteracoes:
-- varredura do Acervo local em segundo plano com progresso por arquivo e confirmacao final no canto inferior direito;
-- impede varreduras concorrentes;
-- corrige espacamento entre os cards do Acervo local e a Fila de adocao;
-- adiciona Validar IDs recuperados em lote via videos.list, sem consumir search.list;
-- conflitos, videos indisponiveis e diferenca de duracao acima de 45 s permanecem para revisao manual;
+- esclarece Adicionar a playlist YouTube x Adotar na biblioteca;
+- adiciona Selecionar todos confirmados em todo o filtro atual e Limpar selecao;
+- preserva a selecao ao paginar/atualizar filtros;
+- usa POST para consultar destinos de adocao em lotes grandes;
+- identifica o tipo e a pasta do destino gerenciado no painel de adocao;
 - nenhuma migracao de config.json ou estados persistentes.
 
-Aplicacao v3.9.2, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v3.9.3, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 Consulte UPGRADE.md antes da atualizacao.

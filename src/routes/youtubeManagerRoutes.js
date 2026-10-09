@@ -128,6 +128,10 @@ async function handleYouTubeManagerRoutes(req, res, url, deps) {
     const itemIds = (url.searchParams.get('itemIds') || url.searchParams.get('itemId') || '').split(',').map((value) => value.trim()).filter(Boolean);
     deps.sendJson(res, 200, { ok: true, result: await adoptionService.listDestinations(await deps.loadConfig(), { itemIds }) }); return true;
   }
+  if (req.method === 'POST' && action === 'adoption-destinations') {
+    const payload = await deps.readJson(req);
+    deps.sendJson(res, 200, { ok: true, result: await adoptionService.listDestinations(await deps.loadConfig(), { itemIds: payload.itemIds || [] }) }); return true;
+  }
   if (req.method === 'POST' && action === 'adoption-plan') {
     deps.sendJson(res, 200, { ok: true, result: await adoptionService.plan(await deps.loadConfig(), await deps.readJson(req)) }); return true;
   }

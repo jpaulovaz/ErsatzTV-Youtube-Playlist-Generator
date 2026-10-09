@@ -2169,6 +2169,10 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
 .ytm-catalog-row > div:nth-child(3) { display: grid; gap: .25rem; }
 .ytm-catalog-row > div:nth-child(3) small { color: var(--muted); overflow-wrap: anywhere; }
 .ytm-select { align-self: center; }
+.ytm-catalog-flow-help { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-top: 1rem; }
+.ytm-catalog-flow-help > div { display: grid; gap: .25rem; padding: .75rem .85rem; border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,.025); }
+.ytm-catalog-flow-help span, .ytm-selection-summary span { color: var(--muted); font-size: .9em; }
+.ytm-selection-summary { display: flex; gap: .75rem; justify-content: space-between; align-items: center; margin-top: .75rem; padding: .55rem .75rem; border-radius: 9px; background: rgba(67,151,255,.06); }
 .ytm-metrics { margin-top: 1rem; }
 .ytm-match-card { margin-top: 1rem; }
 .ytm-account-status { margin-bottom: 1rem; }
@@ -2180,6 +2184,7 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
 
 @media (max-width: 980px) {
   .ytm-search-options, .ytm-catalog-toolbar, .ytm-source-form, .ytm-playlist-create { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ytm-catalog-flow-help { grid-template-columns: 1fr; }
   .ytm-result-card { grid-template-columns: 112px minmax(0, 1fr); }
   .ytm-result-card img, .ytm-thumb-placeholder { width: 112px; }
   .ytm-result-actions { grid-column: 1 / -1; flex-direction: row; min-width: 0; }
@@ -2189,6 +2194,7 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
 
 @media (max-width: 640px) {
   .ytm-tabs { overflow-x: auto; flex-wrap: nowrap; padding-bottom: .2rem; }
+  .ytm-selection-summary { align-items: flex-start; flex-direction: column; }
   .ytm-tab { flex: 0 0 auto; }
   .ytm-search-row, .ytm-search-options, .ytm-catalog-toolbar, .ytm-source-form, .ytm-playlist-create { grid-template-columns: 1fr; }
   .ytm-source-form .wide, .ytm-catalog-toolbar .wide, .ytm-playlist-create .wide { grid-column: auto; }

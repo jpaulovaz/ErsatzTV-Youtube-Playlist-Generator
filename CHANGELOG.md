@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.9.3
+
+- Clarifica o fluxo do Acervo local: **Adicionar à playlist YouTube** atua somente na playlist da conta; **Adotar na biblioteca** reutiliza a mídia local em um destino gerenciado já sincronizado, evitando redownload.
+- Renomeia os controles de destino/ações e adiciona explicação visual permanente entre a playlist do YouTube e Bibliotecas/Playlists de Canais do aplicativo.
+- Adiciona **Selecionar todos confirmados** e **Limpar seleção**. A seleção em massa percorre todo o filtro atual em páginas de até 200 itens e inclui confirmados ainda não carregados visualmente.
+- A seleção deixa de ser descartada pela paginação e por atualizações internas do catálogo; aplicar um novo filtro ou trocar de fonte limpa a seleção para evitar ações sobre itens ocultos. Itens cujo match é limpo/ignorado também são removidos da seleção.
+- Lotes grandes de adoção passam a consultar destinos via POST, evitando estouro do limite de URL quando centenas de IDs são selecionados. O GET anterior permanece aceito por compatibilidade.
+- O seletor de adoção identifica Biblioteca/Playlist de Canal/Fonte de Canal e a interface mostra a pasta gerenciada escolhida antes do preflight.
+- Nenhuma mudança em `configVersion`, Download state, YouTube Manager state, YouTube Account state/config ou Adoption transaction state.
+- Aplicação **v3.9.3**; Universal **v1.3.1**; `configVersion` **9**; Scripted Schedules schema **1**; download state **5**; subtitle-manager state **1**; subtitle-translation config/state **1**; YouTube Manager state **1**; YouTube Account state/config **1**; Adoption transaction state **1**.
+
 ## 3.9.2
 
 - A varredura do **Acervo local** passa a rodar como job em segundo plano, evitando a sensação de botão sem resposta enquanto o servidor executa `ffprobe` em centenas de arquivos.

@@ -66,6 +66,7 @@ function publicDestination(destination, managedItem) {
     type: destination.type,
     enabled: destination.enabled !== false,
     mediaProfile: destination.mediaProfile,
+    rootPath: destination.rootPath || '',
     targetPath: managedItem && managedItem.targetPath || '',
     managedStatus: managedItem && managedItem.status || '',
     hasMedia: Boolean(managedItem && managedItem.targetPath && require('fs').existsSync(managedItem.targetPath))
