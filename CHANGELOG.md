@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.9.7
+
+- Padroniza o espaçamento vertical entre cards irmãos em **todas as abas do Gerenciador do YouTube**, usando uma única regra estrutural em vez de uma exceção exclusiva do Acervo local.
+- Corrige especificamente **Minhas playlists** e **Fila de inserção**, que apareciam encostadas.
+- Mantém coerentes **Correspondência**, **Adoção** e **Fila de adoção**, inclusive quando painéis intermediários estão ocultos.
+- Nenhuma mudança funcional, de API, configuração ou schema; todos os estados existentes permanecem preservados.
+- Aplicação **v3.9.7**; Universal **v1.3.1**; `configVersion` **9**; Scripted Schedules schema **1**; download state **5**; subtitle-manager state **1**; subtitle-translation config/state **1**; YouTube Manager state **1**; YouTube Account state/config **1**; Adoption transaction state **1**.
+
 ## 3.9.6
 
 - Corrige a fila de inserção quando `playlistItems.list`/reconstrução do índice também falha por quota: o job passa a **pausar** com itens pendentes preservados em vez de virar `failed`.

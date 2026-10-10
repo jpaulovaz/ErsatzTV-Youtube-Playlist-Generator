@@ -2142,8 +2142,7 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
 .ytm-tab { background: var(--panel); border: 1px solid var(--border); color: var(--muted); }
 .ytm-tab.active { border-color: var(--accent-border); color: var(--text); background: rgba(67,151,255,.10); }
 .ytm-panel { display: none; }
-.ytm-panel.active { display: block; }
-.ytm-panel[data-ytm-panel="catalog"] > .card + .card { margin-top: 1rem; }
+.ytm-panel.active { display: grid; gap: 1rem; }
 .ytm-search-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: end; }
 .ytm-search-options, .ytm-catalog-toolbar, .ytm-source-form, .ytm-playlist-create { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; margin-top: 1rem; align-items: end; }
 .ytm-search-options { grid-template-columns: minmax(220px, 1fr) minmax(260px, 1fr); }

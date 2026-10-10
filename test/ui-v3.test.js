@@ -708,7 +708,8 @@ test('Gerenciador do YouTube expõe pesquisa, acervo local, playlists e OAuth na
   assert.match(manager, /adoption-destinations', \{ method: 'POST'/);
   assert.match(manager, /Biblioteca\/Playlist de Canal gerenciada/);
   assert.match(css, /toast\.loading/);
-  assert.match(css, /catalog.*card \+ \.card/);
+  assert.match(css, /\.ytm-panel\.active \{ display: grid; gap: 1rem; \}/);
+  assert.doesNotMatch(css, /ytm-panel\[data-ytm-panel=\"catalog\"\] > \.card \+ \.card/);
   assert.match(css, /ytm-catalog-flow-help/);
   assert.match(manager, /youtube-manager/);
   assert.match(css, /YouTube Manager v3\.9/);
