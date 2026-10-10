@@ -316,8 +316,10 @@
 
   function playlistMembershipText(entry) {
     const title = entry.playlistTitle || entry.playlistId || 'Playlist';
-    if (entry.status === 'added') return `✓ ${title} · Adicionado`;
-    if (entry.status === 'already-existing') return `✓ ${title} · Já estava na playlist`;
+    if (entry.verifiedPresent === false && ['added', 'already-existing', 'verified-present', 'missing'].includes(entry.status)) return `! ${title} · Não encontrado na playlist na última conferência`;
+    if (entry.status === 'added') return `✓ ${title} · Adicionado${entry.verifiedPresent === true ? ' · verificado' : ''}`;
+    if (entry.status === 'already-existing') return `✓ ${title} · Já estava na playlist${entry.verifiedPresent === true ? ' · verificado' : ''}`;
+    if (entry.status === 'verified-present' || entry.verifiedPresent === true) return `✓ ${title} · Na playlist · verificado`;
     if (entry.status === 'running') return `● ${title} · Adicionando`;
     if (entry.status === 'queued') return `● ${title} · Em fila`;
     if (entry.status === 'failed') return `! ${title} · Falha${entry.lastError ? `: ${entry.lastError}` : ''}`;
@@ -599,24 +601,49 @@
     await refreshQueue();
   }
 
+  function queuePauseLabel(reason) {
+    if (reason === 'quota') return 'quota do YouTube';
+    if (reason === 'auth') return 'reconexão da conta';
+    if (reason === 'playlist') return 'playlist indisponível';
+    if (reason === 'network') return 'falha temporária de rede/API';
+    return reason || '';
+  }
+
   function renderQueue(queue) {
     const job = queue && (queue.activeJob || queue.latestJob);
-    const toggle = $('#ytmQueueToggle'); const cancel = $('#ytmQueueCancel'); const progress = $('#ytmQueueProgress');
+    const toggle = $('#ytmQueueToggle'); const cancel = $('#ytmQueueCancel'); const reconcile = $('#ytmQueueReconcile'); const notice = $('#ytmQueueNotice'); const progress = $('#ytmQueueProgress');
     if (!job) {
       $('#ytmQueueSubtitle').textContent = 'Nenhuma fila ativa.';
       $('#ytmQueueMetrics').innerHTML = '<span><strong>0</strong> concluídos</span><span><strong>0</strong> pendentes</span><span><strong>0</strong> falhas</span>';
-      progress.max = 1; progress.value = 0; toggle.classList.add('hidden'); cancel.classList.add('hidden'); return;
+      progress.max = 1; progress.value = 0; toggle.classList.add('hidden'); cancel.classList.add('hidden'); reconcile.classList.add('hidden'); notice.classList.add('hidden'); notice.textContent = ''; return;
     }
-    const counts = job.counts || {};
-    const total = (job.items || []).length || 1;
+    const counts = queue.aggregateCounts || job.counts || {};
+    const total = queue.aggregateTotal || (job.items || []).length || 1;
     const done = (counts.completed || 0) + (counts.skipped || 0) + (counts.failed || 0) + (counts.cancelled || 0);
-    $('#ytmQueueSubtitle').textContent = `${job.playlistTitle || job.playlistId} · ${job.status}${job.pauseReason ? ` · pausada por ${job.pauseReason}` : ''}`;
+    const pauseLabel = queuePauseLabel(job.pauseReason);
+    const jobsLabel = queue.runnableJobs > 1 ? ` · ${queue.runnableJobs} jobs retomáveis` : '';
+    $('#ytmQueueSubtitle').textContent = `${job.playlistTitle || job.playlistId} · ${job.status}${jobsLabel}${job.pauseReason ? ` · pausada por ${pauseLabel}` : ''}`;
     progress.max = total; progress.value = Math.min(total, done);
     $('#ytmQueueMetrics').innerHTML = `<span><strong>${counts.completed || 0}</strong> concluídos</span><span><strong>${counts.pending || 0}</strong> pendentes</span><span><strong>${counts.skipped || 0}</strong> já existentes</span><span><strong>${counts.failed || 0}</strong> falhas</span>`;
     toggle.classList.toggle('hidden', !['queued', 'running'].includes(job.status));
     cancel.classList.toggle('hidden', !['queued', 'running'].includes(job.status));
+    reconcile.classList.remove('hidden');
+    reconcile.dataset.playlistId = job.playlistId || '';
+    reconcile.dataset.playlistTitle = job.playlistTitle || '';
     toggle.textContent = queue.paused ? 'Retomar' : 'Pausar';
     toggle.dataset.action = queue.paused ? 'resume' : 'pause';
+    if (queue.paused && job.pauseReason) {
+      const messages = {
+        quota: `Quota do YouTube atingida. ${counts.pending || 0} item(ns) permanecem pendentes e serão conferidos novamente antes da próxima inserção. Retome após a renovação da quota.`,
+        auth: `A fila foi pausada porque a conta precisa ser reconectada. ${counts.pending || 0} item(ns) foram preservados.`,
+        playlist: `A fila foi pausada porque a playlist não pôde ser acessada. ${counts.pending || 0} item(ns) foram preservados para revisão.`,
+        network: `A fila foi pausada por uma falha temporária de rede/API. ${counts.pending || 0} item(ns) foram preservados.`
+      };
+      notice.textContent = messages[job.pauseReason] || `Fila pausada: ${pauseLabel}. ${counts.pending || 0} item(ns) pendentes foram preservados.`;
+      notice.classList.remove('hidden');
+    } else {
+      notice.classList.add('hidden'); notice.textContent = '';
+    }
   }
 
   function flowStatusSignature(value) {
@@ -745,6 +772,17 @@
     $('#ytmPlaylistCreate').addEventListener('click', async () => { try { await deps.api('/api/youtube-manager/playlists', { method: 'POST', body: JSON.stringify({ title: $('#ytmPlaylistTitle').value.trim(), description: $('#ytmPlaylistDescription').value.trim(), privacyStatus: $('#ytmPlaylistPrivacy').value }) }); $('#ytmPlaylistTitle').value = ''; $('#ytmPlaylistDescription').value = ''; await refreshStatus(); deps.showToast('Playlist criada.'); } catch (error) { deps.showToast(error.message, true); } });
     $('#ytmPlaylistList').addEventListener('click', (event) => { const button = event.target.closest('[data-ytm-use-playlist]'); if (!button) return; $('#ytmSearchPlaylist').value = button.dataset.ytmUsePlaylist; $('#ytmCatalogPlaylist').value = button.dataset.ytmUsePlaylist; deps.showToast('Playlist definida como destino.'); });
     $('#ytmQueueToggle').addEventListener('click', async () => { try { const action = $('#ytmQueueToggle').dataset.action === 'resume' ? 'resume' : 'pause'; await deps.api(`/api/youtube-manager/playlist-${action}`, { method: 'POST', body: '{}' }); await refreshQueue(); } catch (error) { deps.showToast(error.message, true); } });
+    $('#ytmQueueReconcile').addEventListener('click', async () => {
+      try {
+        const playlistId = $('#ytmQueueReconcile').dataset.playlistId || '';
+        const playlistTitle = $('#ytmQueueReconcile').dataset.playlistTitle || '';
+        const response = await deps.api('/api/youtube-manager/playlist-reconcile', { method: 'POST', body: JSON.stringify({ playlistId, playlistTitle }) });
+        const result = response.result || {};
+        deps.showToast(`Conferência concluída: ${result.playlistItems || 0} item(ns) no YouTube; ${result.pendingSkipped || 0} pendente(s) já existentes foram removidos da fila.`);
+        await refreshQueue();
+        if (activeTab === 'catalog') await refreshCatalog();
+      } catch (error) { deps.showToast(error.message, true); }
+    });
     $('#ytmQueueCancel').addEventListener('click', async () => { const dialog = await deps.showDialog({ eyebrow: 'Fila de playlist', title: 'Cancelar itens pendentes?', message: 'Itens já inseridos no YouTube serão preservados.', confirmLabel: 'Cancelar pendentes', danger: true }); if (!dialog.confirmed) return; await deps.api('/api/youtube-manager/playlist-cancel', { method: 'POST', body: '{}' }); await refreshQueue(); });
 
     $('#ytmAccountSave').addEventListener('click', () => saveAccountConfig().catch((error) => deps.showToast(error.message, true)));

@@ -621,3 +621,126 @@ test('playlist preflight records already-existing membership even when no insert
   assert.equal(state.localItems.local.playlistState.playlists.PLKNOWN.status, 'already-existing');
   assert.equal(state.localItems.local.playlistState.playlists.PLKNOWN.playlistTitle, 'Ja existente');
 });
+
+test('playlist queue pauses instead of failing when quota is exhausted while rebuilding the playlist index', async () => {
+  playlistService.getIndex = async () => { throw Object.assign(new Error('The request cannot be completed because you have exceeded your quota.'), { statusCode: 403, code: 'quotaExceeded' }); };
+  await playlistQueue.init();
+  const job = await playlistQueue.start({
+    playlistId: 'PLQUOTA', playlistTitle: 'Quota',
+    entries: [{ videoId: 'AAAAAAAAAAA' }, { videoId: 'BBBBBBBBBBB' }]
+  });
+  let queue;
+  for (let i = 0; i < 100; i += 1) {
+    queue = await playlistQueue.getStatus();
+    const current = queue.jobs.find((value) => value.id === job.id);
+    if (queue.paused && current && current.pauseReason === 'quota') break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  const current = queue.jobs.find((value) => value.id === job.id);
+  assert.equal(queue.paused, true);
+  assert.equal(current.status, 'queued');
+  assert.equal(current.pauseReason, 'quota');
+  assert.equal(current.counts.pending, 2);
+  assert.equal(current.counts.failed, 0);
+});
+
+test('playlist queue recovers legacy failed quota jobs with pending work without sending anything automatically', async () => {
+  await managerState.save({
+    ...managerState.emptyState(),
+    playlistQueue: {
+      paused: false,
+      activeJobId: null,
+      jobs: {
+        legacy: {
+          id: 'legacy', playlistId: 'PLLEGACY', playlistTitle: 'Legacy', status: 'failed',
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+          lastError: 'The request cannot be completed because you have exceeded your quota.',
+          items: [
+            { id: 'a', videoId: 'AAAAAAAAAAA', status: 'pending', createdAt: new Date().toISOString() },
+            { id: 'b', videoId: 'BBBBBBBBBBB', status: 'failed', lastError: 'quotaExceeded', completedAt: new Date().toISOString(), createdAt: new Date().toISOString() }
+          ]
+        }
+      }
+    }
+  });
+  let indexCalls = 0;
+  playlistService.getIndex = async () => { indexCalls += 1; return { items: [], videoIds: new Set() }; };
+  await playlistQueue.init();
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const queue = await playlistQueue.getStatus();
+  const current = queue.jobs.find((value) => value.id === 'legacy');
+  assert.equal(queue.paused, true);
+  assert.equal(current.status, 'queued');
+  assert.equal(current.pauseReason, 'quota');
+  assert.equal(current.counts.pending, 2);
+  assert.equal(current.counts.failed, 0);
+  assert.equal(queue.runnableJobs, 1);
+  assert.equal(queue.aggregateCounts.pending, 2);
+  assert.equal(indexCalls, 0);
+});
+
+test('resuming a recovered quota job reindexes the live playlist before inserting remaining videos', async () => {
+  const now = new Date().toISOString();
+  await managerState.save({
+    ...managerState.emptyState(),
+    playlistQueue: {
+      paused: false,
+      activeJobId: null,
+      jobs: {
+        legacy: {
+          id: 'legacy', playlistId: 'PLLEGACY', playlistTitle: 'Legacy', status: 'failed', createdAt: now, updatedAt: now,
+          lastError: 'quotaExceeded',
+          items: [
+            { id: 'a', videoId: 'AAAAAAAAAAA', status: 'pending', createdAt: now },
+            { id: 'b', videoId: 'BBBBBBBBBBB', status: 'pending', createdAt: now }
+          ]
+        }
+      }
+    }
+  });
+  const inserted = [];
+  playlistService.getIndex = async () => ({ items: [{ videoId: 'AAAAAAAAAAA' }], videoIds: new Set(['AAAAAAAAAAA']) });
+  playlistService.insertVideo = async (playlistId, videoId) => { inserted.push(videoId); return { playlistItemId: `pi-${videoId}` }; };
+  await playlistQueue.init();
+  let queue = await playlistQueue.getStatus();
+  assert.equal(queue.paused, true);
+  await playlistQueue.resume();
+  for (let i = 0; i < 100; i += 1) {
+    queue = await playlistQueue.getStatus();
+    const current = queue.jobs.find((value) => value.id === 'legacy');
+    if (current && current.status === 'completed') break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  const current = queue.jobs.find((value) => value.id === 'legacy');
+  assert.equal(current.status, 'completed');
+  assert.equal(current.counts.skipped, 1);
+  assert.equal(current.counts.completed, 1);
+  assert.deepEqual(inserted, ['BBBBBBBBBBB']);
+});
+
+test('playlist reconciliation records live presence and flags historical additions that are no longer present', async () => {
+  const now = new Date().toISOString();
+  await managerState.save({
+    ...managerState.emptyState(),
+    localItems: {
+      missing: { id: 'missing', present: true, recoveredVideoId: 'AAAAAAAAAAA', playlistState: { playlists: { PLVERIFY: { playlistId: 'PLVERIFY', playlistTitle: 'Verify', status: 'added', updatedAt: now } } } },
+      present: { id: 'present', present: true, recoveredVideoId: 'BBBBBBBBBBB' }
+    }
+  });
+  playlistService.getIndex = async () => ({ items: [{ videoId: 'BBBBBBBBBBB' }], videoIds: new Set(['BBBBBBBBBBB']) });
+  const result = await playlistQueue.reconcile({ playlistId: 'PLVERIFY', playlistTitle: 'Verify' });
+  assert.equal(result.playlistItems, 1);
+  const state = await managerState.load();
+  assert.equal(state.localItems.missing.playlistState.playlists.PLVERIFY.status, 'missing');
+  assert.equal(state.localItems.missing.playlistState.playlists.PLVERIFY.verifiedPresent, false);
+  assert.equal(state.localItems.present.playlistState.playlists.PLVERIFY.status, 'verified-present');
+  assert.equal(state.localItems.present.playlistState.playlists.PLVERIFY.verifiedPresent, true);
+});
+
+test('playlist queue classifies recoverable account, playlist and network failures as operational pauses', () => {
+  assert.equal(playlistQueue.operationalPauseReason(Object.assign(new Error('quota exceeded'), { statusCode: 403, code: 'quotaExceeded' })), 'quota');
+  assert.equal(playlistQueue.operationalPauseReason(Object.assign(new Error('authorization revoked'), { statusCode: 401, code: 'YOUTUBE_RECONNECT_REQUIRED' })), 'auth');
+  assert.equal(playlistQueue.operationalPauseReason(Object.assign(new Error('playlist not found'), { statusCode: 404, code: 'playlistNotFound' })), 'playlist');
+  assert.equal(playlistQueue.operationalPauseReason(Object.assign(new Error('network timeout'), { statusCode: 504, code: 'YOUTUBE_ACCOUNT_TIMEOUT' })), 'network');
+  assert.equal(playlistQueue.operationalPauseReason(Object.assign(new Error('invalid video'), { statusCode: 400, code: 'videoNotFound' })), '');
+});

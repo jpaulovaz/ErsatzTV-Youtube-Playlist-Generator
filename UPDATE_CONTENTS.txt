@@ -1,11 +1,13 @@
-ErsatzTV YouTube Downloader 3.9.5 - pacote de atualização
-Base: v3.9.4
+ErsatzTV YouTube Downloader 3.9.6 - pacote de atualização
+Base: v3.9.5
 
-Este update incrementa a interface/serviço do Gerenciador do YouTube para:
-- filtros de Biblioteca explícitos: sem Biblioteca, presente em Biblioteca, aguardando mídia, mídia presente e adotado;
-- validação individual de Video ID recuperado diretamente no card, sem abrir Revisar;
-- mesmas travas da validação em lote para conflito, disponibilidade e diferença de duração;
-- exibição individual de Adotar somente quando existe destino sincronizado ainda sem mídia.
+Este update corrige e endurece a fila de inserção em playlists do YouTube para:
+- recuperar jobs antigos que ficaram failed por quota, preservando pendentes e iniciando pausado;
+- tratar quota, reconexão OAuth, playlist indisponível e falhas temporárias de rede/API como pausas operacionais;
+- reler a playlist completa antes de retomar/inserir e classificar IDs já presentes como já existentes;
+- adicionar Conferir com o YouTube para reconciliação autoritativa do histórico local;
+- registrar presença verificada/ausência verificada no estado visual do Acervo local;
+- agregar contadores quando existem vários jobs retomáveis.
 
 Arquivos incluídos:
 CHANGELOG.md
@@ -15,14 +17,16 @@ package.json
 public/index.html
 public/js/youtubeManager.js
 public/login.html
+public/styles.css
 src/routes/youtubeManagerRoutes.js
 src/youtubeManager/localCatalogScanner.js
+src/youtubeManager/playlistQueue.js
 src/youtubeManager/youtubeManagerService.js
 test/ui-v3.test.js
 test/youtubeManager.test.js
 MODIFIED_FILES.txt
 UPDATE_CONTENTS.txt
 
-Aplicacao v3.9.5, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v3.9.6, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 
 O pacote nao inclui config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/, tokens, estados operacionais, arquivos de midia ou sidecars.

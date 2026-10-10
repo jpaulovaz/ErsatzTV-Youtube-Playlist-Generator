@@ -1,10 +1,10 @@
-# Atualização para 3.9.5
+# Atualização para 3.9.6
 
-A versão 3.9.5 é uma atualização incremental sobre a **v3.9.4**, focada em deixar inequívocos os estados de Biblioteca no Acervo local e permitir validar um Video ID recuperado diretamente no item, sem abrir Revisar. Não há migração de configuração nem alteração de schema.
+A versão 3.9.6 é uma atualização incremental sobre a **v3.9.5**, focada na recuperação e reconciliação da fila de inserção em playlists do YouTube. Não há migração de configuração nem alteração de schema.
 
 ## Versionamento
 
-- aplicação: **v3.9.5**;
+- aplicação: **v3.9.6**;
 - Universal Scripted Schedules: **v1.3.1**;
 - `configVersion`: **9**;
 - Download state: **5**;
@@ -17,44 +17,62 @@ A versão 3.9.5 é uma atualização incremental sobre a **v3.9.4**, focada em d
 
 ## Atualização
 
-Pare o serviço, faça backup da instalação e extraia o pacote incremental sobre a instalação v3.9.4:
+Pare o serviço, faça backup da instalação e extraia o pacote incremental sobre a instalação v3.9.5:
 
 ```bash
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.9.4-to-v3.9.5-update.zip -d /caminho/da/aplicacao
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.9.5-to-v3.9.6-update.zip -d /caminho/da/aplicacao
 ```
 
-Depois reinicie o serviço. Não substitua `config/config.json`, `config/auth.json`, `config/youtube-account.json`, `data/` ou arquivos de mídia; eles não fazem parte do pacote de atualização.
+Depois reinicie o serviço. O pacote não substitui `config/config.json`, `config/auth.json`, `config/youtube-account.json`, `data/` nem arquivos de mídia.
 
-## Mudanças visíveis no Acervo local
+## Recuperação de filas antigas paradas por quota
 
-O filtro **Biblioteca** agora oferece:
+Na inicialização, a v3.9.6 procura jobs antigos da fila de playlist que estejam simultaneamente:
 
-- Todos;
-- **Não está em nenhuma Biblioteca**;
-- **Já está em alguma Biblioteca**;
-- **Sincronizado, aguardando mídia**;
-- **Mídia presente**;
-- **Adotado**.
+- com `status = failed`;
+- com erro compatível com quota do YouTube;
+- e ainda possuam itens pendentes ou itens que foram marcados como falha exclusivamente pelo mesmo erro de quota.
 
-Os estados são calculados comparando o Video ID do item com o Download State real. `Mídia presente` representa um destino com arquivo físico já existente e que não está marcado como adoção; `Adotado` representa explicitamente um destino concluído pelo fluxo de adoção. Um mesmo vídeo pode aparecer em mais de um destino e, nesse caso, pode satisfazer mais de um filtro conforme o estado de cada destino.
+Esses jobs são recuperados para `queued`, seus itens recuperáveis voltam para `pending` e a fila global inicia **pausada por quota**. Nenhuma inserção é enviada automaticamente apenas por instalar ou reiniciar a aplicação.
 
-Itens com **ID recuperado** passam a exibir **Validar ID** diretamente no card. Essa ação valida o ID encontrado em filename/sidecar/metadata embedded e, quando aprovado, transforma o item em **Confirmado** sem abrir o painel Revisar. As regras são as mesmas da validação em lote:
+Depois da atualização, abra **YouTube → Gerenciador do YouTube → Minhas playlists**. A fila recuperada deve aparecer com os contadores preservados. Quando a quota já tiver sido renovada, clique em **Retomar**.
 
-- conflito do mesmo Video ID entre arquivos: bloqueado;
-- vídeo indisponível: bloqueado;
-- diferença de duração acima de 45 s: bloqueada e encaminhada para Revisar;
-- diferença acima de 10 s e até 45 s: confirmada com aviso;
-- demais casos válidos: confirmados diretamente.
+Antes de qualquer nova inserção, o worker relê a playlist completa com `playlistItems.list`. Se um Video ID pendente já estiver presente, ele é classificado como **já existente** e não é inserido novamente. Isso protege inclusive playlists antigas que já continham parte do mesmo acervo.
 
-O botão individual **Adotar** aparece somente quando o item está Confirmado e existe ao menos um destino gerenciado sincronizado que ainda aguarda mídia. Se a mídia já está presente, ou se o Video ID ainda não pertence a nenhum destino gerenciado, não há adoção útil a executar naquele momento.
+## Pausas operacionais
+
+A fila não transforma mais em falha terminal um problema recuperável ocorrido durante a reconstrução do índice ou durante uma inserção. São pausas operacionais:
+
+- quota esgotada;
+- conta/autorização que exige reconexão;
+- playlist removida ou indisponível;
+- timeout/falha temporária de rede ou API.
+
+Os itens pendentes permanecem preservados. Um erro realmente específico e permanente de um vídeo continua falhando somente aquele item, sem encerrar o lote inteiro.
+
+## Conferir com o YouTube
+
+A área **Minhas playlists → Fila de inserção** passa a mostrar **Conferir com o YouTube**. Essa ação:
+
+1. lê a playlist real e completa;
+2. compara os Video IDs com os jobs locais da mesma playlist;
+3. transforma pendentes já presentes em **já existentes**;
+4. atualiza no Acervo local a verificação de presença por playlist;
+5. sinaliza históricos que diziam Adicionado/Já existente, mas que não são mais encontrados na playlist.
+
+Os filtros de Playlist do Acervo local passam a respeitar uma conferência autoritativa quando ela existe.
+
+## Contadores com múltiplos jobs
+
+Quando mais de um job da mesma operação permanece retomável, a interface soma os contadores dos jobs `queued/running`. Assim, um histórico dividido em dois jobs não aparece artificialmente como apenas o job mais recente.
 
 ## Validação após atualizar
 
-1. Abra **YouTube → Gerenciador do YouTube → Acervo local**.
-2. Escolha uma fonte já varrida.
-3. Teste **Biblioteca → Não está em nenhuma Biblioteca** e confirme que só aparecem IDs sem destino gerenciado.
-4. Teste **Sincronizado, aguardando mídia**, **Mídia presente** e **Adotado** conforme os estados existentes.
-5. Em um item **ID recuperado**, clique em **Validar ID**; quando aprovado, ele deve mudar para **Confirmado** sem abrir Revisar.
-6. Se o item confirmado possuir destino sincronizado sem mídia, o botão **Adotar** deve aparecer.
+1. Reinicie a aplicação.
+2. Abra **YouTube → Gerenciador do YouTube → Minhas playlists**.
+3. Se houver fila recuperada por quota, confirme que aparece **Pausada por quota**, com os pendentes preservados.
+4. Opcionalmente clique em **Conferir com o YouTube** para reconciliar a playlist antes da retomada.
+5. Quando a quota estiver disponível, clique em **Retomar**.
+6. Confirme que vídeos já existentes são contabilizados em **já existentes** e somente os realmente ausentes são inseridos.
 
-Não é necessário recriar OAuth, revarrer o acervo ou refazer matches já confirmados.
+Não é necessário recriar OAuth, revarrer o acervo, refazer matches confirmados ou editar arquivos de estado manualmente.

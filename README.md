@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.9.5
+# ErsatzTV YouTube Downloader 3.9.6
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.9.5 torna o fluxo do **Acervo local** mais direto: **Confirmado** continua representando somente a identidade do arquivo, enquanto YouTube e Biblioteca permanecem como estados independentes. O filtro de Biblioteca agora separa ausência total, presença gerenciada, item aguardando mídia, mídia presente e item adotado. IDs exatos recuperados de filename/sidecar/metadata embedded podem ser validados individualmente pelo botão **Validar ID**, sem abrir Revisar, mantendo as mesmas travas de conflito e duração da validação em lote. Universal continua em v1.3.1, `configVersion` em 9 e todos os schemas/estados permanecem nas mesmas versões.
+A versão 3.9.6 corrige e endurece a **fila de inserção em playlists do YouTube**: jobs históricos que ficaram marcados como falha por esgotamento de quota são recuperados sem perda, erros operacionais passam a pausar em vez de encerrar o job, a retomada sempre reconstrói o índice real da playlist antes de inserir e a interface permite **Conferir com o YouTube** para reconciliar o histórico local com o conteúdo atual da playlist. Universal continua em v1.3.1, `configVersion` em 9 e todos os schemas/estados permanecem nas mesmas versões.
 
 ## Arquitetura
 
@@ -125,11 +125,11 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A v3.9.5 atualiza diretamente uma instalação **v3.9.4** e melhora filtros/validação direta do Acervo local, sem migrar configuração ou estado. `configVersion` continua 9, o Universal continua 1.3.1 e todos os schemas/estados permanecem nas versões atuais. Consulte [UPGRADE.md](UPGRADE.md).
+A v3.9.6 atualiza diretamente uma instalação **v3.9.5** e corrige recuperação, pausa operacional e reconciliação da fila de inserção em playlists do YouTube, sem migrar configuração ou schema. `configVersion` continua 9, o Universal continua 1.3.1 e todos os schemas/estados permanecem nas versões atuais. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Gerenciador do YouTube
 
-A área **YouTube -> Gerenciador do YouTube** é independente das Bibliotecas, Canais e Scripted Schedules. O scanner do **Acervo local continua somente leitura**; na v3.9.5, alterações de mídia só acontecem depois de uma ação explícita de **Adotar mídia existente**, preflight aprovado e confirmação do usuário.
+A área **YouTube -> Gerenciador do YouTube** é independente das Bibliotecas, Canais e Scripted Schedules. O scanner do **Acervo local continua somente leitura**; na v3.9.6, alterações de mídia só acontecem depois de uma ação explícita de **Adotar mídia existente**, preflight aprovado e confirmação do usuário.
 
 A interface possui quatro abas:
 
@@ -169,7 +169,7 @@ As duas ações principais têm responsabilidades diferentes:
 
 O fluxo típico para migrar um vídeo ainda ausente da Biblioteca é: **Adicionar à playlist YouTube → sincronizar a Biblioteca/Playlist de Canal correspondente → Adotar na biblioteca**. Se a intenção for permitir o download normal, basta parar depois da sincronização e deixar o Download Manager processar o item.
 
-A fila de playlist reconsulta o conteúdo atual da playlist antes de inserir: IDs já existentes são ignorados, itens concluídos não são revertidos ao cancelar e uma interrupção/restart não perde o job. Erros permanentes de um item não interrompem os demais; erro de quota pausa a fila para retomada posterior.
+A fila de playlist reconsulta **toda a playlist real no YouTube antes de inserir ou retomar**: IDs já existentes são classificados como já existentes e não consomem novo `playlistItems.insert`. Erros de quota, reconexão/autorização, playlist indisponível e falha temporária de rede/API são tratados como pausas operacionais, mantendo os itens pendentes intactos; erros permanentes específicos de um vídeo continuam restritos àquele item. A v3.9.6 também recupera automaticamente jobs de versões anteriores que ficaram `failed` por quota, mas inicia a fila **pausada**, exigindo ação explícita em **Retomar**. Quando há mais de um job retomável, os contadores da tela são agregados. O botão **Conferir com o YouTube** executa uma leitura autoritativa da playlist, reconcilia os pendentes já presentes e marca no catálogo quando um histórico de adição não é mais encontrado na playlist.
 
 A **adoção de mídia existente sem redownload** exige match confirmado e um item já ativo no destino gerenciado. O preflight revalida YouTube, duração, compatibilidade da mídia e colisões. Diferenças de duração acima de 10 segundos geram aviso e acima de 45 segundos bloqueiam. **Hardlink** é preferencial no mesmo filesystem, **Copy** preserva a origem e **Move** exige confirmação reforçada e remove somente o vídeo de origem no commit final. Sidecars antigos (`.nfo`, imagens e `.srt`) permanecem intactos; o destino recebe NFO/artwork/metadata gerados pelos serviços atuais. Cada operação usa manifesto persistente e rollback, e legendas/traduções continuam sob comando do usuário.
 
@@ -278,13 +278,13 @@ Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando
 
 ## Scripted Schedules
 
-A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do **Universal v1.3.1**, único motor suportado pela v3.9.5.
+A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do **Universal v1.3.1**, único motor suportado pela v3.9.6.
 
 O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas. O valor **Nenhum** nos seletores de Presentation é interno e sempre vazio; ele não aparece como perfil editável.
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.9.5:
+Módulos disponíveis na v3.9.6:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -549,7 +549,7 @@ Cada **Biblioteca** e cada **Playlist de Canal** possui a configuração **Arqui
 - **Marcar como órfão**: mantém o arquivo no lugar. **Limpar órfãos** só aparece quando esta política está selecionada e existem órfãos.
 - **Mover para quarentena recuperável**: retira o pacote da biblioteca ativa e o preserva fora da raiz escaneada. A retenção pode ser **Nunca**, 30, 90 ou 180 dias.
 
-Cada destino atual precisa ter uma política de órfãos válida. A v3.9.5 não executa migração automática de destinos antigos; configurações já atualizadas para `configVersion` 9 continuam preservadas.
+Cada destino atual precisa ter uma política de órfãos válida. A v3.9.6 não executa migração automática de destinos antigos; configurações já atualizadas para `configVersion` 9 continuam preservadas.
 
 A quarentena fica em uma pasta irmã da base de mídia, preferencialmente no mesmo filesystem, para que movimentos sejam feitos por `rename` quando possível. Em filesystems diferentes o aplicativo usa cópia, validação e só então remove o original. Nunca sobrescreve silenciosamente um arquivo existente durante restauração. MP4, NFO, thumbnail/poster e SRTs são tratados como um pacote; em Clipes musicais, assets compartilhados do Show só são retirados quando não resta outro episódio ativo/mantido.
 

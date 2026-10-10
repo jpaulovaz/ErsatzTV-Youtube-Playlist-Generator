@@ -23,9 +23,11 @@ function publicPlaylistStatus(item) {
 
 function syncLocalPlaylistState(state, job, item) {
   if (!job || !item || !item.localItemId) return null;
-  return stateStore.setLocalPlaylistState(state, item.localItemId, job.playlistId, {
+  const status = publicPlaylistStatus(item);
+  const updatedAt = item.completedAt || item.startedAt || job.updatedAt || nowIso();
+  const patch = {
     playlistTitle: job.playlistTitle || job.playlistId,
-    status: publicPlaylistStatus(item),
+    status,
     jobId: job.id,
     playlistItemId: item.playlistItemId || '',
     reason: item.reason || '',
@@ -33,8 +35,13 @@ function syncLocalPlaylistState(state, job, item) {
     createdAt: item.createdAt || job.createdAt || null,
     startedAt: item.startedAt || null,
     completedAt: item.completedAt || null,
-    updatedAt: item.completedAt || item.startedAt || job.updatedAt || nowIso()
-  });
+    updatedAt
+  };
+  if (['added', 'already-existing'].includes(status)) {
+    patch.verifiedPresent = true;
+    patch.checkedAt = updatedAt;
+  }
+  return stateStore.setLocalPlaylistState(state, item.localItemId, job.playlistId, patch);
 }
 
 function summarize(job) {
@@ -45,11 +52,53 @@ function summarize(job) {
   return counts;
 }
 
+function errorText(error) {
+  if (!error) return '';
+  return `${error.reason || ''} ${error.code || ''} ${error.message || error || ''}`.trim();
+}
+
+function quotaError(error) {
+  const status = Number(error && (error.status || error.statusCode)) || 0;
+  return /quota|daily/i.test(errorText(error)) && (!status || status === 403 || status === 429);
+}
+
+function authError(error) {
+  const status = Number(error && (error.status || error.statusCode)) || 0;
+  return status === 401 || /YOUTUBE_RECONNECT_REQUIRED|YOUTUBE_ACCOUNT_NOT_CONNECTED|insufficientPermissions|auth/i.test(errorText(error));
+}
+
+function playlistUnavailableError(error) {
+  const status = Number(error && (error.status || error.statusCode)) || 0;
+  return status === 404 || /playlistNotFound|playlist[^\n]*(not found|removed|deleted)/i.test(errorText(error));
+}
+
+function transientError(error) {
+  const status = Number(error && (error.status || error.statusCode)) || 0;
+  return status >= 500 || /YOUTUBE_ACCOUNT_(NETWORK|TIMEOUT)|timeout|network/i.test(errorText(error));
+}
+
+function operationalPauseReason(error) {
+  if (quotaError(error)) return 'quota';
+  if (authError(error)) return 'auth';
+  if (playlistUnavailableError(error)) return 'playlist';
+  if (transientError(error)) return 'network';
+  return '';
+}
+
+function validVideoId(value) { return /^[A-Za-z0-9_-]{11}$/.test(String(value || '').trim()); }
+
+function itemIdentityVideoId(state, item) {
+  const match = state.matches && state.matches[item.id];
+  if (match && match.status === 'confirmed' && validVideoId(match.videoId)) return match.videoId;
+  return validVideoId(item.recoveredVideoId) ? item.recoveredVideoId : '';
+}
+
 async function init() {
   if (initialized) return;
   initialized = true;
   stopped = false;
   await stateStore.mutate((state) => {
+    let recoveredQuotaJob = false;
     for (const job of Object.values(state.playlistQueue.jobs || {})) {
       if (job.cancelRequested) {
         for (const item of job.items || []) {
@@ -61,11 +110,45 @@ async function init() {
         job.counts = summarize(job);
         continue;
       }
+
+      const legacyQuotaFailure = job.status === 'failed' && quotaError({ message: job.lastError || '' });
+      if (legacyQuotaFailure) {
+        let recoverable = 0;
+        for (const item of job.items || []) {
+          if (item.status === 'running' || item.status === 'pending' || (item.status === 'failed' && quotaError({ message: item.lastError || job.lastError || '' }))) {
+            item.status = 'pending';
+            item.completedAt = null;
+            item.reason = '';
+            recoverable += 1;
+          }
+          syncLocalPlaylistState(state, job, item);
+        }
+        if (recoverable) {
+          job.status = 'queued';
+          job.pauseReason = 'quota';
+          job.completedAt = null;
+          job.recoveredAt = nowIso();
+          job.updatedAt = nowIso();
+          job.counts = summarize(job);
+          recoveredQuotaJob = true;
+          stateStore.appendAudit(state, { action: 'playlist-job-recovered', jobId: job.id, playlistId: job.playlistId, reason: 'quota', pending: job.counts.pending });
+          continue;
+        }
+      }
+
       for (const item of job.items || []) {
         if (item.status === 'running') item.status = 'pending';
         syncLocalPlaylistState(state, job, item);
       }
       if (job.status === 'running') job.status = 'queued';
+      job.counts = summarize(job);
+    }
+    if (recoveredQuotaJob) {
+      state.playlistQueue.paused = true;
+      state.playlistQueue.activeJobId = null;
+    } else if (state.playlistQueue.activeJobId) {
+      const active = state.playlistQueue.jobs[state.playlistQueue.activeJobId];
+      if (!active || !['queued', 'running'].includes(active.status)) state.playlistQueue.activeJobId = null;
     }
   });
   scheduleWorker(50);
@@ -105,8 +188,48 @@ async function setItem(jobIdValue, itemId, patch, jobPatch = {}) {
   });
 }
 
-function quotaError(error) {
-  return error && (error.status === 403 || error.statusCode === 403) && /quota|daily/i.test(`${error.reason || ''} ${error.code || ''} ${error.message || ''}`);
+async function pauseOperational(jobIdValue, error, reason, itemId = '') {
+  await stateStore.mutate((state) => {
+    state.playlistQueue.paused = true;
+    state.playlistQueue.activeJobId = null;
+    const job = state.playlistQueue.jobs[jobIdValue];
+    if (!job) return;
+    const item = itemId ? (job.items || []).find((entry) => entry.id === itemId) : null;
+    if (item && item.status === 'running') {
+      item.status = 'pending';
+      item.lastError = error.message;
+      item.completedAt = null;
+      syncLocalPlaylistState(state, job, item);
+    }
+    job.status = 'queued';
+    job.pauseReason = reason;
+    job.lastError = error.message;
+    job.updatedAt = nowIso();
+    job.counts = summarize(job);
+    stateStore.appendAudit(state, { action: 'playlist-job-paused', jobId: job.id, playlistId: job.playlistId, reason, error: error.message });
+  });
+}
+
+async function reconcileJobPending(jobIdValue, index, { checkedAt = nowIso() } = {}) {
+  return stateStore.mutate((state) => {
+    const job = state.playlistQueue.jobs[jobIdValue];
+    if (!job) return { skipped: 0 };
+    let skipped = 0;
+    for (const item of job.items || []) {
+      if (!['pending', 'running'].includes(item.status) || !index.videoIds.has(item.videoId)) continue;
+      item.status = 'skipped';
+      item.reason = 'already-in-playlist';
+      item.lastError = '';
+      item.completedAt = checkedAt;
+      skipped += 1;
+      syncLocalPlaylistState(state, job, item);
+    }
+    job.lastReconcile = { checkedAt, playlistItems: index.items.length, skippedPending: skipped };
+    job.pauseReason = null;
+    job.updatedAt = checkedAt;
+    job.counts = summarize(job);
+    return { skipped };
+  });
 }
 
 async function processJob(job) {
@@ -117,8 +240,15 @@ async function processJob(job) {
   });
 
   let index;
-  try { index = await playlistService.getIndex(job.playlistId); }
-  catch (error) {
+  try {
+    index = await playlistService.getIndex(job.playlistId);
+    await reconcileJobPending(job.id, index);
+  } catch (error) {
+    const reason = operationalPauseReason(error);
+    if (reason) {
+      await pauseOperational(job.id, error, reason);
+      return;
+    }
     await stateStore.mutate((state) => {
       const live = state.playlistQueue.jobs[job.id];
       if (live) {
@@ -165,18 +295,9 @@ async function processJob(job) {
       index.videoIds.add(next.videoId);
       await setItem(job.id, next.id, { status: 'completed', playlistItemId: inserted.playlistItemId, completedAt: nowIso() });
     } catch (error) {
-      if (quotaError(error)) {
-        await stateStore.mutate((current) => {
-          current.playlistQueue.paused = true;
-          const liveJob = current.playlistQueue.jobs[job.id];
-          const liveItem = liveJob && liveJob.items.find((item) => item.id === next.id);
-          if (liveItem) { liveItem.status = 'pending'; liveItem.lastError = error.message; }
-          if (liveJob) {
-            liveJob.status = 'queued'; liveJob.pauseReason = 'quota'; liveJob.lastError = error.message; liveJob.updatedAt = nowIso(); liveJob.counts = summarize(liveJob);
-            if (liveItem) syncLocalPlaylistState(current, liveJob, liveItem);
-          }
-          current.playlistQueue.activeJobId = null;
-        });
+      const reason = operationalPauseReason(error);
+      if (reason) {
+        await pauseOperational(job.id, error, reason, next.id);
         return;
       }
       await setItem(job.id, next.id, { status: 'failed', lastError: error.message, completedAt: nowIso() });
@@ -270,15 +391,99 @@ async function cancelPending(jobIdValue = '') {
   return getStatus();
 }
 
+async function reconcile({ jobId: jobIdValue = '', playlistId = '', playlistTitle = '' } = {}) {
+  const initial = await stateStore.load();
+  const jobs = Object.values(initial.playlistQueue.jobs || {}).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  const targetJob = jobIdValue ? initial.playlistQueue.jobs[jobIdValue] : jobs.find((job) => !playlistId || job.playlistId === playlistId);
+  const pid = String(playlistId || targetJob && targetJob.playlistId || '').trim();
+  const title = String(playlistTitle || targetJob && targetJob.playlistTitle || pid).trim();
+  if (!pid) throw Object.assign(new Error('Selecione uma playlist para conferir com o YouTube.'), { statusCode: 400 });
+
+  let index;
+  try { index = await playlistService.getIndex(pid); }
+  catch (error) {
+    const reason = operationalPauseReason(error);
+    if (reason && targetJob) await pauseOperational(targetJob.id, error, reason);
+    throw error;
+  }
+
+  const checkedAt = nowIso();
+  return stateStore.mutate((state) => {
+    let catalogPresent = 0;
+    let catalogMissing = 0;
+    let pendingSkipped = 0;
+    const matchingJobs = Object.values(state.playlistQueue.jobs || {}).filter((job) => job.playlistId === pid && (!jobIdValue || job.id === jobIdValue));
+
+    for (const job of matchingJobs) {
+      let jobSkipped = 0;
+      for (const item of job.items || []) {
+        if (['pending', 'running'].includes(item.status) && index.videoIds.has(item.videoId)) {
+          item.status = 'skipped';
+          item.reason = 'already-in-playlist';
+          item.lastError = '';
+          item.completedAt = checkedAt;
+          pendingSkipped += 1;
+          jobSkipped += 1;
+          syncLocalPlaylistState(state, job, item);
+        }
+      }
+      job.lastReconcile = { checkedAt, playlistItems: index.items.length, skippedPending: jobSkipped };
+      job.updatedAt = checkedAt;
+      job.counts = summarize(job);
+      if (!job.counts.pending && !job.counts.running && ['queued', 'running'].includes(job.status)) {
+        job.status = job.cancelRequested ? 'cancelled' : 'completed';
+        job.completedAt = checkedAt;
+      }
+    }
+
+    for (const item of Object.values(state.localItems || {})) {
+      const videoId = itemIdentityVideoId(state, item);
+      const previous = item.playlistState && item.playlistState.playlists && item.playlistState.playlists[pid];
+      if (!videoId) continue;
+      const present = index.videoIds.has(videoId);
+      if (!present && !previous) continue;
+      let status = previous && previous.status || '';
+      if (present) {
+        catalogPresent += 1;
+        if (!status || status === 'missing' || ['failed', 'cancelled'].includes(status)) status = 'verified-present';
+      } else {
+        catalogMissing += 1;
+        if (['added', 'already-existing', 'verified-present'].includes(status)) status = 'missing';
+      }
+      stateStore.setLocalPlaylistState(state, item.id, pid, {
+        playlistTitle: title || previous && previous.playlistTitle || pid,
+        status: status || (present ? 'verified-present' : previous && previous.status || ''),
+        verifiedPresent: present,
+        checkedAt,
+        updatedAt: checkedAt
+      });
+    }
+
+    stateStore.appendAudit(state, { action: 'playlist-reconcile', playlistId: pid, jobId: jobIdValue || null, playlistItems: index.items.length, catalogPresent, catalogMissing, pendingSkipped });
+    return { playlistId: pid, playlistTitle: title, checkedAt, playlistItems: index.items.length, catalogPresent, catalogMissing, pendingSkipped };
+  });
+}
+
 async function getStatus() {
   const state = await stateStore.load();
   const jobs = Object.values(state.playlistQueue.jobs || {}).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  const active = state.playlistQueue.activeJobId && state.playlistQueue.jobs[state.playlistQueue.activeJobId] || jobs.find((job) => ['running', 'queued'].includes(job.status)) || null;
+  const runnable = jobs.filter((job) => ['running', 'queued'].includes(job.status)).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  const active = state.playlistQueue.activeJobId && state.playlistQueue.jobs[state.playlistQueue.activeJobId] || runnable[0] || null;
+  const aggregateCounts = { pending: 0, running: 0, completed: 0, skipped: 0, failed: 0, cancelled: 0 };
+  let aggregateTotal = 0;
+  for (const job of runnable) {
+    const counts = summarize(job);
+    aggregateTotal += (job.items || []).length;
+    for (const key of Object.keys(aggregateCounts)) aggregateCounts[key] += counts[key] || 0;
+  }
   return {
     paused: Boolean(state.playlistQueue.paused),
     activeJobId: state.playlistQueue.activeJobId,
     activeJob: active ? { ...active, counts: summarize(active) } : null,
     latestJob: jobs[0] ? { ...jobs[0], counts: summarize(jobs[0]) } : null,
+    runnableJobs: runnable.length,
+    aggregateCounts: runnable.length ? aggregateCounts : null,
+    aggregateTotal: runnable.length ? aggregateTotal : 0,
     jobs: jobs.slice(0, 20).map((job) => ({ ...job, counts: summarize(job) }))
   };
 }
@@ -292,4 +497,4 @@ async function stop() {
   initialized = false;
 }
 
-module.exports = { init, start, pause, resume, cancelPending, getStatus, stop, summarize, quotaError, publicPlaylistStatus };
+module.exports = { init, start, pause, resume, cancelPending, reconcile, getStatus, stop, summarize, quotaError, operationalPauseReason, publicPlaylistStatus };

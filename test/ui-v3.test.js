@@ -682,6 +682,8 @@ test('Gerenciador do YouTube expõe pesquisa, acervo local, playlists e OAuth na
   assert.match(manager, /\/api\/youtube-manager\/matches\/confirm-recovered-item/);
   assert.match(manager, /data-ytm-validate-id/);
   assert.match(manager, /Validar ID/);
+  assert.match(html, /Conferir com o YouTube/);
+  assert.match(manager, /playlist-reconcile/);
   assert.match(html, /id="ytmConfirmRecovered"/);
   assert.match(html, /id="ytmCatalogSelectAll"/);
   assert.match(html, /Selecionar todos confirmados/);

@@ -451,6 +451,7 @@ async function planPlaylist({ playlistId, playlistTitle = '', itemIds = [], vide
         stateStore.setLocalPlaylistState(state, entry.localItemId, playlistId, {
           playlistTitle: playlistTitle || playlistId,
           status: 'already-existing',
+          verifiedPresent: true,
           checkedAt,
           updatedAt: checkedAt
         });

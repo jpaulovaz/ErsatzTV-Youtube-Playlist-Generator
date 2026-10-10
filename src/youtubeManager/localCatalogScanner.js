@@ -238,8 +238,8 @@ function matchesFilter(item, match, filters) {
 
   const playlistStatus = String(filters.playlistStatus || 'all');
   const playlistMemberships = Array.isArray(item.playlistMemberships) ? item.playlistMemberships : [];
-  const added = playlistMemberships.some((entry) => ['added', 'already-existing'].includes(entry.status));
-  const failed = playlistMemberships.some((entry) => entry.status === 'failed');
+  const added = playlistMemberships.some((entry) => entry.verifiedPresent === true || (entry.verifiedPresent !== false && ['added', 'already-existing', 'verified-present'].includes(entry.status)));
+  const failed = playlistMemberships.some((entry) => ['failed', 'missing'].includes(entry.status));
   if (playlistStatus === 'added' && !added) return false;
   if (playlistStatus === 'not-added' && added) return false;
   if (playlistStatus === 'error' && !failed) return false;

@@ -91,6 +91,9 @@ async function handleYouTubeManagerRoutes(req, res, url, deps) {
   if (req.method === 'POST' && action === 'playlist-resume') {
     deps.sendJson(res, 200, { ok: true, result: await playlistQueue.resume() }); return true;
   }
+  if (req.method === 'POST' && action === 'playlist-reconcile') {
+    deps.sendJson(res, 200, { ok: true, result: await playlistQueue.reconcile(await deps.readJson(req)) }); return true;
+  }
   if (req.method === 'POST' && action === 'playlist-cancel') {
     const payload = await deps.readJson(req); deps.sendJson(res, 200, { ok: true, result: await playlistQueue.cancelPending(payload.jobId || '') }); return true;
   }

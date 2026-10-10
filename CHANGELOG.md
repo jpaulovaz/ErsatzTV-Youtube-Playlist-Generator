@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.9.6
+
+- Corrige a fila de inserção quando `playlistItems.list`/reconstrução do índice também falha por quota: o job passa a **pausar** com itens pendentes preservados em vez de virar `failed`.
+- Recupera automaticamente, no restart, jobs históricos marcados como `failed` por quota que ainda possuem trabalho recuperável; a recuperação inicia globalmente **pausada**, sem enviar inserções automaticamente.
+- Antes de retomar/inserir, a fila relê a playlist completa e converte pendentes já presentes em **já existentes**, evitando duplicar vídeos que a playlist já continha anteriormente.
+- Classifica quota, reconexão/autorização, playlist indisponível e falha temporária de rede/API como pausas operacionais; erros permanentes específicos continuam restritos ao item.
+- Adiciona **Conferir com o YouTube** na Fila de inserção para reconciliar estado local com a playlist real, atualizar presença no Acervo local e sinalizar históricos que não são mais encontrados.
+- A presença autoritativa da playlist passa a ser registrada com `checkedAt/verifiedPresent`; filtros de Playlist respeitam a verificação quando disponível.
+- Quando existem vários jobs retomáveis, a UI agrega os contadores para não ocultar pendentes em jobs anteriores.
+- Mantém os schemas existentes: YouTube Manager state v1, YouTube Account config/state v1, Download state v5 e Adoption transaction state v1.
+- Aplicação **v3.9.6**; Universal **v1.3.1**; `configVersion` **9**; Scripted Schedules schema **1**; download state **5**; subtitle-manager state **1**; subtitle-translation config/state **1**; YouTube Manager state **1**; YouTube Account state/config **1**; Adoption transaction state **1**.
+
 ## 3.9.5
 
 - Expande o filtro **Biblioteca** do Acervo local para distinguir: **Não está em nenhuma Biblioteca**, **Já está em alguma Biblioteca**, **Sincronizado, aguardando mídia**, **Mídia presente** e **Adotado**.
