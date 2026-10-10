@@ -1,10 +1,11 @@
-ErsatzTV YouTube Downloader 3.9.7 - pacote de atualização
-Base: v3.9.6
+ErsatzTV YouTube Downloader 3.9.8 - pacote de atualização
+Base: v3.9.7
 
-Este update padroniza o espaçamento visual do Gerenciador do YouTube para:
-- corrigir o card Fila de inserção encostado em Minhas playlists;
-- manter Correspondência, Adoção e Fila de adoção com o mesmo espaçamento;
-- aplicar uma regra estrutural única a qualquer sequência de cards visíveis em todas as abas do módulo.
+Este update corrige a atualização da visão filtrada em Gerenciar conteúdo após mudanças de legendas para:
+- remover imediatamente de Sem legendas um item que recebeu uma legenda via YouTube ou LRCLIB;
+- atualizar os contadores da visão sem sair e voltar da página;
+- manter a mesma coerência após restaurar ou excluir uma legenda;
+- preservar a visão/filtro atual e atualizar/fechar os detalhes conforme o item continue ou não no resultado.
 
 Arquivos incluídos:
 CHANGELOG.md
@@ -13,11 +14,12 @@ UPGRADE.md
 package.json
 public/index.html
 public/login.html
-public/styles.css
+public/app.js
+public/js/subtitleManager.js
 test/ui-v3.test.js
 MODIFIED_FILES.txt
 UPDATE_CONTENTS.txt
 
-Aplicacao v3.9.7, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v3.9.8, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 
 O pacote nao inclui config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/, tokens, estados operacionais, arquivos de midia ou sidecars.

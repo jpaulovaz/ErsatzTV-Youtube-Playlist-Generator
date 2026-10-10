@@ -1054,11 +1054,12 @@ async function runLibraryContentAction(action, itemIds) {
 
 async function loadLibraryContent(options = {}) {
   const append = Boolean(options.append);
+  const preserveDetails = Boolean(options.preserveDetails);
   if (!libraryContentState.active || !libraryContentState.endpointBase) return;
   const requestId = ++libraryContentRequestId;
   const browser = $('#libraryContentBrowser');
   browser.classList.add('library-content-loading');
-  if (!append) closeLibraryContentDetails();
+  if (!append && !preserveDetails) closeLibraryContentDetails();
 
   const params = new URLSearchParams();
   params.set('limit', String(LIBRARY_CONTENT_PAGE_SIZE));
@@ -1096,6 +1097,15 @@ async function loadLibraryContent(options = {}) {
   } finally {
     if (requestId === libraryContentRequestId) browser.classList.remove('library-content-loading');
   }
+}
+
+
+async function refreshLibraryContentAfterSubtitleMutation({ itemId } = {}) {
+  if (!libraryContentState.active || !libraryContentState.endpointBase || !itemId) return;
+  await loadLibraryContent({ preserveDetails: true });
+  const refreshed = libraryContentState.itemMap.get(itemId);
+  if (refreshed) showLibraryContentDetails(refreshed);
+  else closeLibraryContentDetails();
 }
 
 async function openDestinationContent({ name, endpointBase, view = 'content', returnView = 'libraries' }) {
@@ -2035,7 +2045,7 @@ async function bootstrap() {
   setActiveView(sessionStorage.getItem('ersatztv_active_view') || 'overview', { persist: false });
   updateSettingsAccordionToggle();
   if (window.SubtitleManagerUI) {
-    window.SubtitleManagerUI.configure({ api, showToast, showDialog: showAppDialog, escapeHtml });
+    window.SubtitleManagerUI.configure({ api, showToast, showDialog: showAppDialog, escapeHtml, onContentChanged: refreshLibraryContentAfterSubtitleMutation });
   }
   if (window.SubtitleTranslationUI) {
     window.SubtitleTranslationUI.configure({

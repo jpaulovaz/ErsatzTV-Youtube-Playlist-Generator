@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.9.8
+
+- Corrige **Gerenciar conteúdo** para reconciliar imediatamente a lista atual depois que uma legenda é aplicada com sucesso pelo Gerenciador de Legendas, sem exigir sair e voltar da página.
+- A correção vale igualmente para os provedores **YouTube** e **LRCLIB**, pois ambos convergem no mesmo fluxo seguro de `subtitle-apply`.
+- Mantém o filtro/visão atual: em **Sem legendas**, o item sai da lista assim que o Download State registra a nova faixa; os contadores do seletor também são recalculados.
+- Mantém a mesma coerência ao **restaurar** ou **excluir** uma legenda: a visão `Com legendas`/`Sem legendas` passa a refletir o estado real imediatamente.
+- Preserva o painel de detalhes quando o item continua pertencendo ao filtro; se a mutação fizer o item deixar a visão atual, detalhes e Gerenciador de Legendas são fechados de forma limpa.
+- Nenhuma mudança de API, configuração ou schema; todos os estados existentes permanecem preservados.
+- Aplicação **v3.9.8**; Universal **v1.3.1**; `configVersion` **9**; Scripted Schedules schema **1**; download state **5**; subtitle-manager state **1**; subtitle-translation config/state **1**; YouTube Manager state **1**; YouTube Account state/config **1**; Adoption transaction state **1**.
+
 ## 3.9.7
 
 - Padroniza o espaçamento vertical entre cards irmãos em **todas as abas do Gerenciador do YouTube**, usando uma única regra estrutural em vez de uma exceção exclusiva do Acervo local.

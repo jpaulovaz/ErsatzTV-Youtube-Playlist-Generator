@@ -20,7 +20,8 @@
     searchResults: [],
     defaults: { artist: '', track: '', album: '' },
     queryDraft: { artist: '', track: '', album: '' },
-    previewToken: ''
+    previewToken: '',
+    onContentChanged: null
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -31,6 +32,15 @@
 
   function toast(message, error = false) {
     if (state.showToast) state.showToast(message, error);
+  }
+
+  async function notifyContentChanged(change = {}) {
+    if (typeof state.onContentChanged !== 'function' || !state.item) return;
+    try {
+      await state.onContentChanged({ itemId: state.item.id, endpointBase: state.endpointBase, ...change });
+    } catch (error) {
+      toast(`Legenda atualizada, mas não foi possível atualizar a lista: ${error.message}`, true);
+    }
   }
 
   function formatOffset(ms) {
@@ -429,6 +439,7 @@
       await refreshStatus();
       render();
       await previewLocal(language);
+      await notifyContentChanged({ action: 'apply', language, provider: state.provider });
     } catch (error) { toast(error.message, true); }
   }
 
@@ -458,6 +469,7 @@
       toast(`Versão anterior de ${language} restaurada.`);
       state.activeLocalLanguage = language; state.preview = null; state.previewOffsetMs = 0;
       await refreshStatus(); render(); await previewLocal(language);
+      await notifyContentChanged({ action: 'restore', language });
     } catch (error) { toast(error.message, true); }
   }
 
@@ -488,6 +500,7 @@
       toast(response.result?.recoverable
         ? `Legenda ${language} excluída. A versão removida ficou disponível no histórico.`
         : `Legenda ${language} excluída.`);
+      await notifyContentChanged({ action: 'delete', language });
     } catch (error) { toast(error.message, true); }
   }
 
@@ -508,6 +521,7 @@
     state.showToast = options.showToast;
     state.showDialog = options.showDialog;
     state.escapeHtml = options.escapeHtml;
+    state.onContentChanged = typeof options.onContentChanged === 'function' ? options.onContentChanged : null;
   }
 
   document.addEventListener('click', (event) => {

@@ -725,3 +725,20 @@ test('YouTube Manager accepts adoption destination selection by POST for large b
   assert.match(routes, /payload\.itemIds \|\| \[\]/);
   assert.match(adoption, /rootPath: destination\.rootPath \|\| ''/);
 });
+
+test('Gerenciar Conteudo atualiza o filtro de legendas apos mutacoes do Subtitle Manager', () => {
+  const app = read('app.js');
+  const manager = read('js/subtitleManager.js');
+
+  assert.match(manager, /onContentChanged: null/);
+  assert.match(manager, /notifyContentChanged\(\{ action: 'apply', language, provider: state\.provider \}\)/);
+  assert.match(manager, /notifyContentChanged\(\{ action: 'restore', language \}\)/);
+  assert.match(manager, /notifyContentChanged\(\{ action: 'delete', language \}\)/);
+  assert.match(manager, /state\.onContentChanged = typeof options\.onContentChanged === 'function'/);
+
+  assert.match(app, /const preserveDetails = Boolean\(options\.preserveDetails\)/);
+  assert.match(app, /if \(!append && !preserveDetails\) closeLibraryContentDetails\(\)/);
+  assert.match(app, /async function refreshLibraryContentAfterSubtitleMutation\(\{ itemId \} = \{\}\)/);
+  assert.match(app, /await loadLibraryContent\(\{ preserveDetails: true \}\)/);
+  assert.match(app, /onContentChanged: refreshLibraryContentAfterSubtitleMutation/);
+});
