@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.10.0
+
+- Reorganiza completamente a **arquitetura de informação do Gerenciador do YouTube** para priorizar o uso diário **Destino → Pesquisa → Adicionar**, mantendo ferramentas avançadas em níveis secundários.
+- Substitui as antigas abas de peso equivalente por **Adicionar vídeos**, **Atividade**, **Recuperar acervo** e **Configurações**; Recuperar acervo é identificado como ferramenta de manutenção, não como fluxo principal.
+- Adiciona resumo superior clicável de **Conta Google**, **Atividade** e **Quota hoje**, indicador de pendências e botão **Como funciona?** com explicação simples do fluxo.
+- Adiciona endpoint interno `GET /api/youtube-manager/targets` que cruza Bibliotecas/Playlists de Canal configuradas com suas playlists YouTube, sem expor caminhos locais ou segredos.
+- O seletor **Onde deseja adicionar?** prioriza destinos gerenciados cuja playlist pertence à conta OAuth; playlists sem vínculo local continuam disponíveis no grupo **Somente no YouTube**.
+- Resultados de pesquisa passam a funcionar como ação contextual: thumbnail, metadados, estado no destino, botão **Adicionar** e link do YouTube ficam juntos; a tela não navega para outra área depois da inserção.
+- Para destinos gerenciados, a interface mostra qual playlist YouTube alimenta a Biblioteca/Playlist de Canal e oferece sincronização manual depois que a fila daquele destino termina.
+- Consolida **Fila de inserção**, **Fila de adoção** e **Histórico recente** em Atividade, evitando que estados operacionais concorram com pesquisa e configuração.
+- Move OAuth, quota e manutenção/criação de playlists para **Configurações**; criação de playlist e opções de pesquisa ficam recolhidas por padrão.
+- Reorganiza **Recuperar acervo** com cadastro de pastas e explicações avançadas em disclosure, toolbar de filtros coerente e barra de ações em lote somente quando há seleção.
+- Padroniza estados vazios com próximo passo, ajuda contextual `?`, responsividade e hierarquia visual dos cards sem remover nenhuma capacidade existente.
+- Nenhuma migração de `config.json` ou schema: Download state permanece v5, YouTube Manager state v1, YouTube Account config/state v1 e Adoption transaction state v1.
+- Aplicação **v3.10.0**; Universal **v1.3.1**; `configVersion` **9**; Scripted Schedules schema **1**; download state **5**; subtitle-manager state **1**; subtitle-translation config/state **1**; YouTube Manager state **1**; YouTube Account state/config **1**; Adoption transaction state **1**.
+
 ## 3.9.8
 
 - Corrige **Gerenciar conteúdo** para reconciliar imediatamente a lista atual depois que uma legenda é aplicada com sucesso pelo Gerenciador de Legendas, sem exigir sair e voltar da página.

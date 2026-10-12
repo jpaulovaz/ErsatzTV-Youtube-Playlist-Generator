@@ -109,6 +109,36 @@ test('match scoring uses title, artist and duration so close official clip outra
   assert.equal(official.level, 'high');
 });
 
+test('add targets expose managed Libraries and Channel Playlists backed by YouTube playlists', () => {
+  const config = {
+    paths: { baseDir: '/srv/youtube', channelsBaseDir: '/srv/channels' },
+    playlists: [{
+      name: 'Music 00s', enabled: true, mediaProfile: 'music_clips',
+      urls: [
+        'https://www.youtube.com/playlist?list=PLMUSIC001',
+        'https://www.youtube.com/playlist?list=PLMUSIC002'
+      ]
+    }, {
+      name: 'Desativada', enabled: false, mediaProfile: 'generic',
+      urls: ['https://www.youtube.com/playlist?list=PLDISABLED']
+    }],
+    channels: [{
+      channelId: 'UC123', name: 'Canal', folderName: 'Canal', enabled: true,
+      globalSources: { uploads: true, videos: false, shorts: false, streams: false },
+      playlists: [{ playlistId: 'PLCHANNEL01', name: 'Clipes', folderName: 'Clipes', enabled: true, mediaProfile: 'generic' }]
+    }]
+  };
+  const targets = managerService.listAddTargets(config);
+  assert.deepEqual(targets.map((item) => item.playlistId).sort(), ['PLCHANNEL01', 'PLMUSIC001', 'PLMUSIC002']);
+  const libraryTargets = targets.filter((item) => item.destinationType === 'library');
+  assert.equal(libraryTargets.length, 2);
+  assert.ok(libraryTargets.every((item) => item.displayName === 'Music 00s' && item.sourceCount === 2 && item.syncKind === 'library'));
+  const channelTarget = targets.find((item) => item.playlistId === 'PLCHANNEL01');
+  assert.equal(channelTarget.destinationType, 'channel-playlist');
+  assert.equal(channelTarget.channelId, 'UC123');
+  assert.equal(channelTarget.syncKind, 'channel-playlist');
+});
+
 test('local catalog scan is read-only and recovers a YouTube ID from filename', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ytm-catalog-'));
   try {

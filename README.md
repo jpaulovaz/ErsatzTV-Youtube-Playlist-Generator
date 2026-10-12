@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 3.9.8
+# ErsatzTV YouTube Downloader 3.10.0
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 3.9.8 corrige a atualização do filtro em **Gerenciar conteúdo** após alterações de legendas. Ao aplicar uma legenda via YouTube ou LRCLIB, restaurar uma versão histórica ou excluir a faixa ativa, a lista e seus contadores são reconciliados imediatamente com o estado salvo, preservando a visão/filtro atual sem exigir sair e voltar da página.
+A versão 3.10.0 reorganiza o **Gerenciador do YouTube** em torno do uso diário: escolher a Biblioteca, pesquisar e adicionar. Filas, recuperação de acervo e configuração continuam completas, porém em áreas secundárias e com ajuda contextual, estados vazios orientativos e ações progressivamente reveladas.
 
 ## Arquitetura
 
@@ -125,18 +125,46 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A v3.9.8 atualiza diretamente uma instalação **v3.9.7** e corrige somente a atualização da visão filtrada de **Gerenciar conteúdo** após mutações de legendas. Não há migração de configuração ou schema; `configVersion` continua 9, o Universal continua 1.3.1 e todos os estados permanecem nas versões atuais. Consulte [UPGRADE.md](UPGRADE.md).
+A v3.10.0 atualiza diretamente uma instalação **v3.9.8**. A mudança é predominantemente de arquitetura de interface, com um endpoint interno para mapear Bibliotecas/Playlists de Canal às playlists YouTube que as alimentam. Não há migração de configuração ou schema; `configVersion` continua 9, o Universal continua 1.3.1 e todos os estados permanecem nas versões atuais. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Gerenciador do YouTube
 
-A área **YouTube -> Gerenciador do YouTube** é independente das Bibliotecas, Canais e Scripted Schedules. O scanner do **Acervo local continua somente leitura**; na v3.9.8, alterações de mídia só acontecem depois de uma ação explícita de **Adotar mídia existente**, preflight aprovado e confirmação do usuário.
+A área **YouTube -> Gerenciador do YouTube** foi reorganizada na v3.10.0 para priorizar o uso cotidiano: **escolher o destino, pesquisar e adicionar**. Recuperação de arquivos antigos, filas e OAuth continuam disponíveis, mas deixam de competir visualmente com a tarefa principal.
 
-A interface possui quatro abas:
+A interface possui quatro áreas orientadas por tarefa:
 
-- **Pesquisa**: consulta vídeos pela YouTube Data API, aceita termo, URL ou Video ID, mostra título/canal/thumbnail/duração e permite enviar o resultado escolhido a uma playlist própria.
-- **Acervo local**: cadastra raízes explícitas, percorre arquivos de mídia sem seguir symlinks, tenta recuperar Video ID de nome/`info.json`/NFO/metadados e permite revisar candidatos ordenados por correspondência de título, artista e duração.
-- **Minhas playlists**: lista playlists da conta autenticada, cria novas playlists e acompanha a fila persistente de inserções, com pausa, retomada, cancelamento dos pendentes e prevenção de duplicatas.
-- **Conta**: configura Client ID/Secret OAuth, exibe a URL pública/callback, conecta/desconecta a conta e valida a identidade do canal autenticado.
+- **Adicionar vídeos** — tela inicial. Primeiro escolha uma Biblioteca/Playlist de Canal do aplicativo ou uma playlist apenas do YouTube; depois pesquise por artista, música, URL ou Video ID e use **Adicionar** no próprio resultado.
+- **Atividade** — concentra fila de inserção, fila de adoção e histórico recente. Pendências aparecem também como indicador na navegação e no resumo superior.
+- **Recuperar acervo** — ferramenta secundária para arquivos que já existem no disco. Reúne scanner, recuperação de Video ID, matching, filtros avançados e adoção sem redownload.
+- **Configurações** — conta Google/OAuth, quota estimada e manutenção das playlists da conta. Criar playlist fica recolhido até ser necessário.
+
+No topo, três resumos clicáveis mostram **Conta Google**, **Atividade** e **Quota hoje**. O botão **Como funciona?** explica o fluxo básico sem exigir conhecimento da API. Ajuda contextual `?`, estados vazios com próximo passo e opções avançadas recolhidas reduzem a quantidade de controles exibidos ao mesmo tempo.
+
+### Adicionar vídeos — fluxo principal
+
+O seletor **Onde deseja adicionar?** prioriza destinos do próprio aplicativo que são alimentados por playlists pertencentes à conta Google conectada. O backend expõe somente referências seguras de destino e playlist; o navegador não recebe caminhos internos para executar a adição.
+
+Quando uma Biblioteca usa mais de uma playlist YouTube, cada fonte elegível aparece de forma identificável. Playlists da conta que não alimentam nenhum destino do aplicativo continuam disponíveis no grupo **Somente no YouTube**.
+
+O fluxo normal é:
+
+```text
+Escolher Biblioteca/Playlist de Canal
+        ↓
+Pesquisar por nome, URL ou Video ID
+        ↓
+Adicionar no próprio resultado
+        ↓
+Acompanhar em Atividade
+        ↓
+Sincronizar o destino quando a inserção terminar
+        ↓
+Download Manager reconhece/processa o item
+```
+
+A busca continua funcionando mesmo sem escolher um destino, mas o botão de adição só é habilitado quando a conta e o destino estiverem prontos. URLs e Video IDs diretos evitam `search.list` e consultam somente os metadados necessários. A opção de ignorar o cache fica em **Opções de pesquisa**, recolhida por padrão.
+
+Se o destino escolhido for uma Biblioteca ou Playlist de Canal gerenciada, a tela explica qual playlist YouTube a alimenta e oferece **Sincronizar biblioteca agora** / **Sincronizar playlist agora** depois que não houver inserções pendentes para aquela fonte. Se o destino for apenas uma playlist YouTube, a interface deixa explícito que não existe vínculo automático com uma Biblioteca local.
 
 A URL pública padrão desta instalação é:
 
@@ -152,27 +180,36 @@ https://yt.johnflix.com.br/api/youtube-manager/oauth/callback
 
 O Client Secret nunca é devolvido integralmente à interface. As credenciais podem ficar em `config/youtube-account.json` (permissão 0600) ou ser fornecidas por `YOUTUBE_OAUTH_CLIENT_ID`, `YOUTUBE_OAUTH_CLIENT_SECRET` e `YOUTUBE_PUBLIC_BASE_URL`. Os tokens ficam somente no servidor em `data/youtube-account-state.json` (0600). O pacote full inclui apenas `config/youtube-account.example.json`; o arquivo real nunca é distribuído.
 
-A pesquisa pública reutiliza a YouTube Data API Key já configurada no aplicativo. Pesquisas idênticas são armazenadas em cache por 24 horas; uma URL/Video ID direto evita `search.list` e consulta somente os metadados do vídeo. O painel de quota é **estimativo** porque outras aplicações podem usar o mesmo projeto Google; o dia é contabilizado pelo fuso do Pacífico, compatível com o reset oficial da API.
+A pesquisa pública reutiliza a YouTube Data API Key já configurada no aplicativo. Pesquisas idênticas são armazenadas em cache; uma URL/Video ID direto evita `search.list` e consulta somente os metadados do vídeo. O painel de quota é **estimativo** porque outras aplicações podem usar o mesmo projeto Google; o dia é contabilizado pelo fuso do Pacífico, compatível com o reset oficial da API.
 
-A ação **Atualizar varredura** é assíncrona e mostra uma notificação persistente no canto inferior direito enquanto trabalha. O status informa a fonte/pasta, o arquivo atual, `processados/total`, quantidade de IDs recuperados e erros de leitura; ao finalizar, a interface atualiza métricas e catálogo e mostra um resumo conclusivo. Enquanto uma varredura está ativa, outra não é iniciada em paralelo.
+### Atividade e filas
 
-No catálogo local, uma correspondência só entra em operações em massa depois de **Confirmação**. IDs exatos recuperados de filename, `.info.json`, NFO ou metadata embedded podem ser tratados em lote pelo botão **Validar IDs recuperados** ou individualmente por **Validar ID** no próprio item. As duas formas usam validação por Video ID e aplicam as mesmas travas: duplicidade/conflito, vídeo indisponível e diferença de duração acima de 45 segundos permanecem para revisão manual; diferenças entre 10 e 45 segundos são confirmadas com aviso e continuam sujeitas ao preflight da adoção. **Revisar** continua disponível para pesquisa por título e para os casos bloqueados.
+**Atividade** centraliza o que antes ficava espalhado entre abas. O resumo mostra inserções e adoções pendentes; abaixo ficam a **Fila de inserção**, a **Fila de adoção** e o **Histórico recente**.
 
-**Selecionar todos confirmados** seleciona todos os itens confirmados que atendem ao filtro atual da fonte, não apenas os 100/200 itens já renderizados na página. **Limpar seleção** desfaz a seleção em massa. A contagem permanece visível e as ações subsequentes usam a seleção completa. Paginação preserva a seleção; trocar de fonte ou aplicar um novo filtro limpa a seleção para evitar ações sobre itens que ficaram ocultos.
+A fila de playlist reconsulta **toda a playlist real no YouTube antes de inserir ou retomar**: IDs já existentes são classificados como já existentes e não consomem novo `playlistItems.insert`. Erros de quota, reconexão/autorização, playlist indisponível e falha temporária de rede/API são tratados como pausas operacionais, mantendo os itens pendentes intactos. O botão **Conferir com o YouTube** executa uma leitura autoritativa e reconcilia pendentes/histórico com a playlist real.
 
-O estado do catálogo é deliberadamente composto por camadas independentes. **Confirmado** continua significando apenas que o arquivo local foi associado a um Video ID validado. A seção **YouTube** mostra, por playlist, se o item está em fila, foi adicionado, já existia, falhou ou foi cancelado. A seção **Biblioteca** cruza o Video ID confirmado — ou um ID exato ainda apenas recuperado — com o Download State atual e lista todos os destinos gerenciados onde ele já existe, distinguindo item sincronizado aguardando mídia, mídia já presente e mídia adotada. Os filtros de **Biblioteca** usam esses mesmos estados e distinguem **Não está em nenhuma Biblioteca**, **Já está em alguma Biblioteca**, **Sincronizado, aguardando mídia**, **Mídia presente** e **Adotado**. O filtro de **Playlist** continua separando Adicionado/Ainda não adicionado/Erro.
+### Recuperar acervo local
 
-As duas ações principais têm responsabilidades diferentes:
+Esta área é deliberadamente secundária. Use-a quando já possuir arquivos no disco, perder a referência de um vídeo ou quiser reaproveitar mídia existente sem redownload.
 
-- **Adicionar à playlist YouTube** insere os Video IDs selecionados na playlist da conta Google escolhida. Isso não copia mídia nem cria diretamente um item na Biblioteca interna. Quando essa playlist é fonte de uma Biblioteca ou Playlist de Canal configurada no aplicativo, a sincronização normal passa a reconhecer o vídeo e o downloader poderá baixá-lo.
-- **Adotar na biblioteca** trabalha com um destino gerenciado que já reconhece o Video ID como item ativo. No card individual, **Adotar** só aparece depois da confirmação e quando existe um destino sincronizado ainda aguardando mídia. O painel identifica se o destino é Biblioteca, Playlist de Canal ou Fonte de Canal, mostra a pasta gerenciada e, após o preflight, usa Hardlink/Copy/Move para colocar a mídia local no caminho final sem baixar novamente.
+A ação **Atualizar varredura** é assíncrona e mostra uma notificação persistente no canto inferior direito enquanto trabalha. O status informa fonte/pasta, arquivo atual, `processados/total`, IDs recuperados e erros; ao finalizar, métricas e catálogo são atualizados.
 
-O fluxo típico para migrar um vídeo ainda ausente da Biblioteca é: **Adicionar à playlist YouTube → sincronizar a Biblioteca/Playlist de Canal correspondente → Adotar na biblioteca**. Se a intenção for permitir o download normal, basta parar depois da sincronização e deixar o Download Manager processar o item.
+IDs exatos recuperados de filename, `.info.json`, NFO ou metadata embedded podem ser tratados em lote por **Validar IDs recuperados** ou individualmente por **Validar ID**. Conflito de identidade, vídeo indisponível ou diferença de duração acima de 45 segundos continuam exigindo revisão; diferenças entre 10 e 45 segundos são confirmadas com aviso.
 
-A fila de playlist reconsulta **toda a playlist real no YouTube antes de inserir ou retomar**: IDs já existentes são classificados como já existentes e não consomem novo `playlistItems.insert`. Erros de quota, reconexão/autorização, playlist indisponível e falha temporária de rede/API são tratados como pausas operacionais, mantendo os itens pendentes intactos; erros permanentes específicos de um vídeo continuam restritos àquele item. A v3.9.8 também recupera automaticamente jobs de versões anteriores que ficaram `failed` por quota, mas inicia a fila **pausada**, exigindo ação explícita em **Retomar**. Quando há mais de um job retomável, os contadores da tela são agregados. O botão **Conferir com o YouTube** executa uma leitura autoritativa da playlist, reconcilia os pendentes já presentes e marca no catálogo quando um histórico de adição não é mais encontrado na playlist.
+O catálogo mantém estados independentes:
 
-A **adoção de mídia existente sem redownload** exige match confirmado e um item já ativo no destino gerenciado. O preflight revalida YouTube, duração, compatibilidade da mídia e colisões. Diferenças de duração acima de 10 segundos geram aviso e acima de 45 segundos bloqueiam. **Hardlink** é preferencial no mesmo filesystem, **Copy** preserva a origem e **Move** exige confirmação reforçada e remove somente o vídeo de origem no commit final. Sidecars antigos (`.nfo`, imagens e `.srt`) permanecem intactos; o destino recebe NFO/artwork/metadata gerados pelos serviços atuais. Cada operação usa manifesto persistente e rollback, e legendas/traduções continuam sob comando do usuário.
+- **Identidade** — `Confirmado`, `ID recuperado`, `Sem correspondência`, etc.;
+- **YouTube** — em fila, adicionado, já existente, falha ou cancelado por playlist;
+- **Biblioteca** — ausente de todos os destinos, sincronizado aguardando mídia, mídia presente ou adotado.
 
+Filtros e **Selecionar todos confirmados** atuam sobre todo o conjunto filtrado, não apenas nos itens renderizados. A barra de ações em lote aparece somente quando há seleção, reduzindo ruído visual.
+
+As ações continuam separadas:
+
+- **Adicionar à playlist** insere os Video IDs na playlist da conta Google escolhida;
+- **Adotar na biblioteca** reutiliza mídia local em um destino gerenciado que já reconhece o Video ID.
+
+A adoção exige preflight. Diferença de duração acima de 10 segundos gera aviso e acima de 45 segundos bloqueia. **Hardlink** é preferencial no mesmo filesystem, **Copy** preserva a origem e **Move** exige confirmação reforçada. Sidecars antigos permanecem intactos; o destino recebe NFO/artwork/metadata pelos serviços atuais e cada operação possui rollback persistente.
 ## Estrutura dos arquivos
 
 Com uma biblioteca chamada `Mix_Principal`, o resultado é semelhante a:
@@ -278,13 +315,13 @@ Preencha também **Configurações → ErsatzTV → API Key do ErsatzTV** quando
 
 ## Scripted Schedules
 
-A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do **Universal v1.3.1**, único motor suportado pela v3.9.8.
+A área **Scripted Schedules** é independente do downloader. Cada projeto representa um arquivo `.py` que pode ser usado por um ou mais Playouts com a mesma programação. O aplicativo salva a configuração estruturada e gera o Python a partir do **Universal v1.3.1**, único motor suportado pela v3.10.0.
 
 O editor é dividido em **Geral**, **Recursos**, **Programação**, **Revisão** e **Publicar**. Em Recursos, a ordem visual prioriza o fluxo mais comum: **Grupos de Graphics -> Presentation Profiles -> Sources -> Scripted Playlists**. O pre-roll do Presentation Profile é opcional e pode ser selecionado depois que a Scripted Playlist existir. Em Programação, o **Filler** aparece antes dos módulos porque ele é usado pelo Pad To Nearest Minute. O botão **Adicionar módulo** abre um modal com a lista de nomes à esquerda; ao selecionar um módulo, o painel direito mostra a descrição curta e as combinações sugeridas. O valor **Nenhum** nos seletores de Presentation é interno e sempre vazio; ele não aparece como perfil editável.
 
 A **Source define o conteúdo**, não mais a ordem em que ele será percorrido. Para os tipos compatíveis com ordenação do Scripted Schedule — Smart Collection, Collection, Multi Collection, Search e Show — cada uso na Programação, no Filler, em Scripted Playlists ou como Fallback escolhe **Chronological** ou **Shuffle**. Se a mesma Source for usada com as duas ordens, o gerador registra automaticamente duas Sources internas no `.py`, uma para cada ordem, sem duplicar o cadastro na interface. **Random** e **Shuffle In Order** não são oferecidos porque a API de Scripted Schedule usada pelo projeto não suporta esses modos. Marathon continua com suas próprias opções internas de agrupamento/ordem.
 
-Módulos disponíveis na v3.9.8:
+Módulos disponíveis na v3.10.0:
 
 - **Rotação por tempo**: alterna Sources por blocos de minutos.
 - **Rotação por quantidade**: alterna depois de X itens.
@@ -549,7 +586,7 @@ Cada **Biblioteca** e cada **Playlist de Canal** possui a configuração **Arqui
 - **Marcar como órfão**: mantém o arquivo no lugar. **Limpar órfãos** só aparece quando esta política está selecionada e existem órfãos.
 - **Mover para quarentena recuperável**: retira o pacote da biblioteca ativa e o preserva fora da raiz escaneada. A retenção pode ser **Nunca**, 30, 90 ou 180 dias.
 
-Cada destino atual precisa ter uma política de órfãos válida. A v3.9.8 não executa migração automática de destinos antigos; configurações já atualizadas para `configVersion` 9 continuam preservadas.
+Cada destino atual precisa ter uma política de órfãos válida. A v3.10.0 não executa migração automática de destinos antigos; configurações já atualizadas para `configVersion` 9 continuam preservadas.
 
 A quarentena fica em uma pasta irmã da base de mídia, preferencialmente no mesmo filesystem, para que movimentos sejam feitos por `rename` quando possível. Em filesystems diferentes o aplicativo usa cópia, validação e só então remove o original. Nunca sobrescreve silenciosamente um arquivo existente durante restauração. MP4, NFO, thumbnail/poster e SRTs são tratados como um pacote; em Clipes musicais, assets compartilhados do Show só são retirados quando não resta outro episódio ativo/mantido.
 

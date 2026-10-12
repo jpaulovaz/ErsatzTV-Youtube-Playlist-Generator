@@ -1,10 +1,10 @@
-# Atualização para 3.9.8
+# Atualização para 3.10.0
 
-A versão 3.9.8 é uma atualização incremental sobre a **v3.9.7**, focada na atualização imediata da visão filtrada de **Gerenciar conteúdo** depois de mudanças em legendas. Não há migração de configuração, estado ou schema.
+A versão 3.10.0 reorganiza o **Gerenciador do YouTube** para priorizar o fluxo diário **Destino → Pesquisa → Adicionar**, mantendo recuperação de acervo, filas, OAuth e adoção como ferramentas completas porém secundárias. A atualização parte da **v3.9.8** e não exige migração de configuração, estado ou schema.
 
 ## Versionamento
 
-- aplicação: **v3.9.8**;
+- aplicação: **v3.10.0**;
 - Universal Scripted Schedules: **v1.3.1**;
 - `configVersion`: **9**;
 - Download state: **5**;
@@ -17,33 +17,47 @@ A versão 3.9.8 é uma atualização incremental sobre a **v3.9.7**, focada na a
 
 ## Atualização
 
-Pare o serviço, faça backup da instalação e extraia o pacote incremental sobre a instalação v3.9.7:
+Pare o serviço, faça backup da instalação e extraia o pacote incremental sobre a instalação v3.9.8:
 
 ```bash
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.9.7-to-v3.9.8-update.zip -d /caminho/da/aplicacao
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.9.8-to-v3.10.0-update.zip -d /caminho/da/aplicacao
 ```
 
-Depois reinicie o serviço. O pacote não substitui `config/config.json`, `config/auth.json`, `config/youtube-account.json`, `data/` nem arquivos de mídia.
+Depois reinicie o serviço. O pacote não substitui `config/config.json`, `config/auth.json`, `config/subtitle-translation.json`, `config/youtube-account.json`, `data/` nem arquivos de mídia.
 
-## Correção do filtro de legendas
+## O que mudou no Gerenciador do YouTube
 
-Antes da v3.9.8, o backend salvava corretamente a nova legenda e atualizava o Download State, mas a listagem já aberta em **Gerenciar conteúdo** continuava usando o snapshot anterior. Por isso um item filtrado em **Sem legendas** permanecia visível até sair e voltar da página.
+A navegação principal passa a ter quatro áreas:
 
-Na v3.9.8, o Gerenciador de Legendas avisa a tela principal depois de qualquer mutação que altere a presença da legenda:
+1. **Adicionar vídeos** — tela inicial e fluxo principal. Escolha uma Biblioteca/Playlist de Canal ou playlist do YouTube, pesquise e adicione diretamente no resultado.
+2. **Atividade** — reúne fila de inserção, fila de adoção e histórico recente.
+3. **Recuperar acervo** — ferramenta de manutenção para arquivos que já existem localmente; scanner, matching, validação de IDs e adoção ficam aqui.
+4. **Configurações** — OAuth, quota e manutenção/criação de playlists da conta.
 
-- **Aplicar** uma legenda encontrada no YouTube;
-- **Aplicar** uma legenda encontrada no LRCLIB;
-- **Restaurar** uma versão do histórico;
-- **Excluir** uma legenda ativa.
+O topo agora mostra estados rápidos de **Conta Google**, **Atividade** e **Quota hoje**. Ajuda contextual `?`, o botão **Como funciona?**, estados vazios orientativos e seções avançadas recolhidas reduzem o número de controles visíveis ao mesmo tempo.
 
-A tela recarrega a visão atual mantendo o filtro selecionado. Se o item não pertencer mais ao resultado atual, ele é removido imediatamente e os contadores são atualizados. Se continuar pertencendo à visão, o painel de detalhes é atualizado sem abandonar a página.
+## Destino antes da pesquisa
+
+O novo seletor **Onde deseja adicionar?** cruza a configuração local com as playlists pertencentes à conta OAuth:
+
+- Bibliotecas e Playlists de Canal alimentadas por playlists da conta aparecem primeiro;
+- playlists da conta sem vínculo local aparecem em **Somente no YouTube**;
+- se uma Biblioteca tiver mais de uma fonte elegível, cada playlist é identificada separadamente;
+- selecionar um destino gerenciado deixa explícita a playlist YouTube que o alimenta.
+
+Depois que a fila de inserção terminar, destinos gerenciados oferecem **Sincronizar biblioteca agora** ou **Sincronizar playlist agora**, sem obrigar o usuário a navegar para outra área.
+
+## Recuperação de acervo
+
+Nenhuma capacidade foi removida. A ferramenta continua com varredura em background, validação individual/em lote de Video IDs, filtros de presença em Biblioteca/playlist, seleção em massa, matching manual e adoção Hardlink/Copy/Move. O cadastro/remoção de pastas e as explicações avançadas ficam recolhidos por padrão.
 
 ## Validação após atualizar
 
-1. Abra uma Biblioteca ou Playlist de Canal em **Gerenciar conteúdo**.
-2. Selecione **Sem legendas**.
-3. Abra um item e aplique uma legenda via **YouTube** ou **LRCLIB**.
-4. Confirme que o item desaparece imediatamente do resultado filtrado e que a contagem de **Sem legendas** diminui.
-5. Em **Com legendas**, exclua a última legenda de um item e confirme que ele deixa essa visão imediatamente.
+1. Abra **YouTube → Gerenciador do YouTube** e confirme que a tela inicial é **Adicionar vídeos**.
+2. Confirme que **Onde deseja adicionar?** lista primeiro Bibliotecas/Playlists de Canal vinculadas às playlists da conta.
+3. Pesquise por um vídeo e confirme que a ação de adicionar permanece na mesma tela.
+4. Abra **Atividade** e confirme que as duas filas aparecem juntas.
+5. Abra **Recuperar acervo** e confirme que suas fontes, filtros, matches e estados anteriores continuam preservados.
+6. Abra **Configurações** e confirme conta OAuth, quota e playlists.
 
-Nenhuma fila de downloads, tradução, YouTube Manager, OAuth ou estado de adoção é alterado por esta atualização.
+Não há alteração na semântica das filas, quota, adoção, downloads, legendas, tradução ou Scripted Schedules.

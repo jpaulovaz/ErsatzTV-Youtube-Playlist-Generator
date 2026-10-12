@@ -1,11 +1,15 @@
-ErsatzTV YouTube Downloader 3.9.8 - pacote de atualização
-Base: v3.9.7
+ErsatzTV YouTube Downloader 3.10.0 - pacote de atualização
+Base: v3.9.8
 
-Este update corrige a atualização da visão filtrada em Gerenciar conteúdo após mudanças de legendas para:
-- remover imediatamente de Sem legendas um item que recebeu uma legenda via YouTube ou LRCLIB;
-- atualizar os contadores da visão sem sair e voltar da página;
-- manter a mesma coerência após restaurar ou excluir uma legenda;
-- preservar a visão/filtro atual e atualizar/fechar os detalhes conforme o item continue ou não no resultado.
+Este update reorganiza o Gerenciador do YouTube para o fluxo principal Destino -> Pesquisa -> Adicionar:
+- Adicionar vídeos vira a tela inicial e prioriza Bibliotecas/Playlists de Canal vinculadas às playlists da conta;
+- resultados de pesquisa recebem ação contextual de adição sem sair da tela;
+- Atividade reúne fila de inserção, fila de adoção e histórico recente;
+- Recuperar acervo fica identificado como ferramenta secundária, com controles avançados recolhidos;
+- Configurações concentra OAuth, quota e manutenção/criação de playlists;
+- ajuda contextual, estados vazios orientativos, resumo superior e ações progressivas reduzem ruído;
+- endpoint interno /api/youtube-manager/targets mapeia destinos configurados às playlists YouTube sem expor caminhos ou segredos;
+- nenhum schema ou estado persistente muda.
 
 Arquivos incluídos:
 CHANGELOG.md
@@ -14,12 +18,15 @@ UPGRADE.md
 package.json
 public/index.html
 public/login.html
-public/app.js
-public/js/subtitleManager.js
+public/styles.css
+public/js/youtubeManager.js
+src/routes/youtubeManagerRoutes.js
+src/youtubeManager/youtubeManagerService.js
 test/ui-v3.test.js
+test/youtubeManager.test.js
 MODIFIED_FILES.txt
 UPDATE_CONTENTS.txt
 
-Aplicacao v3.9.8, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v3.10.0, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 
 O pacote nao inclui config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/, tokens, estados operacionais, arquivos de midia ou sidecars.

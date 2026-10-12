@@ -32,6 +32,9 @@ async function handleYouTubeManagerRoutes(req, res, url, deps) {
     const payload = await deps.readJson(req);
     deps.sendJson(res, 200, { ok: true, result: await managerService.searchPublic(await deps.loadConfig(), payload) }); return true;
   }
+  if (req.method === 'GET' && action === 'targets') {
+    deps.sendJson(res, 200, { ok: true, result: { targets: managerService.listAddTargets(await deps.loadConfig()) } }); return true;
+  }
 
   if (req.method === 'GET' && action === 'account/config') {
     const config = await accountConfig.load(); deps.sendJson(res, 200, { ok: true, result: accountConfig.publicStatus(config) }); return true;

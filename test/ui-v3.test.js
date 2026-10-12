@@ -656,7 +656,7 @@ test('Gerenciar conteúdo expõe tradução em massa com Gemini e configuração
   assert.match(css, /\.translation-overview-card/);
 });
 
-test('Gerenciador do YouTube expõe pesquisa, acervo local, playlists e OAuth na URL pública canônica', () => {
+test('Gerenciador do YouTube prioriza adicionar vídeos e mantém recuperação, atividade e OAuth organizados', () => {
   const html = read('index.html');
   const app = read('app.js');
   const manager = read('js/youtubeManager.js');
@@ -664,15 +664,22 @@ test('Gerenciador do YouTube expõe pesquisa, acervo local, playlists e OAuth na
 
   assert.match(html, /data-view="youtube-manager"/);
   assert.match(html, /id="view-youtube-manager"/);
-  assert.match(html, /Pesquisa/);
-  assert.match(html, /Acervo local/);
-  assert.match(html, /Minhas playlists/);
-  assert.match(html, /Conta/);
+  assert.match(html, /Adicionar vídeos/);
+  assert.match(html, /data-ytm-tab="add"/);
+  assert.match(html, /data-ytm-tab="activity"/);
+  assert.match(html, /Recuperar acervo/);
+  assert.match(html, /data-ytm-tab="settings"/);
+  assert.match(html, /Onde deseja adicionar\?/);
+  assert.match(html, /Escolha a Biblioteca/);
+  assert.match(html, /Pesquise e adicione/);
+  assert.match(html, /Como funciona\?/);
+  assert.match(html, /Playlists da conta/);
   assert.match(html, /https:\/\/yt\.johnflix\.com\.br\//);
   assert.match(html, new RegExp(`youtubeManager\\.js\\?v=${APP_VERSION_RE}`));
   assert.match(app, /youtube-manager/);
   assert.match(app, /YouTubeManagerView\.init/);
   assert.match(manager, /\/api\/youtube-manager\/search/);
+  assert.match(manager, /\/api\/youtube-manager\/targets/);
   assert.match(manager, /\/api\/youtube-manager\/oauth\/start/);
   assert.match(manager, /\/api\/youtube-manager\/playlists/);
   assert.match(manager, /\/api\/youtube-manager\/scan-start/);
@@ -696,9 +703,8 @@ test('Gerenciador do YouTube expõe pesquisa, acervo local, playlists e OAuth na
   assert.match(html, /Adotado/);
   assert.match(html, /Ainda não adicionado/);
   assert.match(html, /Playlist YouTube destino/);
-  assert.match(html, /Adicionar à playlist YouTube/);
+  assert.match(html, /Adicionar à playlist/);
   assert.match(html, /Adotar na biblioteca/);
-  assert.match(html, /inclusive itens ainda não carregados na tela/);
   assert.match(manager, /async function selectAllConfirmedCatalog/);
   assert.match(manager, /const limit = 200/);
   assert.match(manager, /item\.match && item\.match\.status === 'confirmed'/);
@@ -707,12 +713,15 @@ test('Gerenciador do YouTube expõe pesquisa, acervo local, playlists e OAuth na
   assert.match(manager, /Item sincronizado · aguardando mídia/);
   assert.match(manager, /adoption-destinations', \{ method: 'POST'/);
   assert.match(manager, /Biblioteca\/Playlist de Canal gerenciada/);
+  assert.match(manager, /syncPrimaryTarget/);
+  assert.match(manager, /ytm-primary-target/);
   assert.match(css, /toast\.loading/);
   assert.match(css, /\.ytm-panel\.active \{ display: grid; gap: 1rem; \}/);
-  assert.doesNotMatch(css, /ytm-panel\[data-ytm-panel=\"catalog\"\] > \.card \+ \.card/);
-  assert.match(css, /ytm-catalog-flow-help/);
-  assert.match(manager, /youtube-manager/);
-  assert.match(css, /YouTube Manager v3\.9/);
+  assert.match(css, /\.ytm-overview/);
+  assert.match(css, /\.ytm-step-strip/);
+  assert.match(css, /\.ytm-search-hero/);
+  assert.match(css, /\.ytm-batch-bar/);
+  assert.match(css, /YouTube Manager v3\.10/);
   assert.match(html, /Adotar mídia existente/);
   assert.match(manager, /\/api\/youtube-manager\/adoption-plan/);
   assert.match(manager, /\/api\/youtube-manager\/adoption-start/);

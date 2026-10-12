@@ -8,7 +8,7 @@ const stateStore = require('./youtubeManagerState');
 const quotaTracker = require('./quotaTracker');
 const { scoreCandidate } = require('./matchScore');
 const adoptionQueue = require('./adoptionQueue');
-const { fetchVideoDetails } = require('../youtubeApi');
+const { fetchVideoDetails, extractPlaylistIdFromUrl } = require('../youtubeApi');
 const downloadManager = require('../downloadManager');
 const { getAllDestinations } = require('../destinationService');
 
@@ -106,6 +106,43 @@ function buildManagedDestinationIndex(config, manager) {
   }
   for (const entries of byVideoId.values()) entries.sort((a, b) => String(a.displayName).localeCompare(String(b.displayName), 'pt-BR'));
   return byVideoId;
+}
+
+
+function listAddTargets(config) {
+  const targets = [];
+  const seen = new Set();
+  for (const destination of getAllDestinations(config, { includeDisabled: true })) {
+    if (!destination || destination.enabled === false) continue;
+    const playlistIds = [];
+    if (destination.type === 'library') {
+      for (const sourceUrl of destination.urls || []) {
+        const playlistId = extractPlaylistIdFromUrl(sourceUrl);
+        if (playlistId && !playlistIds.includes(playlistId)) playlistIds.push(playlistId);
+      }
+    } else if (destination.type === 'channel-playlist' && destination.playlistId) {
+      playlistIds.push(String(destination.playlistId));
+    }
+    for (const playlistId of playlistIds) {
+      const key = `${destination.id}::${playlistId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      targets.push({
+        id: key,
+        destinationId: destination.id,
+        destinationType: destination.type,
+        displayName: destination.displayName,
+        playlistId,
+        sourceCount: playlistIds.length,
+        syncKind: destination.type === 'library' ? 'library' : 'channel-playlist',
+        syncName: destination.type === 'library' ? destination.displayName : '',
+        channelId: destination.channelId || '',
+        enabled: destination.enabled !== false
+      });
+    }
+  }
+  targets.sort((a, b) => String(a.displayName).localeCompare(String(b.displayName), 'pt-BR'));
+  return targets;
 }
 
 function catalogIdentityVideoId(item) {
@@ -476,4 +513,4 @@ async function startPlaylistJob(plan) {
   return playlistQueue.start({ playlistId: plan.playlistId, playlistTitle: plan.playlistTitle || '', entries: plan.entries });
 }
 
-module.exports = { getStatus, listCatalogItems, searchPublic, searchForItem, updateMatch, confirmRecoveredItem, confirmRecoveredMatches, resolveEntries, planPlaylist, startPlaylistJob, buildPlaylistMembershipIndex, buildManagedDestinationIndex };
+module.exports = { getStatus, listAddTargets, listCatalogItems, searchPublic, searchForItem, updateMatch, confirmRecoveredItem, confirmRecoveredMatches, resolveEntries, planPlaylist, startPlaylistJob, buildPlaylistMembershipIndex, buildManagedDestinationIndex };

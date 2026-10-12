@@ -1,11 +1,13 @@
 (() => {
   let deps = null;
   let initialized = false;
-  let activeTab = 'search';
+  let activeTab = 'add';
   let status = null;
   let accountConfig = null;
   let playlists = [];
+  let addTargets = [];
   let playlistIndex = new Set();
+  let searchQueueState = new Map();
   let sources = [];
   let catalogItems = [];
   let catalogPagination = { total: 0, offset: 0, limit: 100, hasMore: false };
@@ -151,13 +153,96 @@
   }
 
   function setTab(tab) {
-    activeTab = ['search', 'catalog', 'playlists', 'account'].includes(tab) ? tab : 'search';
+    const aliases = { search: 'add', playlists: 'activity', account: 'settings' };
+    const requested = aliases[tab] || tab;
+    activeTab = ['add', 'activity', 'catalog', 'settings'].includes(requested) ? requested : 'add';
     $$('.ytm-tab').forEach((button) => button.classList.toggle('active', button.dataset.ytmTab === activeTab));
     $$('[data-ytm-panel]').forEach((panel) => panel.classList.toggle('active', panel.dataset.ytmPanel === activeTab));
   }
 
   function accountConnected() {
     return Boolean(status && status.account && status.account.connected && status.account.scopeGranted);
+  }
+
+  function queuePendingCount() {
+    const playlistCounts = status && status.queue && (status.queue.aggregateCounts || status.queue.activeJob && status.queue.activeJob.counts || status.queue.latestJob && status.queue.latestJob.counts) || {};
+    const adoptionCounts = status && status.adoption && (status.adoption.activeJob && status.adoption.activeJob.counts || status.adoption.latestJob && status.adoption.latestJob.counts) || {};
+    return (Number(playlistCounts.pending) || 0) + (Number(playlistCounts.running) || 0) + (Number(adoptionCounts.pending) || 0) + (Number(adoptionCounts.running) || 0);
+  }
+
+  function renderOverview() {
+    const account = status && status.account || {};
+    const accountInfo = account.account || {};
+    const accountRoot = $('#ytmOverviewAccount');
+    if (accountRoot) accountRoot.textContent = account.connected && account.scopeGranted ? (accountInfo.title || 'Conectada') : 'Desconectada';
+
+    const pending = queuePendingCount();
+    const queueRoot = $('#ytmOverviewQueue');
+    if (queueRoot) queueRoot.textContent = pending ? `${pending} item(ns) aguardando` : 'Sem filas ativas';
+    const badge = $('#ytmActivityBadge');
+    if (badge) {
+      badge.textContent = String(pending);
+      badge.classList.toggle('hidden', pending === 0);
+    }
+
+    const quota = status && status.quota || {};
+    const general = Number(quota.generalUnits) || 0;
+    const limit = Number(quota.defaultGeneralLimit) || 10000;
+    const quotaRoot = $('#ytmOverviewQuota');
+    if (quotaRoot) quotaRoot.textContent = `${general.toLocaleString('pt-BR')} / ${limit.toLocaleString('pt-BR')}`;
+    renderActivitySummary();
+    renderActivityHistory();
+  }
+
+  function renderActivitySummary() {
+    const root = $('#ytmActivitySummary');
+    if (!root) return;
+    const queue = status && status.queue || {};
+    const adoption = status && status.adoption || {};
+    const playlistCounts = queue.aggregateCounts || queue.activeJob && queue.activeJob.counts || queue.latestJob && queue.latestJob.counts || {};
+    const adoptionCounts = adoption.activeJob && adoption.activeJob.counts || adoption.latestJob && adoption.latestJob.counts || {};
+    const playlistPending = (Number(playlistCounts.pending) || 0) + (Number(playlistCounts.running) || 0);
+    const adoptionPending = (Number(adoptionCounts.pending) || 0) + (Number(adoptionCounts.running) || 0);
+    root.innerHTML = `
+      <div><span>Inserção no YouTube</span><strong>${playlistPending ? `${playlistPending} aguardando` : 'Em dia'}</strong></div>
+      <div><span>Adoção local</span><strong>${adoptionPending ? `${adoptionPending} aguardando` : 'Em dia'}</strong></div>
+      <div><span>Estado geral</span><strong>${queue.paused || adoption.paused ? 'Pausado' : (playlistPending || adoptionPending ? 'Processando' : 'Sem pendências')}</strong></div>
+    `;
+  }
+
+  function activityStatusLabel(statusValue) {
+    if (statusValue === 'completed') return 'Concluído';
+    if (statusValue === 'running') return 'Em andamento';
+    if (statusValue === 'queued') return 'Aguardando';
+    if (statusValue === 'failed') return 'Falhou';
+    if (statusValue === 'cancelled') return 'Cancelado';
+    return String(statusValue || 'Finalizado');
+  }
+
+  function renderActivityHistory() {
+    const root = $('#ytmActivityHistory');
+    if (!root) return;
+    const playlistJobs = ((status && status.queue && status.queue.jobs) || []).map((job) => ({
+      ...job, kind: 'playlist', when: job.updatedAt || job.createdAt, title: job.playlistTitle || job.playlistId || 'Playlist'
+    }));
+    const adoptionJobs = ((status && status.adoption && status.adoption.jobs) || []).map((job) => ({
+      ...job, kind: 'adoption', when: job.updatedAt || job.createdAt, title: `Adoção · ${job.destinationId || 'destino'}`
+    }));
+    const jobs = [...playlistJobs, ...adoptionJobs]
+      .sort((a, b) => new Date(b.when || 0).getTime() - new Date(a.when || 0).getTime())
+      .slice(0, 8);
+    if (!jobs.length) {
+      root.innerHTML = '<div class="empty-state"><strong>Nenhuma atividade recente.</strong><span>Quando você adicionar ou adotar vídeos, as operações aparecerão aqui.</span></div>';
+      return;
+    }
+    root.innerHTML = jobs.map((job) => {
+      const counts = job.counts || {};
+      const done = Number(counts.completed) || 0;
+      const pending = (Number(counts.pending) || 0) + (Number(counts.running) || 0);
+      const failed = Number(counts.failed) || 0;
+      const kindLabel = job.kind === 'playlist' ? 'Playlist YouTube' : 'Adoção local';
+      return `<div class="ytm-history-row"><span class="badge ${job.status === 'failed' ? 'danger' : ['running', 'queued'].includes(job.status) ? 'info' : 'ok'}">${esc(activityStatusLabel(job.status))}</span><div><strong>${esc(job.title)}</strong><small>${esc(kindLabel)} · ${done} concluído(s)${pending ? ` · ${pending} pendente(s)` : ''}${failed ? ` · ${failed} falha(s)` : ''}</small></div></div>`;
+    }).join('');
   }
 
   function renderQuota() {
@@ -203,9 +288,121 @@
     if (playlists.some((item) => item.id === current)) select.value = current;
   }
 
+  function playlistById(playlistId) {
+    return playlists.find((item) => item.id === String(playlistId || '')) || null;
+  }
+
+  function currentPrimaryTarget() {
+    const raw = $('#ytmPrimaryTarget')?.value || '';
+    if (raw.startsWith('target:')) {
+      const target = addTargets.find((item) => item.id === raw.slice(7));
+      if (!target) return null;
+      const playlist = playlistById(target.playlistId);
+      return { ...target, kind: 'managed', playlistTitle: playlist && playlist.title || target.playlistId };
+    }
+    if (raw.startsWith('playlist:')) {
+      const playlist = playlistById(raw.slice(9));
+      if (!playlist) return null;
+      return { id: raw, kind: 'playlist', playlistId: playlist.id, playlistTitle: playlist.title, displayName: playlist.title };
+    }
+    return null;
+  }
+
+  function renderPrimaryTargets() {
+    const select = $('#ytmPrimaryTarget');
+    if (!select) return;
+    const previous = select.value;
+    let stored = '';
+    try { stored = window.localStorage.getItem('ytm-primary-target') || ''; } catch {}
+
+    if (!accountConnected()) {
+      select.innerHTML = '<option value="">Conecte sua conta do YouTube para adicionar</option>';
+      select.disabled = true;
+      renderPrimaryTargetMeta();
+      return;
+    }
+
+    select.disabled = false;
+    const owned = new Map(playlists.map((playlist) => [playlist.id, playlist]));
+    const managed = addTargets.filter((target) => owned.has(target.playlistId));
+    const managedPlaylistIds = new Set(managed.map((target) => target.playlistId));
+    const direct = playlists.filter((playlist) => !managedPlaylistIds.has(playlist.id));
+    const groups = [];
+    if (managed.length) {
+      groups.push(`<optgroup label="Bibliotecas do aplicativo">${managed.map((target) => {
+        const playlist = owned.get(target.playlistId);
+        const type = target.destinationType === 'channel-playlist' ? 'Playlist de canal' : 'Biblioteca';
+        const suffix = target.sourceCount > 1 ? ` · via ${playlist && playlist.title || target.playlistId}` : '';
+        return `<option value="target:${esc(target.id)}">${esc(type)} · ${esc(target.displayName)}${esc(suffix)}</option>`;
+      }).join('')}</optgroup>`);
+    }
+    if (direct.length) {
+      groups.push(`<optgroup label="Somente no YouTube">${direct.map((playlist) => `<option value="playlist:${esc(playlist.id)}">Playlist · ${esc(playlist.title)}</option>`).join('')}</optgroup>`);
+    }
+    if (!groups.length && playlists.length) {
+      groups.push(`<optgroup label="Playlists do YouTube">${playlists.map((playlist) => `<option value="playlist:${esc(playlist.id)}">Playlist · ${esc(playlist.title)}</option>`).join('')}</optgroup>`);
+    }
+    select.innerHTML = `<option value="">Escolha uma Biblioteca ou playlist</option>${groups.join('')}`;
+
+    const validValues = new Set([...select.options].map((option) => option.value));
+    const preferred = [previous, stored].find((value) => value && validValues.has(value)) || ([...select.options].find((option) => option.value)?.value || '');
+    select.value = preferred;
+    if (preferred) {
+      try { window.localStorage.setItem('ytm-primary-target', preferred); } catch {}
+    }
+    renderPrimaryTargetMeta();
+  }
+
+  function queueBusyForPlaylist(playlistId) {
+    const jobs = status && status.queue && status.queue.jobs || [];
+    return jobs.some((job) => job.playlistId === playlistId && ['queued', 'running'].includes(job.status) && (job.items || []).some((item) => ['pending', 'running'].includes(item.status)));
+  }
+
+  function renderPrimaryTargetMeta() {
+    const root = $('#ytmPrimaryTargetMeta');
+    const syncButton = $('#ytmPrimarySyncBtn');
+    if (!root) return;
+    const target = currentPrimaryTarget();
+    if (!accountConnected()) {
+      root.innerHTML = '<div class="ytm-target-empty"><strong>Conecte sua conta para adicionar vídeos</strong><span>A pesquisa continua disponível, mas alterar playlists exige OAuth.</span><button type="button" class="small" data-ytm-go="settings">Abrir configurações</button></div>';
+      syncButton?.classList.add('hidden');
+      return;
+    }
+    if (!target) {
+      root.innerHTML = '<div class="ytm-target-empty"><strong>Escolha primeiro onde o vídeo deve entrar</strong><span>Bibliotecas vinculadas a uma playlist da sua conta aparecem no topo da lista.</span></div>';
+      syncButton?.classList.add('hidden');
+      return;
+    }
+    if (target.kind === 'managed') {
+      const type = target.destinationType === 'channel-playlist' ? 'Playlist de canal' : 'Biblioteca';
+      root.innerHTML = `<div class="ytm-target-summary"><span class="badge info">${esc(type)}</span><div><strong>${esc(target.displayName)}</strong><small>Fonte no YouTube: ${esc(target.playlistTitle)}. Depois da inserção, sincronize este destino para que o downloader reconheça o vídeo.</small></div></div>`;
+      if (syncButton) {
+        syncButton.classList.remove('hidden');
+        syncButton.textContent = target.destinationType === 'channel-playlist' ? 'Sincronizar playlist agora' : 'Sincronizar biblioteca agora';
+        syncButton.disabled = queueBusyForPlaylist(target.playlistId);
+        syncButton.title = syncButton.disabled ? 'Aguarde a fila de inserção terminar antes de sincronizar.' : '';
+      }
+    } else {
+      root.innerHTML = `<div class="ytm-target-summary"><span class="badge">Somente YouTube</span><div><strong>${esc(target.playlistTitle)}</strong><small>O vídeo será adicionado à playlist, sem vínculo automático com uma Biblioteca do aplicativo.</small></div></div>`;
+      syncButton?.classList.add('hidden');
+    }
+  }
+
+  async function syncPrimaryTarget() {
+    const target = currentPrimaryTarget();
+    if (!target || target.kind !== 'managed') throw new Error('Selecione uma Biblioteca ou Playlist de Canal antes de sincronizar.');
+    if (queueBusyForPlaylist(target.playlistId)) throw new Error('Aguarde a fila de inserção terminar antes de sincronizar este destino.');
+    let endpoint = '';
+    if (target.syncKind === 'library') endpoint = `/api/playlists/${encodeURIComponent(target.syncName)}/run`;
+    else if (target.syncKind === 'channel-playlist') endpoint = `/api/channels/${encodeURIComponent(target.channelId)}/playlists/${encodeURIComponent(target.playlistId)}/run`;
+    if (!endpoint) throw new Error('Este destino não possui sincronização manual compatível.');
+    const response = await deps.api(endpoint, { method: 'POST', body: '{}' });
+    deps.showToast(response.message || `Sincronização iniciada para ${target.displayName}.`);
+  }
+
   function renderPlaylists() {
-    fillPlaylistSelect($('#ytmSearchPlaylist'), { placeholder: 'Selecione uma playlist' });
     fillPlaylistSelect($('#ytmCatalogPlaylist'), { placeholder: 'Selecione uma playlist' });
+    renderPrimaryTargets();
     const root = $('#ytmPlaylistList');
     if (!root) return;
     if (!accountConnected()) {
@@ -213,51 +410,78 @@
       return;
     }
     if (!playlists.length) {
-      root.innerHTML = '<div class="empty-state"><strong>Nenhuma playlist própria encontrada.</strong></div>';
+      root.innerHTML = '<div class="empty-state"><strong>Nenhuma playlist própria encontrada.</strong><span>Crie uma playlist acima ou atualize a conexão da conta.</span></div>';
       return;
     }
+    const mappedIds = new Set(addTargets.map((target) => target.playlistId));
     root.innerHTML = playlists.map((playlist) => `
       <article class="ytm-playlist-card">
-        ${playlist.thumbnailUrl ? `<img src="${esc(playlist.thumbnailUrl)}" alt="">` : ''}
-        <div><strong>${esc(playlist.title)}</strong><small>${playlist.itemCount || 0} vídeos · ${esc(playlist.privacyStatus || '-')}</small></div>
+        ${playlist.thumbnailUrl ? `<img src="${esc(playlist.thumbnailUrl)}" alt="">` : '<div class="ytm-playlist-thumb-placeholder"></div>'}
+        <div><strong>${esc(playlist.title)}</strong><small>${playlist.itemCount || 0} vídeos · ${esc(playlist.privacyStatus || '-')}</small>${mappedIds.has(playlist.id) ? '<span class="badge info">Vinculada ao aplicativo</span>' : ''}</div>
         <div class="inline-actions"><button type="button" class="small" data-ytm-use-playlist="${esc(playlist.id)}">Usar como destino</button><a class="button-link small" href="${esc(playlist.url)}" target="_blank" rel="noopener">Abrir</a></div>
       </article>`).join('');
   }
 
+  function syncSearchQueueState(queue) {
+    searchQueueState = new Map();
+    const target = currentPrimaryTarget();
+    if (!target || !queue) return;
+    const jobs = (queue.jobs || []).filter((job) => job.playlistId === target.playlistId).slice().reverse();
+    for (const job of jobs) for (const item of job.items || []) if (item.videoId) searchQueueState.set(item.videoId, item.status || 'pending');
+  }
+
   async function refreshPlaylistIndex() {
-    const playlistId = $('#ytmSearchPlaylist')?.value || '';
+    const target = currentPrimaryTarget();
+    const playlistId = target && target.playlistId || '';
     playlistIndex = new Set();
-    if (!playlistId || !accountConnected()) { renderSearchResults(); return; }
+    searchQueueState = new Map();
+    if (!playlistId || !accountConnected()) { renderSearchResults(); renderPrimaryTargetMeta(); return; }
     try {
       const response = await deps.api(`/api/youtube-manager/playlist-items?playlistId=${encodeURIComponent(playlistId)}`);
       playlistIndex = new Set((response.result.items || []).map((item) => item.videoId));
+      syncSearchQueueState(status && status.queue);
     } catch (error) {
       deps.showToast(error.message, true);
     }
+    renderPrimaryTargetMeta();
     renderSearchResults();
   }
 
   function renderSearchResults() {
     const root = $('#ytmSearchResults');
     if (!root) return;
-    const playlistSelected = $('#ytmSearchPlaylist')?.value || '';
+    const target = currentPrimaryTarget();
     if (!searchState.results.length) {
-      root.innerHTML = searchState.query ? '<div class="empty-state"><strong>Nenhum vídeo encontrado.</strong></div>' : '';
+      root.innerHTML = searchState.query
+        ? '<div class="empty-state ytm-search-empty"><strong>Nenhum vídeo encontrado.</strong><span>Tente artista + título, cole uma URL ou informe diretamente o Video ID.</span></div>'
+        : '<div class="empty-state ytm-search-empty"><strong>Comece por uma busca</strong><span>Escolha o destino acima e pesquise por artista, música, URL ou Video ID. Você não precisa sair desta tela para acompanhar a fila.</span></div>';
+      $('#ytmSearchMore')?.classList.add('hidden');
       return;
     }
     root.innerHTML = searchState.results.map((item) => {
       const exists = playlistIndex.has(item.id);
-      const disabled = !accountConnected() || !playlistSelected || exists || item.unavailable;
-      return `<article class="ytm-result-card">
+      const queueState = searchQueueState.get(item.id) || '';
+      const queued = ['pending', 'running'].includes(queueState);
+      const processed = ['completed', 'skipped'].includes(queueState);
+      const disabled = !accountConnected() || !target || exists || queued || processed || item.unavailable;
+      let actionLabel = target && target.kind === 'managed' ? 'Adicionar à biblioteca' : 'Adicionar à playlist';
+      if (!target) actionLabel = 'Escolha o destino';
+      if (exists) actionLabel = target && target.kind === 'managed' ? 'Já está na fonte' : 'Já está na playlist';
+      else if (queueState === 'pending') actionLabel = 'Em fila';
+      else if (queueState === 'running') actionLabel = 'Adicionando...';
+      else if (queueState === 'completed') actionLabel = 'Adicionado';
+      else if (queueState === 'skipped') actionLabel = 'Já existente';
+      return `<article class="ytm-result-card ${exists || processed ? 'is-complete' : ''}">
         ${item.thumbnailUrl ? `<img src="${esc(item.thumbnailUrl)}" alt="">` : '<div class="ytm-thumb-placeholder"></div>'}
         <div class="ytm-result-copy">
           <strong>${esc(item.title || item.id)}</strong>
           <span>${esc(item.channelTitle || '')}</span>
           <small>${duration(item.duration)}${item.publishedAt ? ` · ${esc(String(item.publishedAt).slice(0, 10))}` : ''}</small>
+          ${(exists || queueState) ? `<div class="ytm-result-state"><span class="badge ${exists || processed ? 'ok' : 'info'}">${esc(actionLabel)}</span></div>` : ''}
         </div>
         <div class="ytm-result-actions">
+          <button type="button" class="small primary" data-ytm-add-video="${esc(item.id)}" ${disabled ? 'disabled' : ''}>${esc(actionLabel)}</button>
           <a class="button-link small" href="${esc(item.url)}" target="_blank" rel="noopener">Abrir no YouTube</a>
-          <button type="button" class="small primary" data-ytm-add-video="${esc(item.id)}" ${disabled ? 'disabled' : ''}>${exists ? 'Já está na playlist' : 'Adicionar'}</button>
         </div>
       </article>`;
     }).join('');
@@ -267,41 +491,55 @@
   async function doSearch({ more = false } = {}) {
     const query = $('#ytmSearchInput').value.trim();
     if (!query) { deps.showToast('Informe o que deseja pesquisar.', true); return; }
+    const button = $('#ytmSearchBtn');
     const pageToken = more ? searchState.nextPageToken : '';
-    const response = await deps.api('/api/youtube-manager/search', {
-      method: 'POST',
-      body: JSON.stringify({ query, pageToken, force: $('#ytmSearchForce').checked })
-    });
-    const result = response.result;
-    searchState.query = query;
-    searchState.nextPageToken = result.nextPageToken || '';
-    searchState.results = more ? [...searchState.results, ...(result.results || [])] : (result.results || []);
-    $('#ytmSearchMeta').textContent = `${result.direct ? 'Consulta direta por Video ID' : 'Pesquisa'} · ${result.cached ? 'cache' : 'API'} · ${searchState.results.length} resultado(s)`;
-    renderSearchResults();
-    await refreshStatus({ light: true });
+    if (button) { button.disabled = true; button.textContent = 'Pesquisando...'; }
+    if (!more) $('#ytmSearchResults').innerHTML = '<div class="ytm-search-loading"><span></span><strong>Pesquisando no YouTube...</strong></div>';
+    try {
+      const response = await deps.api('/api/youtube-manager/search', {
+        method: 'POST',
+        body: JSON.stringify({ query, pageToken, force: $('#ytmSearchForce').checked })
+      });
+      const result = response.result;
+      searchState.query = query;
+      searchState.nextPageToken = result.nextPageToken || '';
+      searchState.results = more ? [...searchState.results, ...(result.results || [])] : (result.results || []);
+      $('#ytmSearchMeta').textContent = `${result.direct ? 'Consulta direta por Video ID' : 'Pesquisa'} · ${result.cached ? 'resultado em cache' : 'consulta ao YouTube'} · ${searchState.results.length} resultado(s)`;
+      renderSearchResults();
+      await refreshStatus({ light: true });
+    } finally {
+      if (button) { button.disabled = false; button.textContent = 'Pesquisar'; }
+    }
   }
 
   async function addVideoToPlaylist(videoId, title = '') {
-    const playlistId = $('#ytmSearchPlaylist').value;
-    const playlist = playlists.find((item) => item.id === playlistId);
-    if (!playlist) throw new Error('Selecione a playlist YouTube destino.');
+    const target = currentPrimaryTarget();
+    if (!target) throw new Error('Escolha primeiro a Biblioteca ou playlist de destino.');
+    const playlist = playlistById(target.playlistId);
+    if (!playlist) throw new Error('A playlist de destino não está disponível na conta conectada.');
     const planResponse = await deps.api('/api/youtube-manager/playlist-plan', {
-      method: 'POST', body: JSON.stringify({ playlistId, playlistTitle: playlist.title, videoIds: [{ videoId, title }] })
+      method: 'POST', body: JSON.stringify({ playlistId: playlist.id, playlistTitle: playlist.title, videoIds: [{ videoId, title }] })
     });
     const plan = planResponse.result;
     if (!plan.eligible) {
-      deps.showToast(plan.alreadyExists ? 'O vídeo já está nessa playlist.' : 'Nenhum vídeo elegível para adicionar.');
+      deps.showToast(plan.alreadyExists ? 'O vídeo já está na fonte deste destino.' : 'Nenhum vídeo elegível para adicionar.');
       playlistIndex.add(videoId); renderSearchResults(); return;
     }
+    const managed = target.kind === 'managed';
     const dialog = await deps.showDialog({
-      eyebrow: 'YouTube', title: 'Adicionar à playlist?',
-      message: `${title || videoId} será adicionado a “${playlist.title}”.`,
+      eyebrow: managed ? 'Adicionar à Biblioteca' : 'YouTube',
+      title: managed ? `Adicionar a “${target.displayName}”?` : 'Adicionar à playlist?',
+      message: managed
+        ? `${title || videoId} será incluído na playlist “${playlist.title}”, que alimenta este destino no aplicativo.`
+        : `${title || videoId} será adicionado a “${playlist.title}”.`,
+      warning: managed ? 'Depois da inserção, a Biblioteca precisa ser sincronizada para o vídeo entrar no fluxo normal de download.' : '',
       confirmLabel: 'Adicionar'
     });
     if (!dialog.confirmed) return;
     await deps.api('/api/youtube-manager/playlist-start', { method: 'POST', body: JSON.stringify({ plan }) });
-    deps.showToast('Vídeo enviado para a fila da playlist.');
-    setTab('playlists');
+    searchQueueState.set(videoId, 'pending');
+    renderSearchResults();
+    deps.showToast(managed ? 'Vídeo enviado para a fila. Acompanhe em Atividade; depois sincronize a Biblioteca.' : 'Vídeo enviado para a fila da playlist.');
     await refreshQueue();
   }
 
@@ -383,6 +621,7 @@
     const count = selectedCatalog.size;
     if ($('#ytmCatalogSelectionMeta')) $('#ytmCatalogSelectionMeta').textContent = `${count} selecionado(s)`;
     if ($('#ytmCatalogClearSelection')) $('#ytmCatalogClearSelection').disabled = count === 0;
+    if ($('#ytmCatalogBatch')) $('#ytmCatalogBatch').classList.toggle('hidden', count === 0);
   }
 
   async function selectAllConfirmedCatalog() {
@@ -597,7 +836,7 @@
     if (!dialog.confirmed || !plan.eligible) return;
     await deps.api('/api/youtube-manager/playlist-start', { method: 'POST', body: JSON.stringify({ plan }) });
     deps.showToast('Fila de inserção na playlist do YouTube criada.');
-    setTab('playlists');
+    setTab('activity');
     await refreshQueue();
   }
 
@@ -661,6 +900,10 @@
     renderQueue(status.queue);
     renderAdoptionQueue(status.adoption);
     renderQuota();
+    syncSearchQueueState(status.queue);
+    renderOverview();
+    renderPrimaryTargetMeta();
+    renderSearchResults();
     const signature = flowStatusSignature(status);
     const changed = signature !== catalogFlowSignature;
     catalogFlowSignature = signature;
@@ -668,7 +911,22 @@
   }
 
   async function refreshPlaylists() {
-    if (!accountConnected()) { playlists = []; renderPlaylists(); return; }
+    try {
+      const targetResponse = await deps.api('/api/youtube-manager/targets');
+      addTargets = targetResponse.result && targetResponse.result.targets || [];
+    } catch (error) {
+      addTargets = [];
+      deps.showToast(`Não foi possível listar os destinos do aplicativo: ${error.message}`, true);
+    }
+
+    if (!accountConnected()) {
+      playlists = [];
+      playlistIndex = new Set();
+      searchQueueState = new Map();
+      renderPlaylists();
+      renderSearchResults();
+      return;
+    }
     try {
       const response = await deps.api('/api/youtube-manager/playlists');
       playlists = response.result.playlists || [];
@@ -677,6 +935,7 @@
       if (error.status !== 401) deps.showToast(error.message, true);
     }
     renderPlaylists();
+    await refreshPlaylistIndex();
   }
 
   async function refreshStatus({ light = false } = {}) {
@@ -687,8 +946,18 @@
     status = statusResponse.result;
     accountConfig = configResponse.result;
     sources = status.sources || [];
-    renderAccount(); renderSources(); renderCatalogMetrics(); renderQueue(status.queue); renderAdoptionQueue(status.adoption);
+    renderAccount();
+    renderSources();
+    renderCatalogMetrics();
+    renderQueue(status.queue);
+    renderAdoptionQueue(status.adoption);
+    renderOverview();
     if (!light) await refreshPlaylists();
+    else {
+      syncSearchQueueState(status.queue);
+      renderPrimaryTargetMeta();
+      renderSearchResults();
+    }
   }
 
   async function saveAccountConfig() {
@@ -705,23 +974,45 @@
   }
 
   async function home() {
-    setTab(activeTab || 'search');
+    setTab(activeTab || 'add');
     await refreshStatus();
     if (activeTab === 'catalog') await refreshCatalog();
+  }
+
+  async function showGuide() {
+    await deps.showDialog({
+      eyebrow: 'Gerenciador do YouTube',
+      title: 'O caminho mais simples é Destino → Pesquisa → Adicionar',
+      message: '1. Escolha a Biblioteca ou playlist que deve receber o vídeo. 2. Pesquise por artista, música, URL ou Video ID. 3. Clique em Adicionar e acompanhe a operação em Atividade.',
+      warning: '“Recuperar acervo” é uma ferramenta de manutenção para arquivos que já existem no disco. Você normalmente não precisa abrir essa área para adicionar vídeos novos.',
+      confirmLabel: 'Entendi'
+    });
   }
 
   function bind() {
     $$('.ytm-tab').forEach((button) => button.addEventListener('click', async () => {
       setTab(button.dataset.ytmTab);
       if (activeTab === 'catalog') await refreshCatalog();
-      if (activeTab === 'playlists') await refreshPlaylists();
-      if (activeTab === 'account') await refreshStatus({ light: true });
+      if (activeTab === 'settings') await refreshStatus({ light: true });
     }));
     $('#ytmRefreshBtn').addEventListener('click', () => home().catch((error) => deps.showToast(error.message, true)));
+    $('#ytmGuideBtn').addEventListener('click', () => showGuide().catch((error) => deps.showToast(error.message, true)));
+    $('#view-youtube-manager').addEventListener('click', (event) => {
+      const go = event.target.closest('[data-ytm-go]');
+      if (!go) return;
+      const tab = go.dataset.ytmGo;
+      setTab(tab);
+      if (activeTab === 'catalog') refreshCatalog().catch((error) => deps.showToast(error.message, true));
+      if (activeTab === 'settings') refreshStatus({ light: true }).catch((error) => deps.showToast(error.message, true));
+    });
+    $('#ytmPrimaryTarget').addEventListener('change', async () => {
+      try { window.localStorage.setItem('ytm-primary-target', $('#ytmPrimaryTarget').value || ''); } catch {}
+      await refreshPlaylistIndex();
+    });
+    $('#ytmPrimarySyncBtn').addEventListener('click', () => syncPrimaryTarget().catch((error) => deps.showToast(error.message, true)));
     $('#ytmSearchBtn').addEventListener('click', () => doSearch().catch((error) => deps.showToast(error.message, true)));
     $('#ytmSearchInput').addEventListener('keydown', (event) => { if (event.key === 'Enter') doSearch().catch((error) => deps.showToast(error.message, true)); });
     $('#ytmSearchMore').addEventListener('click', () => doSearch({ more: true }).catch((error) => deps.showToast(error.message, true)));
-    $('#ytmSearchPlaylist').addEventListener('change', () => refreshPlaylistIndex());
     $('#ytmSearchResults').addEventListener('click', (event) => {
       const button = event.target.closest('[data-ytm-add-video]'); if (!button) return;
       const item = searchState.results.find((value) => value.id === button.dataset.ytmAddVideo);
@@ -770,7 +1061,19 @@
     $('#ytmAdoptionQueueCancel').addEventListener('click', async () => { const dialog = await deps.showDialog({ eyebrow: 'Fila de adoção', title: 'Cancelar adoções pendentes?', message: 'Itens já concluídos permanecem adotados. O item em execução termina sua transação.', confirmLabel: 'Cancelar pendentes', danger: true }); if (!dialog.confirmed) return; await deps.api('/api/youtube-manager/adoption-cancel', { method: 'POST', body: '{}' }); await refreshQueue(); });
 
     $('#ytmPlaylistCreate').addEventListener('click', async () => { try { await deps.api('/api/youtube-manager/playlists', { method: 'POST', body: JSON.stringify({ title: $('#ytmPlaylistTitle').value.trim(), description: $('#ytmPlaylistDescription').value.trim(), privacyStatus: $('#ytmPlaylistPrivacy').value }) }); $('#ytmPlaylistTitle').value = ''; $('#ytmPlaylistDescription').value = ''; await refreshStatus(); deps.showToast('Playlist criada.'); } catch (error) { deps.showToast(error.message, true); } });
-    $('#ytmPlaylistList').addEventListener('click', (event) => { const button = event.target.closest('[data-ytm-use-playlist]'); if (!button) return; $('#ytmSearchPlaylist').value = button.dataset.ytmUsePlaylist; $('#ytmCatalogPlaylist').value = button.dataset.ytmUsePlaylist; deps.showToast('Playlist definida como destino.'); });
+    $('#ytmPlaylistList').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-ytm-use-playlist]');
+      if (!button) return;
+      const playlistId = button.dataset.ytmUsePlaylist;
+      const target = addTargets.find((item) => item.playlistId === playlistId);
+      const value = target ? `target:${target.id}` : `playlist:${playlistId}`;
+      $('#ytmPrimaryTarget').value = value;
+      $('#ytmCatalogPlaylist').value = playlistId;
+      try { window.localStorage.setItem('ytm-primary-target', value); } catch {}
+      setTab('add');
+      refreshPlaylistIndex().catch((error) => deps.showToast(error.message, true));
+      deps.showToast('Destino definido. Agora pesquise o vídeo que deseja adicionar.');
+    });
     $('#ytmQueueToggle').addEventListener('click', async () => { try { const action = $('#ytmQueueToggle').dataset.action === 'resume' ? 'resume' : 'pause'; await deps.api(`/api/youtube-manager/playlist-${action}`, { method: 'POST', body: '{}' }); await refreshQueue(); } catch (error) { deps.showToast(error.message, true); } });
     $('#ytmQueueReconcile').addEventListener('click', async () => {
       try {
@@ -800,7 +1103,7 @@
     const oauthState = params.get('youtubeOAuth');
     if (oauthState) {
       deps.activateView?.();
-      setTab('account');
+      setTab('settings');
       if (oauthState === 'success') deps.showToast('Conta do YouTube conectada.');
       else deps.showToast(params.get('message') || 'Falha ao conectar a conta do YouTube.', true);
       params.delete('youtubeOAuth'); params.delete('message');
