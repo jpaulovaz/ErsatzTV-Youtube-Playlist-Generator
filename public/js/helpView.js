@@ -1,5 +1,5 @@
 (() => {
-  const TABS = [
+  const SCRIPTED_TABS = [
     ['start', 'Começando'],
     ['resources', 'Recursos'],
     ['queries', 'Queries'],
@@ -127,6 +127,11 @@
     }
   ];
 
+  const APP_AREAS = [
+    ['start', 'Comece aqui'], ['daily', 'Uso diário'], ['libraries', 'Bibliotecas'], ['downloads', 'Downloads'], ['channels', 'Canais'], ['youtube', 'Adicionar vídeos'], ['scripted', 'Scripted Schedules'], ['troubleshooting', 'Problemas comuns']
+  ];
+
+  let area = 'start';
   let tab = 'start';
   const root = () => document.querySelector('#helpRoot');
   const esc = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
@@ -190,6 +195,55 @@
     return `<div class="help-glossary">${items.map(([term, text]) => `<article class="card"><h3>${esc(term)}</h3><p>${esc(text)}</p></article>`).join('')}</div>`;
   }
 
+  function goButton(view, label, primary = false) {
+    return `<button type="button" class="${primary ? 'primary' : ''}" data-help-go="${esc(view)}">${esc(label)}</button>`;
+  }
+
+  function renderAppStart() {
+    return `<section class="card help-lead app-help-hero"><span class="eyebrow">Comece aqui</span><h3>O aplicativo fica simples quando você pensa em quatro tarefas</h3><p>Você não precisa conhecer todas as telas. Escolha o que quer fazer agora e o restante aparece quando for necessário.</p><div class="help-path-grid"><article><strong>1. Quero adicionar um vídeo</strong><span>Use Adicionar vídeos, escolha a Biblioteca, pesquise e confirme.</span>${goButton('youtube-manager', 'Adicionar vídeos', true)}</article><article><strong>2. Quero organizar o que já tenho</strong><span>Bibliotecas concentram conteúdo, legendas, órfãos e fontes.</span>${goButton('libraries', 'Abrir Bibliotecas')}</article><article><strong>3. Quero ver o que está acontecendo</strong><span>Downloads mostra fila, falhas e histórico. A Visão geral destaca somente o que exige atenção.</span>${goButton('downloads', 'Ver Downloads')}</article><article><strong>4. Quero montar uma grade de TV</strong><span>Scripted Schedules organiza a programação em etapas: recursos, grade, revisão e publicação.</span>${goButton('scripted-schedules', 'Abrir Scripted Schedules')}</article></div></section>
+      <section class="card help-note"><h3>Se estiver em dúvida</h3><p>Volte para <strong>Visão geral</strong>. Ela mostra o estado atual, problemas e atalhos para as tarefas mais comuns.</p>${goButton('overview', 'Ir para Visão geral')}</section>`;
+  }
+
+  function renderDailyUse() {
+    return `<section class="card help-lead"><span class="eyebrow">Fluxo mais comum</span><h3>Adicionar conteúdo novo</h3><div class="help-steps"><div><strong>1</strong><span>Abra <b>Adicionar vídeos</b> e escolha a Biblioteca de destino.</span></div><div><strong>2</strong><span>Pesquise por título, artista, URL ou Video ID e adicione o resultado correto.</span></div><div><strong>3</strong><span>Sincronize a Biblioteca quando o aplicativo oferecer essa ação.</span></div><div><strong>4</strong><span>Acompanhe o download em <b>Downloads</b>. Se algo falhar, a Visão geral chamará sua atenção.</span></div></div><div class="inline-actions">${goButton('youtube-manager', 'Adicionar vídeos', true)}${goButton('downloads', 'Acompanhar downloads')}</div></section>
+      <section class="card help-note"><h3>Buscar novidades em tudo</h3><p>O botão <strong>Buscar novidades</strong> verifica as fontes configuradas sem alterar sua configuração. Use quando quiser antecipar a próxima busca agendada.</p></section>`;
+  }
+
+  function renderLibrariesHelp() {
+    return `<div class="help-module-grid"><article class="card help-module-card"><span class="eyebrow">Biblioteca</span><h3>Quando usar</h3><p>Use Bibliotecas para destinos estáveis que recebem vídeos de uma ou mais playlists/URLs e ficam organizados em uma pasta própria.</p><div class="help-example"><strong>Uso comum</strong><span>JOHNFLIX MUSIX 00'S recebe clipes de uma playlist do YouTube e mantém vídeo, NFO, poster e legendas juntos.</span></div>${goButton('libraries', 'Abrir Bibliotecas', true)}</article><article class="card help-module-card"><h3>Gerenciar conteúdo</h3><p>É onde você vê os arquivos já conhecidos, filtra itens sem legendas, gerencia órfãos/quarentena e abre o Gerenciador de Legendas.</p><p>Os filtros são recalculados quando uma legenda é aplicada, restaurada ou excluída.</p></article><article class="card help-module-card"><h3>Biblioteca x Canal</h3><p><strong>Biblioteca</strong> é melhor para um destino definido por playlists/URLs. <strong>Canal</strong> é melhor quando você quer acompanhar a estrutura de um canal do YouTube, como uploads, Shorts, streams e playlists específicas.</p></article></div>`;
+  }
+
+  function renderDownloadsHelp() {
+    return `<section class="card help-lead"><span class="eyebrow">Atividade</span><h3>Entenda a fila sem decorar estados</h3><p>A tela começa pela fila ativa. Filtros e detalhes técnicos ficam disponíveis quando você precisa investigar.</p><div class="help-status-grid"><div><strong>Pendente</strong><span>Aguardando a vez.</span></div><div><strong>Baixando</strong><span>Transferência em andamento.</span></div><div><strong>Falha</strong><span>Algo precisa de atenção; abra a ação do item.</span></div><div><strong>Concluído</strong><span>Mídia finalizada e registrada.</span></div><div><strong>Órfão</strong><span>Arquivo local cuja origem deixou de existir na fonte.</span></div></div>${goButton('downloads', 'Abrir Downloads', true)}</section><section class="card help-note"><h3>Não limpe a fila para resolver uma fonte errada</h3><p>Limpar remove os pendentes atuais, mas uma fonte ainda configurada pode descobri-los novamente. Corrija ou pause a fonte primeiro.</p></section>`;
+  }
+
+  function renderChannelsHelp() {
+    return `<section class="card help-lead"><span class="eyebrow">Canais</span><h3>Monitore um canal do YouTube como estrutura</h3><div class="help-steps"><div><strong>1</strong><span>Cole a URL ou @handle e clique em Analisar canal.</span></div><div><strong>2</strong><span>Escolha apenas as fontes que realmente quer acompanhar: uploads, vídeos, Shorts, streams ou playlists.</span></div><div><strong>3</strong><span>Revise perfil, legendas e destino. Depois salve e use Atualizar agora quando quiser sincronizar.</span></div></div>${goButton('channels', 'Abrir Canais', true)}</section>`;
+  }
+
+  function renderYoutubeHelp() {
+    return `<section class="card help-lead"><span class="eyebrow">Adicionar vídeos</span><h3>O caminho rápido para conteúdo novo</h3><p>A tela foi desenhada para o uso diário: <strong>Destino → Pesquisa → Adicionar</strong>. Escolher uma Biblioteca faz o aplicativo usar a playlist YouTube associada a ela e depois oferecer a sincronização.</p><div class="help-steps"><div><strong>1</strong><span>Escolha a Biblioteca ou playlist de destino.</span></div><div><strong>2</strong><span>Pesquise pelo vídeo ou cole uma URL/ID.</span></div><div><strong>3</strong><span>Adicione o resultado correto e acompanhe a fila em Atividade.</span></div></div><p><strong>Recuperar acervo</strong> é uma ferramenta eventual para arquivos que já estão no disco e perderam a referência, não o fluxo normal de adição.</p>${goButton('youtube-manager', 'Abrir Adicionar vídeos', true)}</section>`;
+  }
+
+  function renderTroubleshooting() {
+    return `<div class="help-module-grid"><article class="card help-module-card"><h3>Algo parou?</h3><p>Comece pela Visão geral. Ela prioriza pouco disco, fila pausada e downloads com falha.</p>${goButton('overview', 'Ver estado do sistema', true)}</article><article class="card help-module-card"><h3>Integração não conecta</h3><p>Abra Configurações e teste YouTube Data API ou ErsatzTV. Credenciais do Gerenciador do YouTube ficam na própria área de Configurações dele.</p>${goButton('settings', 'Abrir Configurações')}</article><article class="card help-module-card"><h3>Preciso diagnosticar</h3><p>Logs é a tela técnica. Use-a quando uma mensagem de erro não for suficiente e procure o horário da ação que falhou.</p>${goButton('logs', 'Abrir Logs')}</article><article class="card help-module-card"><h3>Antes de excluir</h3><p>Ações destrutivas ficam escondidas em opções avançadas e pedem confirmação. Prefira pausar, remover configuração ou quarentena quando quiser preservar arquivos.</p></article></div>`;
+  }
+
+  function renderScriptedArea() {
+    return `<section class="card help-note"><span class="eyebrow">Programação avançada</span><h3>Scripted Schedules</h3><p>Esta área tem sua própria documentação detalhada. Comece em “Começando” e avance só quando precisar.</p></section><nav class="help-tabs help-subtabs" aria-label="Assuntos da ajuda de Scripted Schedules">${SCRIPTED_TABS.map(([key, label]) => `<button type="button" class="${tab === key ? 'active' : ''}" data-help-tab="${key}">${label}</button>`).join('')}</nav><div class="help-scripted-body">${content()}</div>`;
+  }
+
+  function appContent() {
+    if (area === 'daily') return renderDailyUse();
+    if (area === 'libraries') return renderLibrariesHelp();
+    if (area === 'downloads') return renderDownloadsHelp();
+    if (area === 'channels') return renderChannelsHelp();
+    if (area === 'youtube') return renderYoutubeHelp();
+    if (area === 'scripted') return renderScriptedArea();
+    if (area === 'troubleshooting') return renderTroubleshooting();
+    return renderAppStart();
+  }
+
   function content() {
     if (tab === 'resources') return renderResources();
     if (tab === 'queries') return renderQueries();
@@ -202,17 +256,27 @@
 
   function render() {
     const el = root(); if (!el) return;
-    el.innerHTML = `<div class="page-header"><div><span class="page-kicker">Programação · Scripted Schedules</span><h2>Ajuda</h2><p>Explicações simples para montar e manter seus Scripted Schedules.</p></div></div><nav class="help-tabs" aria-label="Assuntos da ajuda de Scripted Schedules">${TABS.map(([key, label]) => `<button type="button" class="${tab === key ? 'active' : ''}" data-help-tab="${key}">${label}</button>`).join('')}</nav><div class="help-body">${content()}</div>`;
+    el.innerHTML = `<div class="page-header page-header-rich"><div><span class="page-kicker">Ajuda</span><h2>Como posso ajudar?</h2><p class="page-subtitle">Guias curtos para o uso diário e uma área detalhada para Scripted Schedules.</p></div></div><nav class="help-tabs help-main-tabs" aria-label="Assuntos da ajuda">${APP_AREAS.map(([key, label]) => `<button type="button" class="${area === key ? 'active' : ''}" data-help-area="${key}">${label}</button>`).join('')}</nav><div class="help-body">${appContent()}</div>`;
   }
 
   function init() {
     root()?.addEventListener('click', (event) => {
+      const go = event.target.closest('[data-help-go]');
+      if (go) {
+        document.querySelector(`.nav-button[data-view="${go.dataset.helpGo}"]`)?.click();
+        return;
+      }
+      const areaButton = event.target.closest('[data-help-area]');
+      if (areaButton) {
+        area = areaButton.dataset.helpArea || 'start'; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); return;
+      }
       const button = event.target.closest('[data-help-tab]');
       if (!button) return;
       tab = button.dataset.helpTab || 'start'; render(); window.scrollTo({ top: 0, behavior: 'smooth' });
     });
     render();
   }
-  function home() { tab = 'start'; render(); }
-  window.HelpView = { init, home };
+  function home() { area = 'start'; tab = 'start'; render(); }
+  function open(nextArea = 'start') { area = APP_AREAS.some(([key]) => key === nextArea) ? nextArea : 'start'; render(); }
+  window.HelpView = { init, home, open };
 })(window);

@@ -35,6 +35,38 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
+test('v4 reorganizes the application around primary tasks, progressive disclosure and guided help', () => {
+  const html = read('index.html');
+  const app = read('app.js');
+  const help = read('js/helpView.js');
+  const schedules = read('js/scriptedSchedulesView.js');
+  const css = read('styles.css');
+
+  assert.match(html, /<span class="nav-label">Principal<\/span>/);
+  assert.match(html, /nav-button nav-button-primary" data-view="youtube-manager"/);
+  assert.match(html, /<span>Adicionar vídeos<\/span>/);
+  assert.match(html, /overview-quick-actions/);
+  assert.match(html, /id="overviewAttention"/);
+  assert.match(html, /id="librariesOverviewCount"/);
+  assert.match(html, /id="channelsOverviewCount"/);
+  assert.match(html, /id="settingsSearch"/);
+  assert.match(html, /settings-group-label"><span>Essencial/);
+  assert.match(html, /settings-group-label"><span>Integrações/);
+  assert.match(html, /settings-group-label"><span>Automação/);
+  assert.match(html, /settings-group-label"><span>Avançado/);
+  assert.match(html, /id="downloadsAccordion" class="queue-accordion" open/);
+  assert.match(app, /function updateOverviewDashboard\(\)/);
+  assert.match(app, /function applySettingsSearch\(\)/);
+  assert.match(app, /function applyLibraryConfigSearch\(\)/);
+  assert.match(help, /Como posso ajudar\?/);
+  assert.match(help, /Problemas comuns/);
+  assert.match(schedules, /ss-workflow-steps/);
+  assert.match(schedules, /Mais opções/);
+  assert.match(css, /\.overview-quick-actions/);
+  assert.match(css, /\.settings-group-label/);
+  assert.match(css, /\.empty-state-rich/);
+});
+
 test('saved Channels expose compact read-only summaries without moving edit controls into the accordions', () => {
   const view = read('js/channelsView.js');
   const css = read('styles.css');
@@ -345,17 +377,18 @@ test('sidebar navigation always returns each section to its home state', () => {
   assert.match(schedules, /async function home\(\)[\s\S]*state\.current = null/);
 });
 
-test('Scripted Schedules Help stays inside the Programacao sidebar group and is clearly scoped', () => {
+test('Ajuda is an application-wide help center and preserves deep Scripted Schedules guidance', () => {
   const html = read('index.html');
   const help = read('js/helpView.js');
   const programacaoGroup = html.match(/<div class="nav-group">\s*<span class="nav-label">Programação<\/span>[\s\S]*?<\/div>/)?.[0] || '';
   const sistemaGroup = html.match(/<div class="nav-group">\s*<span class="nav-label">Sistema<\/span>[\s\S]*?<\/div>/)?.[0] || '';
   assert.match(programacaoGroup, /data-view="scripted-schedules"/);
-  assert.match(programacaoGroup, /data-view="help"/);
-  assert.doesNotMatch(sistemaGroup, /data-view="help"/);
+  assert.doesNotMatch(programacaoGroup, /data-view="help"/);
+  assert.match(sistemaGroup, /data-view="help"/);
   assert.match(html, /id="view-help"/);
   assert.match(html, new RegExp(`helpView\\.js\\?v=${APP_VERSION_RE}`));
-  assert.match(help, /Programação · Scripted Schedules/);
+  assert.match(help, /Como posso ajudar\?/);
+  for (const area of ['Comece aqui', 'Uso diário', 'Bibliotecas', 'Downloads', 'Canais', 'Adicionar vídeos', 'Scripted Schedules', 'Problemas comuns']) assert.match(help, new RegExp(area));
   assert.match(help, /Assuntos da ajuda de Scripted Schedules/);
   for (const tab of ['Começando', 'Recursos', 'Queries', 'Módulos', 'Combinações', 'Publicar', 'Glossário']) assert.match(help, new RegExp(tab));
   for (const name of ['Rotação por quantidade', 'Rotação por peso', 'Bloco contínuo por horário', 'Inserções após X itens', 'Encaixar até o próximo evento', 'Escolha entre fontes', 'Relógio de programação', 'Programação especial temporária']) assert.match(help, new RegExp(name));

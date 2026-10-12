@@ -612,9 +612,23 @@
     if (!root) return;
     const channels = currentConfig() && currentConfig().channels || [];
     $('#navChannelsBadge').textContent = String(channels.length);
+    const aggregate = channels.reduce((acc, channel) => {
+      const stats = aggregateChannelStats(channel);
+      const state = stateForChannel(channel.channelId);
+      if (channel.enabled !== false && !(state && state.available === false)) acc.active += 1;
+      if (stats.found) {
+        acc.pending += stats.pending;
+        acc.issues += stats.failed + stats.orphaned;
+      }
+      return acc;
+    }, { active: 0, pending: 0, issues: 0 });
+    if ($('#channelsOverviewCount')) $('#channelsOverviewCount').textContent = String(channels.length);
+    if ($('#channelsOverviewActive')) $('#channelsOverviewActive').textContent = String(aggregate.active);
+    if ($('#channelsOverviewPending')) $('#channelsOverviewPending').textContent = String(aggregate.pending);
+    if ($('#channelsOverviewIssues')) $('#channelsOverviewIssues').textContent = String(aggregate.issues);
     rememberSummaryOpenState(root);
     if (!channels.length) {
-      root.innerHTML = '<div class="empty-state">Nenhum canal configurado.</div>';
+      root.innerHTML = '<div class="empty-state empty-state-rich"><strong>Nenhum canal configurado</strong><span>Use “Adicionar canal” para monitorar uploads, Shorts, streams ou playlists de um canal do YouTube.</span></div>';
       return;
     }
     root.innerHTML = channels.map((channel) => {
@@ -635,9 +649,14 @@
             </div>
             <div class="channel-card-actions">
               <button type="button" class="small primary" data-channel-action="run">Atualizar agora</button>
-              <button type="button" class="small" data-channel-action="edit">Editar</button>
-              <button type="button" class="small danger" data-channel-action="remove-config">Remover configuração</button>
-              <button type="button" class="small danger" data-channel-action="delete-with-files">Excluir canal e arquivos</button>
+              <button type="button" class="small" data-channel-action="edit">Configurar</button>
+              <details class="channel-more-actions">
+                <summary>Mais opções</summary>
+                <div class="channel-more-actions-menu">
+                  <button type="button" class="small danger ghost" data-channel-action="remove-config">Remover configuração</button>
+                  <button type="button" class="small danger ghost" data-channel-action="delete-with-files">Excluir canal e arquivos</button>
+                </div>
+              </details>
             </div>
           </div>
           <div class="channel-card-stats">${channelStatsHtml(channel)}</div>

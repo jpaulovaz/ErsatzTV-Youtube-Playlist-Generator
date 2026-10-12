@@ -412,6 +412,11 @@
     if (!button) return;
     const action = button.dataset.ssAction;
 
+    if (action === 'open-help') {
+      document.querySelector('.nav-button[data-view="help"]')?.click();
+      window.HelpView?.open?.('scripted');
+      return;
+    }
     if (action === 'new-project') {
       const decision = await state.deps.showDialog({ eyebrow: 'Scripted Schedules', title: 'Novo projeto', message: 'Informe um nome para esta programação.', input: true, inputRequired: true, inputLabel: 'Nome', confirmLabel: 'Criar' });
       if (!decision.confirmed) return;
@@ -637,27 +642,37 @@
   }
 
   function renderList() {
+    const published = state.projects.filter((item) => item.publishedAt).length;
+    const drafts = state.projects.length - published;
+    const linked = state.projects.filter((item) => (item.channelLinks || []).length > 0).length;
     const cards = state.projects.length ? state.projects.map(renderProjectCard).join('') : `
-      <section class="card ss-empty">
-        <span class="eyebrow">Programação</span>
+      <section class="card ss-empty empty-state-rich">
+        <span class="eyebrow">Sua primeira grade</span>
         <h3>Nenhum Scripted Schedule criado</h3>
-        <p>Crie um projeto para montar a programação pela interface e publicar o arquivo Python usado pelo ErsatzTV.</p>
-        <button type="button" class="primary" data-ss-action="new-project">Novo Scripted Schedule</button>
+        <p>Crie um projeto e avance pelas etapas: Geral → Recursos → Programação → Revisão → Publicar. Você não precisa configurar tudo de uma vez.</p>
+        <div class="inline-actions"><button type="button" class="primary" data-ss-action="new-project">Criar primeira programação</button><button type="button" data-ss-action="open-help">Ver guia rápido</button></div>
       </section>`;
     return `
-      <div class="page-header ss-page-header">
-        <div><span class="page-kicker">Programação</span><h2>Scripted Schedules</h2></div>
-        <button type="button" class="primary" data-ss-action="new-project">Novo Scripted Schedule</button>
+      <div class="page-header page-header-rich ss-page-header">
+        <div><span class="page-kicker">Programação</span><h2>Scripted Schedules</h2><p class="page-subtitle">Monte uma grade de TV em etapas, valide antes de publicar e mantenha histórico das versões.</p></div>
+        <div class="header-actions"><button type="button" data-ss-action="open-help">Ajuda</button><button type="button" class="primary" data-ss-action="new-project">Novo Scripted Schedule</button></div>
       </div>
-      ${renderSettingsCard()}
-      <div class="ss-project-grid">${cards}</div>`;
+      <section class="ss-overview-grid" aria-label="Resumo das programações">
+        <div><span>Projetos</span><strong>${state.projects.length}</strong><small>no aplicativo</small></div>
+        <div><span>Publicados</span><strong>${published}</strong><small>com arquivo ativo</small></div>
+        <div><span>Rascunhos</span><strong>${drafts}</strong><small>ainda não publicados</small></div>
+        <div><span>Vinculados</span><strong>${linked}</strong><small>a canais do ErsatzTV</small></div>
+      </section>
+      <section class="card ss-workflow-card"><div class="section-heading"><div><span class="eyebrow">Como funciona</span><h3>Um projeto, cinco etapas</h3><p>Comece pelo canal e pelas fontes; detalhes avançados aparecem somente dentro da etapa correspondente.</p></div></div><div class="ss-workflow-steps"><span><b>1</b> Geral</span><span><b>2</b> Recursos</span><span><b>3</b> Programação</span><span><b>4</b> Revisão</span><span><b>5</b> Publicar</span></div></section>
+      <div class="ss-project-grid">${cards}</div>
+      ${renderSettingsCard()}`;
   }
 
   function renderSettingsCard() {
     const settings = state.settings || { outputRoot: '', historyLimit: 10 };
     return `
       <details class="card ss-settings-card">
-        <summary><strong>Pasta de saída dos scripts</strong><span>${esc(settings.outputRoot || 'Não configurada')}</span></summary>
+        <summary><div><strong>Configuração de publicação</strong><small>Pasta onde os arquivos Python serão gravados.</small></div><span>${esc(settings.outputRoot || 'Não configurada')}</span></summary>
         <div class="ss-settings-body">
           <label class="wide">${labelTitle('Pasta absoluta', 'settingsOutputRoot')}
             <input type="text" data-ss-settings="outputRoot" value="${esc(settings.outputRoot || '')}" placeholder="/srv/ersatztv/scripts">
@@ -685,12 +700,17 @@
         </div>
         <div class="ss-card-channels"><strong>Canais</strong><span>${links.length ? esc(links.join(', ')) : 'Nenhum vínculo local'}</span></div>
         <div class="ss-card-actions">
-          <button type="button" class="primary" data-ss-action="edit" data-id="${esc(project.id)}">Editar</button>
+          <button type="button" class="primary" data-ss-action="edit" data-id="${esc(project.id)}">Abrir editor</button>
           <button type="button" data-ss-action="open-preview" data-id="${esc(project.id)}">Prévia</button>
-          <button type="button" data-ss-action="open-history" data-id="${esc(project.id)}">Histórico</button>
-          <button type="button" data-ss-action="duplicate" data-id="${esc(project.id)}">Duplicar</button>
-          ${links.length ? `<button type="button" class="danger ghost" data-ss-action="open-reset" data-id="${esc(project.id)}">Reset Playout</button>` : ''}
-          <button type="button" class="danger ghost" data-ss-action="delete" data-id="${esc(project.id)}">Excluir</button>
+          <details class="ss-project-more">
+            <summary>Mais opções</summary>
+            <div class="ss-project-more-menu">
+              <button type="button" data-ss-action="open-history" data-id="${esc(project.id)}">Histórico</button>
+              <button type="button" data-ss-action="duplicate" data-id="${esc(project.id)}">Duplicar</button>
+              ${links.length ? `<button type="button" class="danger ghost" data-ss-action="open-reset" data-id="${esc(project.id)}">Reset Playout</button>` : ''}
+              <button type="button" class="danger ghost" data-ss-action="delete" data-id="${esc(project.id)}">Excluir</button>
+            </div>
+          </details>
         </div>
       </article>`;
   }
@@ -700,18 +720,15 @@
       ['general', 'Geral'], ['resources', 'Recursos'], ['programming', 'Programação'], ['review', 'Revisão'], ['publish', 'Publicar']
     ];
     return `
-      <div class="page-header ss-page-header">
+      <div class="page-header page-header-rich ss-page-header">
         <div>
-          <button type="button" class="text-button ss-back" data-ss-action="back">← Scripted Schedules</button>
-          <span class="page-kicker">Editor</span><h2>${esc(state.current.name || 'Scripted Schedule')}</h2>
+          <button type="button" class="text-button ss-back" data-ss-action="back">← Todas as programações</button>
+          <span class="page-kicker">Editor guiado</span><h2>${esc(state.current.name || 'Scripted Schedule')}</h2><p class="page-subtitle">Avance pelas etapas no seu ritmo. Validar não publica nada; Salvar e publicar atualiza o arquivo Python.</p>
         </div>
-        <div class="header-actions">
-          <button type="button" data-ss-action="validate">Validar</button>
-          <button type="button" class="primary" data-ss-action="publish">Salvar e publicar</button>
-        </div>
+        <div class="header-actions"><button type="button" data-ss-action="open-help">Ajuda</button><button type="button" data-ss-action="validate">Validar</button><button type="button" class="primary" data-ss-action="publish">Salvar e publicar</button></div>
       </div>
-      <nav class="ss-editor-tabs" aria-label="Etapas do editor">
-        ${tabs.map(([key, label]) => `<button type="button" class="${state.tab === key ? 'active' : ''}" data-ss-action="tab" data-tab="${key}">${label}</button>`).join('')}
+      <nav class="ss-editor-tabs ss-step-tabs" aria-label="Etapas do editor">
+        ${tabs.map(([key, label], index) => `<button type="button" class="${state.tab === key ? 'active' : ''}" data-ss-action="tab" data-tab="${key}"><span>${index + 1}</span>${label}</button>`).join('')}
       </nav>
       <div class="ss-editor-body">
         ${state.tab === 'general' ? renderGeneral() : ''}

@@ -182,7 +182,7 @@ async function goToViewHome(view) {
   setActiveView(nextView, { scroll: true });
   if (nextView === 'downloads') {
     const accordion = $('#downloadsAccordion');
-    if (accordion) accordion.open = false;
+    if (accordion) accordion.open = true;
     if ($('#downloadFilter')) $('#downloadFilter').value = 'all';
     if ($('#downloadLibraryFilter')) $('#downloadLibraryFilter').value = '';
   } else if (nextView === 'libraries') {
@@ -198,7 +198,10 @@ async function goToViewHome(view) {
   } else if (nextView === 'help') {
     window.HelpView?.home?.();
   } else if (nextView === 'settings') {
-    $$('.settings-accordion').forEach((item) => { item.open = false; });
+    if ($('#settingsSearch')) $('#settingsSearch').value = '';
+    $$('.settings-accordion').forEach((item) => { item.open = false; item.classList.remove('settings-filter-hidden'); });
+    $$('.settings-group-label').forEach((item) => item.classList.remove('settings-filter-hidden'));
+    updateSettingsOverview();
     updateSettingsAccordionToggle();
   } else if (nextView === 'logs') {
     await refreshLogs();
@@ -563,6 +566,7 @@ function fillConfigForm() {
     if (field.type === 'checkbox') field.checked = Boolean(value);
     else field.value = value ?? '';
   });
+  updateSettingsOverview();
 }
 
 function collectConfigForm() {
@@ -629,6 +633,7 @@ function updateLibraryStats() {
       else slot.innerHTML = '';
     }
   });
+  updateLibrariesOverview();
 }
 
 function updateLibraryFilters() {
@@ -671,8 +676,10 @@ function renderLibraries() {
   $('#navLibrariesBadge').textContent = String(playlists.length);
 
   if (playlists.length === 0) {
-    container.innerHTML = '<div class="empty-state">Nenhuma biblioteca configurada.</div>';
+    container.innerHTML = '<div class="empty-state empty-state-rich"><strong>Nenhuma biblioteca configurada</strong><span>Use “Adicionar biblioteca” para criar um destino gerenciado ou vá para “Adicionar vídeos” para começar pelo YouTube.</span></div>';
     updateLibraryFilters();
+    updateLibrariesOverview();
+    applyLibraryConfigSearch();
     return;
   }
 
@@ -736,10 +743,13 @@ function renderLibraries() {
               <button class="small" type="button" data-library-action="reset-playout">Reset Playout</button>
             </div>
           </div>
-          <div class="library-actions library-danger-actions">
-            <button class="small danger" type="button" data-library-action="remove-config">Remover configuração</button>
-            <button class="small danger" type="button" data-library-action="delete-with-files">Excluir biblioteca e arquivos</button>
-          </div>
+          <details class="library-danger-disclosure">
+            <summary>Opções avançadas e exclusão</summary>
+            <div class="library-actions library-danger-actions">
+              <button class="small danger ghost" type="button" data-library-action="remove-config">Remover configuração</button>
+              <button class="small danger ghost" type="button" data-library-action="delete-with-files">Excluir biblioteca e arquivos</button>
+            </div>
+          </details>
         </div>
       </div>
     `;
@@ -749,6 +759,8 @@ function renderLibraries() {
     window.DestinationForm.syncOrphanControls(row);
   });
   updateLibraryFilters();
+  updateLibrariesOverview();
+  applyLibraryConfigSearch();
 }
 
 function libraryContentEpisodeLabel(item) {
@@ -1320,6 +1332,126 @@ async function openTranslationOverviewContent() {
   showToast('Abra Gerenciar conteúdo no destino correspondente para ver os detalhes da tradução.');
 }
 
+function normalizedUiSearch(value) {
+  return String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function updateSettingsOverview() {
+  if (!config) return;
+  const downloads = config.downloads || {};
+  const youtube = config.youtubeApi || {};
+  const ersatz = config.ersatztv || {};
+  const scheduler = config.scheduler || {};
+  const channelScheduler = config.channelScheduler || {};
+  const downloadText = downloads.maxHeight ? `${downloads.maxHeight}p` : 'Padrão';
+  const ytText = youtube.enabled === false ? 'Desativada' : (youtube.apiKey ? 'Configurada' : 'Sem chave');
+  const ersatzText = ersatz.url ? 'Configurado' : 'Não configurado';
+  const automationCount = [scheduler.enabled, channelScheduler.enabled].filter(Boolean).length;
+  const automationText = automationCount ? `${automationCount} ativa${automationCount === 1 ? '' : 's'}` : 'Manual';
+  if ($('#settingsOverviewDownloads')) $('#settingsOverviewDownloads').textContent = downloadText;
+  if ($('#settingsOverviewYoutube')) $('#settingsOverviewYoutube').textContent = ytText;
+  if ($('#settingsOverviewErsatz')) $('#settingsOverviewErsatz').textContent = ersatzText;
+  if ($('#settingsOverviewScheduler')) $('#settingsOverviewScheduler').textContent = automationText;
+}
+
+function updateLibrariesOverview() {
+  const playlists = config && Array.isArray(config.playlists) ? config.playlists : [];
+  let pending = 0; let issues = 0; let totalBytes = 0;
+  for (const playlist of playlists) {
+    const stats = libraryStatsFor(playlist);
+    pending += Number(stats && stats.pending) || 0;
+    issues += (Number(stats && stats.failed) || 0) + (Number(stats && stats.orphaned) || 0) + (Number(stats && stats.quarantined) || 0);
+    totalBytes += Number(stats && stats.totalBytes) || 0;
+  }
+  if ($('#librariesOverviewCount')) $('#librariesOverviewCount').textContent = String(playlists.length);
+  if ($('#librariesOverviewPending')) $('#librariesOverviewPending').textContent = String(pending);
+  if ($('#librariesOverviewIssues')) $('#librariesOverviewIssues').textContent = String(issues);
+  if ($('#librariesOverviewSize')) $('#librariesOverviewSize').textContent = formatBytes(totalBytes);
+}
+
+function updateOverviewDashboard() {
+  if (!statusData) return;
+  const queue = statusData.queue || {};
+  const counts = queue.counts || {};
+  const storage = queue.storage || {};
+  const playlists = config && Array.isArray(config.playlists) ? config.playlists : [];
+  const channels = config && Array.isArray(config.channels) ? config.channels : [];
+  const pending = Number(counts.pending) || 0;
+  const failed = Number(counts.failed) || 0;
+  const active = Number(queue.activeItems) || 0;
+
+  if ($('#overviewQueueValue')) $('#overviewQueueValue').textContent = active ? `${active} ativo${active === 1 ? '' : 's'}` : (pending ? `${pending} pendente${pending === 1 ? '' : 's'}` : 'Em dia');
+  if ($('#overviewQueueMeta')) $('#overviewQueueMeta').textContent = failed ? `${failed} falha${failed === 1 ? '' : 's'} precisa(m) de atenção` : (queue.paused ? 'Fila pausada' : 'Fila operacional');
+  if ($('#overviewLibraryValue')) $('#overviewLibraryValue').textContent = String(playlists.length);
+  if ($('#overviewLibraryMeta')) $('#overviewLibraryMeta').textContent = playlists.length ? 'destinos configurados' : 'adicione sua primeira biblioteca';
+  if ($('#overviewChannelValue')) $('#overviewChannelValue').textContent = String(channels.length);
+  if ($('#overviewChannelMeta')) $('#overviewChannelMeta').textContent = channels.length ? 'canais monitorados' : 'nenhum canal monitorado';
+  if ($('#overviewDiskValue')) $('#overviewDiskValue').textContent = storage.error ? 'Indisponível' : formatBytes(storage.availableBytes || 0);
+  if ($('#overviewDiskMeta')) $('#overviewDiskMeta').textContent = storage.totalBytes ? `${Number(storage.usedPercent || 0).toFixed(1)}% usado` : 'espaço disponível';
+
+  const box = $('#overviewAttention');
+  const icon = $('#overviewAttentionIcon');
+  const title = $('#overviewAttentionTitle');
+  const text = $('#overviewAttentionText');
+  const action = $('#overviewAttentionAction');
+  if (!box || !title || !text || !action) return;
+  let klass = 'ok'; let iconText = '✓'; let titleText = 'Tudo certo'; let bodyText = 'Nenhuma ação imediata necessária.'; let actionLabel = ''; let view = '';
+  if (queue.lowDiskBlocked) {
+    klass = 'danger'; iconText = '!'; titleText = 'Pouco espaço em disco'; bodyText = 'A fila foi bloqueada para proteger o armazenamento. Libere espaço antes de retomar.'; actionLabel = 'Ver downloads'; view = 'downloads';
+  } else if (failed > 0) {
+    klass = 'danger'; iconText = '!'; titleText = `${failed} download${failed === 1 ? '' : 's'} com falha`; bodyText = 'Revise os itens com erro antes de deixar a fila crescer.'; actionLabel = 'Ver falhas'; view = 'downloads';
+  } else if (queue.paused) {
+    klass = 'warn'; iconText = 'Ⅱ'; titleText = 'Fila pausada'; bodyText = `${pending} item(ns) continuam aguardando. Retome quando estiver pronto.`; actionLabel = 'Abrir downloads'; view = 'downloads';
+  } else if (!playlists.length && !channels.length) {
+    klass = 'warn'; iconText = 'i'; titleText = 'Comece configurando conteúdo'; bodyText = 'Adicione uma Biblioteca ou use Adicionar vídeos para criar seu primeiro fluxo.'; actionLabel = 'Adicionar vídeos'; view = 'youtube-manager';
+  } else if (statusData.discovery && statusData.discovery.running) {
+    klass = 'info'; iconText = '↻'; titleText = 'Buscando novidades'; bodyText = statusData.discovery.currentStep || 'A descoberta está em andamento.';
+  } else if (queue.running) {
+    klass = 'info'; iconText = '↓'; titleText = 'Download em andamento'; bodyText = queue.current && queue.current.title ? queue.current.title : 'A fila está trabalhando normalmente.'; actionLabel = 'Ver downloads'; view = 'downloads';
+  }
+  box.className = `card overview-attention ${klass}`;
+  icon.textContent = iconText; title.textContent = titleText; text.textContent = bodyText;
+  action.textContent = actionLabel || 'Ver detalhes';
+  action.dataset.view = view;
+  action.classList.toggle('hidden', !view);
+}
+
+function applyLibraryConfigSearch() {
+  const input = $('#libraryConfigSearch');
+  const query = normalizedUiSearch(input && input.value);
+  const rows = $$('#playlistList .playlist-row');
+  let visible = 0;
+  rows.forEach((row) => {
+    const name = normalizedUiSearch(row.querySelector('[data-field="name"]')?.value || row.textContent);
+    const show = !query || name.includes(query);
+    row.classList.toggle('library-filter-hidden', !show);
+    if (show) visible += 1;
+  });
+  if ($('#libraryConfigSearchCount')) $('#libraryConfigSearchCount').textContent = query ? `${visible} de ${rows.length}` : `${rows.length} biblioteca${rows.length === 1 ? '' : 's'}`;
+}
+
+function applySettingsSearch() {
+  const input = $('#settingsSearch');
+  const query = normalizedUiSearch(input && input.value);
+  const details = $$('.settings-accordion');
+  details.forEach((item) => {
+    const haystack = normalizedUiSearch(`${item.dataset.settingsKeywords || ''} ${item.textContent || ''}`);
+    const show = !query || haystack.includes(query);
+    item.classList.toggle('settings-filter-hidden', !show);
+    if (query && show) item.open = true;
+  });
+  $$('.settings-group-label').forEach((label) => {
+    let next = label.nextElementSibling;
+    let hasVisible = false;
+    while (next && !next.classList.contains('settings-group-label')) {
+      if (next.classList.contains('settings-accordion') && !next.classList.contains('settings-filter-hidden')) hasVisible = true;
+      next = next.nextElementSibling;
+    }
+    label.classList.toggle('settings-filter-hidden', !hasVisible);
+  });
+  updateSettingsAccordionToggle();
+}
+
 function renderStatus() {
   if (!statusData) return;
   const discovery = statusData.discovery || {};
@@ -1436,6 +1568,9 @@ function renderStatus() {
 
   renderTranslationOverview();
   updateLibraryStats();
+  updateLibrariesOverview();
+  updateSettingsOverview();
+  updateOverviewDashboard();
 }
 
 function renderDownloads() {
@@ -1756,6 +1891,19 @@ function bindEvents() {
   $$('.nav-button[data-view]').forEach((button) => {
     button.addEventListener('click', () => goToViewHome(button.dataset.view).catch((error) => showToast(error.message, true)));
   });
+
+  $$('[data-overview-view]').forEach((button) => {
+    button.addEventListener('click', () => goToViewHome(button.dataset.overviewView).catch((error) => showToast(error.message, true)));
+  });
+  $('#overviewRunNowBtn')?.addEventListener('click', () => runDiscovery().catch((error) => showToast(error.message, true)));
+  $('#overviewAttentionAction')?.addEventListener('click', (event) => {
+    const view = event.currentTarget.dataset.view;
+    if (view) goToViewHome(view).catch((error) => showToast(error.message, true));
+  });
+  $('#libraryConfigSearch')?.addEventListener('input', applyLibraryConfigSearch);
+  $('#settingsSearch')?.addEventListener('input', applySettingsSearch);
+  $('#configForm')?.addEventListener('input', updateSettingsOverview);
+  $('#configForm')?.addEventListener('change', updateSettingsOverview);
 
   $('#settingsAccordionToggle').addEventListener('click', () => {
     const accordions = $$('.settings-accordion');

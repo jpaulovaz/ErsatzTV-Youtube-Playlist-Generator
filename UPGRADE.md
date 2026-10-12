@@ -1,10 +1,10 @@
-# Atualização para 3.10.0
+# Atualização para 4.0.0
 
-A versão 3.10.0 reorganiza o **Gerenciador do YouTube** para priorizar o fluxo diário **Destino → Pesquisa → Adicionar**, mantendo recuperação de acervo, filas, OAuth e adoção como ferramentas completas porém secundárias. A atualização parte da **v3.9.8** e não exige migração de configuração, estado ou schema.
+A versão 4.0.0 reorganiza a experiência do **aplicativo inteiro** com foco em uso intuitivo por pessoas que não precisam conhecer a arquitetura interna. A atualização parte da **v3.10.0** e preserva todas as capacidades, configurações e estados existentes.
 
 ## Versionamento
 
-- aplicação: **v3.10.0**;
+- aplicação: **v4.0.0**;
 - Universal Scripted Schedules: **v1.3.1**;
 - `configVersion`: **9**;
 - Download state: **5**;
@@ -15,49 +15,56 @@ A versão 3.10.0 reorganiza o **Gerenciador do YouTube** para priorizar o fluxo 
 - YouTube Account config/state: **1**;
 - Adoption transaction state: **1**.
 
+Não há migração de schema.
+
 ## Atualização
 
-Pare o serviço, faça backup da instalação e extraia o pacote incremental sobre a instalação v3.9.8:
+Pare o serviço, faça backup da instalação e extraia o pacote incremental sobre a v3.10.0:
 
 ```bash
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.9.8-to-v3.10.0-update.zip -d /caminho/da/aplicacao
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v3.10.0-to-v4.0.0-update.zip -d /caminho/da/aplicacao
 ```
 
-Depois reinicie o serviço. O pacote não substitui `config/config.json`, `config/auth.json`, `config/subtitle-translation.json`, `config/youtube-account.json`, `data/` nem arquivos de mídia.
+Reinicie o serviço. O pacote update não substitui `config/config.json`, `config/auth.json`, `config/subtitle-translation.json`, `config/youtube-account.json`, `data/` nem arquivos de mídia.
 
-## O que mudou no Gerenciador do YouTube
+## O que mudou
 
-A navegação principal passa a ter quatro áreas:
+### Visão geral
 
-1. **Adicionar vídeos** — tela inicial e fluxo principal. Escolha uma Biblioteca/Playlist de Canal ou playlist do YouTube, pesquise e adicione diretamente no resultado.
-2. **Atividade** — reúne fila de inserção, fila de adoção e histórico recente.
-3. **Recuperar acervo** — ferramenta de manutenção para arquivos que já existem localmente; scanner, matching, validação de IDs e adoção ficam aqui.
-4. **Configurações** — OAuth, quota e manutenção/criação de playlists da conta.
+Passa a ser um painel de decisão: **Adicionar vídeos**, **Buscar novidades**, **Ver downloads** e **Bibliotecas** ficam como ações rápidas. Um cartão de atenção prioriza automaticamente pouco disco, falhas, fila pausada e operação em andamento. Os resumos de Downloads, Bibliotecas, Canais e armazenamento são clicáveis.
 
-O topo agora mostra estados rápidos de **Conta Google**, **Atividade** e **Quota hoje**. Ajuda contextual `?`, o botão **Como funciona?**, estados vazios orientativos e seções avançadas recolhidas reduzem o número de controles visíveis ao mesmo tempo.
+### Downloads
 
-## Destino antes da pesquisa
+A fila fica aberta por padrão e os estados essenciais aparecem primeiro: estado, ativo, pendentes, falhas e disco. Contadores históricos e diagnóstico ficam em **Detalhes técnicos da fila**.
 
-O novo seletor **Onde deseja adicionar?** cruza a configuração local com as playlists pertencentes à conta OAuth:
+### Bibliotecas
 
-- Bibliotecas e Playlists de Canal alimentadas por playlists da conta aparecem primeiro;
-- playlists da conta sem vínculo local aparecem em **Somente no YouTube**;
-- se uma Biblioteca tiver mais de uma fonte elegível, cada playlist é identificada separadamente;
-- selecionar um destino gerenciado deixa explícita a playlist YouTube que o alimenta.
+A tela mostra resumo de quantidade, pendências, problemas e tamanho do acervo, permite pesquisar Bibliotecas e mantém **Gerenciar conteúdo** como o local para vídeos, legendas, tradução, órfãos, quarentena e ignorados. Exclusão/remoção ficam sob opções avançadas.
 
-Depois que a fila de inserção terminar, destinos gerenciados oferecem **Sincronizar biblioteca agora** ou **Sincronizar playlist agora**, sem obrigar o usuário a navegar para outra área.
+### Canais
 
-## Recuperação de acervo
+Mostra saúde dos canais antes da configuração. Adicionar canal vira um fluxo explícito **informar URL → analisar → revisar fontes/playlist → salvar**. Remoção e exclusão de arquivos ficam sob **Mais opções**.
 
-Nenhuma capacidade foi removida. A ferramenta continua com varredura em background, validação individual/em lote de Video IDs, filtros de presença em Biblioteca/playlist, seleção em massa, matching manual e adoção Hardlink/Copy/Move. O cadastro/remoção de pastas e as explicações avançadas ficam recolhidos por padrão.
+### Scripted Schedules
+
+A tela inicial resume projetos publicados/rascunhos e mostra o fluxo em cinco etapas. O editor mantém todos os recursos do Universal v1.3.1 e ganha navegação por etapas mais evidente. Histórico, duplicação, reset e exclusão ficam em **Mais opções**.
+
+### Ajuda
+
+Deixa de ser somente documentação de Scripted Schedules e passa a cobrir **Comece aqui, Uso diário, Bibliotecas, Downloads, Canais, Adicionar vídeos, Scripted Schedules e Problemas comuns**. A referência profunda de módulos, Queries e glossário permanece dentro de Scripted Schedules.
+
+### Configurações e Logs
+
+Configurações recebe busca, resumo do estado e grupos **Essencial, Integrações, Automação e Avançado**. `yt-dlp avançado` fica por último. Logs passa a se apresentar como ferramenta de diagnóstico, não como tela que precisa ser monitorada.
 
 ## Validação após atualizar
 
-1. Abra **YouTube → Gerenciador do YouTube** e confirme que a tela inicial é **Adicionar vídeos**.
-2. Confirme que **Onde deseja adicionar?** lista primeiro Bibliotecas/Playlists de Canal vinculadas às playlists da conta.
-3. Pesquise por um vídeo e confirme que a ação de adicionar permanece na mesma tela.
-4. Abra **Atividade** e confirme que as duas filas aparecem juntas.
-5. Abra **Recuperar acervo** e confirme que suas fontes, filtros, matches e estados anteriores continuam preservados.
-6. Abra **Configurações** e confirme conta OAuth, quota e playlists.
+1. Abra **Visão geral** e confirme ações rápidas, cartão de atenção e resumos clicáveis.
+2. Abra **Downloads** e confirme que a fila está visível sem abrir manualmente a sanfona.
+3. Abra **Bibliotecas** e **Canais** e confirme os resumos e ações avançadas recolhidas.
+4. Abra **Scripted Schedules** e confirme a visão em etapas e seus projetos existentes.
+5. Abra **Ajuda** e confirme que ela cobre o aplicativo inteiro.
+6. Abra **Configurações**, pesquise por `API Key` e confirme que somente seções relacionadas permanecem visíveis.
+7. Confirme que Bibliotecas, Canais, filas, OAuth, legendas, tradução e Scripted Schedules preservaram seus dados existentes.
 
-Não há alteração na semântica das filas, quota, adoção, downloads, legendas, tradução ou Scripted Schedules.
+Não há alteração de semântica em downloads, descoberta, quotas, adoção, legendas, tradução ou geração de Scripted Schedules.

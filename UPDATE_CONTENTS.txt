@@ -1,32 +1,34 @@
-ErsatzTV YouTube Downloader 3.10.0 - pacote de atualização
-Base: v3.9.8
+ErsatzTV YouTube Downloader 4.0.0 - pacote de atualização
+Base: v3.10.0
 
-Este update reorganiza o Gerenciador do YouTube para o fluxo principal Destino -> Pesquisa -> Adicionar:
-- Adicionar vídeos vira a tela inicial e prioriza Bibliotecas/Playlists de Canal vinculadas às playlists da conta;
-- resultados de pesquisa recebem ação contextual de adição sem sair da tela;
-- Atividade reúne fila de inserção, fila de adoção e histórico recente;
-- Recuperar acervo fica identificado como ferramenta secundária, com controles avançados recolhidos;
-- Configurações concentra OAuth, quota e manutenção/criação de playlists;
-- ajuda contextual, estados vazios orientativos, resumo superior e ações progressivas reduzem ruído;
-- endpoint interno /api/youtube-manager/targets mapeia destinos configurados às playlists YouTube sem expor caminhos ou segredos;
-- nenhum schema ou estado persistente muda.
+Este update reorganiza a experiência do aplicativo inteiro sem alterar schemas ou semântica operacional:
+- Visão geral vira um painel de decisão com ações rápidas, atenção priorizada e resumos clicáveis;
+- Downloads destaca fila, falhas e armazenamento, deixando diagnóstico técnico em disclosure;
+- Bibliotecas e Canais exibem saúde e tarefas frequentes antes de configuração/destruição;
+- Scripted Schedules ganha visão em etapas, resumo e progressive disclosure para ações raras;
+- Ajuda passa a cobrir o aplicativo inteiro, preservando a documentação profunda de Scripted Schedules;
+- Configurações recebe busca e grupos Essencial, Integrações, Automação e Avançado;
+- Logs passa a se apresentar como ferramenta de diagnóstico;
+- navegação, estados vazios, ajuda contextual, cards e responsividade são padronizados;
+- nenhuma API, schema, configuração persistente ou estado operacional muda.
 
 Arquivos incluídos:
 CHANGELOG.md
 README.md
 UPGRADE.md
 package.json
+public/app.js
 public/index.html
+public/js/channelsView.js
+public/js/helpView.js
+public/js/scriptedSchedulesView.js
 public/login.html
+public/scripted-schedules.css
 public/styles.css
-public/js/youtubeManager.js
-src/routes/youtubeManagerRoutes.js
-src/youtubeManager/youtubeManagerService.js
 test/ui-v3.test.js
-test/youtubeManager.test.js
 MODIFIED_FILES.txt
 UPDATE_CONTENTS.txt
 
-Aplicacao v3.10.0, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v4.0.0, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 
 O pacote nao inclui config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/, tokens, estados operacionais, arquivos de midia ou sidecars.

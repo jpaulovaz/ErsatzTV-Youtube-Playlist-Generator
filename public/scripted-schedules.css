@@ -405,3 +405,32 @@ button.ghost { background: transparent; }
   .ss-module-picker-list { max-height: 32vh; }
   .ss-module-picker-description { min-height: 180px; overflow: visible; }
 }
+
+/* v4.0.0 - guided Scripted Schedules experience */
+.ss-overview-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
+.ss-overview-grid > div { display: grid; gap: 3px; padding: 12px 13px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: rgba(255,255,255,.022); }
+.ss-overview-grid span { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.ss-overview-grid strong { color: var(--text-strong); font-size: 18px; line-height: 1.2; }
+.ss-overview-grid small { font-size: 10.5px; }
+.ss-workflow-card { display: grid; gap: 12px; }
+.ss-workflow-steps { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 8px; }
+.ss-workflow-steps > span { display: flex; gap: 7px; align-items: center; padding: 9px 10px; border: 1px solid var(--line-soft); border-radius: 9px; color: var(--muted-strong); background: rgba(255,255,255,.02); font-size: 11px; font-weight: 650; }
+.ss-workflow-steps b { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--accent-soft); color: #dbeafe; font-size: 10px; }
+.ss-settings-card > summary > div { display: grid; gap: 2px; }
+.ss-settings-card > summary small { color: var(--muted); font-size: 10.5px; }
+.ss-project-more { position: relative; }
+.ss-project-more > summary { min-height: 36px; display: inline-flex; align-items: center; padding: 7px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel-soft); color: var(--text); cursor: pointer; font-size: 12.5px; font-weight: 650; list-style: none; }
+.ss-project-more > summary::-webkit-details-marker { display: none; }
+.ss-project-more-menu { position: absolute; z-index: 20; left: 0; top: calc(100% + 6px); min-width: 200px; display: grid; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: #101b2b; box-shadow: var(--shadow-lg); }
+.ss-project-more-menu button { width: 100%; justify-content: flex-start; }
+.ss-step-tabs { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); overflow: visible; }
+.ss-step-tabs button { display: inline-flex; justify-content: flex-start; gap: 7px; }
+.ss-step-tabs button > span { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,.05); font-size: 10px; }
+.ss-step-tabs button.active > span { background: rgba(101,163,255,.18); color: #fff; }
+@media (max-width: 900px) {
+  .ss-overview-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .ss-workflow-steps { grid-template-columns: 1fr; }
+  .ss-step-tabs { display: flex; overflow-x: auto; }
+  .ss-step-tabs button { flex: 0 0 auto; }
+}
+@media (max-width: 560px) { .ss-overview-grid { grid-template-columns: 1fr; } }

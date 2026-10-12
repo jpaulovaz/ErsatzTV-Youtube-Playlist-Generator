@@ -1,5 +1,22 @@
 # Changelog
 
+## 4.0.0
+
+- Redesenha a experiência do aplicativo inteiro com a mesma arquitetura orientada por tarefas introduzida no Gerenciador do YouTube, preservando APIs, estados, schemas e capacidades operacionais.
+- Reorganiza a navegação lateral por intenção: **Principal** (Visão geral, Adicionar vídeos, Downloads), **Organização** (Bibliotecas, Canais), **Programação** (Scripted Schedules) e **Sistema** (Configurações, Logs, Ajuda).
+- Transforma **Visão geral** em painel de decisão: ações rápidas, cartão de atenção priorizado por gravidade e resumos clicáveis de Downloads, Bibliotecas, Canais e armazenamento.
+- Reestrutura **Downloads** para destacar atividade, pendências, falhas e disco; a fila fica aberta por padrão e detalhes técnicos passam para disclosure secundário.
+- Reorganiza **Bibliotecas** com resumo de saúde, busca por nome, estados vazios orientativos e ações destrutivas sob opções avançadas; **Gerenciar conteúdo** continua com toda a funcionalidade de legendas, tradução, órfãos e quarentena.
+- Reorganiza **Canais** com resumo de atividade, fluxo guiado para adicionar/analisar canal e ações perigosas sob **Mais opções**, mantendo fontes e playlists existentes.
+- Atualiza **Scripted Schedules** com resumo da área, fluxo visual em cinco etapas, ajuda direta no editor e ações raras/históricas sob **Mais opções**, sem alterar o Universal v1.3.1.
+- Expande **Ajuda** de manual específico do Builder para um centro de ajuda do aplicativo inteiro, com Comece aqui, Uso diário, Bibliotecas, Downloads, Canais, Adicionar vídeos, Scripted Schedules e Problemas comuns; toda a documentação profunda de Scripted Schedules permanece disponível.
+- Reorganiza **Configurações** em Essencial, Integrações, Automação e Avançado, adiciona busca por configuração e cartões de resumo, deixando yt-dlp avançado no último nível de exposição.
+- Reposiciona **Logs** como ferramenta de diagnóstico, deixando explícito que não precisa ser acompanhada no uso normal.
+- Padroniza cabeçalhos, estados vazios, tooltips `?`, cards-resumo, busca, progressive disclosure, ações contextuais e comportamento responsivo nas principais áreas.
+- Adiciona teste de regressão específico para a arquitetura v4 e atualiza a Ajuda/navegação sem remover os testes funcionais anteriores.
+- Nenhuma migração de `config.json` ou schema: Download state permanece v5, Scripted Schedules schema v1, Subtitle Manager state v1, Subtitle Translation config/state v1, YouTube Manager state v1, YouTube Account config/state v1 e Adoption transaction state v1.
+- Aplicação **v4.0.0**; Universal **v1.3.1**; `configVersion` **9**.
+
 ## 3.10.0
 
 - Reorganiza completamente a **arquitetura de informação do Gerenciador do YouTube** para priorizar o uso diário **Destino → Pesquisa → Adicionar**, mantendo ferramentas avançadas em níveis secundários.
