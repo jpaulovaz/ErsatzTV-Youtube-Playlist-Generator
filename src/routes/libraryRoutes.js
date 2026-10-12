@@ -41,7 +41,8 @@ async function handleLibraryRoutes(req, res, url, deps) {
       offset: url.searchParams.get('offset'),
       limit: url.searchParams.get('limit'),
       view: url.searchParams.get('view'),
-      subtitleOrigin: url.searchParams.get('subtitleOrigin')
+      subtitleOrigin: url.searchParams.get('subtitleOrigin'),
+      subtitleYoutubeType: url.searchParams.get('subtitleYoutubeType')
     });
     deps.sendJson(res, 200, { ok: true, result });
     return true;

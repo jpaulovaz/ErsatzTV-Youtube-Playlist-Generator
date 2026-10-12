@@ -23,6 +23,7 @@ let libraryContentState = {
   returnView: 'libraries',
   view: 'content',
   subtitleOrigin: 'all',
+  subtitleYoutubeType: 'all',
   library: null,
   path: '',
   query: '',
@@ -834,6 +835,8 @@ function updateLibraryContentViewControls() {
   const select = $('#libraryContentView');
   const originLabel = $('#libraryContentSubtitleOriginLabel');
   const originSelect = $('#libraryContentSubtitleOrigin');
+  const youtubeTypeLabel = $('#libraryContentSubtitleYoutubeTypeLabel');
+  const youtubeTypeSelect = $('#libraryContentSubtitleYoutubeType');
   if (!select) return;
   const counts = libraryContentState.library && libraryContentState.library.specialCounts || {};
   const countKeys = {
@@ -874,6 +877,20 @@ function updateLibraryContentViewControls() {
       const count = Number(originCounts[option.value]) || 0;
       option.textContent = `${originLabels[option.value] || option.textContent}${count ? ` (${count})` : ''}`;
       option.disabled = count === 0 && option.value !== libraryContentState.subtitleOrigin;
+    }
+  }
+
+  const showYoutubeType = showOrigin && libraryContentState.subtitleOrigin === 'youtube';
+  if (youtubeTypeLabel) youtubeTypeLabel.classList.toggle('hidden', !showYoutubeType);
+  if (youtubeTypeSelect) {
+    youtubeTypeSelect.value = libraryContentState.subtitleYoutubeType || 'all';
+    const typeCounts = libraryContentState.subtitleYoutubeTypeCounts || {};
+    const typeLabels = { manual: 'Enviada pelo canal', automatic: 'Automática' };
+    for (const option of youtubeTypeSelect.options) {
+      if (option.value === 'all') { option.textContent = 'Todos os tipos'; option.disabled = false; continue; }
+      const count = Number(typeCounts[option.value]) || 0;
+      option.textContent = `${typeLabels[option.value] || option.textContent}${count ? ` (${count})` : ''}`;
+      option.disabled = count === 0 && option.value !== libraryContentState.subtitleYoutubeType;
     }
   }
 }
@@ -931,6 +948,10 @@ function renderLibraryContent() {
     if (libraryContentState.view === 'subtitles-present' && libraryContentState.subtitleOrigin !== 'all') {
       const originLabels = { youtube: 'YouTube', lrclib: 'LRCLIB', gemini: 'Gemini', local: 'arquivo local/origem não registrada' };
       status += ` · origem: ${originLabels[libraryContentState.subtitleOrigin] || libraryContentState.subtitleOrigin}`;
+    }
+    if (libraryContentState.subtitleOrigin === 'youtube' && libraryContentState.subtitleYoutubeType !== 'all') {
+      const youtubeTypeLabels = { manual: 'enviada pelo canal', automatic: 'automática' };
+      status += ` · tipo YouTube: ${youtubeTypeLabels[libraryContentState.subtitleYoutubeType] || libraryContentState.subtitleYoutubeType}`;
     }
   }
   else if (libraryContentState.query) status = `${pagination.total || 0} resultado(s) em toda a biblioteca`;
@@ -1080,6 +1101,9 @@ async function loadLibraryContent(options = {}) {
   if (libraryContentState.view === 'subtitles-present' && libraryContentState.subtitleOrigin !== 'all') {
     params.set('subtitleOrigin', libraryContentState.subtitleOrigin);
   }
+  if (libraryContentState.view === 'subtitles-present' && libraryContentState.subtitleOrigin === 'youtube' && libraryContentState.subtitleYoutubeType !== 'all') {
+    params.set('subtitleYoutubeType', libraryContentState.subtitleYoutubeType);
+  }
   if (libraryContentState.view === 'content' && libraryContentState.path) params.set('path', libraryContentState.path);
   if (libraryContentState.query) params.set('q', libraryContentState.query);
 
@@ -1091,6 +1115,8 @@ async function loadLibraryContent(options = {}) {
     libraryContentState.view = result.view || libraryContentState.view;
     libraryContentState.subtitleOrigin = result.subtitleOrigin || (libraryContentState.view === 'subtitles-present' ? libraryContentState.subtitleOrigin : 'all');
     libraryContentState.subtitleOriginCounts = result.subtitleOriginCounts || {};
+    libraryContentState.subtitleYoutubeType = result.subtitleYoutubeType || (libraryContentState.subtitleOrigin === 'youtube' ? libraryContentState.subtitleYoutubeType : 'all');
+    libraryContentState.subtitleYoutubeTypeCounts = result.subtitleYoutubeTypeCounts || {};
     libraryContentState.path = result.path || '';
     libraryContentState.directories = result.directories || [];
     const nextItems = result.items || [];
@@ -1129,6 +1155,8 @@ async function openDestinationContent({ name, endpointBase, view = 'content', re
     view,
     subtitleOrigin: 'all',
     subtitleOriginCounts: {},
+    subtitleYoutubeType: 'all',
+    subtitleYoutubeTypeCounts: {},
     library: null,
     path: '',
     query: '',
@@ -1142,6 +1170,8 @@ async function openDestinationContent({ name, endpointBase, view = 'content', re
   $('#libraryContentView').value = view;
   $('#libraryContentSubtitleOrigin').value = 'all';
   $('#libraryContentSubtitleOriginLabel').classList.add('hidden');
+  $('#libraryContentSubtitleYoutubeType').value = 'all';
+  $('#libraryContentSubtitleYoutubeTypeLabel').classList.add('hidden');
   if (activeView !== 'libraries') setActiveView('libraries', { persist: false });
   setLibraryContentMode(true);
   $('#libraryContentBackBtn').textContent = returnView === 'channels' ? 'Voltar para Canais' : 'Voltar para Bibliotecas';
@@ -2122,6 +2152,8 @@ function bindEvents() {
     libraryContentState.query = '';
     libraryContentState.subtitleOrigin = 'all';
     libraryContentState.subtitleOriginCounts = {};
+    libraryContentState.subtitleYoutubeType = 'all';
+    libraryContentState.subtitleYoutubeTypeCounts = {};
     libraryContentState.selectedIds.clear();
     $('#libraryContentSearch').value = '';
     loadLibraryContent().catch((error) => showToast(error.message, true));
@@ -2129,6 +2161,14 @@ function bindEvents() {
 
   $('#libraryContentSubtitleOrigin').addEventListener('change', (event) => {
     libraryContentState.subtitleOrigin = event.currentTarget.value || 'all';
+    libraryContentState.subtitleYoutubeType = 'all';
+    libraryContentState.subtitleYoutubeTypeCounts = {};
+    libraryContentState.selectedIds.clear();
+    loadLibraryContent().catch((error) => showToast(error.message, true));
+  });
+
+  $('#libraryContentSubtitleYoutubeType').addEventListener('change', (event) => {
+    libraryContentState.subtitleYoutubeType = event.currentTarget.value || 'all';
     libraryContentState.selectedIds.clear();
     loadLibraryContent().catch((error) => showToast(error.message, true));
   });
@@ -2202,7 +2242,8 @@ async function bootstrap() {
         view: libraryContentState.view,
         query: libraryContentState.query,
         path: libraryContentState.path,
-        subtitleOrigin: libraryContentState.subtitleOrigin
+        subtitleOrigin: libraryContentState.subtitleOrigin,
+        subtitleYoutubeType: libraryContentState.subtitleYoutubeType
       })
     });
   }

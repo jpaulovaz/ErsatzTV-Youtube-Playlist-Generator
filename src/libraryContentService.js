@@ -12,6 +12,7 @@ const MAX_PAGE_SIZE = 120;
 const STATE_PAGE_SIZE = 500;
 const CONTENT_VIEWS = new Set(['content', 'subtitles-missing', 'subtitles-present', 'orphans', 'quarantine', 'ignored']);
 const SUBTITLE_ORIGINS = new Set(['all', 'youtube', 'lrclib', 'gemini', 'local']);
+const SUBTITLE_YOUTUBE_TYPES = new Set(['all', 'manual', 'automatic']);
 
 function decodeXmlEntities(value) {
   return String(value || '')
@@ -56,6 +57,11 @@ function normalizeSubtitleOrigin(value) {
   return SUBTITLE_ORIGINS.has(normalized) ? normalized : 'all';
 }
 
+function normalizeSubtitleYoutubeType(value) {
+  const normalized = String(value || 'all').trim().toLowerCase();
+  return SUBTITLE_YOUTUBE_TYPES.has(normalized) ? normalized : 'all';
+}
+
 function subtitlePresence(item) {
   const raw = item && item.subtitles && typeof item.subtitles === 'object' ? item.subtitles : {};
   const languages = Array.isArray(raw.foundLanguages)
@@ -89,6 +95,29 @@ function subtitleOrigins(item, managerItemState = null) {
 function matchesSubtitleOrigin(item, managerItemState, origin) {
   const selected = normalizeSubtitleOrigin(origin);
   return selected === 'all' || subtitleOrigins(item, managerItemState).includes(selected);
+}
+
+function subtitleYoutubeTypes(item, managerItemState = null) {
+  const presence = subtitlePresence(item);
+  if (!presence.hasSubtitles) return [];
+  const tracks = managerItemState && managerItemState.tracks && typeof managerItemState.tracks === 'object'
+    ? managerItemState.tracks
+    : {};
+  const types = new Set();
+  const languages = presence.languages.length ? presence.languages : Object.keys(tracks);
+  for (const language of languages) {
+    const track = tracks[language] || {};
+    if (String(track.provider || '').trim().toLowerCase() !== 'youtube') continue;
+    const sourceType = String(track.sourceType || '').trim().toLowerCase();
+    if (sourceType === 'manual') types.add('manual');
+    else if (sourceType === 'automatic' || sourceType === 'auto') types.add('automatic');
+  }
+  return [...types];
+}
+
+function matchesSubtitleYoutubeType(item, managerItemState, sourceType) {
+  const selected = normalizeSubtitleYoutubeType(sourceType);
+  return selected === 'all' || subtitleYoutubeTypes(item, managerItemState).includes(selected);
 }
 
 function isStoredItem(item) {
@@ -334,7 +363,16 @@ function subtitleOriginCounts(entries, managerState) {
   return counts;
 }
 
-async function listDestinationContent({ destination, downloadManager, browserPath = '', query = '', offset = 0, limit = DEFAULT_PAGE_SIZE, view = 'content', subtitleOrigin = 'all' }) {
+function subtitleYoutubeTypeCounts(entries, managerState) {
+  const counts = { manual: 0, automatic: 0 };
+  for (const entry of entries) {
+    const itemState = managerState && managerState.items ? managerState.items[entry.item.id] : null;
+    for (const sourceType of subtitleYoutubeTypes(entry.item, itemState)) counts[sourceType] += 1;
+  }
+  return counts;
+}
+
+async function listDestinationContent({ destination, downloadManager, browserPath = '', query = '', offset = 0, limit = DEFAULT_PAGE_SIZE, view = 'content', subtitleOrigin = 'all', subtitleYoutubeType = 'all' }) {
   if (!destination) {
     const error = new Error('Destino invalido.');
     error.statusCode = 404;
@@ -343,6 +381,9 @@ async function listDestinationContent({ destination, downloadManager, browserPat
   const selectedView = normalizeContentView(view);
   const currentPath = selectedView === 'content' ? normalizeBrowserPath(browserPath) : '';
   const selectedSubtitleOrigin = selectedView === 'subtitles-present' ? normalizeSubtitleOrigin(subtitleOrigin) : 'all';
+  const selectedSubtitleYoutubeType = selectedView === 'subtitles-present' && selectedSubtitleOrigin === 'youtube'
+    ? normalizeSubtitleYoutubeType(subtitleYoutubeType)
+    : 'all';
   const q = String(query || '').trim().toLocaleLowerCase('pt-BR');
   const safeOffset = Math.max(0, Math.floor(Number(offset) || 0));
   const safeLimit = Math.max(1, Math.min(Number(limit) || DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE));
@@ -350,14 +391,23 @@ async function listDestinationContent({ destination, downloadManager, browserPat
   let entries = buildEntries(downloadManager, destination, selectedView);
   let managerState = null;
   let originCounts = { youtube: 0, lrclib: 0, gemini: 0, local: 0 };
+  let youtubeTypeCounts = { manual: 0, automatic: 0 };
   if (selectedView === 'subtitles-present') {
     managerState = await subtitleManagerState.load();
     originCounts = subtitleOriginCounts(entries, managerState);
+    youtubeTypeCounts = subtitleYoutubeTypeCounts(entries, managerState);
     if (selectedSubtitleOrigin !== 'all') {
       entries = entries.filter((entry) => matchesSubtitleOrigin(
         entry.item,
         managerState.items && managerState.items[entry.item.id],
         selectedSubtitleOrigin
+      ));
+    }
+    if (selectedSubtitleOrigin === 'youtube' && selectedSubtitleYoutubeType !== 'all') {
+      entries = entries.filter((entry) => matchesSubtitleYoutubeType(
+        entry.item,
+        managerState.items && managerState.items[entry.item.id],
+        selectedSubtitleYoutubeType
       ));
     }
   }
@@ -402,6 +452,8 @@ async function listDestinationContent({ destination, downloadManager, browserPat
     query: String(query || '').trim(),
     subtitleOrigin: selectedSubtitleOrigin,
     subtitleOriginCounts: originCounts,
+    subtitleYoutubeType: selectedSubtitleYoutubeType,
+    subtitleYoutubeTypeCounts: youtubeTypeCounts,
     directories,
     items: metadata,
     pagination: { total, offset: safeOffset, limit: safeLimit, hasMore: safeOffset + metadata.length < total }
@@ -465,6 +517,7 @@ module.exports = {
   DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
   CONTENT_VIEWS,
+  SUBTITLE_YOUTUBE_TYPES,
   decodeXmlEntities,
   safeRelativeFile,
   normalizeBrowserPath,

@@ -1,16 +1,14 @@
-ErsatzTV YouTube Downloader 4.0.0 - pacote de atualização
-Base: v3.10.0
+ErsatzTV YouTube Downloader 4.0.1 - pacote de atualização
+Base: v4.0.0
 
-Este update reorganiza a experiência do aplicativo inteiro sem alterar schemas ou semântica operacional:
-- Visão geral vira um painel de decisão com ações rápidas, atenção priorizada e resumos clicáveis;
-- Downloads destaca fila, falhas e armazenamento, deixando diagnóstico técnico em disclosure;
-- Bibliotecas e Canais exibem saúde e tarefas frequentes antes de configuração/destruição;
-- Scripted Schedules ganha visão em etapas, resumo e progressive disclosure para ações raras;
-- Ajuda passa a cobrir o aplicativo inteiro, preservando a documentação profunda de Scripted Schedules;
-- Configurações recebe busca e grupos Essencial, Integrações, Automação e Avançado;
-- Logs passa a se apresentar como ferramenta de diagnóstico;
-- navegação, estados vazios, ajuda contextual, cards e responsividade são padronizados;
-- nenhuma API, schema, configuração persistente ou estado operacional muda.
+Este update adiciona um filtro secundário contextual para legendas do YouTube em Gerenciar conteúdo:
+- Com legendas -> Origem da legenda -> YouTube passa a exibir Tipo da legenda YouTube;
+- opções: Todos os tipos, Enviada pelo canal e Automática;
+- usa a proveniência já persistida pelo Subtitle Manager (sourceType manual/automatic);
+- exibe contagens por tipo;
+- mantém o filtro oculto para LRCLIB, Gemini e arquivo local;
+- a tradução em massa com escopo Resultado filtrado atual respeita o tipo YouTube escolhido;
+- nenhuma migração de configuração ou estado.
 
 Arquivos incluídos:
 CHANGELOG.md
@@ -19,16 +17,18 @@ UPGRADE.md
 package.json
 public/app.js
 public/index.html
-public/js/channelsView.js
-public/js/helpView.js
-public/js/scriptedSchedulesView.js
+public/js/subtitleTranslation.js
 public/login.html
-public/scripted-schedules.css
-public/styles.css
+src/libraryContentService.js
+src/routes/channelRoutes.js
+src/routes/libraryRoutes.js
+src/subtitleTranslation/translationService.js
+test/libraryContentService.test.js
+test/subtitleTranslation.test.js
 test/ui-v3.test.js
 MODIFIED_FILES.txt
 UPDATE_CONTENTS.txt
 
-Aplicacao v4.0.0, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v4.0.1, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 
 O pacote nao inclui config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/, tokens, estados operacionais, arquivos de midia ou sidecars.

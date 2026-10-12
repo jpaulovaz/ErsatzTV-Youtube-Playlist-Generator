@@ -215,3 +215,39 @@ test('translation queue persists progress and cancellation waits for the running
     await translationQueue.stop();
   }
 });
+
+test('translation filtered scope respects YouTube manual versus automatic subtitle type', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'subtitle-translation-youtube-type-'));
+  t.after(async () => {
+    await managerState.save(managerState.emptyState());
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  const manualMedia = path.join(root, 'Manual.mp4');
+  const autoMedia = path.join(root, 'Automatic.mp4');
+  await fs.writeFile(manualMedia, 'video');
+  await fs.writeFile(autoMedia, 'video');
+  await fs.writeFile(path.join(root, 'Manual.en.srt'), '1\n00:00:01,000 --> 00:00:02,000\nManual source\n');
+  await fs.writeFile(path.join(root, 'Automatic.en.srt'), '1\n00:00:01,000 --> 00:00:02,000\nAutomatic source\n');
+
+  const items = [
+    { id: 'manual-item', videoId: 'manual', title: 'Manual', targetPath: manualMedia, status: 'completed', storageState: 'active', sourceActive: true, subtitles: { status: 'complete', foundLanguages: ['en'] } },
+    { id: 'automatic-item', videoId: 'automatic', title: 'Automatic', targetPath: autoMedia, status: 'completed', storageState: 'active', sourceActive: true, subtitles: { status: 'complete', foundLanguages: ['en'] } }
+  ];
+  const destination = { id: 'library', rootPath: root, displayName: 'Library', mediaProfile: 'music-clips' };
+  const downloadManager = { getDestinationItems: () => items, saveNow: async () => {} };
+  const state = managerState.emptyState();
+  state.items['manual-item'] = { tracks: { en: { provider: 'youtube', sourceType: 'manual' } }, history: {} };
+  state.items['automatic-item'] = { tracks: { en: { provider: 'youtube', sourceType: 'automatic' } }, history: {} };
+  await managerState.save(state);
+
+  const plan = await translationService.buildPlan({
+    destination,
+    downloadManager,
+    payload: {
+      sourceLanguage: 'en', targetLanguage: 'pt-BR', outputMode: 'translated', existingPolicy: 'skip', scope: 'filtered',
+      filter: { view: 'subtitles-present', subtitleOrigin: 'youtube', subtitleYoutubeType: 'manual' }
+    }
+  });
+  assert.deepEqual(plan.eligibleItems.map((item) => item.itemId), ['manual-item']);
+});

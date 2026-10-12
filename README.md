@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 4.0.0
+# ErsatzTV YouTube Downloader 4.0.1
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A versão 4.0.0 aplica ao **aplicativo inteiro** a arquitetura orientada por tarefas que tornou o Gerenciador do YouTube mais simples: o uso frequente aparece primeiro, estados que exigem atenção ficam evidentes, ações perigosas ou raras são reveladas somente quando necessárias e a Ajuda passa a orientar o produto inteiro. Nenhuma capacidade operacional foi removida.
+A linha v4 aplica ao **aplicativo inteiro** a arquitetura orientada por tarefas que tornou o Gerenciador do YouTube mais simples. A v4.0.1 preserva essa experiência e acrescenta filtragem do tipo de legenda do YouTube em Gerenciar conteúdo, sem remover capacidades ou alterar estados existentes.
 
 ## Experiência v4
 
@@ -49,7 +49,7 @@ Biblioteca local do ErsatzTV
 - NFOs novos incluem `year` + `premiered` em Movies e `aired` em episódios de Clipes musicais.
 - Thumbnail do vídeo como artwork de episódio (`-thumb.jpg`) e `poster.jpg` no nível do artista/Show.
 - Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
-- **Gerenciador manual de legendas** no Gerenciar conteúdo: player, preview de SRT local/YouTube/LRCLIB, busca manual, offset e histórico de até cinco versões por idioma. O filtro/listagem atual é reconciliado automaticamente após aplicar, restaurar ou excluir uma legenda, inclusive removendo imediatamente um item de **Sem legendas** após aplicação bem-sucedida.
+- **Gerenciador manual de legendas** no Gerenciar conteúdo: player, preview de SRT local/YouTube/LRCLIB, busca manual, offset e histórico de até cinco versões por idioma. O filtro/listagem atual é reconciliado automaticamente após aplicar, restaurar ou excluir uma legenda, inclusive removendo imediatamente um item de **Sem legendas** após aplicação bem-sucedida. Em **Com legendas**, a origem YouTube pode ser refinada por **Enviada pelo canal** ou **Automática**, usando a proveniência persistida de cada faixa.
 - **Tradução em massa de legendas com Gemini**: pré-análise por biblioteca/playlist, fonte local preservada, saída traduzida, bilíngue ou ambas no mesmo job, fila persistente com pausa/retomada/cancelamento e origem Gemini rastreável. A Visão geral acompanha o progresso global da fila.
 - **Gerenciador do YouTube** independente: pesquisa pública, conexão OAuth da conta, playlists próprias, criação/inserção com fila persistente, catálogo de acervo local, recuperação de Video ID, matching assistido e adoção sem redownload por Hardlink/Copy/Move com preflight e rollback.
 - Seleção múltipla de idiomas: `pt-BR`, `pt`, `en` e `es`.
@@ -136,7 +136,7 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A v4.0.0 atualiza diretamente uma instalação **v3.10.0**. A mudança é de arquitetura de interface e não exige migração de configuração ou schema; `configVersion` continua 9, o Universal continua 1.3.1 e todos os estados persistentes permanecem nas versões atuais. Consulte [UPGRADE.md](UPGRADE.md).
+A v4.0.1 atualiza diretamente uma instalação **v4.0.0**. O ajuste é de filtragem/UX em Gerenciar conteúdo e não exige migração de configuração ou schema; `configVersion` continua 9, o Universal continua 1.3.1 e todos os estados persistentes permanecem nas versões atuais. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Gerenciador do YouTube
 

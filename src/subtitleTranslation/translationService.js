@@ -93,10 +93,11 @@ async function filteredIds({ destination, downloadManager, filter = {} }) {
   const query = String(filter.query || '').trim();
   const browserPath = String(filter.path || '').trim();
   const subtitleOrigin = String(filter.subtitleOrigin || 'all');
+  const subtitleYoutubeType = String(filter.subtitleYoutubeType || 'all');
   const ids = [];
   let offset = 0;
   while (true) {
-    const result = await listDestinationContent({ destination, downloadManager, view, query, browserPath, subtitleOrigin, offset, limit: 120 });
+    const result = await listDestinationContent({ destination, downloadManager, view, query, browserPath, subtitleOrigin, subtitleYoutubeType, offset, limit: 120 });
     ids.push(...(result.items || []).map((item) => item.id));
     if (!result.pagination || !result.pagination.hasMore || !result.items.length) break;
     offset += result.items.length;

@@ -602,6 +602,10 @@ test('library content browser manages active and special content states', () => 
   assert.match(html, /value="subtitles-present">Com legendas/);
   assert.match(html, /id="libraryContentSubtitleOrigin"/);
   assert.match(app, /subtitleOrigin/);
+  assert.match(app, /subtitleYoutubeType/);
+  assert.match(html, /libraryContentSubtitleYoutubeType/);
+  assert.match(html, /Enviada pelo canal/);
+  assert.match(html, /Automática/);
   assert.match(app, /Origem da legenda|originLabels/);
   assert.match(app, /frame\.classList\.add\('has-image'\)/);
   assert.match(app, /relativeFile/);

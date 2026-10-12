@@ -27,7 +27,7 @@
       scope: $('#translationScope')?.value || 'filtered',
       existingPolicy: $('#translationExistingPolicy')?.value || 'skip',
       filter: {
-        view: current.view || 'content', query: current.query || '', path: current.path || '', subtitleOrigin: current.subtitleOrigin || 'all'
+        view: current.view || 'content', query: current.query || '', path: current.path || '', subtitleOrigin: current.subtitleOrigin || 'all', subtitleYoutubeType: current.subtitleYoutubeType || 'all'
       }
     };
   }

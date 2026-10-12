@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.0.1
+
+- Em **Gerenciar conteúdo → Com legendas**, quando **Origem da legenda = YouTube**, exibe um segundo filtro contextual por tipo: **Todos os tipos**, **Enviada pelo canal** e **Automática**.
+- O filtro usa a proveniência já persistida pelo Subtitle Manager (`sourceType: manual/automatic`), sem migração e sem reclassificar arquivos existentes.
+- Exibe contadores independentes por tipo e mantém o segundo filtro oculto para LRCLIB, Gemini e arquivo local, reduzindo ruído visual.
+- O estado/resumo do resultado informa também o tipo YouTube selecionado.
+- O escopo **Resultado filtrado atual** da tradução em massa com Gemini respeita o novo filtro, evitando traduzir acidentalmente o outro tipo de legenda do YouTube.
+- Nenhuma mudança de schema: aplicação **v4.0.1**, Universal **v1.3.1**, `configVersion` **9**, Download state **5**, Subtitle Manager state **1** e demais estados preservados.
+
 ## 4.0.0
 
 - Redesenha a experiência do aplicativo inteiro com a mesma arquitetura orientada por tarefas introduzida no Gerenciador do YouTube, preservando APIs, estados, schemas e capacidades operacionais.

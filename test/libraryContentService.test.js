@@ -297,7 +297,7 @@ test('subtitle views separate missing tracks and filter present tracks by record
   state.items['Music:holiday'] = {
     tracks: {
       'pt-BR': { provider: 'youtube', sourceType: 'manual' },
-      en: { provider: 'local', sourceType: 'unregistered' }
+      en: { provider: 'youtube', sourceType: 'automatic' }
     },
     history: {}
   };
@@ -318,7 +318,8 @@ test('subtitle views separate missing tracks and filter present tracks by record
     config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items), view: 'subtitles-present'
   });
   assert.deepEqual(present.items.map((item) => item.videoId), ['holiday', 'uprising']);
-  assert.deepEqual(present.subtitleOriginCounts, { youtube: 1, lrclib: 1, gemini: 0, local: 1 });
+  assert.deepEqual(present.subtitleOriginCounts, { youtube: 1, lrclib: 1, gemini: 0, local: 0 });
+  assert.deepEqual(present.subtitleYoutubeTypeCounts, { manual: 1, automatic: 1 });
 
   const youtube = await listLibraryContent({
     config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items),
@@ -326,6 +327,20 @@ test('subtitle views separate missing tracks and filter present tracks by record
   });
   assert.deepEqual(youtube.items.map((item) => item.videoId), ['holiday']);
   assert.equal(youtube.subtitleOrigin, 'youtube');
+
+  const youtubeManual = await listLibraryContent({
+    config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items),
+    view: 'subtitles-present', subtitleOrigin: 'youtube', subtitleYoutubeType: 'manual'
+  });
+  assert.deepEqual(youtubeManual.items.map((item) => item.videoId), ['holiday']);
+  assert.equal(youtubeManual.subtitleYoutubeType, 'manual');
+
+  const youtubeAutomatic = await listLibraryContent({
+    config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items),
+    view: 'subtitles-present', subtitleOrigin: 'youtube', subtitleYoutubeType: 'automatic'
+  });
+  assert.deepEqual(youtubeAutomatic.items.map((item) => item.videoId), ['holiday']);
+  assert.equal(youtubeAutomatic.subtitleYoutubeType, 'automatic');
 
   const lrclib = await listLibraryContent({
     config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items),
@@ -337,5 +352,5 @@ test('subtitle views separate missing tracks and filter present tracks by record
     config: fx.config, playlist: fx.playlist, downloadManager: makeManager(fx.items),
     view: 'subtitles-present', subtitleOrigin: 'local'
   });
-  assert.deepEqual(local.items.map((item) => item.videoId), ['holiday']);
+  assert.deepEqual(local.items.map((item) => item.videoId), []);
 });
