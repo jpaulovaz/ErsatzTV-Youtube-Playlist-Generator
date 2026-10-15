@@ -1,13 +1,13 @@
-ErsatzTV YouTube Downloader 4.0.1 - pacote de atualização
-Base: v4.0.0
+ErsatzTV YouTube Downloader 4.0.2 - pacote de atualização
+Base: v4.0.1
 
-Este update adiciona um filtro secundário contextual para legendas do YouTube em Gerenciar conteúdo:
-- Com legendas -> Origem da legenda -> YouTube passa a exibir Tipo da legenda YouTube;
-- opções: Todos os tipos, Enviada pelo canal e Automática;
-- usa a proveniência já persistida pelo Subtitle Manager (sourceType manual/automatic);
-- exibe contagens por tipo;
-- mantém o filtro oculto para LRCLIB, Gemini e arquivo local;
-- a tradução em massa com escopo Resultado filtrado atual respeita o tipo YouTube escolhido;
+Este update compacta a saída bilíngue gerada pela tradução com Gemini:
+- cada cue bilíngue passa a ter no máximo uma linha de original + uma linha de tradução;
+- quebras internas do original ou da tradução viram espaços apenas na faixa bilíngue;
+- a saída Somente traduzida mantém as quebras originais recebidas do tradutor;
+- não há chamada adicional ao Gemini;
+- timestamps, quantidade de cues, tags, pontuação e arquivos-fonte são preservados;
+- não há normalização de capitalização;
 - nenhuma migração de configuração ou estado.
 
 Arquivos incluídos:
@@ -15,20 +15,13 @@ CHANGELOG.md
 README.md
 UPGRADE.md
 package.json
-public/app.js
 public/index.html
-public/js/subtitleTranslation.js
 public/login.html
-src/libraryContentService.js
-src/routes/channelRoutes.js
-src/routes/libraryRoutes.js
-src/subtitleTranslation/translationService.js
-test/libraryContentService.test.js
+src/subtitleTranslation/translationValidator.js
 test/subtitleTranslation.test.js
-test/ui-v3.test.js
 MODIFIED_FILES.txt
 UPDATE_CONTENTS.txt
 
-Aplicacao v4.0.1, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v4.0.2, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 
 O pacote nao inclui config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/, tokens, estados operacionais, arquivos de midia ou sidecars.

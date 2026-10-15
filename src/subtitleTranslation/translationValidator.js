@@ -24,12 +24,27 @@ function normalizeTranslations(raw, expectedIds) {
   return byId;
 }
 
+function compactBilingualLine(value) {
+  return String(value == null ? '' : value)
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
 function buildOutputCues(sourceCues, translationMap, outputMode) {
   return sourceCues.map((cue, index) => {
     const id = String(index + 1);
     const hasTranslation = translationMap.has(id);
     const translated = hasTranslation ? translationMap.get(id) : cue.text;
-    const text = outputMode === 'bilingual' && hasTranslation ? `${cue.text}\n${translated}` : translated;
+    let text = translated;
+    if (outputMode === 'bilingual') {
+      const sourceLine = compactBilingualLine(cue.text);
+      text = hasTranslation
+        ? `${sourceLine}\n${compactBilingualLine(translated)}`
+        : sourceLine;
+    }
     return { startMs: cue.startMs, endMs: cue.endMs, text };
   });
 }

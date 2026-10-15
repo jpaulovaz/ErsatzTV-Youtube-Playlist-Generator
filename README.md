@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 4.0.1
+# ErsatzTV YouTube Downloader 4.0.2
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A linha v4 aplica ao **aplicativo inteiro** a arquitetura orientada por tarefas que tornou o Gerenciador do YouTube mais simples. A v4.0.1 preserva essa experiência e acrescenta filtragem do tipo de legenda do YouTube em Gerenciar conteúdo, sem remover capacidades ou alterar estados existentes.
+A linha v4 aplica ao **aplicativo inteiro** a arquitetura orientada por tarefas que tornou o Gerenciador do YouTube mais simples. A v4.0.2 preserva essa experiência e passa a compactar a saída bilíngue de tradução para uma linha de original + uma linha de tradução por cue, sem alterar timelines, schemas ou os arquivos-fonte.
 
 ## Experiência v4
 
@@ -136,7 +136,7 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A v4.0.1 atualiza diretamente uma instalação **v4.0.0**. O ajuste é de filtragem/UX em Gerenciar conteúdo e não exige migração de configuração ou schema; `configVersion` continua 9, o Universal continua 1.3.1 e todos os estados persistentes permanecem nas versões atuais. Consulte [UPGRADE.md](UPGRADE.md).
+A v4.0.2 atualiza diretamente uma instalação **v4.0.1**. O ajuste afeta somente a renderização da faixa bilíngue criada pela tradução com Gemini e não exige migração de configuração ou schema; `configVersion` continua 9, o Universal continua 1.3.1 e todos os estados persistentes permanecem nas versões atuais. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Gerenciador do YouTube
 
@@ -488,7 +488,7 @@ Musica.pt-BR.srt    -> somente tradução em Português (Brasil)
 Musica.srt          -> bilíngue (original + tradução), idioma ErsatzTV: und
 ```
 
-No modo bilíngue, cada cue mantém o original acima e a tradução abaixo. O Gerenciador de Legendas identifica `Musica.srt` como **Bilíngue**, registra `sourceLanguage`, `targetLanguage` e `ersatzTvLanguage=und`, e permite preview, exclusão, histórico e restauração normalmente. A convenção sem sufixo é reservada pelo aplicativo para a faixa bilíngue.
+No modo bilíngue, cada cue mantém o original acima e a tradução abaixo. A partir da v4.0.2, quebras internas de linha dentro do original ou da tradução são compactadas localmente para que cada lado ocupe **uma única linha**; a faixa bilíngue fica, portanto, com no máximo uma linha de original + uma linha de tradução por cue. Essa compactação não usa IA adicional, não altera timestamps e não modifica a saída somente traduzida. O Gerenciador de Legendas identifica `Musica.srt` como **Bilíngue**, registra `sourceLanguage`, `targetLanguage` e `ersatzTvLanguage=und`, e permite preview, exclusão, histórico e restauração normalmente. A convenção sem sufixo é reservada pelo aplicativo para a faixa bilíngue.
 
 A fila de tradução é independente da fila de downloads. Ela pode ser pausada, retomada e ter pendentes cancelados; seu estado fica em `data/subtitle-translation-state.json` (versão 1) e checkpoints em `data/subtitle-translation-jobs/`. Após restart, trabalho que estava em execução volta de forma retomável; resultados parciais nunca são publicados como SRT final. A **Visão geral** exibe o estado da fila, item atual, concluídas, aguardando, falhas e ignoradas, com ação rápida de pausar/retomar e atalho para **Gerenciar conteúdo**.
 

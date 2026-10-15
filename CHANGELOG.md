@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.0.2
+
+- Compacta automaticamente cada lado da saída **bilíngue** para uma única linha por cue: original em uma linha e tradução na linha seguinte, mesmo quando a legenda-fonte ou a resposta traduzida trazem quebras internas.
+- A compactação é determinística e local, sem nova chamada ao Gemini: apenas quebras de linha internas viram espaços; timestamps, quantidade de cues, texto, tags e pontuação permanecem preservados.
+- A saída **Somente traduzida** continua exatamente como recebida do tradutor; a mudança se aplica apenas à faixa bilíngue, inclusive quando o formato escolhido é **Traduzida + bilíngue**.
+- Não altera capitalização e não implementa normalização de caixa alta.
+- Nenhuma mudança de schema: aplicação **v4.0.2**, Universal **v1.3.1**, `configVersion` **9**, Download state **5**, Subtitle Manager state **1** e demais estados preservados.
+
 ## 4.0.1
 
 - Em **Gerenciar conteúdo → Com legendas**, quando **Origem da legenda = YouTube**, exibe um segundo filtro contextual por tipo: **Todos os tipos**, **Enviada pelo canal** e **Automática**.

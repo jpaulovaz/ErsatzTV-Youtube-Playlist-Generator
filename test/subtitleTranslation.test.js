@@ -43,14 +43,18 @@ test('translation validator accepts numeric/string IDs and rejects missing or du
   assert.throws(() => validator.normalizeTranslations({ translations: [{ id: 1, text: 'Um' }, { id: '1', text: 'Outro' }] }, ['1']), /duplicado/);
 });
 
-test('translated and bilingual output preserve cue count and exact timeline', () => {
-  const source = [{ startMs: 1000, endMs: 2000, text: 'Hello' }, { startMs: 3000, endMs: 4000, text: '♪' }];
-  const translations = new Map([['1', 'Olá']]);
+test('translated and bilingual output preserve timeline while bilingual compacts each side to one line', () => {
+  const source = [
+    { startMs: 1000, endMs: 2000, text: '<i>Hello\nworld</i>' },
+    { startMs: 3000, endMs: 4000, text: '♪\n♪' }
+  ];
+  const translations = new Map([['1', '<i>Olá\nmundo</i>']]);
   const translated = validator.renderValidatedSrt(source, translations, 'translated').cues;
   const bilingual = validator.renderValidatedSrt(source, translations, 'bilingual').cues;
   assert.deepEqual(translated.map(({ startMs, endMs }) => [startMs, endMs]), [[1000, 2000], [3000, 4000]]);
-  assert.equal(bilingual[0].text, 'Hello\nOlá');
-  assert.equal(bilingual[1].text, '♪');
+  assert.equal(translated[0].text, '<i>Olá\nmundo</i>');
+  assert.equal(bilingual[0].text, '<i>Hello world</i>\n<i>Olá mundo</i>');
+  assert.equal(bilingual[1].text, '♪ ♪');
 });
 
 test('Gemini provider sends API key in header and consumes structured JSON', async () => {

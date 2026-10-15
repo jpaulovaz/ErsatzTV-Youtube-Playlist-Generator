@@ -1,10 +1,10 @@
-# Atualização para 4.0.1
+# Atualização para 4.0.2
 
-A versão 4.0.1 parte da **v4.0.0** e acrescenta um filtro secundário para distinguir legendas do YouTube **enviadas pelo canal** das **automáticas** em Gerenciar conteúdo.
+A versão 4.0.2 parte da **v4.0.1** e compacta a saída bilíngue das traduções Gemini para reduzir a altura ocupada na tela.
 
 ## Versionamento
 
-- aplicação: **v4.0.1**;
+- aplicação: **v4.0.2**;
 - Universal Scripted Schedules: **v1.3.1**;
 - `configVersion`: **9**;
 - Download state: **5**;
@@ -18,22 +18,23 @@ Nenhuma migração de configuração ou estado é necessária.
 
 ## O que muda
 
-Em **Bibliotecas/Playlists de Canal → Gerenciar conteúdo → Com legendas**, o filtro **Origem da legenda** continua oferecendo YouTube, LRCLIB, Gemini e arquivo local. Ao escolher **YouTube**, surge um segundo filtro:
+Nas saídas **Somente bilíngue** e **Traduzida + bilíngue**, cada cue passa a ser renderizado como:
 
-- **Todos os tipos**;
-- **Enviada pelo canal**;
-- **Automática**.
+```text
+Original inteiro em uma linha
+Tradução inteira em uma linha
+```
 
-A classificação usa a proveniência que o Subtitle Manager já grava ao aplicar uma faixa do YouTube (`sourceType` manual ou automatic). O filtro permanece oculto quando a origem selecionada não é YouTube.
+Se o original ou a tradução contiverem quebras internas, elas são substituídas localmente por espaços apenas ao gerar a faixa bilíngue. A faixa somente traduzida mantém as quebras recebidas do tradutor.
 
-A tradução em massa no escopo **Resultado filtrado atual** também respeita o tipo selecionado.
+A compactação não faz nova chamada ao Gemini, não altera capitalização, timestamps, quantidade de cues, tags ou arquivos-fonte.
 
 ## Atualização
 
-Pare o serviço, faça backup normal da instalação e extraia o update por cima da v4.0.0:
+Pare o serviço, faça backup normal da instalação e extraia o update por cima da v4.0.1:
 
 ```bash
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v4.0.0-to-v4.0.1-update.zip -d /caminho/da/aplicacao
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v4.0.1-to-v4.0.2-update.zip -d /caminho/da/aplicacao
 ```
 
 Depois reinicie o serviço e valide:
