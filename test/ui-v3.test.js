@@ -35,6 +35,21 @@ test('main UI exposes Channels separately and loads shared destination form', ()
   assert.match(html, /rev=ersatztv-catalog-1/);
 });
 
+test('local session expiry is distinguished from YouTube OAuth reconnect-required', () => {
+  const app = read('app.js');
+  const youtube = read('js/youtubeManager.js');
+  const css = read('styles.css');
+
+  assert.match(app, /response\.status === 401 && payload && payload\.code === 'AUTH_REQUIRED'/);
+  assert.match(app, /if \(error\.code === 'AUTH_REQUIRED'\) window\.location\.replace\('\/login'\)/);
+  assert.doesNotMatch(app, /if \(response\.status === 401 && !skipAuthRedirect\)/);
+  assert.match(youtube, /function accountNeedsReconnect\(\)/);
+  assert.match(youtube, /YOUTUBE_RECONNECT_REQUIRED/);
+  assert.match(youtube, /Reconectar com Google/);
+  assert.match(youtube, /A autorização do Google expirou ou foi revogada/);
+  assert.match(css, /\.ytm-account-banner\.danger/);
+});
+
 test('v4 reorganizes the application around primary tasks, progressive disclosure and guided help', () => {
   const html = read('index.html');
   const app = read('app.js');

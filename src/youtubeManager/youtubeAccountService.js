@@ -20,6 +20,16 @@ function hasRequiredScope(scopes) {
   return (scopes || []).includes(YOUTUBE_SCOPE) || (scopes || []).includes('https://www.googleapis.com/auth/youtube');
 }
 
+function stateRequiresReconnect(state) {
+  if (!state || typeof state !== 'object') return false;
+  if (state.reconnectRequired || state.lastErrorCode === 'YOUTUBE_RECONNECT_REQUIRED') return true;
+  return /invalid_grant|autorizacao do YouTube expirou|authorization.*revoked|refresh token inexistente/i.test(String(state.lastError || ''));
+}
+
+function reconnectError() {
+  return new YouTubeAccountError('A autorizacao do YouTube expirou ou foi revogada. Reconecte a conta.', { code: 'YOUTUBE_RECONNECT_REQUIRED', statusCode: 401 });
+}
+
 async function refreshAccessToken(config, state) {
   const refreshToken = String(state.tokens && state.tokens.refreshToken || '').trim();
   if (!refreshToken) throw new YouTubeAccountError('Refresh token inexistente. Reconecte a conta do YouTube.', { code: 'YOUTUBE_RECONNECT_REQUIRED', statusCode: 401 });
@@ -40,6 +50,8 @@ async function refreshAccessToken(config, state) {
   };
   if (payload.scope) state.scopes = String(payload.scope).split(/\s+/).filter(Boolean);
   state.lastError = null;
+  state.lastErrorCode = null;
+  state.reconnectRequired = false;
   await accountState.save(state);
   return accessToken;
 }
@@ -53,16 +65,18 @@ async function ensureAccessToken({ forceRefresh = false } = {}) {
   if (!state.tokens) {
     throw new YouTubeAccountError('Conta do YouTube nao conectada.', { code: 'YOUTUBE_ACCOUNT_NOT_CONNECTED', statusCode: 401 });
   }
+  if (stateRequiresReconnect(state)) throw reconnectError();
   const expiresAt = new Date(state.tokens.expiresAt || 0).getTime();
   if (!forceRefresh && state.tokens.accessToken && expiresAt > Date.now() + 60000) return state.tokens.accessToken;
   try {
     return await refreshAccessToken(config, state);
   } catch (error) {
-    state.lastError = error.message;
+    const reconnectRequired = error.code === 'YOUTUBE_RECONNECT_REQUIRED' || error.code === 'invalid_grant' || /invalid_grant/i.test(error.message);
+    state.lastError = reconnectRequired ? 'A autorizacao do YouTube expirou ou foi revogada. Reconecte a conta.' : error.message;
+    state.lastErrorCode = reconnectRequired ? 'YOUTUBE_RECONNECT_REQUIRED' : (error.code || null);
+    state.reconnectRequired = reconnectRequired;
     await accountState.save(state).catch(() => {});
-    if (error.code === 'invalid_grant' || /invalid_grant/i.test(error.message)) {
-      throw new YouTubeAccountError('A autorizacao do YouTube expirou ou foi revogada. Reconecte a conta.', { code: 'YOUTUBE_RECONNECT_REQUIRED', statusCode: 401 });
-    }
+    if (reconnectRequired) throw reconnectError();
     throw error;
   }
 }
@@ -130,6 +144,8 @@ async function refreshAccountSummary() {
     verifiedAt: new Date().toISOString()
   };
   state.lastError = null;
+  state.lastErrorCode = null;
+  state.reconnectRequired = false;
   await accountState.save(state);
   return state.account;
 }
@@ -141,18 +157,23 @@ async function getStatus({ verify = false } = {}) {
     try { await refreshAccountSummary(); } catch (error) {
       state = await accountState.load();
       state.lastError = error.message;
+      state.lastErrorCode = error.code || null;
+      if (error.code === 'YOUTUBE_RECONNECT_REQUIRED') state.reconnectRequired = true;
       await accountState.save(state).catch(() => {});
     }
     state = await accountState.load();
   }
+  const reconnectRequired = stateRequiresReconnect(state);
   return {
     config: accountConfig.publicStatus(config),
     connected: Boolean(state.tokens && state.tokens.refreshToken),
+    reconnectRequired,
     scopes: state.scopes || [],
     scopeGranted: hasRequiredScope(state.scopes || []),
     account: state.account,
     tokenExpiresAt: state.tokens && state.tokens.expiresAt || null,
-    lastError: state.lastError || null,
+    lastError: reconnectRequired ? 'A autorizacao do YouTube expirou ou foi revogada. Reconecte a conta.' : (state.lastError || null),
+    lastErrorCode: reconnectRequired ? 'YOUTUBE_RECONNECT_REQUIRED' : (state.lastErrorCode || null),
     pendingAuthorization: Boolean(state.pendingAuth)
   };
 }
@@ -161,6 +182,7 @@ module.exports = {
   API_BASE,
   YouTubeAccountError,
   hasRequiredScope,
+  stateRequiresReconnect,
   ensureAccessToken,
   authorizedRequest,
   refreshAccountSummary,

@@ -16,7 +16,9 @@ function emptyState() {
     scopes: [],
     account: null,
     pendingAuth: null,
-    lastError: null
+    lastError: null,
+    lastErrorCode: null,
+    reconnectRequired: false
   };
 }
 
@@ -28,7 +30,9 @@ function normalize(raw) {
     ...base,
     ...value,
     version: STATE_VERSION,
-    scopes: Array.isArray(value.scopes) ? value.scopes.map((x) => String(x)) : []
+    scopes: Array.isArray(value.scopes) ? value.scopes.map((x) => String(x)) : [],
+    lastErrorCode: value.lastErrorCode ? String(value.lastErrorCode) : null,
+    reconnectRequired: Boolean(value.reconnectRequired)
   };
 }
 

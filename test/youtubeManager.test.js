@@ -291,6 +291,58 @@ test('account service refreshes public channel identity with server-side bearer 
   assert.equal(status.scopeGranted, true);
 });
 
+
+test('expired Google refresh token is persisted as reconnect-required and subsequent checks do not hit Google again', async () => {
+  await accountConfig.save({ clientId: 'client-id', clientSecret: 'client-secret', publicBaseUrl: 'https://yt.johnflix.com.br/' });
+  await accountState.save({
+    ...accountState.emptyState(),
+    tokens: { accessToken: 'expired', refreshToken: 'refresh-expired', tokenType: 'Bearer', expiresAt: new Date(Date.now() - 60000).toISOString() },
+    scopes: [oauth.YOUTUBE_SCOPE]
+  });
+  let calls = 0;
+  global.fetch = async (url) => {
+    calls += 1;
+    assert.equal(String(url), oauth.TOKEN_ENDPOINT);
+    return new Response(JSON.stringify({ error: 'invalid_grant', error_description: 'Token has been expired or revoked.' }), { status: 400, headers: { 'content-type': 'application/json' } });
+  };
+
+  await assert.rejects(
+    () => accountService.ensureAccessToken(),
+    (error) => error && error.code === 'YOUTUBE_RECONNECT_REQUIRED' && error.statusCode === 401
+  );
+  assert.equal(calls, 1);
+
+  const persisted = await accountState.load();
+  assert.equal(persisted.reconnectRequired, true);
+  assert.equal(persisted.lastErrorCode, 'YOUTUBE_RECONNECT_REQUIRED');
+  const publicStatus = await accountService.getStatus();
+  assert.equal(publicStatus.connected, true);
+  assert.equal(publicStatus.reconnectRequired, true);
+  assert.equal(publicStatus.lastErrorCode, 'YOUTUBE_RECONNECT_REQUIRED');
+
+  await assert.rejects(
+    () => accountService.ensureAccessToken(),
+    (error) => error && error.code === 'YOUTUBE_RECONNECT_REQUIRED'
+  );
+  assert.equal(calls, 1, 'circuit breaker must avoid repeated refresh attempts until reconnect');
+});
+
+test('legacy persisted invalid_grant state is recognized as reconnect-required without a state migration', async () => {
+  await accountConfig.save({ clientId: 'client-id', clientSecret: 'client-secret', publicBaseUrl: 'https://yt.johnflix.com.br/' });
+  await accountState.save({
+    ...accountState.emptyState(),
+    tokens: { accessToken: 'expired', refreshToken: 'legacy-refresh', tokenType: 'Bearer', expiresAt: new Date(Date.now() - 60000).toISOString() },
+    scopes: [oauth.YOUTUBE_SCOPE],
+    lastError: 'invalid_grant'
+  });
+  let calls = 0;
+  global.fetch = async () => { calls += 1; throw new Error('Google should not be called'); };
+  const status = await accountService.getStatus();
+  assert.equal(status.reconnectRequired, true);
+  await assert.rejects(() => accountService.ensureAccessToken(), (error) => error && error.code === 'YOUTUBE_RECONNECT_REQUIRED');
+  assert.equal(calls, 0);
+});
+
 test('identity helper does not mistake arbitrary eleven-character words for YouTube IDs', () => {
   assert.equal(identity.findVideoIdInText('Performance - Example.mp4'), '');
   assert.equal(identity.findVideoIdInText('ABCDEFGHIJK'), 'ABCDEFGHIJK');

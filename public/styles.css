@@ -2261,6 +2261,7 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
 .ytm-account-banner { display: grid; gap: .3rem; padding: .9rem 1rem; border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,.025); }
 .ytm-account-banner.ok { border-color: rgba(71,196,132,.45); }
 .ytm-account-banner.warn { border-color: rgba(239,180,75,.45); }
+.ytm-account-banner.danger { border-color: rgba(255,93,93,.55); background: rgba(255,93,93,.055); }
 .ytm-account-banner span, .ytm-account-banner small { color: var(--muted); }
 .ytm-account-banner .error-text { color: var(--danger); }
 

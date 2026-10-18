@@ -340,6 +340,21 @@ function isMutatingMethod(method) {
   return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(method || '').toUpperCase());
 }
 
+const operationalErrorLogAt = new Map();
+
+async function logServerError(error) {
+  if (error && error.code === 'YOUTUBE_RECONNECT_REQUIRED') {
+    const now = Date.now();
+    const previous = operationalErrorLogAt.get(error.code) || 0;
+    if (now - previous >= 60000) {
+      operationalErrorLogAt.set(error.code, now);
+      await logger.warn(`Conta do YouTube requer reconexao: ${error.message}`, { code: error.code });
+    }
+    return;
+  }
+  await logger.error(`Erro no servidor: ${error.message}`);
+}
+
 function createServer() {
   return http.createServer(async (req, res) => {
     applySecurityHeaders(req, res);
@@ -391,7 +406,7 @@ function createServer() {
 
       await serveStatic(req, res, url.pathname);
     } catch (error) {
-      await logger.error(`Erro no servidor: ${error.message}`);
+      await logServerError(error);
       if (!res.headersSent) {
         const headers = {};
         if (error.retryAfterSeconds) headers['Retry-After'] = String(error.retryAfterSeconds);

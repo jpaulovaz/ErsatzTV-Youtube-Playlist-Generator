@@ -160,8 +160,34 @@
     $$('[data-ytm-panel]').forEach((panel) => panel.classList.toggle('active', panel.dataset.ytmPanel === activeTab));
   }
 
+  function accountNeedsReconnect() {
+    return Boolean(status && status.account && status.account.reconnectRequired);
+  }
+
   function accountConnected() {
-    return Boolean(status && status.account && status.account.connected && status.account.scopeGranted);
+    return Boolean(status && status.account && status.account.connected && status.account.scopeGranted && !status.account.reconnectRequired);
+  }
+
+  function markAccountReconnectRequired(error) {
+    if (!error || error.code !== 'YOUTUBE_RECONNECT_REQUIRED') return false;
+    status = status || {};
+    status.account = {
+      ...(status.account || {}),
+      connected: Boolean(status.account && status.account.connected !== false),
+      reconnectRequired: true,
+      lastError: error.message || 'A autorização do YouTube expirou ou foi revogada. Reconecte a conta.',
+      lastErrorCode: 'YOUTUBE_RECONNECT_REQUIRED'
+    };
+    playlists = [];
+    playlistIndex = new Set();
+    searchQueueState = new Map();
+    renderAccount();
+    renderOverview();
+    renderPlaylists();
+    renderPrimaryTargets();
+    renderPrimaryTargetMeta();
+    renderSearchResults();
+    return true;
   }
 
   function queuePendingCount() {
@@ -174,7 +200,9 @@
     const account = status && status.account || {};
     const accountInfo = account.account || {};
     const accountRoot = $('#ytmOverviewAccount');
-    if (accountRoot) accountRoot.textContent = account.connected && account.scopeGranted ? (accountInfo.title || 'Conectada') : 'Desconectada';
+    if (accountRoot) accountRoot.textContent = account.reconnectRequired
+      ? 'Reconexão necessária'
+      : account.connected && account.scopeGranted ? (accountInfo.title || 'Conectada') : 'Desconectada';
 
     const pending = queuePendingCount();
     const queueRoot = $('#ytmOverviewQueue');
@@ -265,25 +293,36 @@
     if ($('#ytmClientId') && document.activeElement !== $('#ytmClientId')) $('#ytmClientId').value = config.clientId || '';
     const root = $('#ytmAccountStatus');
     if (!root) return;
-    const state = account.connected && account.scopeGranted ? 'ok' : account.connected ? 'warn' : 'muted';
-    const label = account.connected
-      ? (accountInfo ? `${accountInfo.title || accountInfo.channelId}` : 'Conectada; identidade ainda não validada')
-      : 'Não conectada';
+    const reconnectRequired = Boolean(account.reconnectRequired);
+    const state = reconnectRequired ? 'danger' : account.connected && account.scopeGranted ? 'ok' : account.connected ? 'warn' : 'muted';
+    const label = reconnectRequired
+      ? 'Reconexão necessária'
+      : account.connected
+        ? (accountInfo ? `${accountInfo.title || accountInfo.channelId}` : 'Conectada; identidade ainda não validada')
+        : 'Não conectada';
+    const detail = reconnectRequired
+      ? 'A autorização do Google expirou ou foi revogada. O restante do aplicativo continua disponível; reconecte para voltar a ler e alterar suas playlists.'
+      : account.connected
+        ? `Escopo de playlists: ${account.scopeGranted ? 'OK' : 'ausente'}`
+        : 'Pesquisa pública continua disponível com a API key normal.';
     root.innerHTML = `
       <div class="ytm-account-banner ${state}">
         <strong>${esc(label)}</strong>
-        <span>${account.connected ? `Escopo de playlists: ${account.scopeGranted ? 'OK' : 'ausente'}` : 'Pesquisa pública continua disponível com a API key normal.'}</span>
-        ${account.lastError ? `<small class="error-text">${esc(account.lastError)}</small>` : ''}
+        <span>${esc(detail)}</span>
+        ${account.lastError && !reconnectRequired ? `<small class="error-text">${esc(account.lastError)}</small>` : ''}
       </div>`;
+    const connectButton = $('#ytmAccountConnect');
+    if (connectButton) connectButton.textContent = reconnectRequired ? 'Reconectar com Google' : 'Conectar com Google';
     $('#ytmAccountDisconnect')?.classList.toggle('hidden', !account.connected);
-    $('#ytmAccountTest')?.classList.toggle('hidden', !account.connected);
+    $('#ytmAccountTest')?.classList.toggle('hidden', !account.connected || reconnectRequired);
     renderQuota();
   }
 
   function fillPlaylistSelect(select, { placeholder = 'Selecione uma playlist' } = {}) {
     if (!select) return;
     const current = select.value;
-    select.innerHTML = `<option value="">${esc(accountConnected() ? placeholder : 'Conecte a conta')}</option>` + playlists.map((playlist) =>
+    const accountPlaceholder = accountNeedsReconnect() ? 'Reconecte a conta' : 'Conecte a conta';
+    select.innerHTML = `<option value="">${esc(accountConnected() ? placeholder : accountPlaceholder)}</option>` + playlists.map((playlist) =>
       `<option value="${esc(playlist.id)}">${esc(playlist.title)} (${playlist.itemCount || 0})</option>`).join('');
     if (playlists.some((item) => item.id === current)) select.value = current;
   }
@@ -316,7 +355,7 @@
     try { stored = window.localStorage.getItem('ytm-primary-target') || ''; } catch {}
 
     if (!accountConnected()) {
-      select.innerHTML = '<option value="">Conecte sua conta do YouTube para adicionar</option>';
+      select.innerHTML = `<option value="">${accountNeedsReconnect() ? 'Reconecte sua conta do YouTube para adicionar' : 'Conecte sua conta do YouTube para adicionar'}</option>`;
       select.disabled = true;
       renderPrimaryTargetMeta();
       return;
@@ -364,7 +403,9 @@
     if (!root) return;
     const target = currentPrimaryTarget();
     if (!accountConnected()) {
-      root.innerHTML = '<div class="ytm-target-empty"><strong>Conecte sua conta para adicionar vídeos</strong><span>A pesquisa continua disponível, mas alterar playlists exige OAuth.</span><button type="button" class="small" data-ytm-go="settings">Abrir configurações</button></div>';
+      root.innerHTML = accountNeedsReconnect()
+        ? '<div class="ytm-target-empty"><strong>Reconecte sua conta do YouTube</strong><span>A autorização do Google expirou ou foi revogada. A pesquisa pública continua disponível.</span><button type="button" class="small primary" data-ytm-go="settings">Reconectar conta</button></div>'
+        : '<div class="ytm-target-empty"><strong>Conecte sua conta para adicionar vídeos</strong><span>A pesquisa continua disponível, mas alterar playlists exige OAuth.</span><button type="button" class="small" data-ytm-go="settings">Abrir configurações</button></div>';
       syncButton?.classList.add('hidden');
       return;
     }
@@ -406,7 +447,9 @@
     const root = $('#ytmPlaylistList');
     if (!root) return;
     if (!accountConnected()) {
-      root.innerHTML = '<div class="empty-state"><strong>Conecte sua conta do YouTube</strong><span>A pesquisa pública não precisa de OAuth, mas suas playlists precisam.</span></div>';
+      root.innerHTML = accountNeedsReconnect()
+        ? '<div class="empty-state"><strong>Reconexão necessária</strong><span>A autorização do Google expirou ou foi revogada. Reconecte a conta em Configurações.</span></div>'
+        : '<div class="empty-state"><strong>Conecte sua conta do YouTube</strong><span>A pesquisa pública não precisa de OAuth, mas suas playlists precisam.</span></div>';
       return;
     }
     if (!playlists.length) {
@@ -441,7 +484,7 @@
       playlistIndex = new Set((response.result.items || []).map((item) => item.videoId));
       syncSearchQueueState(status && status.queue);
     } catch (error) {
-      deps.showToast(error.message, true);
+      if (!markAccountReconnectRequired(error)) deps.showToast(error.message, true);
     }
     renderPrimaryTargetMeta();
     renderSearchResults();
@@ -932,7 +975,7 @@
       playlists = response.result.playlists || [];
     } catch (error) {
       playlists = [];
-      if (error.status !== 401) deps.showToast(error.message, true);
+      if (!markAccountReconnectRequired(error) && error.status !== 401) deps.showToast(error.message, true);
     }
     renderPlaylists();
     await refreshPlaylistIndex();

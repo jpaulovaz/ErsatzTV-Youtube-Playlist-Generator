@@ -256,9 +256,13 @@ async function api(url, options = {}) {
     payload = null;
   }
 
-  if (response.status === 401 && !skipAuthRedirect) {
+  if (response.status === 401 && payload && payload.code === 'AUTH_REQUIRED' && !skipAuthRedirect) {
     window.location.replace('/login');
-    throw new Error('Sessão expirada.');
+    const error = new Error(payload.error || 'Sessão expirada.');
+    error.status = response.status;
+    error.code = payload.code;
+    error.payload = payload;
+    throw error;
   }
   if (!response.ok) {
     const error = new Error(payload && payload.error ? payload.error : `HTTP ${response.status}`);
@@ -2281,5 +2285,5 @@ async function bootstrap() {
 
 bootstrap().catch((error) => {
   showToast(error.message, true);
-  if (error.status === 401) window.location.replace('/login');
+  if (error.code === 'AUTH_REQUIRED') window.location.replace('/login');
 });

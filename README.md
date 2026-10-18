@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 4.0.2
+# ErsatzTV YouTube Downloader 4.0.3
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A linha v4 aplica ao **aplicativo inteiro** a arquitetura orientada por tarefas que tornou o Gerenciador do YouTube mais simples. A v4.0.2 preserva essa experiência e passa a compactar a saída bilíngue de tradução para uma linha de original + uma linha de tradução por cue, sem alterar timelines, schemas ou os arquivos-fonte.
+A linha v4 aplica ao **aplicativo inteiro** a arquitetura orientada por tarefas que tornou o Gerenciador do YouTube mais simples. A v4.0.3 preserva essa experiência e corrige o isolamento entre a sessão local da interface e o OAuth do Google: uma autorização YouTube expirada agora solicita reconexão sem derrubar o restante do aplicativo.
 
 ## Experiência v4
 
@@ -136,7 +136,7 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A v4.0.2 atualiza diretamente uma instalação **v4.0.1**. O ajuste afeta somente a renderização da faixa bilíngue criada pela tradução com Gemini e não exige migração de configuração ou schema; `configVersion` continua 9, o Universal continua 1.3.1 e todos os estados persistentes permanecem nas versões atuais. Consulte [UPGRADE.md](UPGRADE.md).
+A v4.0.3 atualiza diretamente uma instalação **v4.0.2**. O patch corrige o tratamento de expiração/revogação do OAuth do Google sem alterar configuração ou schema; `configVersion` continua 9, o Universal continua 1.3.1 e todos os estados persistentes permanecem nas versões atuais. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Gerenciador do YouTube
 
@@ -190,6 +190,8 @@ https://yt.johnflix.com.br/api/youtube-manager/oauth/callback
 ```
 
 O Client Secret nunca é devolvido integralmente à interface. As credenciais podem ficar em `config/youtube-account.json` (permissão 0600) ou ser fornecidas por `YOUTUBE_OAUTH_CLIENT_ID`, `YOUTUBE_OAUTH_CLIENT_SECRET` e `YOUTUBE_PUBLIC_BASE_URL`. Os tokens ficam somente no servidor em `data/youtube-account-state.json` (0600). O pacote full inclui apenas `config/youtube-account.example.json`; o arquivo real nunca é distribuído.
+
+A partir da v4.0.3, expiração ou revogação do refresh token é tratada como **reconexão da conta Google**, não como expiração da sessão local da interface. O Gerenciador do YouTube entra no estado **Reconexão necessária**, bloqueia novas chamadas OAuth dependentes daquele token e mantém o restante do aplicativo operacional. Depois de uma nova autorização bem-sucedida, o circuit breaker é limpo automaticamente. Estados antigos que já contenham `invalid_grant` ou a mensagem equivalente também são reconhecidos sem migração.
 
 A pesquisa pública reutiliza a YouTube Data API Key já configurada no aplicativo. Pesquisas idênticas são armazenadas em cache; uma URL/Video ID direto evita `search.list` e consulta somente os metadados do vídeo. O painel de quota é **estimativo** porque outras aplicações podem usar o mesmo projeto Google; o dia é contabilizado pelo fuso do Pacífico, compatível com o reset oficial da API.
 

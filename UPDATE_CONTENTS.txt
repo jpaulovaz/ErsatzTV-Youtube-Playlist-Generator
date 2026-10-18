@@ -1,27 +1,35 @@
-ErsatzTV YouTube Downloader 4.0.2 - pacote de atualização
-Base: v4.0.1
+ErsatzTV YouTube Downloader 4.0.3 - pacote de atualização
+Base: v4.0.2
 
-Este update compacta a saída bilíngue gerada pela tradução com Gemini:
-- cada cue bilíngue passa a ter no máximo uma linha de original + uma linha de tradução;
-- quebras internas do original ou da tradução viram espaços apenas na faixa bilíngue;
-- a saída Somente traduzida mantém as quebras originais recebidas do tradutor;
-- não há chamada adicional ao Gemini;
-- timestamps, quantidade de cues, tags, pontuação e arquivos-fonte são preservados;
-- não há normalização de capitalização;
-- nenhuma migração de configuração ou estado.
+Este update corrige o tratamento da expiração/revogação do OAuth Google:
+- somente `401 + AUTH_REQUIRED` redireciona para a tela de login;
+- `YOUTUBE_RECONNECT_REQUIRED` passa a manter a sessão local e solicitar reconexão no YouTube Manager;
+- o restante do aplicativo continua funcional mesmo com OAuth Google expirado;
+- `invalid_grant` ativa um circuit breaker que evita novas tentativas com o mesmo refresh token;
+- nova autorização OAuth limpa automaticamente o estado de reconexão;
+- estados legados com `invalid_grant` são reconhecidos sem migração;
+- logs de reconexão são limitados para evitar spam;
+- nenhuma migração de configuração ou schema.
 
 Arquivos incluídos:
 CHANGELOG.md
 README.md
 UPGRADE.md
 package.json
+public/app.js
 public/index.html
 public/login.html
-src/subtitleTranslation/translationValidator.js
-test/subtitleTranslation.test.js
+public/js/youtubeManager.js
+public/styles.css
+src/server.js
+src/youtubeManager/youtubeAccountService.js
+src/youtubeManager/youtubeAccountState.js
+src/youtubeManager/youtubeOAuthService.js
+test/ui-v3.test.js
+test/youtubeManager.test.js
 MODIFIED_FILES.txt
 UPDATE_CONTENTS.txt
 
-Aplicacao v4.0.2, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v4.0.3, Universal v1.3.1, configVersion 9, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 
 O pacote nao inclui config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/, tokens, estados operacionais, arquivos de midia ou sidecars.

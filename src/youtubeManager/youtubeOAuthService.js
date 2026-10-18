@@ -60,7 +60,6 @@ async function startAuthorization() {
     expiresAt: new Date(now + STATE_TTL_MS).toISOString(),
     redirectUri: accountConfig.redirectUri(config)
   };
-  state.lastError = null;
   await accountState.save(state);
 
   const url = new URL(AUTH_ENDPOINT);
@@ -88,6 +87,7 @@ async function handleCallback({ state: returnedState, code, error: oauthError, e
   if (oauthError) {
     state.pendingAuth = null;
     state.lastError = String(errorDescription || oauthError);
+    state.lastErrorCode = 'YOUTUBE_OAUTH_DENIED';
     await accountState.save(state);
     throw new YouTubeOAuthError(`Autorizacao recusada pelo Google: ${state.lastError}`, { code: 'YOUTUBE_OAUTH_DENIED' });
   }
@@ -125,6 +125,8 @@ async function handleCallback({ state: returnedState, code, error: oauthError, e
   state.scopes = String(payload.scope || YOUTUBE_SCOPE).split(/\s+/).filter(Boolean);
   state.pendingAuth = null;
   state.lastError = null;
+  state.lastErrorCode = null;
+  state.reconnectRequired = false;
   await accountState.save(state);
   return { connected: true, scopes: state.scopes, expiresAt: state.tokens.expiresAt };
 }

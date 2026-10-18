@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.0.3
+
+- Corrige a distinção entre a sessão local da interface e a autorização OAuth do Google: `401 + YOUTUBE_RECONNECT_REQUIRED` não redireciona mais para `/login` nem exibe “Sessão expirada”.
+- O YouTube Manager passa a mostrar **Reconexão necessária** e oferece **Reconectar com Google** sem derrubar Visão Geral, Downloads, Bibliotecas, Canais, Scripted Schedules ou demais áreas do aplicativo.
+- Adiciona circuit breaker para refresh token expirado/revogado: após `invalid_grant`, novas chamadas não insistem no mesmo token até uma nova autorização OAuth concluir com sucesso.
+- Reduz ruído de log de `YOUTUBE_RECONNECT_REQUIRED`, registrando o evento operacional no máximo uma vez por minuto no logger do servidor.
+- Estados legados que já possuam `invalid_grant`/mensagem equivalente são reconhecidos automaticamente; nenhuma migração ou alteração do schema YouTube Account state v1 é necessária.
+- Aplicação **v4.0.3**, Universal **v1.3.1**, `configVersion` **9** e demais schemas/estados preservados.
+
 ## 4.0.2
 
 - Compacta automaticamente cada lado da saída **bilíngue** para uma única linha por cue: original em uma linha e tradução na linha seguinte, mesmo quando a legenda-fonte ou a resposta traduzida trazem quebras internas.
