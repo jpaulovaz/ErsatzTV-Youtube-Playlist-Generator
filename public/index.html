@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>ErsatzTV YouTube Downloader</title>
-  <link rel="icon" href="/brand-mark.svg?v=4.0.3" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=4.0.3&amp;rev=scripted-schedules-2">
-  <link rel="stylesheet" href="/scripted-schedules.css?v=4.0.3">
+  <link rel="icon" href="/brand-mark.svg?v=4.1.0" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=4.1.0&amp;rev=scripted-schedules-2">
+  <link rel="stylesheet" href="/scripted-schedules.css?v=4.1.0">
 </head>
 <body class="app-page">
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=4.0.3" alt=""></span>
+        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=4.1.0" alt=""></span>
         <div class="brand-copy">
           <div class="title-line">
             <h1>ErsatzTV YouTube Downloader</h1>
-            <span id="versionBadge" class="version-badge">v4.0.3</span>
+            <span id="versionBadge" class="version-badge">v4.1.0</span>
           </div>
         </div>
       </div>
@@ -130,6 +130,18 @@
         <button type="button" class="nav-button" data-view="scripted-schedules">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8M8 13h5M16 13l2 2-2 2"/></svg>
           <span>Scripted Schedules</span>
+        </button>
+      </div>
+
+      <div class="nav-group">
+        <span class="nav-label">Ferramentas</span>
+        <button type="button" class="nav-button" data-view="recover-archive">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM7 9h10M7 13h6M16 15l2 2 3-4"/></svg>
+          <span>Recuperar acervo</span>
+        </button>
+        <button type="button" class="nav-button" data-view="subtitle-tools">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM7 9h10M7 13h4M14 13h3M7 17h7M16 17h1M12 3v2"/></svg>
+          <span>Gerenciar legendas</span>
         </button>
       </div>
 
@@ -437,7 +449,6 @@
         <nav class="ytm-tabs" role="tablist" aria-label="Áreas do Gerenciador do YouTube">
           <button type="button" class="ytm-tab active" data-ytm-tab="add"><span>Adicionar vídeos</span></button>
           <button type="button" class="ytm-tab" data-ytm-tab="activity"><span>Atividade</span><span id="ytmActivityBadge" class="ytm-tab-badge hidden">0</span></button>
-          <button type="button" class="ytm-tab" data-ytm-tab="catalog"><span>Recuperar acervo</span><small>Ferramenta</small></button>
           <button type="button" class="ytm-tab" data-ytm-tab="settings"><span>Configurações</span></button>
         </nav>
 
@@ -513,7 +524,65 @@
           </section>
         </section>
 
-        <section class="ytm-panel" data-ytm-panel="catalog">
+
+
+        <section class="ytm-panel" data-ytm-panel="settings">
+          <section class="card">
+            <div class="section-heading"><div><span class="eyebrow">Integração</span><h3>Conta do YouTube</h3><p>A pesquisa pública usa a API key normal. A conta Google é necessária para alterar playlists.</p></div><span class="ytm-help" tabindex="0" aria-label="Ajuda sobre a conta Google" data-tooltip="O aplicativo nunca recebe sua senha. O Google devolve tokens OAuth ao servidor e o Client Secret não é exibido novamente no navegador.">?</span></div>
+            <div id="ytmAccountStatus" class="ytm-account-status"></div>
+            <div class="form-grid two">
+              <label class="wide">URL pública<input id="ytmPublicBaseUrl" type="url" value="https://yt.johnflix.com.br/"></label>
+              <label class="wide">Redirect URI<input id="ytmRedirectUri" type="text" readonly></label>
+              <label class="wide">OAuth Client ID<input id="ytmClientId" type="text" autocomplete="off" placeholder="...apps.googleusercontent.com"></label>
+              <label class="wide">OAuth Client Secret<input id="ytmClientSecret" type="password" autocomplete="off" placeholder="Deixe vazio para preservar o segredo atual"></label>
+            </div>
+            <p class="settings-hint">Cadastre exatamente o Redirect URI acima no Google Cloud. Para uso persistente, não deixe o projeto OAuth indefinidamente em modo Testing.</p>
+            <div class="form-actions-inline">
+              <button id="ytmAccountSave" type="button">Salvar OAuth</button>
+              <button id="ytmAccountConnect" type="button" class="primary">Conectar com Google</button>
+              <button id="ytmAccountTest" type="button">Testar conexão</button>
+              <button id="ytmAccountDisconnect" type="button" class="danger">Desconectar</button>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="section-heading"><div><h3>Quota estimada</h3><p>Contador local do que este aplicativo executou; não representa o saldo oficial do projeto Google.</p></div><span class="ytm-help" tabindex="0" aria-label="Ajuda sobre quota" data-tooltip="A quota geral padrão é diária. Inserir um vídeo em playlist custa 50 unidades; o contador é apenas uma estimativa das chamadas feitas por este aplicativo.">?</span></div>
+            <div id="ytmQuotaMetrics" class="metrics"></div>
+          </section>
+
+          <section class="card">
+            <div class="section-heading"><div><h3>Playlists da conta</h3><p>Use esta área para manutenção. No dia a dia, prefira escolher a Biblioteca diretamente em “Adicionar vídeos”.</p></div></div>
+            <details class="ytm-tool-settings">
+              <summary>Criar nova playlist no YouTube</summary>
+              <div class="ytm-tool-settings-body">
+                <div class="ytm-playlist-create">
+                  <label>Nome<input id="ytmPlaylistTitle" type="text" placeholder="MIGRAÇÃO CLIPES ANTIGOS"></label>
+                  <label>Privacidade<select id="ytmPlaylistPrivacy"><option value="private">Privada</option><option value="unlisted">Não listada</option><option value="public">Pública</option></select></label>
+                  <label class="wide">Descrição<input id="ytmPlaylistDescription" type="text" placeholder="Opcional"></label>
+                  <button id="ytmPlaylistCreate" type="button">Criar playlist</button>
+                </div>
+              </div>
+            </details>
+            <div id="ytmPlaylistList" class="ytm-playlist-list"></div>
+          </section>
+        </section>
+      </section>
+
+
+      <section id="view-scripted-schedules" class="view-panel" data-view-panel="scripted-schedules">
+        <div id="scriptedSchedulesRoot"></div>
+      </section>
+
+      <section id="view-help" class="view-panel" data-view-panel="help">
+        <div id="helpRoot"></div>
+      </section>
+
+      <section id="view-recover-archive" class="view-panel" data-view-panel="recover-archive">
+        <div class="page-header page-header-rich">
+          <div><span class="page-kicker">Ferramentas</span><h2>Recuperar acervo</h2><p class="page-subtitle">Reencontre a identidade de vídeos que já existem no disco e adote mídia sem baixar novamente.</p></div>
+          <button type="button" class="small" data-overview-view="youtube-manager">Adicionar vídeos novos</button>
+        </div>
+        <section class="ytm-panel active" data-ytm-panel="catalog">
           <section class="card ytm-recovery-card">
             <div class="section-heading">
               <div><span class="eyebrow">Ferramenta de recuperação</span><h3>Recuperar acervo local</h3><p>Use esta área quando você já possui arquivos no disco e precisa reencontrar a identidade deles no YouTube ou adotá-los sem redownload.</p></div>
@@ -591,56 +660,52 @@
             <div class="form-actions-inline"><button id="ytmAdoptionStart" type="button" class="primary" disabled>Iniciar adoção</button></div>
           </section>
         </section>
+      </section>
 
-        <section class="ytm-panel" data-ytm-panel="settings">
-          <section class="card">
-            <div class="section-heading"><div><span class="eyebrow">Integração</span><h3>Conta do YouTube</h3><p>A pesquisa pública usa a API key normal. A conta Google é necessária para alterar playlists.</p></div><span class="ytm-help" tabindex="0" aria-label="Ajuda sobre a conta Google" data-tooltip="O aplicativo nunca recebe sua senha. O Google devolve tokens OAuth ao servidor e o Client Secret não é exibido novamente no navegador.">?</span></div>
-            <div id="ytmAccountStatus" class="ytm-account-status"></div>
-            <div class="form-grid two">
-              <label class="wide">URL pública<input id="ytmPublicBaseUrl" type="url" value="https://yt.johnflix.com.br/"></label>
-              <label class="wide">Redirect URI<input id="ytmRedirectUri" type="text" readonly></label>
-              <label class="wide">OAuth Client ID<input id="ytmClientId" type="text" autocomplete="off" placeholder="...apps.googleusercontent.com"></label>
-              <label class="wide">OAuth Client Secret<input id="ytmClientSecret" type="password" autocomplete="off" placeholder="Deixe vazio para preservar o segredo atual"></label>
-            </div>
-            <p class="settings-hint">Cadastre exatamente o Redirect URI acima no Google Cloud. Para uso persistente, não deixe o projeto OAuth indefinidamente em modo Testing.</p>
-            <div class="form-actions-inline">
-              <button id="ytmAccountSave" type="button">Salvar OAuth</button>
-              <button id="ytmAccountConnect" type="button" class="primary">Conectar com Google</button>
-              <button id="ytmAccountTest" type="button">Testar conexão</button>
-              <button id="ytmAccountDisconnect" type="button" class="danger">Desconectar</button>
-            </div>
-          </section>
+      <section id="view-subtitle-tools" class="view-panel" data-view-panel="subtitle-tools">
+        <div class="page-header page-header-rich">
+          <div><span class="page-kicker">Ferramentas</span><h2>Gerenciar legendas</h2><p class="page-subtitle">Varra qualquer pasta autorizada, assista ao vídeo enquanto ajusta o SRT e siga item por item sem depender de uma Biblioteca gerenciada.</p></div>
+          <button id="subtitleWorkspaceScan" type="button" class="primary">Atualizar varredura</button>
+        </div>
 
-          <section class="card">
-            <div class="section-heading"><div><h3>Quota estimada</h3><p>Contador local do que este aplicativo executou; não representa o saldo oficial do projeto Google.</p></div><span class="ytm-help" tabindex="0" aria-label="Ajuda sobre quota" data-tooltip="A quota geral padrão é diária. Inserir um vídeo em playlist custa 50 unidades; o contador é apenas uma estimativa das chamadas feitas por este aplicativo.">?</span></div>
-            <div id="ytmQuotaMetrics" class="metrics"></div>
-          </section>
-
-          <section class="card">
-            <div class="section-heading"><div><h3>Playlists da conta</h3><p>Use esta área para manutenção. No dia a dia, prefira escolher a Biblioteca diretamente em “Adicionar vídeos”.</p></div></div>
-            <details class="ytm-tool-settings">
-              <summary>Criar nova playlist no YouTube</summary>
-              <div class="ytm-tool-settings-body">
-                <div class="ytm-playlist-create">
-                  <label>Nome<input id="ytmPlaylistTitle" type="text" placeholder="MIGRAÇÃO CLIPES ANTIGOS"></label>
-                  <label>Privacidade<select id="ytmPlaylistPrivacy"><option value="private">Privada</option><option value="unlisted">Não listada</option><option value="public">Pública</option></select></label>
-                  <label class="wide">Descrição<input id="ytmPlaylistDescription" type="text" placeholder="Opcional"></label>
-                  <button id="ytmPlaylistCreate" type="button">Criar playlist</button>
-                </div>
+        <section class="card subtitle-workspace-intro">
+          <div class="section-heading"><div><span class="eyebrow">Pasta de trabalho</span><h3>Onde estão os filmes ou séries?</h3><p>O scanner lê subpastas sem seguir links simbólicos. Somente SRT é editado; outros formatos e legendas embutidas são identificados sem alteração.</p></div><span class="context-help" tabindex="0" data-tooltip="Nada é movido para uma Biblioteca. A ferramenta trabalha diretamente nos sidecars da pasta cadastrada e mantém histórico antes de qualquer alteração.">?</span></div>
+          <div class="subtitle-workspace-source-row">
+            <label>Pasta cadastrada<select id="subtitleWorkspaceSelect"><option value="">Nenhuma pasta cadastrada</option></select></label>
+            <span id="subtitleWorkspaceLastScan" class="muted">Cadastre uma pasta para começar.</span>
+          </div>
+          <details class="ytm-tool-settings">
+            <summary>Gerenciar pastas de trabalho</summary>
+            <div class="ytm-tool-settings-body">
+              <div class="ytm-source-form">
+                <label>Nome<input id="subtitleWorkspaceName" type="text" placeholder="Filmes e séries"></label>
+                <label class="wide">Pasta raiz<input id="subtitleWorkspacePath" type="text" placeholder="/mnt/media/Movies"></label>
+                <label class="check-row"><input id="subtitleWorkspaceRecursive" type="checkbox" checked><span>Incluir subpastas</span></label>
+                <button id="subtitleWorkspaceAdd" type="button">Cadastrar pasta</button>
+                <button id="subtitleWorkspaceRemove" type="button" class="danger">Remover cadastro</button>
               </div>
-            </details>
-            <div id="ytmPlaylistList" class="ytm-playlist-list"></div>
-          </section>
+            </div>
+          </details>
+          <div id="subtitleWorkspaceScanStatus" class="settings-hint hidden" aria-live="polite"></div>
         </section>
-      </section>
 
+        <section id="subtitleWorkspaceMetrics" class="settings-overview-grid subtitle-workspace-metrics" aria-label="Resumo do acervo"></section>
 
-      <section id="view-scripted-schedules" class="view-panel" data-view-panel="scripted-schedules">
-        <div id="scriptedSchedulesRoot"></div>
-      </section>
+        <section class="card">
+          <div class="section-heading"><div><span class="eyebrow">Triagem</span><h3>Vídeos encontrados</h3><p>Use “Não revisados” como fila de trabalho e marque cada item depois de conferir a sincronização.</p></div></div>
+          <div class="subtitle-workspace-filterbar">
+            <label>Exibir<select id="subtitleWorkspaceFilter"><option value="unreviewed">Não revisados</option><option value="all">Todos</option><option value="editable">Com SRT editável</option><option value="without-subtitles">Sem legenda externa</option><option value="multiple">Múltiplas legendas</option><option value="readonly">Formato não editável</option><option value="reviewed">Revisados</option><option value="bazarr-linked">Encontrado no Bazarr</option><option value="bazarr-unlinked">Não encontrado no Bazarr</option></select></label>
+            <label>Idioma<select id="subtitleWorkspaceLanguage"><option value="all">Todos os idiomas</option></select></label>
+            <label class="wide">Pesquisar<input id="subtitleWorkspaceQuery" type="search" placeholder="Nome do vídeo, arquivo ou pasta"></label>
+          </div>
+          <div id="subtitleWorkspaceResultMeta" class="muted"></div>
+          <div id="subtitleWorkspaceList" class="subtitle-workspace-list"></div>
+          <button id="subtitleWorkspaceMore" type="button" class="small hidden">Carregar mais</button>
+        </section>
 
-      <section id="view-help" class="view-panel" data-view-panel="help">
-        <div id="helpRoot"></div>
+        <section id="subtitleWorkspaceNavigator" class="card subtitle-workspace-navigator hidden"></section>
+        <section id="subtitleWorkspaceManagerPanel" class="card subtitle-manager-panel hidden"></section>
+        <section id="subtitleWorkspaceBazarr" class="card subtitle-workspace-bazarr hidden"></section>
       </section>
 
       <section id="view-settings" class="view-panel" data-view-panel="settings">
@@ -764,10 +829,29 @@
             </div>
           </details>
 
+          <details id="bazarrSettings" class="settings-accordion" data-settings-keywords="bazarr legendas subtitles sonarr radarr api key caminho path mapping sincronização">
+            <summary>
+              <span class="settings-index">05</span>
+              <span class="settings-summary-copy"><strong>Bazarr</strong><small>Busca, download e sincronização opcionais para a ferramenta Gerenciar legendas.</small></span>
+              <span class="accordion-chevron" aria-hidden="true"></span>
+            </summary>
+            <div class="settings-panel">
+              <div class="form-grid two">
+                <label class="check-row"><input name="bazarr.enabled" type="checkbox"><span>Ativar integração com Bazarr</span></label>
+                <label>URL<input name="bazarr.url" type="url" placeholder="http://bazarr:6767"></label>
+                <label class="wide">API Key<input name="bazarr.apiKey" type="password" autocomplete="off" placeholder="Deixe vazio para preservar a chave atual"></label>
+                <label>Timeout (segundos)<input name="bazarr.timeoutSeconds" type="number" min="5" max="120"></label>
+                <label class="wide">Mapeamento de caminhos<textarea id="bazarrPathMappings" rows="4" placeholder="/mnt/media/Movies = /movies&#10;/mnt/media/TV = /tv"></textarea><small>Uma regra por linha: caminho visto por este aplicativo = caminho visto por Bazarr/Sonarr/Radarr.</small></label>
+                <div class="form-actions-inline"><button id="testBazarrBtn" type="button">Testar Bazarr</button></div>
+              </div>
+              <p class="settings-hint">A ferramenta local funciona sem Bazarr. A integração só é usada quando você pede uma busca, download ou sincronização.</p>
+            </div>
+          </details>
+
           <div class="settings-group-label"><span>Automação</span><small>Rotinas que funcionam sem intervenção manual.</small></div>
           <details class="settings-accordion" data-settings-keywords="agendador scheduler intervalo canais startup atualização periódica">
             <summary>
-              <span class="settings-index">05</span>
+              <span class="settings-index">06</span>
               <span class="settings-summary-copy">
                 <strong>Agendadores</strong><small>Busca periódica de Bibliotecas e atualização de Canais.</small>
               </span>
@@ -792,7 +876,7 @@
 
           <details class="settings-accordion" data-settings-keywords="tradução legendas gemini modelo batch concorrência timeout idioma bilíngue">
             <summary>
-              <span class="settings-index">06</span>
+              <span class="settings-index">07</span>
               <span class="settings-summary-copy"><strong>Tradução de legendas</strong><small>Gemini, idioma de destino e processamento em lote.</small></span>
               <span class="accordion-chevron" aria-hidden="true"></span>
             </summary>
@@ -816,7 +900,7 @@
           <div class="settings-group-label"><span>Avançado</span><small>Use somente quando precisar adaptar o yt-dlp ao seu ambiente.</small></div>
           <details class="settings-accordion settings-advanced" data-settings-keywords="yt-dlp avançado user agent runtime javascript deno node ejs">
             <summary>
-              <span class="settings-index">07</span>
+              <span class="settings-index">08</span>
               <span class="settings-summary-copy">
                 <strong>yt-dlp avançado</strong><small>Runtime, User-Agent e componentes EJS.</small>
               </span>
@@ -906,14 +990,15 @@
   </dialog>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="/js/destinationForm.js?v=4.0.3"></script>
-  <script src="/js/channelsView.js?v=4.0.3&amp;rev=ersatztv-catalog-1"></script>
-  <script src="/js/scriptedScheduleEditorUtils.js?v=4.0.3"></script>
-  <script src="/js/scriptedSchedulesView.js?v=4.0.3"></script>
-  <script src="/js/helpView.js?v=4.0.3"></script>
-  <script src="/js/subtitleManager.js?v=4.0.3"></script>
-  <script src="/js/subtitleTranslation.js?v=4.0.3"></script>
-  <script src="/js/youtubeManager.js?v=4.0.3"></script>
-  <script src="/app.js?v=4.0.3"></script>
+  <script src="/js/destinationForm.js?v=4.1.0"></script>
+  <script src="/js/channelsView.js?v=4.1.0&amp;rev=ersatztv-catalog-1"></script>
+  <script src="/js/scriptedScheduleEditorUtils.js?v=4.1.0"></script>
+  <script src="/js/scriptedSchedulesView.js?v=4.1.0"></script>
+  <script src="/js/helpView.js?v=4.1.0"></script>
+  <script src="/js/subtitleManager.js?v=4.1.0"></script>
+  <script src="/js/subtitleTranslation.js?v=4.1.0"></script>
+  <script src="/js/youtubeManager.js?v=4.1.0"></script>
+  <script src="/js/subtitleWorkspace.js?v=4.1.0"></script>
+  <script src="/app.js?v=4.1.0"></script>
 </body>
 </html>

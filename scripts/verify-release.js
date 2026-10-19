@@ -28,7 +28,7 @@ expect('UPGRADE.md', new RegExp(`^# Atualização para ${version.replaceAll('.',
 expect('CHANGELOG.md', new RegExp(`^## ${version.replaceAll('.', '\\.')}$`, 'm'), `changelog deve conter ${version}`);
 expect('UPDATE_CONTENTS.txt', new RegExp(`ErsatzTV YouTube Downloader ${version.replaceAll('.', '\\.')} - pacote de atualização`), `conteudo do update deve usar ${version}`);
 expect('MODIFIED_FILES.txt', new RegExp(`^ErsatzTV YouTube Downloader ${version.replaceAll('.', '\\.')}$`, 'm'), `lista de arquivos deve usar ${version}`);
-expect('config/config.example.json', /\"configVersion\"\s*:\s*9/, 'config de exemplo deve usar configVersion 9');
+expect('config/config.example.json', /\"configVersion\"\s*:\s*10/, 'config de exemplo deve usar configVersion 10');
 reject('config/config.example.json', /updateExistingThumbnails|showMetadata|movieMetadata/, 'config de exemplo nao deve conter campos removidos');
 expect('src/scriptedSchedules/schema.js', /TEMPLATE_VERSION\s*=\s*'1\.3\.1'/, 'Universal atual deve ser 1.3.1');
 expect('src/scriptedSchedules/schema.js', /SUPPORTED_TEMPLATE_VERSIONS\s*=\s*\[TEMPLATE_VERSION\]/, 'somente o Universal atual deve ser suportado');

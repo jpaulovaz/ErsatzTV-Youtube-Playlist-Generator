@@ -14,14 +14,16 @@
     preview: null,
     previewOffsetMs: 0,
     textTrack: null,
-    activeLocalLanguage: '',
+    activeLocalTrackId: '',
+    panelId: 'subtitleManagerPanel',
     targetLanguage: 'pt-BR',
     provider: 'youtube',
     searchResults: [],
     defaults: { artist: '', track: '', album: '' },
     queryDraft: { artist: '', track: '', album: '' },
     previewToken: '',
-    onContentChanged: null
+    onContentChanged: null,
+    contextOnContentChanged: null
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -35,9 +37,10 @@
   }
 
   async function notifyContentChanged(change = {}) {
-    if (typeof state.onContentChanged !== 'function' || !state.item) return;
+    const handler = state.contextOnContentChanged || state.onContentChanged;
+    if (typeof handler !== 'function' || !state.item) return;
     try {
-      await state.onContentChanged({ itemId: state.item.id, endpointBase: state.endpointBase, ...change });
+      await handler({ itemId: state.item.id, endpointBase: state.endpointBase, ...change });
     } catch (error) {
       toast(`Legenda atualizada, mas não foi possível atualizar a lista: ${error.message}`, true);
     }
@@ -80,6 +83,8 @@
       parts.push(`${source} + ${target}`);
       parts.push('ErsatzTV: und');
     }
+    if (track?.fileName && track.fileName !== track.language) parts.push(track.fileName);
+    if (track?.editable === false) parts.push('Somente leitura');
     if (track?.staleTranslation) parts.push('Tradução desatualizada');
     return parts.join(' · ');
   }
@@ -91,7 +96,7 @@
     try { video.removeAttribute('src'); video.load(); } catch {}
   }
 
-  function panel() { return $('#subtitleManagerPanel'); }
+  function panel() { return document.getElementById(state.panelId || 'subtitleManagerPanel'); }
 
   function canRenderCue() {
     return typeof global.VTTCue === 'function' || typeof global.TextTrackCue === 'function';
@@ -173,44 +178,47 @@
 
   function localTrackRows() {
     const tracks = state.status?.tracks || [];
-    if (!tracks.length) return '<div class="subtitle-manager-empty">Sem legenda local.</div>';
+    if (!tracks.length) return '<div class="subtitle-manager-empty">Sem legenda local ou embutida detectada.</div>';
     return tracks.map((track) => {
-      const isPreviewing = state.preview?.kind === 'local' && state.preview.language === track.language;
+      const trackId = track.trackId || track.language;
+      const isPreviewing = state.preview?.kind === 'local' && (state.preview.trackId || state.preview.language) === trackId;
+      const editable = track.editable !== false && !track.embedded;
       return `
-      <div class="subtitle-manager-track ${isPreviewing ? 'is-previewing' : ''}">
+      <div class="subtitle-manager-track ${isPreviewing ? 'is-previewing' : ''} ${editable ? '' : 'is-readonly'}">
         <div><strong>${esc(localTrackTitle(track))}</strong><small>${esc(localTrackSubtitle(track))}</small></div>
         <div class="inline-actions">
-          <button type="button" class="small subtitle-preview-button ${isPreviewing ? 'is-previewing' : ''}" aria-pressed="${isPreviewing ? 'true' : 'false'}" data-subtitle-local-preview="${esc(track.language)}">${isPreviewing ? 'Em teste no player' : 'Testar no player'}</button>
-          <button type="button" class="small danger" data-subtitle-local-delete="${esc(track.language)}" ${!state.status?.canApply ? 'disabled title="A exclusão exige conteúdo ativo e gravável"' : ''}>Excluir legenda</button>
+          <button type="button" class="small subtitle-preview-button ${isPreviewing ? 'is-previewing' : ''}" aria-pressed="${isPreviewing ? 'true' : 'false'}" data-subtitle-local-preview="${esc(trackId)}" ${!editable ? 'disabled title="Este formato é somente leitura nesta versão"' : ''}>${!editable ? 'Somente leitura' : (isPreviewing ? 'Em teste no player' : 'Testar no player')}</button>
+          <button type="button" class="small danger" data-subtitle-local-delete="${esc(trackId)}" ${!editable || !state.status?.canApply ? 'disabled title="A exclusão exige uma faixa SRT editável e gravável"' : ''}>Excluir legenda</button>
         </div>
       </div>`;
     }).join('');
   }
 
   function historyRows() {
-    const language = state.activeLocalLanguage;
-    const entries = language && state.status?.history ? state.status.history[language] || [] : [];
-    if (!language) return '<div class="subtitle-manager-empty">Selecione uma legenda local para visualizar o histórico.</div>';
+    const trackId = state.activeLocalTrackId;
+    const entries = trackId && state.status?.history ? state.status.history[trackId] || [] : [];
+    if (!trackId) return '<div class="subtitle-manager-empty">Selecione uma legenda local para visualizar o histórico.</div>';
     if (!entries.length) return '<div class="subtitle-manager-empty">Nenhuma versão anterior registrada para esta faixa.</div>';
     return entries.map((entry) => `
       <div class="subtitle-manager-history-row">
         <div><strong>${esc(entry.sourceLabel || 'Versão anterior')}</strong><small>${esc(entry.createdAt ? new Date(entry.createdAt).toLocaleString('pt-BR') : '')} · offset ${esc(formatOffset(entry.lastAppliedOffsetMs || 0))}</small></div>
-        <button type="button" class="small" data-subtitle-history-restore="${esc(entry.id)}" data-language="${esc(language)}" ${entry.valid === false ? 'disabled title="Arquivo histórico ausente"' : ''}>Restaurar</button>
+        <button type="button" class="small" data-subtitle-history-restore="${esc(entry.id)}" data-track-id="${esc(trackId)}" ${entry.valid === false ? 'disabled title="Arquivo histórico ausente"' : ''}>Restaurar</button>
       </div>`).join('');
   }
 
   function providerControls() {
     const providers = state.status?.providers || {};
-    const youtubeDisabled = !providers.youtube?.available;
+    const youtubeAvailable = Boolean(providers.youtube?.available);
     const lrclibAvailable = Boolean(providers.lrclib?.available);
+    if (!youtubeAvailable && !lrclibAvailable) return '';
     if (state.provider === 'lrclib' && !lrclibAvailable) state.provider = 'youtube';
-    if (state.provider === 'youtube' && youtubeDisabled && lrclibAvailable) state.provider = 'lrclib';
+    if (state.provider === 'youtube' && !youtubeAvailable && lrclibAvailable) state.provider = 'lrclib';
     const isLrclib = state.provider === 'lrclib';
     return `
       <div class="subtitle-manager-search-head">
         <label>Fonte
           <select id="subtitleManagerProvider">
-            <option value="youtube" ${state.provider === 'youtube' ? 'selected' : ''} ${youtubeDisabled ? 'disabled' : ''}>YouTube</option>
+            ${youtubeAvailable ? `<option value="youtube" ${state.provider === 'youtube' ? 'selected' : ''}>YouTube</option>` : ''}
             ${lrclibAvailable ? `<option value="lrclib" ${state.provider === 'lrclib' ? 'selected' : ''}>LRCLIB</option>` : ''}
           </select>
         </label>
@@ -263,7 +271,8 @@
     const root = panel();
     if (!root || !state.status) return;
     const tracks = state.status.tracks || [];
-    const current = tracks.length ? tracks.map((track) => `${track.language}: ${track.sourceLabel}`).join(' · ') : 'Sem legenda';
+    const current = tracks.length ? tracks.map((track) => `${localTrackTitle(track)}: ${track.sourceLabel}`).join(' · ') : 'Sem legenda';
+    const hasProviders = Boolean(state.status?.providers?.youtube?.available || state.status?.providers?.lrclib?.available);
     root.innerHTML = `
       <div class="subtitle-manager-head">
         <div><span class="page-kicker">Legendas</span><h3>Gerenciador de legendas</h3><p>${esc(current)}</p></div>
@@ -303,11 +312,11 @@
         </section>
       </div>
 
-      <section class="subtitle-manager-section subtitle-manager-search">
+      ${hasProviders ? `<section class="subtitle-manager-section subtitle-manager-search">
         <h4>Pesquisar outra legenda</h4>
         ${providerControls()}
         <div id="subtitleManagerResults" class="subtitle-manager-results">${resultRows()}</div>
-      </section>
+      </section>` : ''}
 
       <section class="subtitle-manager-section">
         <h4>Histórico da faixa</h4>
@@ -333,10 +342,10 @@
     state.status = response.result || {};
     state.defaults = { ...(state.status.queryDefaults || {}) };
     if (!state.queryDraft.track && !state.queryDraft.artist && !state.queryDraft.album) state.queryDraft = { ...state.defaults };
-    if (state.activeLocalLanguage) {
-      const stillLocal = (state.status.tracks || []).some((track) => track.language === state.activeLocalLanguage);
-      const hasHistory = Boolean((state.status.history?.[state.activeLocalLanguage] || []).length);
-      if (!stillLocal && !hasHistory) state.activeLocalLanguage = '';
+    if (state.activeLocalTrackId) {
+      const stillLocal = (state.status.tracks || []).some((track) => (track.trackId || track.language) === state.activeLocalTrackId);
+      const hasHistory = Boolean((state.status.history?.[state.activeLocalTrackId] || []).length);
+      if (!stillLocal && !hasHistory) state.activeLocalTrackId = '';
     }
   }
 
@@ -346,6 +355,10 @@
     try {
       await refreshStatus();
       render();
+      if (options.autoPreviewFirst && !state.preview) {
+        const first = (state.status?.tracks || []).find((track) => track.editable !== false && !track.embedded);
+        if (first) await previewLocal(first.trackId || first.language);
+      }
     } catch (error) {
       toast(error.message, true);
     }
@@ -359,27 +372,41 @@
     state.previewToken = '';
     state.textTrack = null;
     state.opened = false;
-    panel()?.classList.add('hidden');
+    const root = panel();
+    if (root) { root.classList.add('hidden'); root.innerHTML = ''; }
   }
 
-  function setContext({ item, endpointBase }) {
-    if (!item || !endpointBase) { close(); state.item = null; state.endpointBase = ''; state.queryDraft = { artist: '', track: '', album: '' }; return; }
-    if (state.item?.id !== item.id || state.endpointBase !== endpointBase) {
+  function setContext({ item, endpointBase, panelId = 'subtitleManagerPanel', onContentChanged = null }) {
+    if (!item || !endpointBase) { close(); state.item = null; state.endpointBase = ''; state.contextOnContentChanged = null; state.queryDraft = { artist: '', track: '', album: '' }; return; }
+    if (state.item?.id !== item.id || state.endpointBase !== endpointBase || state.panelId !== panelId) {
       close();
       state.queryDraft = { artist: '', track: '', album: '' };
       state.searchResults = [];
+      state.activeLocalTrackId = '';
     }
+    state.panelId = panelId;
     state.item = item;
     state.endpointBase = endpointBase;
+    state.contextOnContentChanged = typeof onContentChanged === 'function' ? onContentChanged : null;
   }
 
-  async function previewLocal(language) {
+  function getActiveTrack() {
+    if (!state.item) return null;
+    return {
+      itemId: state.item.id,
+      trackId: state.activeLocalTrackId || state.preview?.trackId || '',
+      fingerprint: state.preview?.kind === 'local' ? (state.preview.fingerprint || null) : null,
+      previewKind: state.preview?.kind || null
+    };
+  }
+
+  async function previewLocal(trackId) {
     const response = await state.api(`${state.endpointBase}/subtitle-preview-local`, {
-      method: 'POST', body: JSON.stringify({ itemId: state.item.id, language })
+      method: 'POST', body: JSON.stringify({ itemId: state.item.id, trackId, language: trackId })
     });
     state.preview = { ...(response.result || {}), kind: 'local' };
     state.previewOffsetMs = 0;
-    state.activeLocalLanguage = language;
+    state.activeLocalTrackId = response.result?.trackId || trackId;
     render();
     renderPreviewCues();
     $('#subtitleManagerVideo')?.play().catch(() => {});
@@ -434,7 +461,7 @@
         method: 'POST', body: JSON.stringify({ itemId: state.item.id, provider: state.provider, candidateId: candidate.candidateId, language, offsetMs })
       });
       toast(`Legenda ${language} aplicada com sucesso.`);
-      state.activeLocalLanguage = language;
+      state.activeLocalTrackId = language;
       state.preview = null; state.previewOffsetMs = 0;
       await refreshStatus();
       render();
@@ -444,42 +471,50 @@
   }
 
   async function saveOffset() {
-    if (!state.preview || state.preview.kind !== 'local' || !state.activeLocalLanguage || !state.previewOffsetMs) return;
+    if (!state.preview || state.preview.kind !== 'local' || !state.activeLocalTrackId || !state.previewOffsetMs) return;
     try {
-      const language = state.activeLocalLanguage;
+      const trackId = state.activeLocalTrackId;
       const delta = state.previewOffsetMs;
       await state.api(`${state.endpointBase}/subtitle-offset`, {
-        method: 'POST', body: JSON.stringify({ itemId: state.item.id, language, offsetMs: delta })
+        method: 'POST', body: JSON.stringify({ itemId: state.item.id, trackId, language: trackId, offsetMs: delta, expectedFingerprint: state.preview.fingerprint || null })
       });
-      toast(`Sincronização ${formatOffset(delta)} salva em ${language}.`);
+      toast(`Sincronização ${formatOffset(delta)} salva.`);
       state.preview = null; state.previewOffsetMs = 0;
-      await refreshStatus(); render(); await previewLocal(language);
-    } catch (error) { toast(error.message, true); }
+      await refreshStatus(); render(); await previewLocal(trackId);
+      await notifyContentChanged({ action: 'offset', trackId });
+    } catch (error) {
+      toast(error.message, true);
+      if (error.code === 'SUBTITLE_CHANGED_EXTERNALLY') {
+        state.preview = null; state.previewOffsetMs = 0;
+        await refreshStatus().catch(() => {}); render();
+      }
+    }
   }
 
-  async function restoreHistory(historyId, language) {
+  async function restoreHistory(historyId, trackId) {
     let confirmed = true;
     if (state.showDialog) {
-      const decision = await state.showDialog({ eyebrow: 'Legendas', title: 'Restaurar versão anterior', message: `Restaurar esta versão da legenda ${language}? A versão atual será preservada no histórico.`, confirmLabel: 'Restaurar' });
+      const decision = await state.showDialog({ eyebrow: 'Legendas', title: 'Restaurar versão anterior', message: `Restaurar esta versão da faixa ${trackId}? A versão atual será preservada no histórico.`, confirmLabel: 'Restaurar' });
       confirmed = decision.confirmed;
     }
     if (!confirmed) return;
     try {
-      await state.api(`${state.endpointBase}/subtitle-restore`, { method: 'POST', body: JSON.stringify({ itemId: state.item.id, language, historyId }) });
-      toast(`Versão anterior de ${language} restaurada.`);
-      state.activeLocalLanguage = language; state.preview = null; state.previewOffsetMs = 0;
-      await refreshStatus(); render(); await previewLocal(language);
-      await notifyContentChanged({ action: 'restore', language });
+      const expectedFingerprint = state.preview?.kind === 'local' && state.activeLocalTrackId === trackId ? state.preview.fingerprint || null : null;
+      await state.api(`${state.endpointBase}/subtitle-restore`, { method: 'POST', body: JSON.stringify({ itemId: state.item.id, trackId, language: trackId, historyId, expectedFingerprint }) });
+      toast('Versão anterior restaurada.');
+      state.activeLocalTrackId = trackId; state.preview = null; state.previewOffsetMs = 0;
+      await refreshStatus(); render(); await previewLocal(trackId);
+      await notifyContentChanged({ action: 'restore', trackId });
     } catch (error) { toast(error.message, true); }
   }
 
-  async function deleteLocalSubtitle(language) {
+  async function deleteLocalSubtitle(trackId) {
     let confirmed = true;
     if (state.showDialog) {
       const decision = await state.showDialog({
         eyebrow: 'Legendas',
-        title: `Excluir legenda ${language}`,
-        message: 'O arquivo SRT ativo será removido. Uma cópia será preservada no histórico para restauração, quando disponível.',
+        title: 'Excluir legenda',
+        message: `O arquivo ${trackId} será removido. Uma cópia será preservada no histórico para restauração, quando disponível.`,
         confirmLabel: 'Excluir legenda',
         danger: true
       });
@@ -487,20 +522,15 @@
     }
     if (!confirmed) return;
     try {
+      const expectedFingerprint = state.preview?.kind === 'local' && state.activeLocalTrackId === trackId ? state.preview.fingerprint || null : null;
       const response = await state.api(`${state.endpointBase}/subtitle-delete`, {
-        method: 'POST', body: JSON.stringify({ itemId: state.item.id, language })
+        method: 'POST', body: JSON.stringify({ itemId: state.item.id, trackId, language: trackId, expectedFingerprint })
       });
-      stopPlayer();
-      clearTextTrack();
-      state.preview = null;
-      state.previewOffsetMs = 0;
-      state.activeLocalLanguage = response.result?.historyCount ? language : '';
-      await refreshStatus();
-      render();
-      toast(response.result?.recoverable
-        ? `Legenda ${language} excluída. A versão removida ficou disponível no histórico.`
-        : `Legenda ${language} excluída.`);
-      await notifyContentChanged({ action: 'delete', language });
+      stopPlayer(); clearTextTrack(); state.preview = null; state.previewOffsetMs = 0;
+      state.activeLocalTrackId = response.result?.historyCount ? trackId : '';
+      await refreshStatus(); render();
+      toast(response.result?.recoverable ? 'Legenda excluída. A versão removida ficou disponível no histórico.' : 'Legenda excluída.');
+      await notifyContentChanged({ action: 'delete', trackId });
     } catch (error) { toast(error.message, true); }
   }
 
@@ -548,7 +578,7 @@
       return;
     }
     const restore = event.target.closest('[data-subtitle-history-restore]');
-    if (restore) { restoreHistory(restore.dataset.subtitleHistoryRestore, restore.dataset.language); return; }
+    if (restore) { restoreHistory(restore.dataset.subtitleHistoryRestore, restore.dataset.trackId); return; }
     if (event.target.closest('#subtitleManagerSearchBtn')) { searchProvider(); return; }
     if (event.target.closest('#subtitleManagerSaveOffset')) { saveOffset(); return; }
     if (event.target.closest('#subtitleManagerCompatiblePreview')) { createCompatiblePreview(); }
@@ -577,5 +607,22 @@
     else if (event.target.id === 'subtitleManagerAlbum') state.queryDraft.album = event.target.value;
   });
 
-  global.SubtitleManagerUI = { configure, setContext, open, close };
+  document.addEventListener('keydown', (event) => {
+    if (!state.opened || !state.preview || state.preview.kind !== 'local') return;
+    if (event.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return;
+    if (event.key === '[' || event.key === ']') {
+      event.preventDefault();
+      const amount = event.shiftKey ? 1000 : 250;
+      setPreviewOffset(state.previewOffsetMs + (event.key === '[' ? -amount : amount));
+      return;
+    }
+    if (event.code === 'Space') {
+      const video = $('#subtitleManagerVideo');
+      if (!video) return;
+      event.preventDefault();
+      if (video.paused) video.play().catch(() => {}); else video.pause();
+    }
+  });
+
+  global.SubtitleManagerUI = { configure, setContext, open, close, getActiveTrack };
 })(window);

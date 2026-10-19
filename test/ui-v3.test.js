@@ -793,8 +793,8 @@ test('Gerenciar Conteudo atualiza o filtro de legendas apos mutacoes do Subtitle
 
   assert.match(manager, /onContentChanged: null/);
   assert.match(manager, /notifyContentChanged\(\{ action: 'apply', language, provider: state\.provider \}\)/);
-  assert.match(manager, /notifyContentChanged\(\{ action: 'restore', language \}\)/);
-  assert.match(manager, /notifyContentChanged\(\{ action: 'delete', language \}\)/);
+  assert.match(manager, /notifyContentChanged\(\{ action: 'restore', trackId \}\)/);
+  assert.match(manager, /notifyContentChanged\(\{ action: 'delete', trackId \}\)/);
   assert.match(manager, /state\.onContentChanged = typeof options\.onContentChanged === 'function'/);
 
   assert.match(app, /const preserveDetails = Boolean\(options\.preserveDetails\)/);
@@ -802,4 +802,41 @@ test('Gerenciar Conteudo atualiza o filtro de legendas apos mutacoes do Subtitle
   assert.match(app, /async function refreshLibraryContentAfterSubtitleMutation\(\{ itemId \} = \{\}\)/);
   assert.match(app, /await loadLibraryContent\(\{ preserveDetails: true \}\)/);
   assert.match(app, /onContentChanged: refreshLibraryContentAfterSubtitleMutation/);
+});
+
+test('v4.1 organiza Ferramentas e expoe Gerenciar legendas com Bazarr opcional', () => {
+  const html = read('index.html');
+  const app = read('app.js');
+  const workspace = read('js/subtitleWorkspace.js');
+  const manager = read('js/subtitleManager.js');
+  const help = read('js/helpView.js');
+  const css = read('styles.css');
+
+  assert.match(html, /<span class="nav-label">Ferramentas<\/span>/);
+  assert.match(html, /data-view="recover-archive"/);
+  assert.match(html, /data-view="subtitle-tools"/);
+  assert.match(html, /id="view-recover-archive"/);
+  assert.match(html, /id="view-subtitle-tools"/);
+  assert.match(html, /Gerenciar legendas/);
+  assert.match(html, /id="bazarrSettings"/);
+  assert.match(html, /Mapeamento de caminhos/);
+  assert.doesNotMatch(html, /data-ytm-tab="catalog"/);
+
+  assert.match(app, /'recover-archive'/);
+  assert.match(app, /'subtitle-tools'/);
+  assert.match(app, /YouTubeManagerView\?\.recoveryHome\?\./);
+  assert.match(app, /SubtitleWorkspaceView\.init/);
+  assert.match(app, /Os dois caminhos precisam ser absolutos e começar com/);
+
+  assert.match(workspace, /\/api\/tools\/subtitles\/workspaces/);
+  assert.match(workspace, /Revisado e próximo/);
+  assert.match(html, /Carregar mais/);
+  assert.match(workspace, /\/bazarr\/search/);
+  assert.match(workspace, /\/bazarr\/download/);
+  assert.match(workspace, /\/bazarr\/sync/);
+  assert.match(manager, /SUBTITLE_CHANGED_EXTERNALLY/);
+  assert.match(manager, /autoPreviewFirst/);
+  assert.match(manager, /getActiveTrack/);
+  assert.match(help, /Bazarr é opcional/);
+  assert.match(css, /subtitle-workspace/);
 });

@@ -128,7 +128,7 @@
   ];
 
   const APP_AREAS = [
-    ['start', 'Comece aqui'], ['daily', 'Uso diário'], ['libraries', 'Bibliotecas'], ['downloads', 'Downloads'], ['channels', 'Canais'], ['youtube', 'Adicionar vídeos'], ['scripted', 'Scripted Schedules'], ['troubleshooting', 'Problemas comuns']
+    ['start', 'Comece aqui'], ['daily', 'Uso diário'], ['libraries', 'Bibliotecas'], ['downloads', 'Downloads'], ['channels', 'Canais'], ['youtube', 'Adicionar vídeos'], ['tools', 'Ferramentas'], ['scripted', 'Scripted Schedules'], ['troubleshooting', 'Problemas comuns']
   ];
 
   let area = 'start';
@@ -222,7 +222,11 @@
   }
 
   function renderYoutubeHelp() {
-    return `<section class="card help-lead"><span class="eyebrow">Adicionar vídeos</span><h3>O caminho rápido para conteúdo novo</h3><p>A tela foi desenhada para o uso diário: <strong>Destino → Pesquisa → Adicionar</strong>. Escolher uma Biblioteca faz o aplicativo usar a playlist YouTube associada a ela e depois oferecer a sincronização.</p><div class="help-steps"><div><strong>1</strong><span>Escolha a Biblioteca ou playlist de destino.</span></div><div><strong>2</strong><span>Pesquise pelo vídeo ou cole uma URL/ID.</span></div><div><strong>3</strong><span>Adicione o resultado correto e acompanhe a fila em Atividade.</span></div></div><p><strong>Recuperar acervo</strong> é uma ferramenta eventual para arquivos que já estão no disco e perderam a referência, não o fluxo normal de adição.</p>${goButton('youtube-manager', 'Abrir Adicionar vídeos', true)}</section>`;
+    return `<section class="card help-lead"><span class="eyebrow">Adicionar vídeos</span><h3>O caminho rápido para conteúdo novo</h3><p>A tela foi desenhada para o uso diário: <strong>Destino → Pesquisa → Adicionar</strong>. Escolher uma Biblioteca faz o aplicativo usar a playlist YouTube associada a ela e depois oferecer a sincronização.</p><div class="help-steps"><div><strong>1</strong><span>Escolha a Biblioteca ou playlist de destino.</span></div><div><strong>2</strong><span>Pesquise pelo vídeo ou cole uma URL/ID.</span></div><div><strong>3</strong><span>Adicione o resultado correto e acompanhe a fila em Atividade.</span></div></div><p><strong>Recuperar acervo</strong> agora fica em Ferramentas porque é uma tarefa eventual para arquivos que já estão no disco e perderam a referência.</p>${goButton('youtube-manager', 'Abrir Adicionar vídeos', true)}</section>`;
+  }
+
+  function renderToolsHelp() {
+    return `<div class="help-module-grid"><article class="card help-module-card"><span class="eyebrow">Ferramentas</span><h3>Recuperar acervo</h3><p>Use quando arquivos que já existem no disco perderam a referência com o YouTube. A ferramenta recupera Video IDs, permite revisar correspondências e adotar mídia sem redownload.</p>${goButton('recover-archive', 'Abrir Recuperar acervo', true)}</article><article class="card help-module-card"><span class="eyebrow">Ferramentas</span><h3>Gerenciar legendas</h3><p>Cadastre uma pasta de filmes ou séries, faça uma varredura recursiva e abra cada vídeo no mesmo editor usado pelas Bibliotecas. Ajustes de offset mantêm histórico e podem ser conferidos enquanto você assiste.</p><p><strong>SRT</strong> é editável. ASS/SSA/VTT e faixas embutidas são identificadas como somente leitura nesta versão.</p>${goButton('subtitle-tools', 'Abrir Gerenciar legendas')}</article><article class="card help-module-card"><h3>Bazarr é opcional</h3><p>Quando configurado, ele pode pesquisar/baixar legendas e tentar sincronização automática. O scanner e o editor local continuam funcionando mesmo sem Bazarr.</p>${goButton('settings', 'Configurar integrações')}</article><article class="card help-module-card"><h3>Fluxo sugerido</h3><p>Filtre por <strong>Não revisados</strong>, abra o vídeo, confira a legenda, ajuste se necessário e use <strong>Revisado e próximo</strong>. Isso transforma uma coleção grande em uma fila de conferência simples.</p></article></div>`;
   }
 
   function renderTroubleshooting() {
@@ -239,6 +243,7 @@
     if (area === 'downloads') return renderDownloadsHelp();
     if (area === 'channels') return renderChannelsHelp();
     if (area === 'youtube') return renderYoutubeHelp();
+    if (area === 'tools') return renderToolsHelp();
     if (area === 'scripted') return renderScriptedArea();
     if (area === 'troubleshooting') return renderTroubleshooting();
     return renderAppStart();

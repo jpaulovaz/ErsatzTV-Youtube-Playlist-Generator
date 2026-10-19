@@ -37,7 +37,7 @@ let libraryContentState = {
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
-const APP_VIEWS = new Set(['overview', 'downloads', 'libraries', 'channels', 'youtube-manager', 'scripted-schedules', 'help', 'settings', 'logs']);
+const APP_VIEWS = new Set(['overview', 'downloads', 'libraries', 'channels', 'youtube-manager', 'scripted-schedules', 'recover-archive', 'subtitle-tools', 'help', 'settings', 'logs']);
 const MOBILE_NAV_BREAKPOINT = 760;
 const MOBILE_NAV_IDLE_MS = 3600;
 const MOBILE_NAV_SCROLL_THRESHOLD = 8;
@@ -196,6 +196,10 @@ async function goToViewHome(view) {
     await window.YouTubeManagerView?.home?.();
   } else if (nextView === 'scripted-schedules') {
     await window.ScriptedSchedulesView?.home?.();
+  } else if (nextView === 'recover-archive') {
+    await window.YouTubeManagerView?.recoveryHome?.();
+  } else if (nextView === 'subtitle-tools') {
+    await window.SubtitleWorkspaceView?.home?.();
   } else if (nextView === 'help') {
     window.HelpView?.home?.();
   } else if (nextView === 'settings') {
@@ -571,6 +575,12 @@ function fillConfigForm() {
     if (field.type === 'checkbox') field.checked = Boolean(value);
     else field.value = value ?? '';
   });
+  const bazarrMappings = $('#bazarrPathMappings');
+  if (bazarrMappings) {
+    bazarrMappings.value = (config.bazarr?.pathMappings || []).map((row) => `${row.localRoot} = ${row.bazarrRoot}`).join('\n');
+  }
+  const bazarrApiKey = $('#configForm [name="bazarr.apiKey"]');
+  if (bazarrApiKey && config.bazarr?.apiKeyConfigured) bazarrApiKey.placeholder = 'Chave já configurada · deixe vazio para preservar';
   updateSettingsOverview();
 }
 
@@ -582,6 +592,22 @@ function collectConfigForm() {
     else if (field.type === 'number') value = numberOrNull(field.value);
     else value = field.value.trim();
     setByPath(next, field.name, value);
+  });
+
+  const bazarrMappingsText = $('#bazarrPathMappings')?.value || '';
+  if (!next.bazarr || typeof next.bazarr !== 'object') next.bazarr = {};
+  next.bazarr.pathMappings = bazarrMappingsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
+    const separator = line.indexOf('=');
+    if (separator <= 0 || separator >= line.length - 1) throw new Error(`Mapeamento Bazarr inválido: "${line}". Use caminho local = caminho Bazarr.`);
+    const localRoot = line.slice(0, separator).trim();
+    const bazarrRoot = line.slice(separator + 1).trim();
+    if (!localRoot.startsWith('/') || !bazarrRoot.startsWith('/')) {
+      throw new Error(`Mapeamento Bazarr inválido: "${line}". Os dois caminhos precisam ser absolutos e começar com /.`);
+    }
+    if (localRoot === '/' || bazarrRoot === '/') {
+      throw new Error(`Mapeamento Bazarr amplo demais: "${line}". Use as raízes específicas de mídia.`);
+    }
+    return { localRoot, bazarrRoot };
   });
 
   next.playlists = $$('#playlistList .playlist-row').map((row) => {
@@ -1949,6 +1975,13 @@ function bindEvents() {
 
   $('#saveBtn').addEventListener('click', () => saveConfiguration().catch((error) => showToast(error.message, true)));
   $('#saveBtnBottom').addEventListener('click', () => saveConfiguration().catch((error) => showToast(error.message, true)));
+  $('#testBazarrBtn')?.addEventListener('click', async () => {
+    try {
+      await saveConfiguration();
+      const response = await api('/api/tools/subtitles/bazarr/test', { method: 'POST', body: '{}' });
+      showToast(`Bazarr conectado${response.result?.version ? ` · ${response.result.version}` : ''}.`);
+    } catch (error) { showToast(error.message, true); }
+  });
   for (const field of [
     $('#configForm [name="ersatztv.url"]'),
     $('#configForm [name="ersatztv.apiKey"]'),
@@ -2258,6 +2291,19 @@ async function bootstrap() {
     await window.YouTubeManagerView.init({
       api, showToast, showDialog: showAppDialog, escapeHtml, formatDuration,
       activateView: () => setActiveView('youtube-manager', { persist: true, scroll: true })
+    });
+  }
+  if (window.SubtitleWorkspaceView) {
+    await window.SubtitleWorkspaceView.init({
+      api, showToast, showDialog: showAppDialog, escapeHtml,
+      activateView: () => setActiveView('subtitle-tools', { persist: true, scroll: true }),
+      openSettings: (section) => {
+        setActiveView('settings', { persist: true, scroll: true });
+        if (section === 'bazarr') {
+          const details = $('#bazarrSettings');
+          if (details) { details.open = true; window.setTimeout(() => details.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }
+        }
+      }
     });
   }
   if (window.ChannelView) {

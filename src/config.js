@@ -12,7 +12,7 @@ const CONFIG_DIR = process.env.ERSATZTV_CONFIG_DIR
   ? path.resolve(process.env.ERSATZTV_CONFIG_DIR)
   : path.join(ROOT_DIR, 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
-const CONFIG_VERSION = 9;
+const CONFIG_VERSION = 10;
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const DEFAULT_MAX_HEIGHT = 1080;
@@ -64,6 +64,13 @@ const DEFAULT_CONFIG = {
     apiKey: '',
     apiTimeoutSeconds: 10,
     smartCollectionSelections: {}
+  },
+  bazarr: {
+    enabled: false,
+    url: 'http://localhost:6767',
+    apiKey: '',
+    timeoutSeconds: 20,
+    pathMappings: []
   },
   playlists: [],
   scheduler: {
@@ -212,12 +219,27 @@ function normalizePlaylistSubtitles(playlist) {
 function normalizePlaylistMediaProfile(playlist) {
   return normalizeMediaProfile(playlist && playlist.mediaProfile || MEDIA_PROFILES.GENERIC);
 }
+function normalizeBazarrPathMappings(value) {
+  const rows = Array.isArray(value) ? value : [];
+  const result = [];
+  for (const row of rows.slice(0, 50)) {
+    if (!row || typeof row !== 'object') continue;
+    const localRoot = String(row.localRoot || '').trim();
+    const bazarrRoot = String(row.bazarrRoot || '').trim();
+    if (!localRoot || !bazarrRoot || !path.isAbsolute(localRoot) || !path.isAbsolute(bazarrRoot)) continue;
+    if (isDangerousBaseDir(localRoot)) continue;
+    result.push({ localRoot: path.resolve(localRoot), bazarrRoot: path.resolve(bazarrRoot) });
+  }
+  return result;
+}
+
 function normalizeConfig(raw) {
   const rawConfig = raw && typeof raw === 'object' ? raw : {};
   const rawServer = rawConfig.server && typeof rawConfig.server === 'object' ? rawConfig.server : {};
   const rawPaths = rawConfig.paths && typeof rawConfig.paths === 'object' ? rawConfig.paths : {};
   const rawApi = rawConfig.youtubeApi && typeof rawConfig.youtubeApi === 'object' ? rawConfig.youtubeApi : {};
   const rawErsatz = rawConfig.ersatztv && typeof rawConfig.ersatztv === 'object' ? rawConfig.ersatztv : {};
+  const rawBazarr = rawConfig.bazarr && typeof rawConfig.bazarr === 'object' ? rawConfig.bazarr : {};
   const rawScheduler = rawConfig.scheduler && typeof rawConfig.scheduler === 'object' ? rawConfig.scheduler : {};
   const rawChannelScheduler = rawConfig.channelScheduler && typeof rawConfig.channelScheduler === 'object' ? rawConfig.channelScheduler : {};
   const rawCleanup = rawConfig.cleanup && typeof rawConfig.cleanup === 'object' ? rawConfig.cleanup : {};
@@ -253,6 +275,13 @@ function normalizeConfig(raw) {
       apiKey: String(rawErsatz.apiKey || '').trim(),
       apiTimeoutSeconds: Math.max(1, Number(rawErsatz.apiTimeoutSeconds) || DEFAULT_CONFIG.ersatztv.apiTimeoutSeconds),
       smartCollectionSelections: normalizeSmartCollectionSelections(rawErsatz.smartCollectionSelections)
+    },
+    bazarr: {
+      enabled: Boolean(rawBazarr.enabled),
+      url: String(rawBazarr.url || DEFAULT_CONFIG.bazarr.url).trim().replace(/\/+$/, '') || DEFAULT_CONFIG.bazarr.url,
+      apiKey: String(rawBazarr.apiKey || '').trim(),
+      timeoutSeconds: Math.max(5, Math.min(120, Number(rawBazarr.timeoutSeconds) || DEFAULT_CONFIG.bazarr.timeoutSeconds)),
+      pathMappings: normalizeBazarrPathMappings(rawBazarr.pathMappings)
     },
     playlists: [],
     channels: normalizeChannels(rawConfig.channels, ALLOWED_MAX_HEIGHTS),
@@ -333,6 +362,13 @@ function validateConfig(config) {
     }
   }
 
+  if (config.bazarr.enabled) {
+    let parsed;
+    try { parsed = new URL(config.bazarr.url); } catch { throw new Error('A URL do Bazarr e invalida.'); }
+    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('A URL do Bazarr deve usar HTTP ou HTTPS.');
+    if (!config.bazarr.apiKey) throw new Error('Informe a API Key do Bazarr ou desative a integracao.');
+  }
+
   validateChannels(config);
   return config;
 }
@@ -361,9 +397,16 @@ async function ensureConfigFile() {
 async function loadConfig() {
   await ensureConfigFile();
   const content = await fs.readFile(CONFIG_PATH, 'utf8');
-  const raw = JSON.parse(content);
-  if (Number(raw.configVersion) !== CONFIG_VERSION) {
-    throw new Error(`config.json usa configVersion ${raw.configVersion ?? 'ausente'}. A v3.8.0 aceita somente configVersion ${CONFIG_VERSION}; conclua a migracao na v3.5.2 antes de atualizar.`);
+  let raw = JSON.parse(content);
+  const rawVersion = Number(raw.configVersion);
+  if (rawVersion === 9 && CONFIG_VERSION === 10) {
+    raw = { ...raw, configVersion: 10, bazarr: raw.bazarr && typeof raw.bazarr === 'object' ? raw.bazarr : clone(DEFAULT_CONFIG.bazarr) };
+    const migrated = validateConfig(normalizeConfig(raw));
+    await atomicWriteJson(CONFIG_PATH, migrated);
+    return migrated;
+  }
+  if (rawVersion !== CONFIG_VERSION) {
+    throw new Error(`config.json usa configVersion ${raw.configVersion ?? 'ausente'}. Esta versao aceita configVersion ${CONFIG_VERSION}; atualize a configuracao por uma versao intermediaria compativel.`);
   }
   return validateConfig(normalizeConfig(raw));
 }
@@ -387,6 +430,7 @@ module.exports = {
   YOUTUBE_API_READ_MODES,
   normalizeMaxHeight,
   normalizeConfig,
+  normalizeBazarrPathMappings,
   validateConfig,
   loadConfig,
   saveConfig

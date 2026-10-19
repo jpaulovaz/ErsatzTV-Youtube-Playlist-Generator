@@ -1017,9 +1017,15 @@
   }
 
   async function home() {
+    if (activeTab === 'catalog') activeTab = 'add';
     setTab(activeTab || 'add');
     await refreshStatus();
-    if (activeTab === 'catalog') await refreshCatalog();
+  }
+
+  async function recoveryHome() {
+    setTab('catalog');
+    await refreshStatus({ light: true });
+    await refreshCatalog();
   }
 
   async function showGuide() {
@@ -1160,5 +1166,5 @@
     }, 4000);
   }
 
-  window.YouTubeManagerView = { init, home, setTab };
+  window.YouTubeManagerView = { init, home, recoveryHome, setTab };
 })();

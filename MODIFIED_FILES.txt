@@ -1,35 +1,51 @@
-ErsatzTV YouTube Downloader 4.0.3
+ErsatzTV YouTube Downloader 4.1.0
 
-Arquivos alterados em relacao a v4.0.2:
+Arquivos alterados em relacao a v4.0.3:
 
 M	CHANGELOG.md
 M	README.md
 M	UPGRADE.md
+M	config/config.example.json
 M	package.json
 M	public/app.js
 M	public/index.html
 M	public/login.html
-M	public/js/youtubeManager.js
 M	public/styles.css
+M	public/js/helpView.js
+M	public/js/subtitleManager.js
+A	public/js/subtitleWorkspace.js
+M	public/js/youtubeManager.js
+M	scripts/run-tests.js
+M	scripts/verify-release.js
+M	src/config.js
+A	src/integrations/bazarrClient.js
+A	src/routes/subtitleWorkspaceRoutes.js
 M	src/server.js
-M	src/youtubeManager/youtubeAccountService.js
-M	src/youtubeManager/youtubeAccountState.js
-M	src/youtubeManager/youtubeOAuthService.js
+A	src/subtitleManager/subtitleCore.js
+M	src/subtitleManager/subtitleManagerService.js
+A	src/tools/subtitleWorkspaceScanner.js
+A	src/tools/subtitleWorkspaceService.js
+A	src/tools/subtitleWorkspaceState.js
+A	test/bazarrClient.test.js
+M	test/channels.test.js
+M	test/config.test.js
+M	test/configFile.test.js
+A	test/subtitleWorkspace.test.js
 M	test/ui-v3.test.js
-M	test/youtubeManager.test.js
 M	MODIFIED_FILES.txt
 M	UPDATE_CONTENTS.txt
 
 Versionamento:
-- Aplicacao: v4.0.3
+- Aplicacao: v4.1.0
 - Universal: v1.3.1
-- configVersion: 9
+- configVersion: 10
 - Scripted Schedules schema: 1
 - download state: 5
 - subtitle-manager state: 1
+- subtitle-workspace state: 1
 - subtitle-translation config/state: 1
 - youtube-manager state: 1
 - youtube-account config/state: 1
 - adoption transaction state: 1
 
-O pacote update preserva config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/ e arquivos de midia/sidecars.
+O pacote update preserva config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/ e arquivos de midia/sidecars. A migracao de configVersion 9 para 10 ocorre no primeiro carregamento e adiciona a integracao Bazarr desativada por padrao.

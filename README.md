@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 4.0.3
+# ErsatzTV YouTube Downloader 4.1.0
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A linha v4 aplica ao **aplicativo inteiro** a arquitetura orientada por tarefas que tornou o Gerenciador do YouTube mais simples. A v4.0.3 preserva essa experiência e corrige o isolamento entre a sessão local da interface e o OAuth do Google: uma autorização YouTube expirada agora solicita reconexão sem derrubar o restante do aplicativo.
+A linha v4 aplica ao **aplicativo inteiro** uma arquitetura orientada por tarefas. A v4.1.0 acrescenta o grupo **Ferramentas** e transforma o editor de legendas já usado nas Bibliotecas em um workspace reutilizável para filmes e séries existentes em qualquer pasta autorizada, com integração opcional ao Bazarr.
 
 ## Experiência v4
 
@@ -11,6 +11,7 @@ A navegação principal foi organizada por intenção:
 - **Principal** — Visão geral, Adicionar vídeos e Downloads;
 - **Organização** — Bibliotecas e Canais;
 - **Programação** — Scripted Schedules;
+- **Ferramentas** — Recuperar acervo e Gerenciar legendas;
 - **Sistema** — Configurações, Logs e Ajuda.
 
 A **Visão geral** funciona como painel de decisão, com ações rápidas e um cartão de atenção que prioriza pouco espaço, falhas, fila pausada e operação em andamento. Downloads destaca fila/erros primeiro; Bibliotecas e Canais mostram saúde antes de configuração; Configurações tem busca e níveis Essencial/Integrações/Automação/Avançado; e a Ajuda cobre o aplicativo inteiro sem remover a referência detalhada de Scripted Schedules.
@@ -49,6 +50,7 @@ Biblioteca local do ErsatzTV
 - NFOs novos incluem `year` + `premiered` em Movies e `aired` em episódios de Clipes musicais.
 - Thumbnail do vídeo como artwork de episódio (`-thumb.jpg`) e `poster.jpg` no nível do artista/Show.
 - Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
+- **Gerenciador de legendas em Ferramentas**: workspaces recursivos de filmes/séries externos, filtros de triagem, player, offset, histórico, revisão anterior/próximo, detecção de formatos/legendas embutidas e integração opcional com Bazarr para busca/download/sincronização.
 - **Gerenciador manual de legendas** no Gerenciar conteúdo: player, preview de SRT local/YouTube/LRCLIB, busca manual, offset e histórico de até cinco versões por idioma. O filtro/listagem atual é reconciliado automaticamente após aplicar, restaurar ou excluir uma legenda, inclusive removendo imediatamente um item de **Sem legendas** após aplicação bem-sucedida. Em **Com legendas**, a origem YouTube pode ser refinada por **Enviada pelo canal** ou **Automática**, usando a proveniência persistida de cada faixa.
 - **Tradução em massa de legendas com Gemini**: pré-análise por biblioteca/playlist, fonte local preservada, saída traduzida, bilíngue ou ambas no mesmo job, fila persistente com pausa/retomada/cancelamento e origem Gemini rastreável. A Visão geral acompanha o progresso global da fila.
 - **Gerenciador do YouTube** independente: pesquisa pública, conexão OAuth da conta, playlists próprias, criação/inserção com fila persistente, catálogo de acervo local, recuperação de Video ID, matching assistido e adoção sem redownload por Hardlink/Copy/Move com preflight e rollback.
@@ -88,6 +90,7 @@ Biblioteca local do ErsatzTV
 - Para gerenciar playlists da própria conta: credenciais OAuth 2.0 do Google para aplicação Web, com `https://yt.johnflix.com.br/api/youtube-manager/oauth/callback` cadastrado como URI de redirecionamento autorizada.
 - Para buscar letras sincronizadas no **LRCLIB**, o servidor precisa ter saída HTTPS para `https://lrclib.net`; nenhuma API key do LRCLIB é necessária.
 - Opcional, para **Tradução de legendas**: uma Gemini API key (`GEMINI_API_KEY` recomendado) e saída HTTPS para `https://generativelanguage.googleapis.com`.
+- Opcional: Bazarr acessível por HTTP/HTTPS e sua API Key para pesquisa/download/sincronização dentro de **Ferramentas → Gerenciar legendas**; o editor local não depende dele.
 - Opcional: `cookies.txt` em formato Netscape para vídeos que exigem sessão.
 
 Exemplo de verificação:
@@ -103,7 +106,7 @@ node --version
 ## Instalação nova
 
 1. Extraia o pacote completo em uma pasta permanente. O pacote de distribuição não leva uma configuração pessoal.
-2. No primeiro `npm start`, o aplicativo cria automaticamente um `config/config.json` v9 com os padrões atuais. Se preferir pré-configurar caminhos antes da primeira inicialização, copie `config/config.example.json` para `config/config.json` e edite a cópia.
+2. No primeiro `npm start`, o aplicativo cria automaticamente um `config/config.json` v10 com os padrões atuais. Se preferir pré-configurar caminhos antes da primeira inicialização, copie `config/config.example.json` para `config/config.json` e edite a cópia.
 3. Crie o único usuário administrativo local:
 
 ```bash
@@ -136,7 +139,7 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A v4.0.3 atualiza diretamente uma instalação **v4.0.2**. O patch corrige o tratamento de expiração/revogação do OAuth do Google sem alterar configuração ou schema; `configVersion` continua 9, o Universal continua 1.3.1 e todos os estados persistentes permanecem nas versões atuais. Consulte [UPGRADE.md](UPGRADE.md).
+A v4.1.0 atualiza diretamente uma instalação **v4.0.3**. `configVersion` sobe de 9 para 10 exclusivamente para a integração opcional com Bazarr; a migração é automática e mantém Bazarr desativado até você configurá-lo. Os demais schemas permanecem compatíveis. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Gerenciador do YouTube
 
@@ -146,7 +149,6 @@ A interface possui quatro áreas orientadas por tarefa:
 
 - **Adicionar vídeos** — tela inicial. Primeiro escolha uma Biblioteca/Playlist de Canal do aplicativo ou uma playlist apenas do YouTube; depois pesquise por artista, música, URL ou Video ID e use **Adicionar** no próprio resultado.
 - **Atividade** — concentra fila de inserção, fila de adoção e histórico recente. Pendências aparecem também como indicador na navegação e no resumo superior.
-- **Recuperar acervo** — ferramenta secundária para arquivos que já existem no disco. Reúne scanner, recuperação de Video ID, matching, filtros avançados e adoção sem redownload.
 - **Configurações** — conta Google/OAuth, quota estimada e manutenção das playlists da conta. Criar playlist fica recolhido até ser necessário.
 
 No topo, três resumos clicáveis mostram **Conta Google**, **Atividade** e **Quota hoje**. O botão **Como funciona?** explica o fluxo básico sem exigir conhecimento da API. Ajuda contextual `?`, estados vazios com próximo passo e opções avançadas recolhidas reduzem a quantidade de controles exibidos ao mesmo tempo.
@@ -201,9 +203,9 @@ A pesquisa pública reutiliza a YouTube Data API Key já configurada no aplicati
 
 A fila de playlist reconsulta **toda a playlist real no YouTube antes de inserir ou retomar**: IDs já existentes são classificados como já existentes e não consomem novo `playlistItems.insert`. Erros de quota, reconexão/autorização, playlist indisponível e falha temporária de rede/API são tratados como pausas operacionais, mantendo os itens pendentes intactos. O botão **Conferir com o YouTube** executa uma leitura autoritativa e reconcilia pendentes/histórico com a playlist real.
 
-### Recuperar acervo local
+### Recuperar acervo local (Ferramentas)
 
-Esta área é deliberadamente secundária. Use-a quando já possuir arquivos no disco, perder a referência de um vídeo ou quiser reaproveitar mídia existente sem redownload.
+A partir da v4.1.0 esta função fica em **Ferramentas → Recuperar acervo**. A implementação, estado, matching e adoção permanecem os mesmos. Esta área é deliberadamente secundária. Use-a quando já possuir arquivos no disco, perder a referência de um vídeo ou quiser reaproveitar mídia existente sem redownload.
 
 A ação **Atualizar varredura** é assíncrona e mostra uma notificação persistente no canto inferior direito enquanto trabalha. O status informa fonte/pasta, arquivo atual, `processados/total`, IDs recuperados e erros; ao finalizar, métricas e catálogo são atualizados.
 
@@ -223,6 +225,51 @@ As ações continuam separadas:
 - **Adotar na biblioteca** reutiliza mídia local em um destino gerenciado que já reconhece o Video ID.
 
 A adoção exige preflight. Diferença de duração acima de 10 segundos gera aviso e acima de 45 segundos bloqueia. **Hardlink** é preferencial no mesmo filesystem, **Copy** preserva a origem e **Move** exige confirmação reforçada. Sidecars antigos permanecem intactos; o destino recebe NFO/artwork/metadata pelos serviços atuais e cada operação possui rollback persistente.
+
+## Ferramentas — Gerenciar legendas
+
+A v4.1.0 permite usar o editor de legendas fora das Bibliotecas gerenciadas. Em **Ferramentas → Gerenciar legendas**, cadastre uma raiz específica de filmes/séries e execute **Atualizar varredura**. O scanner é recursivo por padrão, não segue links simbólicos e não move/importa a mídia.
+
+O fluxo recomendado é:
+
+```text
+Cadastrar pasta
+    ↓
+Atualizar varredura
+    ↓
+Filtro: Não revisados
+    ↓
+Abrir vídeo → testar SRT no player
+    ↓
+Ajustar offset se necessário
+    ↓
+Revisado e próximo
+```
+
+A varredura inicial é leve: filesystem, vídeos e sidecars. `ffprobe` só é executado quando um item é aberto, para detectar duração e faixas embutidas. Se o navegador não conseguir reproduzir a mídia original, o mesmo serviço de prévia compatível do Gerenciar conteúdo pode criar um MP4 temporário via FFmpeg.
+
+### Formatos
+
+- `.srt`: editável, com preview, offset, histórico, restauração e exclusão recuperável;
+- `.ass`, `.ssa`, `.vtt`, `.sub`, `.idx`, `.sup`: detectados e exibidos como **somente leitura** nesta versão;
+- faixas embutidas em MKV/MP4: detectadas via FFprobe e exibidas como **somente leitura**.
+
+Antes de salvar uma alteração, o aplicativo confere `mtime`, tamanho e SHA-256 do SRT aberto. Se Bazarr ou qualquer outro processo tiver alterado o arquivo durante a sessão, a gravação é bloqueada com `SUBTITLE_CHANGED_EXTERNALLY` e a tela pede recarga.
+
+### Bazarr opcional
+
+Em **Configurações → Integrações → Bazarr**, informe URL, API Key, timeout e, quando necessário, os path mappings entre o caminho visto por este aplicativo e o caminho usado pelo ambiente Bazarr/Sonarr/Radarr. A API Key é mascarada na leitura da configuração e preservada quando o campo fica vazio.
+
+Quando um vídeo também está indexado no Bazarr, a ferramenta pode:
+
+- pesquisar candidatos manualmente;
+- exibir idioma, provider, score, release e flags;
+- pedir o download de um candidato específico, preferindo SRT;
+- revarrer o sidecar recebido e registrar a proveniência Bazarr;
+- solicitar sincronização da legenda SRT ativa pelo Bazarr, preservando a versão anterior no histórico.
+
+Nenhuma busca de provider é disparada durante o scan em massa. Bazarr indisponível não bloqueia scanner, player, offset, histórico nem revisão local. Para reduzir falsos positivos, o matching é feito por caminho após aplicar o path mapping, nunca apenas por título.
+
 ## Estrutura dos arquivos
 
 Com uma biblioteca chamada `Mix_Principal`, o resultado é semelhante a:
@@ -689,6 +736,7 @@ data/youtube-cache.json             cache da YouTube Data API
 data/youtube-manager-state.json     fontes locais, matches, cache de pesquisa, fila e quota estimada
 data/youtube-account-state.json     tokens OAuth e identidade da conta (0600)
 data/subtitle-manager-state.json    proveniência, offsets e histórico lógico do gerenciador de legendas
+data/subtitle-workspace-state.json  raízes externas, scan, revisão e vínculo Bazarr da ferramenta
 data/subtitle-history/              cópias restauráveis de SRT substituídos/ajustados
 data/.subtitle-preview/             prévias temporárias do player; limpeza automática
 data/app.log                        log operacional

@@ -13,6 +13,7 @@ const { shiftCues, normalizeOffsetMs } = require('./subtitleTiming');
 const youtubeProvider = require('../subtitleProviders/youtubeProvider');
 const lrclibProvider = require('../subtitleProviders/lrclibProvider');
 const mediaPreview = require('../mediaPreviewService');
+const subtitleCore = require('./subtitleCore');
 
 const providers = { youtube: youtubeProvider, lrclib: lrclibProvider };
 const TARGET_LANGUAGES = Object.freeze(['pt-BR', 'en', 'es']);
@@ -89,15 +90,7 @@ function languageFromSidecar(mediaPath, sidecarPath) {
   return base.slice(prefix.length, -4) || 'und';
 }
 
-function trackLabel(track) {
-  if (!track) return 'Arquivo local · origem não registrada';
-  if (track.sourceLabel) return track.sourceLabel;
-  if (track.provider === 'youtube' && track.sourceType === 'manual') return 'YouTube · enviada pelo canal';
-  if (track.provider === 'youtube' && track.sourceType === 'automatic') return 'YouTube · automatica';
-  if (track.provider === 'lrclib') return 'LRCLIB · letra sincronizada';
-  if (track.provider === 'gemini') return track.sourceLabel || 'Gemini · traduzida';
-  return 'Arquivo local · origem não registrada';
-}
+const trackLabel = subtitleCore.trackLabel;
 
 async function localTracks(context, managerItemState) {
   if (!context.mediaPath) return [];
@@ -128,28 +121,67 @@ async function localTracks(context, managerItemState) {
   return tracks;
 }
 
+function managedCoreContext(context) {
+  return {
+    config: context.config,
+    itemId: context.item.id,
+    mediaPath: context.mediaPath,
+    activeWritable: context.activeWritable,
+    async listTrackDescriptors() {
+      if (!context.mediaPath) return [];
+      const paths = await listSubtitleSidecars(context.mediaPath);
+      const state = await stateStore.load();
+      const itemState = stateStore.ensureItem(state, context.item.id);
+      const descriptors = [];
+      for (const filePath of paths) {
+        const language = languageFromSidecar(context.mediaPath, filePath);
+        const metadata = itemState.tracks[language] || null;
+        const trackMetadata = metadata && metadata.metadata && typeof metadata.metadata === 'object' ? metadata.metadata : {};
+        let staleTranslation = false;
+        if (metadata?.provider === 'gemini' && trackMetadata.sourceLanguage && trackMetadata.sourceHash) {
+          const sourcePath = getSubtitleSidecarPath(context.mediaPath, trackMetadata.sourceLanguage);
+          try {
+            const sourceText = await fs.readFile(sourcePath, 'utf8');
+            const currentHash = `sha256:${crypto.createHash('sha256').update(sourceText, 'utf8').digest('hex')}`;
+            staleTranslation = currentHash !== trackMetadata.sourceHash;
+          } catch { staleTranslation = true; }
+        }
+        descriptors.push({
+          trackId: language,
+          language,
+          filePath,
+          fileName: path.basename(filePath),
+          format: 'srt',
+          editable: true,
+          staleTranslation,
+          metadata: trackMetadata,
+          selectable: true
+        });
+      }
+      return descriptors;
+    },
+    async resolveTrack(trackId, { allowMissing = false } = {}) {
+      const language = normalizeLanguage(trackId);
+      const baseMediaPath = context.item.targetPath || context.mediaPath;
+      if (!baseMediaPath) return null;
+      const filePath = getSubtitleSidecarPath(baseMediaPath, language);
+      if (!isPathInside(path.dirname(baseMediaPath), filePath)) {
+        const error = new Error('Caminho de legenda invalido.');
+        error.statusCode = 400;
+        throw error;
+      }
+      if (!allowMissing && !(await pathExists(filePath))) return null;
+      return { trackId: language, language, filePath, fileName: path.basename(filePath), format: 'srt', editable: true };
+    },
+    afterMutation: async () => syncDownloadSubtitleState(context)
+  };
+}
+
 async function getStatus(args) {
   const context = await resolveContext(args);
-  const state = await stateStore.load();
-  const itemState = stateStore.ensureItem(state, context.item.id);
-  const tracks = await localTracks(context, itemState);
-  const history = {};
-  for (const [language, entries] of Object.entries(itemState.history || {})) {
-    history[language] = await Promise.all((Array.isArray(entries) ? entries : []).map(async (entry) => ({
-      id: entry.id, language: entry.language, createdAt: entry.createdAt, sizeBytes: entry.sizeBytes,
-      provider: entry.provider, providerId: entry.providerId, sourceType: entry.sourceType,
-      sourceLabel: entry.sourceLabel, lastAppliedOffsetMs: entry.lastAppliedOffsetMs, metadata: entry.metadata || {}, reason: entry.reason,
-      valid: Boolean(entry.fileName && await pathExists(path.join(stateStore.HISTORY_DIR, path.basename(entry.fileName))))
-    })));
-  }
-  return {
-    itemId: context.item.id,
+  return subtitleCore.getStatus(managedCoreContext(context), {
     videoId: context.videoId || '',
-    mediaAvailable: Boolean(context.mediaPath),
-    canApply: context.activeWritable,
     mediaProfile: context.mediaProfile,
-    tracks,
-    history,
     providers: {
       youtube: { available: Boolean(context.videoId || context.url) },
       lrclib: { available: context.mediaProfile === MEDIA_PROFILES.MUSIC_CLIPS }
@@ -159,7 +191,7 @@ async function getStatus(args) {
       track: String(context.item.trackTitle || context.item.title || '').trim(),
       album: String(context.item.album || '').trim()
     }
-  };
+  });
 }
 
 function validateProvider(context, name) {
@@ -211,28 +243,11 @@ async function previewCandidate(args, payload) {
 
 async function previewLocal(args, payload) {
   const context = await resolveContext(args);
-  if (!context.mediaPath) {
-    const error = new Error('Midia local nao disponivel.'); error.statusCode = 404; throw error;
-  }
-  const language = normalizeLanguage(payload.language);
-  const sidecar = getSubtitleSidecarPath(context.mediaPath, language);
-  if (!isPathInside(path.dirname(context.mediaPath), sidecar)) throw new Error('Caminho de legenda invalido.');
-  let text;
-  try { text = await fs.readFile(sidecar, 'utf8'); }
-  catch (error) { if (error.code === 'ENOENT') { const e = new Error('Legenda local nao encontrada.'); e.statusCode = 404; throw e; } throw error; }
-  const cues = parseSrt(text);
-  if (!cues.length) { const error = new Error('A legenda local nao possui cues SRT validos.'); error.statusCode = 422; throw error; }
-  const state = await stateStore.load();
-  const itemState = stateStore.ensureItem(state, context.item.id);
-  const track = itemState.tracks[language];
-  return { provider: track?.provider || 'local', providerId: track?.providerId || null, sourceType: track?.sourceType || 'unregistered', sourceLabel: trackLabel(track), language, cues, vtt: cuesToVtt(cues) };
+  return subtitleCore.previewLocal(managedCoreContext(context), payload);
 }
 
 async function atomicWriteText(filePath, content) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const temp = `${filePath}.tmp-${process.pid}-${crypto.randomUUID()}`;
-  await fs.writeFile(temp, content, 'utf8');
-  await fs.rename(temp, filePath);
+  return subtitleCore.atomicWriteText(filePath, content);
 }
 
 async function syncDownloadSubtitleState(context) {
@@ -280,83 +295,17 @@ async function applyCandidate(args, payload) {
 
 async function applyOffset(args, payload) {
   const context = await resolveContext(args);
-  if (!context.activeWritable) { const error = new Error('Salvar offset exige um item ativo.'); error.statusCode = 409; throw error; }
-  const language = normalizeLanguage(payload.language);
-  const offsetMs = normalizeOffsetMs(payload.offsetMs);
-  const sidecarPath = getSubtitleSidecarPath(context.item.targetPath, language);
-  let text;
-  try { text = await fs.readFile(sidecarPath, 'utf8'); }
-  catch (error) { if (error.code === 'ENOENT') { const e = new Error('Legenda ativa nao encontrada.'); e.statusCode = 404; throw e; } throw error; }
-  const cues = parseSrt(text);
-  if (!cues.length) { const error = new Error('Nao foi possivel interpretar o SRT ativo com seguranca.'); error.statusCode = 422; throw error; }
-  const shifted = shiftCues(cues, offsetMs);
-  const state = await stateStore.load();
-  const itemState = stateStore.ensureItem(state, context.item.id);
-  await backupAndRegister(state, itemState, context, language, sidecarPath, 'offset');
-  await atomicWriteText(sidecarPath, writeSrt(shifted));
-  const previous = itemState.tracks[language] || { provider: 'local', sourceType: 'unregistered', sourceLabel: 'Arquivo local · origem não registrada' };
-  itemState.tracks[language] = { ...previous, appliedAt: nowIso(), lastAppliedOffsetMs: (Number(previous.lastAppliedOffsetMs) || 0) + offsetMs };
-  await stateStore.save(state);
-  await syncDownloadSubtitleState(context);
-  return { language, offsetMs, totalOffsetMs: itemState.tracks[language].lastAppliedOffsetMs, historyCount: (itemState.history[language] || []).length };
+  return subtitleCore.applyOffset(managedCoreContext(context), payload);
 }
 
 async function restoreHistory(args, payload) {
   const context = await resolveContext(args);
-  if (!context.activeWritable) { const error = new Error('Restaurar legenda exige um item ativo.'); error.statusCode = 409; throw error; }
-  const language = normalizeLanguage(payload.language);
-  const historyId = String(payload.historyId || '').trim();
-  const state = await stateStore.load();
-  const itemState = stateStore.ensureItem(state, context.item.id);
-  const entries = Array.isArray(itemState.history[language]) ? itemState.history[language] : [];
-  const index = entries.findIndex((entry) => entry.id === historyId);
-  if (index < 0) { const error = new Error('Versao historica nao encontrada.'); error.statusCode = 404; throw error; }
-  const selected = entries[index];
-  const historicalText = await historyService.readHistory(selected);
-  const cues = parseSrt(historicalText);
-  if (!cues.length) { const error = new Error('A versao historica nao contem um SRT valido.'); error.statusCode = 422; throw error; }
-  const sidecarPath = getSubtitleSidecarPath(context.item.targetPath, language);
-  await backupAndRegister(state, itemState, context, language, sidecarPath, 'restore');
-  const currentEntries = itemState.history[language] || [];
-  const restoredIndex = currentEntries.findIndex((entry) => entry.id === historyId);
-  if (restoredIndex >= 0) currentEntries.splice(restoredIndex, 1);
-  await atomicWriteText(sidecarPath, writeSrt(cues));
-  itemState.tracks[language] = {
-    provider: selected.provider || 'local', providerId: selected.providerId || null, sourceType: selected.sourceType || 'unregistered',
-    sourceLabel: selected.sourceLabel || 'Arquivo local · origem não registrada', appliedAt: nowIso(),
-    lastAppliedOffsetMs: Number(selected.lastAppliedOffsetMs) || 0, metadata: selected.metadata && typeof selected.metadata === 'object' ? selected.metadata : {}
-  };
-  itemState.history[language] = await historyService.pruneHistory(currentEntries);
-  await stateStore.save(state);
-  await syncDownloadSubtitleState(context);
-  return { language, sourceLabel: itemState.tracks[language].sourceLabel, historyCount: itemState.history[language].length };
+  return subtitleCore.restoreHistory(managedCoreContext(context), payload);
 }
-
 
 async function deleteLocalSubtitle(args, payload) {
   const context = await resolveContext(args);
-  if (!context.activeWritable) {
-    const error = new Error('Excluir legenda exige um item ativo com arquivo local gravavel.'); error.statusCode = 409; throw error;
-  }
-  const language = normalizeLanguage(payload.language);
-  const sidecarPath = getSubtitleSidecarPath(context.item.targetPath, language);
-  if (!isPathInside(path.dirname(context.item.targetPath), sidecarPath)) {
-    const error = new Error('Caminho de legenda invalido.'); error.statusCode = 400; throw error;
-  }
-  try {
-    await fs.access(sidecarPath);
-  } catch (error) {
-    if (error.code === 'ENOENT') { const e = new Error('Legenda local nao encontrada.'); e.statusCode = 404; throw e; }
-    throw error;
-  }
-  const state = await stateStore.load();
-  const itemState = stateStore.ensureItem(state, context.item.id);
-  await backupAndRegister(state, itemState, context, language, sidecarPath, 'delete');
-  await fs.rm(sidecarPath, { force: true });
-  delete itemState.tracks[language];
-  await stateStore.save(state);
-  await syncDownloadSubtitleState(context);
-  return { language, historyCount: (itemState.history[language] || []).length, recoverable: (itemState.history[language] || []).length > 0 };
+  return subtitleCore.deleteLocalSubtitle(managedCoreContext(context), payload);
 }
 
 
@@ -412,20 +361,12 @@ async function applyGeneratedSubtitle(args, payload = {}) {
 
 async function streamMedia(args, req, res, previewToken = '') {
   const context = await resolveContext(args);
-  if (!context.mediaPath) { const error = new Error('Midia local nao encontrada.'); error.statusCode = 404; throw error; }
-  let target = context.mediaPath;
-  if (previewToken) {
-    const preview = mediaPreview.resolvePreview(previewToken, context.item.id);
-    if (!preview) { const error = new Error('Previa compativel expirada ou invalida.'); error.statusCode = 404; throw error; }
-    target = preview.filePath;
-  }
-  await mediaPreview.streamFile(req, res, target);
+  return subtitleCore.streamMedia(managedCoreContext(context), req, res, previewToken);
 }
 
 async function createCompatiblePreview(args) {
   const context = await resolveContext(args);
-  if (!context.mediaPath) { const error = new Error('Midia local nao encontrada.'); error.statusCode = 404; throw error; }
-  return mediaPreview.createCompatiblePreview({ config: context.config, itemId: context.item.id, mediaPath: context.mediaPath });
+  return subtitleCore.createCompatiblePreview(managedCoreContext(context));
 }
 
 module.exports = {

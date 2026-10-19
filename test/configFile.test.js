@@ -15,21 +15,21 @@ function runConfigScript(configDir, source) {
   });
 }
 
-test('clean install creates a current v9 config and saveConfig persists it atomically', () => {
+test('clean install creates a current v10 config and saveConfig persists it atomically', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ersatztv-config-'));
   try {
     const result = runConfigScript(root, `
       (async () => {
         const config = require('./src/config');
         const loaded = await config.loadConfig();
-        if (loaded.configVersion !== 9) throw new Error('unexpected config version');
+        if (loaded.configVersion !== 10) throw new Error('unexpected config version');
         loaded.server.port = 4312;
         await config.saveConfig(loaded);
       })().catch((error) => { console.error(error); process.exit(1); });
     `);
     assert.equal(result.status, 0, result.stderr || result.stdout);
     const saved = JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'));
-    assert.equal(saved.configVersion, 9);
+    assert.equal(saved.configVersion, 10);
     assert.equal(saved.server.port, 4312);
     assert.equal(Object.hasOwn(saved.downloads, 'updateExistingThumbnails'), false);
   } finally {
@@ -37,6 +37,40 @@ test('clean install creates a current v9 config and saveConfig persists it atomi
   }
 });
 
+
+
+test('loadConfig migrates configVersion 9 to 10 adding Bazarr disabled without losing existing values', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ersatztv-config-v9-'));
+  try {
+    const legacy = {
+      configVersion: 9,
+      server: { host: '127.0.0.1', port: 4111 },
+      paths: { baseDir: '/srv/media/youtube', channelsBaseDir: '/srv/media/channels' },
+      downloads: { maxHeight: 720 },
+      youtubeApi: { enabled: false },
+      ersatztv: { url: 'http://localhost:8409', apiKey: '' },
+      playlists: [], channels: [], scheduler: { enabled: false }, channelScheduler: { enabled: false }
+    };
+    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify(legacy) + '\n');
+    const result = runConfigScript(root, `
+      (async () => {
+        const config = require('./src/config');
+        const loaded = await config.loadConfig();
+        if (loaded.configVersion !== 10) throw new Error('migration failed');
+        if (loaded.server.port !== 4111) throw new Error('value lost');
+        if (loaded.bazarr.enabled !== false) throw new Error('bazarr should default disabled');
+      })().catch((error) => { console.error(error); process.exit(1); });
+    `);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const saved = JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'));
+    assert.equal(saved.configVersion, 10);
+    assert.equal(saved.server.port, 4111);
+    assert.equal(saved.bazarr.enabled, false);
+    assert.deepEqual(saved.bazarr.pathMappings, []);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 test('loadConfig rejects an old config instead of silently migrating it', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ersatztv-config-old-'));
   try {
@@ -48,7 +82,7 @@ test('loadConfig rejects an old config instead of silently migrating it', () => 
       })().catch((error) => { console.error(error.message); process.exit(23); });
     `);
     assert.equal(result.status, 23);
-    assert.match(result.stderr, /aceita somente configVersion 9/);
+    assert.match(result.stderr, /aceita configVersion 10/);
     const stillOld = JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'));
     assert.equal(stillOld.configVersion, 2);
   } finally {

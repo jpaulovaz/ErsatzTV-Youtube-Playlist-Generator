@@ -22,6 +22,7 @@ const { handleErsatzTvRoutes } = require('./routes/ersatztvRoutes');
 const { handleScriptedScheduleRoutes } = require('./routes/scriptedScheduleRoutes');
 const { handleGlobalSubtitleTranslationRoutes } = require('./routes/subtitleTranslationRoutes');
 const { handleYouTubeManagerRoutes } = require('./routes/youtubeManagerRoutes');
+const { handleSubtitleWorkspaceRoutes } = require('./routes/subtitleWorkspaceRoutes');
 const translationQueue = require('./subtitleTranslation/translationQueue');
 const youtubePlaylistQueue = require('./youtubeManager/playlistQueue');
 const auth = require('./auth');
@@ -243,19 +244,41 @@ async function handleApi(req, res, url) {
   if (url.pathname.startsWith('/api/youtube-manager/')) {
     if (await handleYouTubeManagerRoutes(req, res, url, routeDeps)) return;
   }
+  if (url.pathname.startsWith('/api/tools/subtitles')) {
+    if (await handleSubtitleWorkspaceRoutes(req, res, url, routeDeps)) return;
+  }
 
   if (req.method === 'GET' && url.pathname === '/api/config') {
-    sendJson(res, 200, await loadConfig());
+    const config = await loadConfig();
+    const clientConfig = JSON.parse(JSON.stringify(config));
+    if (clientConfig.bazarr) {
+      clientConfig.bazarr.apiKeyConfigured = Boolean(config.bazarr.apiKey);
+      clientConfig.bazarr.apiKey = '';
+    }
+    sendJson(res, 200, clientConfig);
     return;
   }
 
   if (req.method === 'PUT' && url.pathname === '/api/config') {
-    const config = await saveConfig(await readJson(req));
+    const currentConfig = await loadConfig();
+    const payload = await readJson(req);
+    if (payload.bazarr && typeof payload.bazarr === 'object') {
+      if (!String(payload.bazarr.apiKey || '').trim() && payload.bazarr.apiKeyConfigured && currentConfig.bazarr?.apiKey) {
+        payload.bazarr.apiKey = currentConfig.bazarr.apiKey;
+      }
+      delete payload.bazarr.apiKeyConfigured;
+    }
+    const config = await saveConfig(payload);
     scheduler.configure(config);
     channelScheduler.configure(config);
     downloadManager.configure(config);
     await logger.info('Configuracao salva pela interface.');
-    sendJson(res, 200, { ok: true, config });
+    const clientConfig = JSON.parse(JSON.stringify(config));
+    if (clientConfig.bazarr) {
+      clientConfig.bazarr.apiKeyConfigured = Boolean(config.bazarr.apiKey);
+      clientConfig.bazarr.apiKey = '';
+    }
+    sendJson(res, 200, { ok: true, config: clientConfig });
     return;
   }
 

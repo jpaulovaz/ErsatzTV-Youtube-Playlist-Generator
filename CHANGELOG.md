@@ -1,5 +1,21 @@
 # Changelog
 
+## 4.1.0
+
+- Cria o grupo lateral **Ferramentas** e move **Recuperar acervo** para esse contexto, preservando integralmente scanner, matching, adoção e compatibilidade de navegação do Gerenciador do YouTube.
+- Adiciona **Ferramentas → Gerenciar legendas**, um workspace independente para filmes/séries existentes fora das Bibliotecas gerenciadas: cadastra raízes seguras, faz varredura recursiva e organiza revisão de legendas sem importar ou mover a mídia.
+- Reutiliza o mesmo núcleo do Subtitle Manager das Bibliotecas para player, preview, offset, histórico, restauração, exclusão e prévia compatível via FFmpeg, evitando dois editores divergentes.
+- Introduz **Subtitle Workspace state v1** com estado revisado/não revisado, progresso de scan, cache de FFprobe e associação opcional ao Bazarr; o arquivo fica em `data/subtitle-workspace-state.json`.
+- O scanner não segue symlinks, confina leitura/gravação à raiz cadastrada e faz a varredura rápida por filesystem; FFprobe é executado sob demanda ao abrir um item.
+- SRT externo é editável. ASS/SSA/VTT/SUB/IDX/SUP e faixas embutidas são detectados e exibidos como **somente leitura**, sem conversão/remux automático.
+- Adiciona workflow de triagem com filtros, busca, idioma, paginação, **Revisado/Não revisado**, anterior/próximo e **Revisado e próximo**.
+- Protege edições externas com fingerprint `mtime + tamanho + SHA-256`: se Bazarr ou outro processo alterar o SRT enquanto ele está aberto, o aplicativo bloqueia a gravação e exige recarga.
+- Adiciona integração **opcional** com Bazarr: teste de conexão, path mappings, matching por caminho, pesquisa manual de candidatos, download específico e sincronização sob demanda; o editor local funciona normalmente sem Bazarr.
+- Busca no Bazarr nunca é disparada durante a varredura em massa. Download manual força formato SRT quando o provider permitir e registra proveniência Bazarr no Subtitle Manager.
+- Antes de sincronizar pelo Bazarr, o SRT atual é preservado no histórico; faixas `forced` ou sem idioma identificado são bloqueadas com orientação para usar offset manual/renomear o sidecar.
+- Eleva `configVersion` de **9 para 10** para incluir `bazarr.enabled/url/apiKey/timeoutSeconds/pathMappings`; a migração 9 → 10 é automática, preserva toda a configuração existente e deixa Bazarr desativado por padrão.
+- Aplicação **v4.1.0**, Universal **v1.3.1**, Download state **5**, Subtitle Manager state **1**, Subtitle Translation config/state **1**, YouTube Manager state **1**, YouTube Account config/state **1**, Adoption transaction state **1** e novo Subtitle Workspace state **1**.
+
 ## 4.0.3
 
 - Corrige a distinção entre a sessão local da interface e a autorização OAuth do Google: `401 + YOUTUBE_RECONNECT_REQUIRED` não redireciona mais para `/login` nem exibe “Sessão expirada”.

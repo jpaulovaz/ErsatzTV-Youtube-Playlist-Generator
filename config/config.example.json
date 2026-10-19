@@ -1,5 +1,5 @@
 {
-  "configVersion": 9,
+  "configVersion": 10,
   "server": {
     "host": "0.0.0.0",
     "port": 3099
@@ -45,6 +45,13 @@
     "apiTimeoutSeconds": 10,
     "apiKey": "",
     "smartCollectionSelections": {}
+  },
+  "bazarr": {
+    "enabled": false,
+    "url": "http://localhost:6767",
+    "apiKey": "",
+    "timeoutSeconds": 20,
+    "pathMappings": []
   },
   "playlists": [],
   "channels": [],
