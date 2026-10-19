@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.1.1
+
+- Corrige o cadastro de workspaces de **Gerenciar legendas** em mountpoints diretamente sob a raiz, como `/gay_movies` ou `/movies`.
+- Caminhos classificados como amplos deixam de ser rejeitados: o backend retorna `SUBTITLE_WORKSPACE_BROAD_PATH_CONFIRM_REQUIRED` e a interface exibe um modal explicando o risco e oferecendo **Usar esta pasta**.
+- Após confirmação explícita, até caminhos amplos como `/`, `/mnt` ou `/media` podem ser cadastrados; as varreduras subsequentes não exigem nova confirmação.
+- Permanecem obrigatórias as proteções técnicas: caminho absoluto e existente, diretório real (não symlink), confinamento das operações ao workspace e scanner sem seguir links simbólicos internos.
+- Nenhuma alteração de schema: aplicação **v4.1.1**, Universal **v1.3.1**, `configVersion` **10**, Download state **5**, Subtitle Manager state **1**, Subtitle Workspace state **1** e demais estados preservados.
+
 ## 4.1.0
 
 - Cria o grupo lateral **Ferramentas** e move **Recuperar acervo** para esse contexto, preservando integralmente scanner, matching, adoção e compatibilidade de navegação do Gerenciador do YouTube.

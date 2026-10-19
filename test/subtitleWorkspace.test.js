@@ -83,14 +83,31 @@ test('workspace marca revisado sem alterar arquivo e filtros refletem estado', a
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
 
-test('workspace rejeita raiz ampla e raiz que é symlink', async () => {
-  await assert.rejects(() => service.createWorkspace({ name: 'root', rootPath: '/' }), /ampla demais/);
+test('workspace pede confirmacao para raiz ampla, permite continuar e ainda rejeita symlink', async () => {
+  await assert.rejects(
+    () => service.createWorkspace({ name: 'root', rootPath: '/' }),
+    (error) => error.code === 'SUBTITLE_WORKSPACE_BROAD_PATH_CONFIRM_REQUIRED' && error.statusCode === 409
+  );
+  const broad = await service.createWorkspace({ name: 'root', rootPath: '/', confirmBroadPath: true });
+  assert.equal(broad.rootPath, '/');
+  await service.deleteWorkspace(broad.id);
+
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'subtitle-workspace-root-'));
   const link = `${root}-link`;
   await fs.symlink(root, link);
   try {
     await assert.rejects(() => service.createWorkspace({ name: 'link', rootPath: link }), /link simbolico/);
   } finally { await fs.rm(link, { force: true }); await fs.rm(root, { recursive: true, force: true }); }
+});
+
+test('workspace classifica mountpoint de primeiro nivel como aviso, nao bloqueio permanente', async () => {
+  await assert.rejects(
+    () => service.createWorkspace({ name: 'Mount', rootPath: '/tmp' }),
+    (error) => error.code === 'SUBTITLE_WORKSPACE_BROAD_PATH_CONFIRM_REQUIRED' && error.statusCode === 409
+  );
+  const workspace = await service.createWorkspace({ name: 'Mount', rootPath: '/tmp', confirmBroadPath: true });
+  assert.equal(workspace.rootPath, '/tmp');
+  await service.deleteWorkspace(workspace.id);
 });
 
 test('workspace rejeita sync Bazarr de sidecar sem idioma antes de alterar o arquivo', async () => {

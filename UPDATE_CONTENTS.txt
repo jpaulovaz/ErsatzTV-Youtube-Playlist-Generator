@@ -1,53 +1,28 @@
-ErsatzTV YouTube Downloader 4.1.0 - pacote de atualização
-Base: v4.0.3
+ErsatzTV YouTube Downloader 4.1.1 - pacote de atualização
+Base: v4.1.0
 
-Este update adiciona o novo grupo Ferramentas e o Gerenciador de Legendas para acervos externos:
-- move Recuperar acervo para Ferramentas, preservando o fluxo existente;
-- adiciona workspaces de legendas por pasta, com varredura recursiva e sem seguir symlinks;
-- reutiliza o mesmo nucleo de edicao das Bibliotecas para preview, offset, historico, restauracao e exclusao;
-- SRT permanece editavel; ASS/SSA/VTT/SUB/IDX/SUP e faixas embutidas sao detectados como somente leitura;
-- adiciona fluxo Revisado/Nao revisado, anterior/proximo e Revisado e proximo;
-- impede sobrescrita silenciosa quando a legenda muda externamente durante a edicao;
-- adiciona integracao opcional com Bazarr para testar conexao, mapear caminhos, pesquisar/baixar manualmente e solicitar sincronizacao;
-- nenhuma pesquisa em providers e feita durante a varredura em massa;
-- antes de sincronizar via Bazarr, a legenda editavel recebe backup no historico;
-- configVersion sobe de 9 para 10; a migracao e automatica e adiciona Bazarr desativado por padrao;
-- adiciona subtitle-workspace state v1; os demais schemas permanecem inalterados.
+Este update corrige o cadastro de caminhos amplos em Ferramentas -> Gerenciar legendas:
+- mountpoints de primeiro nivel, como /gay_movies, deixam de ser bloqueados;
+- caminhos amplos geram um modal de alerta e podem ser confirmados pelo usuario;
+- a confirmacao e exigida somente no cadastro; as varreduras posteriores usam o workspace normalmente;
+- continuam bloqueados caminhos inexistentes, nao absolutos e raizes que sejam symlink;
+- o scanner continua sem seguir symlinks internos e as operacoes continuam confinadas a raiz cadastrada;
+- nenhum schema ou configVersion foi alterado.
 
 Arquivos incluidos:
 CHANGELOG.md
 README.md
 UPGRADE.md
-config/config.example.json
 package.json
-public/app.js
 public/index.html
 public/login.html
-public/styles.css
-public/js/helpView.js
-public/js/subtitleManager.js
 public/js/subtitleWorkspace.js
-public/js/youtubeManager.js
-scripts/run-tests.js
-scripts/verify-release.js
-src/config.js
-src/integrations/bazarrClient.js
-src/routes/subtitleWorkspaceRoutes.js
-src/server.js
-src/subtitleManager/subtitleCore.js
-src/subtitleManager/subtitleManagerService.js
-src/tools/subtitleWorkspaceScanner.js
 src/tools/subtitleWorkspaceService.js
-src/tools/subtitleWorkspaceState.js
-test/bazarrClient.test.js
-test/channels.test.js
-test/config.test.js
-test/configFile.test.js
 test/subtitleWorkspace.test.js
 test/ui-v3.test.js
 MODIFIED_FILES.txt
 UPDATE_CONTENTS.txt
 
-Aplicacao v4.1.0, Universal v1.3.1, configVersion 10, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-workspace state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v4.1.1, Universal v1.3.1, configVersion 10, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-workspace state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 
 O pacote nao inclui config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/, tokens, estados operacionais, arquivos de midia ou sidecars.

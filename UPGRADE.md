@@ -1,66 +1,39 @@
-# Atualização para 4.1.0
+# Atualização para 4.1.1
 
-A versão 4.1.0 parte da **v4.0.3** e adiciona o novo grupo **Ferramentas**, com **Recuperar acervo** e **Gerenciar legendas** para arquivos externos.
+A versão 4.1.1 parte da **v4.1.0** e corrige o cadastro de pastas amplas no **Ferramentas → Gerenciar legendas**.
 
 ## Versionamento
 
-- aplicação: **v4.1.0**;
+- aplicação: **v4.1.1**;
 - Universal Scripted Schedules: **v1.3.1**;
 - `configVersion`: **10**;
 - Download state: **5**;
 - Subtitle Manager state: **1**;
-- **Subtitle Workspace state: 1 (novo)**;
+- Subtitle Workspace state: **1**;
 - Subtitle Translation config/state: **1**;
 - YouTube Manager state: **1**;
 - YouTube Account config/state: **1**;
 - Adoption transaction state: **1**.
 
-## Migração automática de configuração
-
-No primeiro carregamento após o update, um `config/config.json` v9 é migrado automaticamente para v10. A migração preserva os valores existentes e acrescenta a integração Bazarr desativada por padrão:
-
-```json
-"bazarr": {
-  "enabled": false,
-  "url": "http://localhost:6767",
-  "apiKey": "",
-  "timeoutSeconds": 20,
-  "pathMappings": []
-}
-```
-
-O update **não** substitui `config/config.json`; a mudança acima é executada pelo próprio aplicativo de forma atômica. Faça o backup normal de `config/` e `data/` antes da atualização.
+Não há migração de configuração nem de estado.
 
 ## O que muda
 
-- **Recuperar acervo** sai da navegação interna do Gerenciador do YouTube e passa para **Ferramentas**, sem perda de funcionalidade.
-- **Gerenciar legendas** permite cadastrar uma pasta de filmes/séries e varrer recursivamente seus vídeos e sidecars.
-- SRT pode ser testado no player, atrasado/adiantado, salvo, restaurado pelo histórico ou excluído de forma recuperável.
-- ASS/SSA/VTT/SUB/IDX/SUP e legendas embutidas são exibidos como somente leitura nesta primeira versão.
-- A varredura não segue symlinks; caminhos amplos/perigosos são rejeitados e as operações ficam confinadas à raiz cadastrada.
-- Alteração externa de um SRT aberto é detectada antes de salvar para evitar sobrescrever mudanças feitas por Bazarr/outro processo.
-- A integração Bazarr é opcional. Quando configurada, oferece matching por caminho, busca/download manual e tentativa de sincronização da legenda ativa.
+Na v4.1.0 caminhos classificados como amplos eram bloqueados. Isso atingia mountpoints válidos diretamente sob `/`, por exemplo `/gay_movies`.
 
-## Configurar Bazarr (opcional)
+Na v4.1.1 o bloqueio de amplitude vira confirmação: ao cadastrar um caminho amplo, a interface explica que a varredura pode percorrer muitos arquivos e oferece **Usar esta pasta**. Confirmando, o workspace é cadastrado normalmente e as próximas varreduras não pedem nova confirmação.
 
-Abra **Configurações → Integrações → Bazarr**, informe URL e API Key e, quando o aplicativo e Bazarr enxergarem a mídia por caminhos diferentes, cadastre uma regra por linha:
-
-```text
-/mnt/media/Movies = /movies
-/mnt/media/TV = /tv
-```
-
-O lado esquerdo é o caminho visto por este aplicativo; o lado direito deve corresponder ao caminho usado/retornado pelo seu ambiente Bazarr/Sonarr/Radarr. Use **Testar Bazarr** antes de pesquisar legendas.
+Continuam como bloqueios reais apenas as proteções técnicas: caminho deve ser absoluto, existir, ser diretório real e não ser symlink; o scanner não segue symlinks internos e todas as operações permanecem confinadas à raiz cadastrada.
 
 ## Atualização
 
-Pare o serviço, faça backup normal da instalação e extraia o update por cima da v4.0.3:
+Pare o serviço, faça backup normal da instalação e extraia o update por cima da v4.1.0:
 
 ```bash
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v4.0.3-to-v4.1.0-update.zip -d /caminho/da/aplicacao
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v4.1.0-to-v4.1.1-update.zip -d /caminho/da/aplicacao
 ```
 
-Depois reinicie o serviço. Na primeira carga, confirme em **Configurações** que o `configVersion` foi migrado e valide:
+Depois reinicie o serviço e valide:
 
 ```bash
 npm run verify

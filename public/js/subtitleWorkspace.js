@@ -182,7 +182,28 @@
     const rootPath = $('#subtitleWorkspacePath')?.value.trim() || '';
     const recursive = $('#subtitleWorkspaceRecursive')?.checked !== false;
     if (!rootPath) return toast('Informe a pasta raiz.', true);
-    const response = await state.api('/api/tools/subtitles/workspaces', { method: 'POST', body: JSON.stringify({ name, rootPath, recursive }) });
+
+    const submit = async (confirmBroadPath = false) => state.api('/api/tools/subtitles/workspaces', {
+      method: 'POST',
+      body: JSON.stringify({ name, rootPath, recursive, confirmBroadPath })
+    });
+
+    let response;
+    try {
+      response = await submit(false);
+    } catch (error) {
+      if (error.code !== 'SUBTITLE_WORKSPACE_BROAD_PATH_CONFIRM_REQUIRED') throw error;
+      const dialog = await state.showDialog({
+        eyebrow: 'Gerenciar legendas',
+        title: 'Usar esta pasta mesmo assim?',
+        message: `O caminho “${rootPath}” parece amplo e pode fazer a varredura percorrer muitos arquivos ou diretorios que nao fazem parte do seu acervo.`,
+        warning: 'Se este caminho for realmente o ponto de montagem ou a pasta que contem seus filmes/series, pode continuar normalmente.',
+        confirmLabel: 'Usar esta pasta'
+      });
+      if (!dialog.confirmed) return;
+      response = await submit(true);
+    }
+
     state.activeWorkspaceId = response.result.id;
     persistWorkspace();
     if ($('#subtitleWorkspaceName')) $('#subtitleWorkspaceName').value = '';

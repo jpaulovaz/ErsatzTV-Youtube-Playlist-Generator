@@ -50,11 +50,6 @@ async function validateRoot(rootPath) {
     throw error;
   }
   const resolved = path.resolve(raw);
-  if (isDangerousBaseDir(resolved)) {
-    const error = new Error('A pasta informada e ampla demais. Cadastre uma pasta especifica de filmes ou series.');
-    error.statusCode = 400;
-    throw error;
-  }
   const stats = await fs.lstat(resolved).catch((error) => {
     if (error.code === 'ENOENT') return null;
     throw error;
@@ -80,6 +75,12 @@ async function listWorkspaces() {
 
 async function createWorkspace(payload = {}) {
   const rootPath = await validateRoot(payload.rootPath);
+  if (isDangerousBaseDir(rootPath) && payload.confirmBroadPath !== true) {
+    const error = new Error('Esta pasta parece muito ampla para uma varredura de midia. Confirme se deseja usa-la mesmo assim.');
+    error.statusCode = 409;
+    error.code = 'SUBTITLE_WORKSPACE_BROAD_PATH_CONFIRM_REQUIRED';
+    throw error;
+  }
   const name = String(payload.name || path.basename(rootPath)).trim().slice(0, 120) || path.basename(rootPath);
   const recursive = payload.recursive !== false;
   return mutateState(async (state) => {

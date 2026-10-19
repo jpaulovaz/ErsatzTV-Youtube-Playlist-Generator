@@ -829,6 +829,8 @@ test('v4.1 organiza Ferramentas e expoe Gerenciar legendas com Bazarr opcional',
   assert.match(app, /Os dois caminhos precisam ser absolutos e começar com/);
 
   assert.match(workspace, /\/api\/tools\/subtitles\/workspaces/);
+  assert.match(workspace, /SUBTITLE_WORKSPACE_BROAD_PATH_CONFIRM_REQUIRED/);
+  assert.match(workspace, /Usar esta pasta mesmo assim/);
   assert.match(workspace, /Revisado e próximo/);
   assert.match(html, /Carregar mais/);
   assert.match(workspace, /\/bazarr\/search/);

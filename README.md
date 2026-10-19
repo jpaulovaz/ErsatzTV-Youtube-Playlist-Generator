@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 4.1.0
+# ErsatzTV YouTube Downloader 4.1.1
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A linha v4 aplica ao **aplicativo inteiro** uma arquitetura orientada por tarefas. A v4.1.0 acrescenta o grupo **Ferramentas** e transforma o editor de legendas já usado nas Bibliotecas em um workspace reutilizável para filmes e séries existentes em qualquer pasta autorizada, com integração opcional ao Bazarr.
+A linha v4 aplica ao **aplicativo inteiro** uma arquitetura orientada por tarefas. A v4.1.x acrescenta o grupo **Ferramentas** e transforma o editor de legendas já usado nas Bibliotecas em um workspace reutilizável para filmes e séries existentes em qualquer pasta autorizada, com integração opcional ao Bazarr. A v4.1.1 substitui o bloqueio rígido de caminhos amplos por uma confirmação explícita: mountpoints dedicados como `/gay_movies` podem ser usados normalmente, enquanto caminhos muito amplos exibem um aviso antes do cadastro.
 
 ## Experiência v4
 
@@ -228,7 +228,7 @@ A adoção exige preflight. Diferença de duração acima de 10 segundos gera av
 
 ## Ferramentas — Gerenciar legendas
 
-A v4.1.0 permite usar o editor de legendas fora das Bibliotecas gerenciadas. Em **Ferramentas → Gerenciar legendas**, cadastre uma raiz específica de filmes/séries e execute **Atualizar varredura**. O scanner é recursivo por padrão, não segue links simbólicos e não move/importa a mídia.
+A v4.1.x permite usar o editor de legendas fora das Bibliotecas gerenciadas. Em **Ferramentas → Gerenciar legendas**, cadastre uma raiz de filmes/séries e execute **Atualizar varredura**. O scanner é recursivo por padrão, não segue links simbólicos e não move/importa a mídia. Caminhos considerados amplos (por exemplo `/`, `/mnt`, `/media` ou um mountpoint diretamente sob `/`) não são bloqueados: a interface exibe um modal de confirmação e permite continuar conscientemente.
 
 O fluxo recomendado é:
 
