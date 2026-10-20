@@ -74,8 +74,8 @@
     const workspace = activeWorkspace();
     target.innerHTML = [
       ['Vídeos', c.all ?? workspace?.itemCount ?? 0, 'Itens encontrados na pasta'],
-      ['Com SRT editável', c.editable ?? 0, 'Podem ser ajustados aqui'],
-      ['Sem legenda externa', c.withoutSubtitles ?? 0, 'Candidatos a busca no Bazarr'],
+      ['Com legenda editável', c.editable ?? 0, 'Podem ser ajustados aqui'],
+      ['Sem legenda separada', c.withoutSubtitles ?? 0, 'Podem precisar de extração ou busca'],
       ['Não revisados', c.unreviewed ?? 0, 'Fila sugerida de conferência']
     ].map(([label, value, help]) => `<div><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(help)}</small></div>`).join('');
     const scan = $('#subtitleWorkspaceLastScan');
@@ -94,11 +94,12 @@
 
   function sidecarBadges(item) {
     const tracks = Array.isArray(item.sidecars) ? item.sidecars : [];
-    if (!tracks.length) return '<span class="badge warn">Sem legenda externa</span>';
+    if (!tracks.length) return '<span class="badge warn">Sem legenda separada</span>';
     return tracks.slice(0, 5).map((track) => {
       const cls = track.editable ? 'ok' : '';
       const flags = (track.flags || []).length ? ` · ${(track.flags || []).join('/')}` : '';
-      return `<span class="badge ${cls}">${esc(track.language || 'und')} · ${esc(String(track.format || '').toUpperCase())}${esc(flags)}</span>`;
+      const editLabel = track.editable ? 'editável' : 'somente leitura';
+      return `<span class="badge ${cls}" title="Formato: ${esc(String(track.format || '').toUpperCase())}${esc(flags)}">${esc(track.language || 'und')} · ${editLabel}</span>`;
     }).join('') + (tracks.length > 5 ? `<span class="badge">+${tracks.length - 5}</span>` : '');
   }
 

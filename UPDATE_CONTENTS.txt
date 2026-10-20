@@ -1,46 +1,32 @@
-ErsatzTV YouTube Downloader 4.2.1 - pacote de atualização
-Base: v4.2.0
+ErsatzTV YouTube Downloader 4.2.2 - pacote de atualização
+Base: v4.2.1
 
-Este update reformula a reprodução do Gerenciador de Legendas para bibliotecas locais e remotas:
-- streaming compatível em tempo real, sem preparar um preview completo antes de tocar;
-- Direct Play para mídia já compatível;
-- Direct Stream para MKV/H.264 com vídeo em copy e áudio AAC convertido enquanto assiste;
-- transcode H.264 + AAC sob demanda quando o vídeo também é incompatível;
-- aceleração de vídeo com detecção/teste de NVENC, QSV, VAAPI, AMF e VideoToolbox;
-- fallback automático para CPU quando o hardware não estiver disponível ou falhar antes da saída;
-- linha do tempo absoluta e seek que reinicia o stream próximo do ponto escolhido;
-- troca de faixa de áudio preservando a posição atual;
-- preview completo mantido como fallback manual;
-- Configurações e Ajuda atualizadas para streaming e aceleração.
+Este update simplifica a experiência do Gerenciador de Legendas e torna visível o andamento das operações:
+- linguagem orientada a tarefas para usuários leigos;
+- explicações e detalhes técnicos movidos para ajuda contextual ?;
+- recursos opcionais recolhidos para reduzir excesso de informação;
+- status unificado para ações sobre vídeo e legendas;
+- barra animada + tempo decorrido quando não existe percentual confiável;
+- percentual real nos jobs de tradução, reconhecimento de texto e criação de cópias de vídeo;
+- feedback imediato durante extração de legenda embutida, conversão, forma de onda, mapa de frequências, preview, edição, sincronização, restauração e exclusão;
+- listagem do workspace simplificada, mantendo detalhes técnicos acessíveis sob demanda.
 
 Arquivos incluidos:
 CHANGELOG.md
 README.md
 UPGRADE.md
-config/config.example.json
 package.json
 public/index.html
 public/login.html
 public/styles.css
-public/js/helpView.js
 public/js/subtitleManager.js
-scripts/verify-release.js
-src/config.js
-src/mediaPreviewService.js
-src/routes/subtitleWorkspaceRoutes.js
-src/tools/subtitleWorkspaceAdvanced.js
-src/tools/subtitleWorkspaceService.js
-test/channels.test.js
-test/config.test.js
-test/configFile.test.js
-test/mediaPreviewService.test.js
-test/subtitleWorkspace.test.js
+public/js/subtitleWorkspace.js
 test/ui-v3.test.js
 MODIFIED_FILES.txt
 UPDATE_CONTENTS.txt
 
-Aplicacao v4.2.1, Universal v1.3.1, configVersion 12, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-workspace state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v4.2.2, Universal v1.3.1, configVersion 12, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-workspace state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 
-A migracao 11 -> 12 adiciona apenas playback.liveCompatibilityStreaming=true, playback.hardwareAcceleration=auto e playback.vaapiDevice=/dev/dri/renderD128. Nenhum backend de GPU e obrigatorio; sem hardware validado o aplicativo usa CPU.
+Nao existe migracao de configuracao ou estado na v4.2.2. Streaming, aceleracao por hardware, Tesseract, Gemini e Bazarr preservam exatamente a configuracao da v4.2.1.
 
 O pacote nao inclui config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/, tokens, estados operacionais, arquivos de midia ou sidecars.

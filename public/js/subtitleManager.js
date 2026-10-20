@@ -38,6 +38,9 @@
     toolAction: null,
     activeJob: null,
     jobTimer: null,
+    operation: null,
+    operationClockTimer: null,
+    operationClearTimer: null,
     playerTime: 0,
     liveStreamBaseSeconds: 0,
     liveStreamActive: false
@@ -51,6 +54,108 @@
 
   function toast(message, error = false) {
     if (state.showToast) state.showToast(message, error);
+  }
+
+  function helpHint(title, message) {
+    return `<details class="subtitle-help"><summary aria-label="Ajuda: ${esc(title)}" title="Ajuda">?</summary><div class="subtitle-help-popover"><strong>${esc(title)}</strong><p>${esc(message)}</p></div></details>`;
+  }
+
+  function formatElapsed(ms) {
+    const seconds = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}m ${String(seconds % 60).padStart(2, '0')}s`;
+  }
+
+  function operationStatusHtml() {
+    const operation = state.operation;
+    if (!operation) return '';
+    const running = operation.status === 'running';
+    const failed = operation.status === 'failed';
+    const completed = operation.status === 'completed';
+    const percent = operation.percent != null && Number.isFinite(Number(operation.percent)) ? Math.max(0, Math.min(100, Math.round(Number(operation.percent)))) : null;
+    const elapsed = formatElapsed(Date.now() - Number(operation.startedAt || Date.now()));
+    const statusText = failed ? 'Não foi possível concluir' : completed ? 'Concluído' : 'Em andamento';
+    const progressHtml = running && percent == null
+      ? '<div class="subtitle-operation-indeterminate" aria-label="Operação em andamento"><span></span></div>'
+      : `<progress class="progress-track" max="100" value="${percent == null ? (completed ? 100 : 0) : percent}"></progress>`;
+    return `<div class="subtitle-operation-card ${failed ? 'failed' : completed ? 'completed' : 'running'}" role="status" aria-live="polite">
+      <div class="subtitle-operation-head"><div><strong>${esc(operation.label || 'Processando')}</strong><span>${esc(operation.message || statusText)}</span></div><div class="subtitle-operation-side"><span class="badge ${failed ? 'warn' : completed ? 'ok' : ''}">${esc(statusText)}</span><button type="button" class="subtitle-operation-dismiss" data-subtitle-operation-dismiss aria-label="Fechar status" title="Fechar">×</button></div></div>
+      ${progressHtml}
+      <div class="subtitle-operation-meta"><span>${running ? `Tempo decorrido: ${esc(elapsed)}` : esc(operation.finishedNote || '')}</span>${running && percent != null ? `<strong>${percent}%</strong>` : ''}</div>
+    </div>`;
+  }
+
+  function updateOperationUi() {
+    const host = $('#subtitleManagerOperationStatus');
+    if (!host) return;
+    host.innerHTML = operationStatusHtml();
+    host.classList.toggle('hidden', !state.operation);
+  }
+
+  function stopOperationTimers() {
+    if (state.operationClockTimer) window.clearInterval(state.operationClockTimer);
+    if (state.operationClearTimer) window.clearTimeout(state.operationClearTimer);
+    state.operationClockTimer = null;
+    state.operationClearTimer = null;
+  }
+
+  function startOperation(key, label, message, options = {}) {
+    stopOperationTimers();
+    state.operation = {
+      key: String(key || 'operation'),
+      label: String(label || 'Processando'),
+      message: String(message || 'Aguarde...'),
+      status: 'running',
+      percent: options.percent != null && Number.isFinite(Number(options.percent)) ? Number(options.percent) : null,
+      startedAt: Date.now(),
+      finishedNote: ''
+    };
+    updateOperationUi();
+    state.operationClockTimer = window.setInterval(updateOperationUi, 1000);
+  }
+
+  function updateOperation(message, percent = undefined) {
+    if (!state.operation) return;
+    if (message != null) state.operation.message = String(message);
+    if (percent !== undefined) state.operation.percent = percent != null && Number.isFinite(Number(percent)) ? Number(percent) : null;
+    updateOperationUi();
+  }
+
+  function finishOperation(message, { failed = false, keepMs = 5000 } = {}) {
+    if (!state.operation) return;
+    if (state.operationClockTimer) window.clearInterval(state.operationClockTimer);
+    state.operationClockTimer = null;
+    state.operation.status = failed ? 'failed' : 'completed';
+    state.operation.message = String(message || (failed ? 'A operação falhou.' : 'Operação concluída.'));
+    state.operation.percent = failed ? state.operation.percent : 100;
+    state.operation.finishedNote = `Duração: ${formatElapsed(Date.now() - Number(state.operation.startedAt || Date.now()))}`;
+    updateOperationUi();
+    if (!failed && keepMs > 0) {
+      state.operationClearTimer = window.setTimeout(() => {
+        state.operation = null;
+        state.operationClearTimer = null;
+        updateOperationUi();
+      }, keepMs);
+    }
+  }
+
+  function dismissOperation() {
+    stopOperationTimers();
+    state.operation = null;
+    updateOperationUi();
+  }
+
+  async function withOperation({ key, label, message, successMessage }, runner) {
+    startOperation(key, label, message);
+    try {
+      const result = await runner();
+      finishOperation(successMessage || 'Operação concluída.');
+      return result;
+    } catch (error) {
+      finishOperation(error.message || 'Não foi possível concluir a operação.', { failed: true, keepMs: 0 });
+      throw error;
+    }
   }
 
   async function notifyContentChanged(change = {}) {
@@ -145,7 +250,7 @@
     if (!state.preview || !Array.isArray(state.preview.cues)) return;
     const track = ensureTextTrack();
     if (!track) {
-      toast('Este navegador não permite carregar cues temporários de legenda no player.', true);
+      toast('Este navegador não permite mostrar a prévia temporária da legenda no player.', true);
       return;
     }
     const Ctor = cueCtor();
@@ -304,9 +409,12 @@
   function audioStreamLabel(stream) {
     const parts = [audioLanguageLabel(stream.language)];
     if (stream.title) parts.push(stream.title);
-    if (stream.codec) parts.push(String(stream.codec).toUpperCase());
-    if (stream.channels) parts.push(`${stream.channels} canais`);
-    if (stream.default) parts.push('padrão');
+    if (stream.channels === 1) parts.push('Mono');
+    else if (stream.channels === 2) parts.push('Estéreo');
+    else if (stream.channels === 6) parts.push('5.1');
+    else if (stream.channels === 8) parts.push('7.1');
+    else if (stream.channels) parts.push(`${stream.channels} canais`);
+    if (stream.default) parts.push('Principal');
     return parts.join(' · ');
   }
 
@@ -383,31 +491,35 @@
       </label>` : '<span class="subtitle-manager-player-note">Nenhuma faixa de áudio foi detectada.</span>';
     const hardware = state.advancedStatus?.playback?.hardwareAcceleration || {};
     const liveEnabled = playback.liveCompatibilityStreaming !== false;
-    let message = 'O arquivo será reproduzido diretamente pelo navegador.';
+    let message = 'Pronto para reproduzir o arquivo original.';
     let tone = 'ok';
-    let buttonLabel = 'Criar preview completo (opcional)';
+    let buttonLabel = 'Preparar versão temporária';
     if (state.previewToken) {
-      message = 'Preview completo ativo. O vídeo original permanece intocado.';
+      message = 'Uma versão temporária compatível está em uso. O arquivo original não foi alterado.';
       tone = 'ok';
-      buttonLabel = 'Recriar preview completo';
+      buttonLabel = 'Recriar versão temporária';
     } else if (useLiveCompatibilityPlayback() && playback.mode === 'audio-transcode' && !selectedAudioDiffersFromDefault()) {
-      message = 'Streaming em tempo real ativo: o vídeo é mantido sem recodificação e somente o áudio é convertido para AAC enquanto você assiste. Não é necessário preparar o filme inteiro.';
+      message = 'O áudio está sendo ajustado automaticamente enquanto você assiste.';
       tone = 'ok';
     } else if (useLiveCompatibilityPlayback()) {
-      const acceleration = hardware.available ? `${hardware.label} será usado quando o vídeo precisar ser convertido.` : 'Se o vídeo precisar ser convertido, o fallback será feito pela CPU.';
-      message = `Streaming em tempo real ativo. ${acceleration}`;
+      message = 'O vídeo está sendo adaptado automaticamente para o navegador enquanto você assiste.';
       tone = hardware.available ? 'ok' : 'warn';
     } else if (playback.mode === 'audio-transcode') {
-      message = liveEnabled ? 'Este arquivo precisa de áudio compatível.' : 'Streaming em tempo real está desativado; use um preview completo com áudio AAC.';
+      message = liveEnabled ? 'Este arquivo precisa de um ajuste de áudio para tocar corretamente.' : 'A reprodução automática compatível está desativada. Prepare uma versão temporária para assistir.';
       tone = 'warn';
-      buttonLabel = 'Preparar preview com áudio AAC';
+      buttonLabel = 'Preparar versão temporária';
     } else if (playback.mode === 'full-transcode') {
-      message = liveEnabled ? 'Este vídeo precisa de conversão para o navegador.' : 'Streaming em tempo real está desativado; crie um preview H.264 + AAC.';
+      message = liveEnabled ? 'Este arquivo precisa ser adaptado para o navegador.' : 'A reprodução automática compatível está desativada. Prepare uma versão temporária para assistir.';
       tone = 'warn';
-      buttonLabel = 'Criar preview H.264 + AAC';
+      buttonLabel = 'Preparar versão temporária';
     }
+    const technical = [
+      `Modo detectado: ${playback.mode || 'direto'}.`,
+      hardware.available ? `Aceleração disponível: ${hardware.label || hardware.selected || 'hardware'}.` : 'Se for necessário converter o vídeo, o aplicativo pode usar a CPU.',
+      'O arquivo original nunca é substituído por esta função.'
+    ].join(' ');
     return `<div class="subtitle-manager-playback-tools">
-      <div class="subtitle-manager-playback-copy ${tone}"><strong>Compatibilidade de reprodução</strong><span>${esc(message)}</span></div>
+      <div class="subtitle-manager-playback-copy ${tone}"><div class="subtitle-manager-title-with-help"><strong>Reprodução</strong>${helpHint('Como a reprodução funciona', technical)}</div><span>${esc(message)}</span></div>
       ${audioSelect}
       <button id="subtitleManagerCompatiblePreview" type="button" class="small">${esc(buttonLabel)}</button>
     </div>`;
@@ -419,9 +531,8 @@
     if (!duration) return '';
     const current = Math.max(0, Math.min(duration, Number(state.playerTime) || 0));
     return `<div class="subtitle-manager-live-timeline">
-      <div class="subtitle-manager-live-timeline-head"><strong>Linha do tempo do vídeo</strong><span id="subtitleManagerLiveTimelineValue">${esc(`${formatPlayerClock(current)} / ${formatPlayerClock(duration)}`)}</span></div>
+      <div class="subtitle-manager-live-timeline-head"><div class="subtitle-manager-title-with-help"><strong>Ir para outro ponto</strong>${helpHint('Navegação em arquivos remotos', 'Ao mover este controle, o aplicativo começa a reprodução perto do ponto escolhido. Isso evita preparar o vídeo inteiro antes, especialmente em bibliotecas remotas.')}</div><span id="subtitleManagerLiveTimelineValue">${esc(`${formatPlayerClock(current)} / ${formatPlayerClock(duration)}`)}</span></div>
       <input id="subtitleManagerLiveTimeline" type="range" min="0" max="${esc(duration)}" step="0.25" value="${esc(current)}" aria-label="Ir para um ponto do vídeo">
-      <small>O áudio compatível é criado enquanto você assiste. Arrastar esta linha reinicia o stream diretamente no ponto escolhido, sem preparar o filme inteiro.</small>
     </div>`;
   }
 
@@ -431,12 +542,15 @@
     const waveform = state.visualizationTokens[`waveform:${keySuffix}`] || '';
     const spectrogram = state.visualizationTokens[`spectrogram:${keySuffix}`] || '';
     const image = (kind, token, label, help) => token
-      ? `<div class="subtitle-manager-visual-card"><div><strong>${label}</strong><small>${help} · clique na imagem para ir até aquele ponto do vídeo.</small></div><img src="${esc(previewAssetUrl(token))}" alt="${esc(label)}" data-subtitle-visualization-seek="${kind}"></div>`
+      ? `<div class="subtitle-manager-visual-card"><div><strong>${label}</strong><small>${help}</small></div><img src="${esc(previewAssetUrl(token))}" alt="${esc(label)}" data-subtitle-visualization-seek="${kind}"></div>`
       : '';
-    return `<section class="subtitle-manager-section subtitle-manager-audio-tools">
-      <div class="subtitle-manager-section-head"><div><h4>Mapa do áudio</h4><p>Use a forma de onda para localizar início de falas e o espectrograma quando precisar distinguir voz, música e ruído.</p></div><div class="inline-actions"><button type="button" class="small" data-subtitle-visualization="waveform">${waveform ? 'Atualizar waveform' : 'Carregar waveform'}</button><button type="button" class="small" data-subtitle-visualization="spectrogram">${spectrogram ? 'Atualizar espectrograma' : 'Carregar espectrograma'}</button></div></div>
-      <div id="subtitleManagerVisualizations" class="subtitle-manager-visualizations">${image('waveform', waveform, 'Waveform', 'Volume ao longo do tempo')}${image('spectrogram', spectrogram, 'Espectrograma', 'Frequências do áudio ao longo do tempo')}${!waveform && !spectrogram ? '<div class="subtitle-manager-empty">As visualizações são geradas sob demanda para não processar todos os vídeos sem necessidade.</div>' : ''}</div>
-    </section>`;
+    return `<details class="subtitle-manager-section subtitle-manager-audio-tools subtitle-manager-collapsible" ${waveform || spectrogram ? 'open' : ''}>
+      <summary><span>Mapa do áudio</span><small>Opcional</small></summary>
+      <div class="subtitle-manager-collapsible-body">
+        <div class="subtitle-manager-section-head"><div class="subtitle-manager-title-with-help"><span>Recursos visuais</span>${helpHint('Mapa do áudio', 'A Forma de onda mostra onde o som fica mais forte ou mais fraco. O Mapa de frequências mostra mais detalhes do som e pode ajudar a separar fala, música e ruído. Clique em qualquer ponto da imagem para ir até aquele momento do vídeo.')}</div><div class="inline-actions"><button type="button" class="small" data-subtitle-visualization="waveform">${waveform ? 'Atualizar forma de onda' : 'Criar forma de onda'}</button><button type="button" class="small" data-subtitle-visualization="spectrogram">${spectrogram ? 'Atualizar mapa de frequências' : 'Criar mapa de frequências'}</button></div></div>
+        <div id="subtitleManagerVisualizations" class="subtitle-manager-visualizations">${image('waveform', waveform, 'Forma de onda', 'Clique na imagem para ir até aquele ponto do vídeo.')}${image('spectrogram', spectrogram, 'Mapa de frequências', 'Clique na imagem para ir até aquele ponto do vídeo.')}${!waveform && !spectrogram ? '<div class="subtitle-manager-empty">Crie um mapa somente quando precisar analisar o áudio.</div>' : ''}</div>
+      </div>
+    </details>`;
   }
 
   function cueEditorHtml() {
@@ -456,12 +570,15 @@
         <label class="subtitle-cue-text">Texto<textarea rows="2" data-subtitle-cue-text data-cue-index="${index}">${esc(cue.text)}</textarea></label>
       </div>`;
     }).join('');
-    return `<section class="subtitle-manager-section subtitle-cue-editor">
-      <div class="subtitle-manager-section-head"><div><h4>Editor cue por cue</h4><p>Edite o texto e os tempos individualmente. Clique no número do cue para conferir o trecho no player.</p></div><div class="inline-actions"><span class="badge">${state.cueDraft.length} cues</span><button id="subtitleManagerSaveCues" type="button" class="small primary" ${state.cueDirty ? '' : 'disabled'}>Salvar alterações</button></div></div>
-      ${state.timingPreview ? '<div class="subtitle-manager-inline-warning">Há uma prévia de sincronização avançada ativa. Descarte ou aplique essa prévia antes de editar os cues.</div>' : ''}
-      <div class="subtitle-cue-list">${rows}</div>
-      <div class="subtitle-cue-pagination"><button type="button" class="small" data-subtitle-cue-page="${state.cuePage - 1}" ${state.cuePage <= 0 ? 'disabled' : ''}>← Cues anteriores</button><span>Página ${state.cuePage + 1} de ${pageCount}</span><button type="button" class="small" data-subtitle-cue-page="${state.cuePage + 1}" ${state.cuePage >= pageCount - 1 ? 'disabled' : ''}>Próximos cues →</button></div>
-    </section>`;
+    return `<details class="subtitle-manager-section subtitle-cue-editor subtitle-manager-collapsible" ${state.cueDirty ? 'open' : ''}>
+      <summary><span>Editar texto e horários</span><small>${state.cueDraft.length} trechos</small></summary>
+      <div class="subtitle-manager-collapsible-body">
+        <div class="subtitle-manager-section-head"><div class="subtitle-manager-title-with-help"><span>Edição detalhada</span>${helpHint('Editar trechos', 'Cada bloco da legenda tem um horário de início, um horário de fim e um texto. Clique no número do trecho para conferir exatamente aquele ponto no vídeo.')}</div><div class="inline-actions"><button id="subtitleManagerSaveCues" type="button" class="small primary" ${state.cueDirty ? '' : 'disabled'}>Salvar alterações</button></div></div>
+        ${state.timingPreview ? '<div class="subtitle-manager-inline-warning">Há um teste de sincronização ativo. Descarte ou salve esse teste antes de editar os trechos.</div>' : ''}
+        <div class="subtitle-cue-list">${rows}</div>
+        <div class="subtitle-cue-pagination"><button type="button" class="small" data-subtitle-cue-page="${state.cuePage - 1}" ${state.cuePage <= 0 ? 'disabled' : ''}>← Trechos anteriores</button><span>Página ${state.cuePage + 1} de ${pageCount}</span><button type="button" class="small" data-subtitle-cue-page="${state.cuePage + 1}" ${state.cuePage >= pageCount - 1 ? 'disabled' : ''}>Próximos trechos →</button></div>
+      </div>
+    </details>`;
   }
 
   function syncValue(value) {
@@ -473,78 +590,83 @@
     const fpsTarget = Number(getMediaProbe().frameRate) || '';
     const p = state.syncPoints;
     const preview = state.timingPreview;
-    return `<section class="subtitle-manager-section subtitle-advanced-sync">
-      <div class="subtitle-manager-section-head"><div><h4>Sincronização avançada</h4><p>Use dois pontos quando a legenda vai se afastando aos poucos. Use FPS quando você conhece o frame rate da versão que originou a legenda.</p></div></div>
-      ${preview ? `<div class="subtitle-sync-preview"><strong>Prévia ativa</strong><span>${preview.mode === 'fps' ? `Escala ${Number(preview.scale || 1).toFixed(6)} · ${preview.sourceFps} → ${preview.targetFps} fps` : `Escala ${Number(preview.scale || 1).toFixed(6)} · correção proporcional entre os dois pontos`}</span><div class="inline-actions"><button type="button" class="small" data-subtitle-timing-discard>Descartar prévia</button><button type="button" class="small primary" data-subtitle-timing-apply>Aplicar e salvar</button></div></div>` : ''}
-      <details class="subtitle-tool-details" open>
-        <summary>Sincronização por dois pontos</summary>
-        <p>Marque uma fala perto do começo e outra mais adiante. Informe onde o cue está na legenda e onde ele deveria aparecer no vídeo.</p>
+    return `<details class="subtitle-manager-section subtitle-advanced-sync subtitle-manager-collapsible" ${preview ? 'open' : ''}>
+      <summary><span>Ajustes avançados</span><small>Opcional</small></summary>
+      <div class="subtitle-manager-collapsible-body">
+      <div class="subtitle-manager-section-head"><div class="subtitle-manager-title-with-help"><span>Sincronização avançada</span>${helpHint('Quando usar o ajuste avançado', 'Use Dois pontos quando a legenda começa quase certa e vai ficando cada vez mais adiantada ou atrasada. Use Diferença de velocidade quando você souber que a legenda veio de uma versão do vídeo com outra taxa de quadros (FPS).')}</div></div>
+      ${preview ? `<div class="subtitle-sync-preview"><strong>Teste ativo</strong><span>${preview.mode === 'fps' ? 'A velocidade da legenda foi ajustada temporariamente para você conferir no player.' : 'Os horários foram corrigidos temporariamente entre os dois pontos escolhidos.'}</span><div class="inline-actions"><button type="button" class="small" data-subtitle-timing-discard>Descartar teste</button><button type="button" class="small primary" data-subtitle-timing-apply>Salvar este ajuste</button></div></div>` : ''}
+      <details class="subtitle-tool-details">
+        <summary>Corrigir usando dois pontos</summary>
+        <div class="subtitle-inline-help">Escolha um trecho perto do começo e outro mais adiante. Em cada ponto, compare o horário da legenda com o horário correto no vídeo.</div>
         <div class="subtitle-sync-points">
-          ${['a','b'].map((key, index) => `<div class="subtitle-sync-point"><strong>Ponto ${index ? 'B' : 'A'}</strong><label>Tempo na legenda<input type="text" data-sync-field="subtitleMs" data-sync-point="${key}" value="${esc(syncValue(p[key].subtitleMs))}" placeholder="00:05:12.200"></label><label>Tempo correto no vídeo<input type="text" data-sync-field="mediaMs" data-sync-point="${key}" value="${esc(syncValue(p[key].mediaMs))}" placeholder="00:05:14.200"></label><div class="inline-actions"><button type="button" class="small" data-sync-capture-cue="${key}">Usar cue selecionado</button><button type="button" class="small" data-sync-capture-media="${key}">Usar tempo atual do vídeo</button></div></div>`).join('')}
+          ${['a','b'].map((key, index) => `<div class="subtitle-sync-point"><strong>Ponto ${index ? 'B' : 'A'}</strong><label>Horário na legenda<input type="text" data-sync-field="subtitleMs" data-sync-point="${key}" value="${esc(syncValue(p[key].subtitleMs))}" placeholder="00:05:12.200"></label><label>Horário correto no vídeo<input type="text" data-sync-field="mediaMs" data-sync-point="${key}" value="${esc(syncValue(p[key].mediaMs))}" placeholder="00:05:14.200"></label><div class="inline-actions"><button type="button" class="small" data-sync-capture-cue="${key}">Usar trecho selecionado</button><button type="button" class="small" data-sync-capture-media="${key}">Usar horário atual do vídeo</button></div></div>`).join('')}
         </div>
-        <button type="button" class="small" data-subtitle-timing-preview="two-point">Testar correção sem salvar</button>
+        <button type="button" class="small" data-subtitle-timing-preview="two-point">Testar sem salvar</button>
       </details>
       <details class="subtitle-tool-details">
-        <summary>Correção de FPS</summary>
-        <p>Útil quando a legenda começa certa e se afasta continuamente por ter sido criada para outro frame rate.</p>
-        <div class="subtitle-fps-grid"><label>FPS da legenda<input id="subtitleManagerSourceFps" type="number" min="1" max="120" step="0.001" value="${esc(state.fpsSource || 25)}"></label><label>FPS do vídeo<input id="subtitleManagerTargetFps" type="number" min="1" max="120" step="0.001" value="${esc(fpsTarget || '')}" placeholder="Ex.: 23.976"></label></div>
-        <button type="button" class="small" data-subtitle-timing-preview="fps">Testar correção sem salvar</button>
+        <summary>Corrigir diferença de velocidade</summary>
+        <div class="subtitle-inline-help">Use somente se você souber a taxa de quadros da versão para a qual a legenda foi criada. O valor do vídeo atual é preenchido automaticamente quando disponível.</div>
+        <div class="subtitle-fps-grid"><label>Legenda (FPS)<input id="subtitleManagerSourceFps" type="number" min="1" max="120" step="0.001" value="${esc(state.fpsSource || 25)}"></label><label>Vídeo atual (FPS)<input id="subtitleManagerTargetFps" type="number" min="1" max="120" step="0.001" value="${esc(fpsTarget || '')}" placeholder="Ex.: 23.976"></label></div>
+        <button type="button" class="small" data-subtitle-timing-preview="fps">Testar sem salvar</button>
       </details>
-    </section>`;
+      </div>
+    </details>`;
   }
 
   function toolActionHtml() {
     const action = state.toolAction;
-    if (!action && !state.activeJob) return '<div class="subtitle-manager-empty">Escolha uma ação em uma das faixas acima. Operações que criam arquivos nunca alteram o vídeo original sem avisar.</div>';
+    if (!action && !state.activeJob) return '<div class="subtitle-manager-empty">Escolha uma ação na legenda desejada.</div>';
     if (state.activeJob) {
       const job = state.activeJob;
       const progress = job.progress || {};
       const finished = ['completed', 'failed'].includes(job.status);
-      const statusLabel = ({ queued: 'Na fila', running: 'Processando', completed: 'Concluído', failed: 'Falhou' })[job.status] || job.status;
+      const statusLabel = ({ queued: 'Aguardando', running: 'Em andamento', completed: 'Concluído', failed: 'Não concluído' })[job.status] || job.status;
       let resultHtml = '';
       if (job.status === 'completed' && job.result) {
         if (job.kind === 'translate') {
           const outputs = Array.isArray(job.result.outputs) ? job.result.outputs : [];
           resultHtml = outputs.length ? `<div class="subtitle-tool-result"><strong>Arquivos</strong>${outputs.map((output) => `<span>${esc(output.fileName || output.language || output.kind)}${output.skipped ? ' · já existia, mantido' : ' · criado'}</span>`).join('')}</div>` : '';
         } else if (job.kind === 'ocr-pgs') {
-          resultHtml = `<div class="subtitle-tool-result"><strong>${esc(job.result.fileName || 'SRT criado')}</strong><span>${esc(job.result.cues || 0)} cues reconhecidos · idioma OCR ${esc(job.result.ocrLanguage || '?')}</span></div>`;
+          resultHtml = `<div class="subtitle-tool-result"><strong>${esc(job.result.fileName || 'Legenda criada')}</strong><span>${esc(job.result.cues || 0)} trechos reconhecidos</span></div>`;
         } else if (job.kind === 'remux') {
-          resultHtml = `<div class="subtitle-tool-result"><strong>${esc(job.result.fileName || 'Cópia MKV criada')}</strong><span>Original preservado · ${esc(job.result.validation?.streamCount || '?')} streams validados</span></div>`;
+          resultHtml = `<div class="subtitle-tool-result"><strong>${esc(job.result.fileName || 'Cópia do vídeo criada')}</strong><span>O arquivo original foi preservado.</span></div>`;
         }
       }
-      return `<div class="subtitle-tool-action-card"><div class="subtitle-manager-section-head"><div><strong>${esc(job.kind === 'translate' ? 'Tradução' : job.kind === 'ocr-pgs' ? 'OCR PGS' : 'Remux')}</strong><p>${esc(progress.message || (job.status === 'queued' ? 'Na fila...' : 'Processando...'))}</p></div><span class="badge ${job.status === 'failed' ? 'warn' : (job.status === 'completed' ? 'ok' : '')}">${esc(statusLabel)}</span></div><progress max="100" value="${esc(progress.percent || 0)}"></progress>${resultHtml}${job.error ? `<div class="subtitle-manager-inline-warning">${esc(job.error)}</div>` : ''}${finished ? '<button type="button" class="small" data-subtitle-tool-close>Fechar</button>' : ''}</div>`;
+      const label = job.kind === 'translate' ? 'Traduzindo legenda' : job.kind === 'ocr-pgs' ? 'Transformando legenda em texto' : 'Criando cópia do vídeo';
+      const progressKnown = progress.percent != null && Number.isFinite(Number(progress.percent));
+      return `<div class="subtitle-tool-action-card"><div class="subtitle-manager-section-head"><div><strong>${esc(label)}</strong><p>${esc(progress.message || (job.status === 'queued' ? 'Aguardando...' : 'Processando...'))}</p></div><span class="badge ${job.status === 'failed' ? 'warn' : (job.status === 'completed' ? 'ok' : '')}">${esc(statusLabel)}</span></div>${progressKnown ? `<progress max="100" value="${esc(progress.percent)}"></progress>` : '<div class="subtitle-operation-indeterminate"><span></span></div>'}${resultHtml}${job.error ? `<div class="subtitle-manager-inline-warning">${esc(job.error)}</div>` : ''}${finished ? '<button type="button" class="small" data-subtitle-tool-close>Fechar</button>' : ''}</div>`;
     }
     const trackName = action.trackId || 'faixa';
     const languageValue = action.language && action.language !== 'und' ? action.language : '';
-    const commonLanguage = `<label>Idioma da legenda<input id="subtitleToolLanguage" type="text" value="${esc(languageValue)}" placeholder="Ex.: en, pt-BR, es"><small>Se o arquivo não informa o idioma, escolha manualmente.</small></label>`;
-    const replace = `<label class="check-row"><input id="subtitleToolReplace" type="checkbox"> Substituir arquivo de destino se ele já existir (a versão anterior vai para o histórico quando for SRT)</label>`;
+    const commonLanguage = `<label>Idioma da legenda<input id="subtitleToolLanguage" type="text" value="${esc(languageValue)}" placeholder="Ex.: en, pt-BR, es"></label>`;
+    const replace = `<label class="check-row"><input id="subtitleToolReplace" type="checkbox"> Substituir se já existir</label>`;
     let content = '';
     if (action.kind === 'translate') {
       const translation = state.advancedStatus?.translation || {};
-      content = `<h5>Traduzir ${esc(trackName)}</h5><p>A mesma engine Gemini das Bibliotecas será usada aqui. O SRT de origem é preservado.</p>${translation.configured ? '' : '<div class="subtitle-manager-inline-warning">A tradução Gemini ainda não está configurada. Configure a API em Configurações → Tradução de legendas.</div>'}<div class="subtitle-tool-form-grid"><label>Idioma de origem<input id="subtitleToolSourceLanguage" type="text" value="${esc(languageValue)}" placeholder="Ex.: en"></label><label>Idioma de destino<select id="subtitleToolTargetLanguage">${TARGET_LANGUAGES.map((entry) => `<option value="${entry.value}" ${entry.value === (translation.defaultTargetLanguage || 'pt-BR') ? 'selected' : ''}>${entry.label}</option>`).join('')}</select></label><label>Arquivos de saída<select id="subtitleToolOutputMode"><option value="translated" ${translation.defaultOutputMode === 'translated' ? 'selected' : ''}>Somente traduzida</option><option value="bilingual" ${translation.defaultOutputMode === 'bilingual' ? 'selected' : ''}>Somente bilíngue</option><option value="both" ${translation.defaultOutputMode === 'both' ? 'selected' : ''}>Traduzida + bilíngue</option></select></label></div>${replace}<div class="inline-actions"><button type="button" class="small" data-subtitle-tool-close>Cancelar</button><button type="button" class="small primary" data-subtitle-tool-submit ${translation.configured ? '' : 'disabled'}>Iniciar tradução</button></div>`;
+      content = `<div class="subtitle-manager-title-with-help"><h5>Traduzir legenda</h5>${helpHint('Tradução', 'A tradução usa a mesma configuração Gemini das Bibliotecas. A legenda atual é preservada e o resultado é salvo em outro arquivo, a menos que você escolha substituir um destino existente.')}</div>${translation.configured ? '' : '<div class="subtitle-manager-inline-warning">A tradução ainda não está configurada. Abra Configurações → Tradução de legendas.</div>'}<div class="subtitle-tool-form-grid"><label>Idioma atual<input id="subtitleToolSourceLanguage" type="text" value="${esc(languageValue)}" placeholder="Ex.: en"></label><label>Traduzir para<select id="subtitleToolTargetLanguage">${TARGET_LANGUAGES.map((entry) => `<option value="${entry.value}" ${entry.value === (translation.defaultTargetLanguage || 'pt-BR') ? 'selected' : ''}>${entry.label}</option>`).join('')}</select></label><label>Resultado<select id="subtitleToolOutputMode"><option value="translated" ${translation.defaultOutputMode === 'translated' ? 'selected' : ''}>Somente tradução</option><option value="bilingual" ${translation.defaultOutputMode === 'bilingual' ? 'selected' : ''}>Original + tradução</option><option value="both" ${translation.defaultOutputMode === 'both' ? 'selected' : ''}>Criar os dois</option></select></label></div>${replace}<div class="inline-actions"><button type="button" class="small" data-subtitle-tool-close>Cancelar</button><button type="button" class="small primary" data-subtitle-tool-submit ${translation.configured ? '' : 'disabled'}>Traduzir</button></div>`;
     } else if (action.kind === 'ocr') {
       const tesseract = state.advancedStatus?.tesseract || {};
-      content = `<h5>Converter PGS em texto (OCR)</h5><p>PGS é uma legenda formada por imagens. O Tesseract vai reconhecer cada quadro e criar um SRT editável; revise o resultado, pois OCR pode confundir caracteres.</p>${tesseract.available ? '' : '<div class="subtitle-manager-inline-warning">Tesseract não está disponível ou não possui idiomas instalados.</div>'}${commonLanguage}${replace}<div class="inline-actions"><button type="button" class="small" data-subtitle-tool-close>Cancelar</button><button type="button" class="small primary" data-subtitle-tool-submit ${tesseract.available ? '' : 'disabled'}>Iniciar OCR</button></div>`;
+      content = `<div class="subtitle-manager-title-with-help"><h5>Transformar legenda em texto</h5>${helpHint('Legenda em imagem', 'Algumas legendas de Blu-ray são imagens dentro do vídeo. O aplicativo usa reconhecimento de texto para criar uma legenda editável. O resultado deve ser revisado porque letras parecidas podem ser confundidas.')}</div>${tesseract.available ? '' : '<div class="subtitle-manager-inline-warning">O reconhecimento de texto não está disponível. Confira o Tesseract em Configurações.</div>'}${commonLanguage}${replace}<div class="inline-actions"><button type="button" class="small" data-subtitle-tool-close>Cancelar</button><button type="button" class="small primary" data-subtitle-tool-submit ${tesseract.available ? '' : 'disabled'}>Transformar em texto</button></div>`;
     } else if (action.kind === 'extract') {
-      content = `<h5>${action.convertToSrt ? 'Extrair como SRT editável' : 'Extrair faixa embutida'}</h5><p>Será criado um arquivo de legenda ao lado do vídeo. O MKV/MP4 original não será modificado.</p>${commonLanguage}${replace}<div class="inline-actions"><button type="button" class="small" data-subtitle-tool-close>Cancelar</button><button type="button" class="small primary" data-subtitle-tool-submit>Extrair legenda</button></div>`;
+      content = `<div class="subtitle-manager-title-with-help"><h5>${action.convertToSrt ? 'Extrair para editar' : 'Salvar legenda separadamente'}</h5>${helpHint('Extração', 'A legenda que está dentro do arquivo de vídeo será salva como um arquivo separado na mesma pasta. O vídeo original não será modificado.')}</div>${commonLanguage}${replace}<div class="inline-actions"><button type="button" class="small" data-subtitle-tool-close>Cancelar</button><button type="button" class="small primary" data-subtitle-tool-submit>Extrair legenda</button></div>`;
     } else if (action.kind === 'convert') {
-      content = `<h5>Criar cópia SRT</h5><p>O arquivo ${esc(String(action.format || '').toUpperCase())} original será preservado. Recursos de estilo, posição, karaokê ou efeitos que não existem em SRT podem ser simplificados.</p>${commonLanguage}${replace}<div class="inline-actions"><button type="button" class="small" data-subtitle-tool-close>Cancelar</button><button type="button" class="small primary" data-subtitle-tool-submit>Criar SRT editável</button></div>`;
+      content = `<div class="subtitle-manager-title-with-help"><h5>Criar cópia editável</h5>${helpHint('Cópia editável', 'Será criada uma cópia em um formato simples de legenda que pode ser editado pelo aplicativo. O arquivo original é preservado. Estilos, posições ou efeitos especiais podem não existir na cópia.')}</div>${commonLanguage}${replace}<div class="inline-actions"><button type="button" class="small" data-subtitle-tool-close>Cancelar</button><button type="button" class="small primary" data-subtitle-tool-submit>Criar cópia editável</button></div>`;
     } else if (action.kind === 'remux-add') {
-      content = `<h5>Adicionar legenda a uma cópia MKV</h5><p>O aplicativo criará um novo MKV com todos os streams originais e esta legenda externa. Vídeo e áudio serão copiados sem recodificação; o arquivo original ficará intacto.</p><div class="inline-actions"><button type="button" class="small" data-subtitle-tool-close>Cancelar</button><button type="button" class="small primary" data-subtitle-tool-submit>Criar cópia MKV</button></div>`;
+      content = `<div class="subtitle-manager-title-with-help"><h5>Criar cópia do vídeo com esta legenda</h5>${helpHint('Cópia do vídeo', 'O aplicativo cria um novo arquivo de vídeo com esta legenda incluída. O vídeo original permanece intacto e não é substituído.')}</div><div class="inline-actions"><button type="button" class="small" data-subtitle-tool-close>Cancelar</button><button type="button" class="small primary" data-subtitle-tool-submit>Criar cópia</button></div>`;
     } else if (action.kind === 'remux-remove') {
-      content = `<h5>Criar cópia sem esta faixa</h5><p>Será criado um novo MKV mantendo os demais streams, capítulos e metadados. O arquivo original não será substituído.</p><div class="inline-actions"><button type="button" class="small" data-subtitle-tool-close>Cancelar</button><button type="button" class="small primary" data-subtitle-tool-submit>Criar cópia MKV</button></div>`;
+      content = `<div class="subtitle-manager-title-with-help"><h5>Criar cópia sem esta legenda</h5>${helpHint('Remover de uma cópia', 'O aplicativo cria um novo arquivo sem esta legenda e preserva o arquivo original.')}</div><div class="inline-actions"><button type="button" class="small" data-subtitle-tool-close>Cancelar</button><button type="button" class="small primary" data-subtitle-tool-submit>Criar cópia</button></div>`;
     }
     return `<div class="subtitle-tool-action-card">${content}</div>`;
   }
 
   function advancedToolsSectionHtml() {
-    if (!isWorkspaceMode()) return '';
-    return `<section class="subtitle-manager-section subtitle-workspace-advanced-tools"><div class="subtitle-manager-section-head"><div><h4>Ferramentas da faixa</h4><p>Extraia, converta, traduza, faça OCR ou crie uma nova cópia MKV sem sair do editor.</p></div></div><div id="subtitleManagerToolActionArea">${toolActionHtml()}</div></section>`;
+    if (!isWorkspaceMode() || (!state.toolAction && !state.activeJob)) return '';
+    return `<section class="subtitle-manager-section subtitle-workspace-advanced-tools"><div class="subtitle-manager-section-head"><div class="subtitle-manager-title-with-help"><h4>Outras ações</h4>${helpHint('Outras ações', 'Aqui ficam as funções menos usadas: extrair uma legenda de dentro do vídeo, criar uma cópia editável, traduzir, transformar uma legenda em imagem em texto ou criar uma nova cópia do vídeo.')}</div></div><div id="subtitleManagerToolActionArea">${toolActionHtml()}</div></section>`;
   }
 
   function localTrackRows() {
     const tracks = state.status?.tracks || [];
-    if (!tracks.length) return '<div class="subtitle-manager-empty">Nenhuma legenda local ou embutida foi detectada. Se o vídeo tiver uma faixa interna, confira se o FFprobe conseguiu analisá-la.</div>';
+    if (!tracks.length) return '<div class="subtitle-manager-empty">Nenhuma legenda foi encontrada neste vídeo.</div>';
     return tracks.map((track) => {
       const trackId = track.trackId || track.language;
       const isPreviewing = state.preview?.kind === 'local' && (state.preview.trackId || state.preview.language) === trackId;
@@ -557,30 +679,36 @@
       if (editable) {
         primary.push(`<button type="button" class="small subtitle-preview-button ${isPreviewing ? 'is-previewing' : ''}" aria-pressed="${isPreviewing ? 'true' : 'false'}" data-subtitle-local-preview="${esc(trackId)}">${isPreviewing ? 'Em teste no player' : 'Testar no player'}</button>`);
         if (isWorkspaceMode()) primary.push(`<button type="button" class="small" data-subtitle-tool-open="translate" data-track-id="${esc(trackId)}">Traduzir</button>`);
-        if (isWorkspaceMode()) secondary.push(`<button type="button" class="small" data-subtitle-tool-open="remux-add" data-track-id="${esc(trackId)}">Adicionar a uma cópia MKV</button>`);
+        if (isWorkspaceMode()) secondary.push(`<button type="button" class="small" data-subtitle-tool-open="remux-add" data-track-id="${esc(trackId)}">Criar cópia do vídeo com esta legenda</button>`);
         secondary.push(`<button type="button" class="small danger" data-subtitle-local-delete="${esc(trackId)}" ${!state.status?.canApply ? 'disabled' : ''}>Excluir legenda</button>`);
       } else if (isWorkspaceMode()) {
         if (track.embedded && textFormat) {
-          primary.push(`<button type="button" class="small primary" data-subtitle-tool-open="extract-srt" data-track-id="${esc(trackId)}">Extrair como SRT</button>`);
+          primary.push(`<button type="button" class="small primary" data-subtitle-tool-open="extract-srt" data-track-id="${esc(trackId)}">Extrair para editar</button>`);
           const originalExt = String(track.format || '').toLowerCase();
           if (originalExt !== 'srt' && originalExt !== 'subrip' && originalExt !== 'mov_text' && originalExt !== 'text') {
-            secondary.push(`<button type="button" class="small" data-subtitle-tool-open="extract-original" data-track-id="${esc(trackId)}">Extrair ${esc(String(track.format || '').toUpperCase())}</button>`);
+            secondary.push(`<button type="button" class="small" data-subtitle-tool-open="extract-original" data-track-id="${esc(trackId)}">Salvar no formato original</button>`);
           }
         } else if (!track.embedded && textFormat && String(track.format || '').toLowerCase() !== 'srt') {
-          primary.push(`<button type="button" class="small primary" data-subtitle-tool-open="convert" data-track-id="${esc(trackId)}">Criar SRT editável</button>`);
+          primary.push(`<button type="button" class="small primary" data-subtitle-tool-open="convert" data-track-id="${esc(trackId)}">Criar cópia editável</button>`);
         }
         if (pgs) {
-          primary.push(`<button type="button" class="small primary" data-subtitle-tool-open="ocr" data-track-id="${esc(trackId)}">OCR para SRT</button>`);
-          if (track.embedded) secondary.push(`<button type="button" class="small" data-subtitle-tool-open="extract-original" data-track-id="${esc(trackId)}">Extrair PGS</button>`);
+          primary.push(`<button type="button" class="small primary" data-subtitle-tool-open="ocr" data-track-id="${esc(trackId)}">Transformar em texto</button>`);
+          if (track.embedded) secondary.push(`<button type="button" class="small" data-subtitle-tool-open="extract-original" data-track-id="${esc(trackId)}">Salvar no formato original</button>`);
         }
         if (track.embedded && Number.isInteger(streamIndex)) {
-          secondary.push(`<button type="button" class="small" data-subtitle-tool-open="remux-remove" data-track-id="${esc(trackId)}">Criar cópia sem esta faixa</button>`);
+          secondary.push(`<button type="button" class="small" data-subtitle-tool-open="remux-remove" data-track-id="${esc(trackId)}">Criar cópia sem esta legenda</button>`);
         }
       }
-      const readOnlyReason = track.embedded ? 'Embutida no vídeo' : (editable ? 'SRT editável' : 'Formato somente leitura');
+      const locationLabel = track.embedded ? 'Dentro do vídeo' : 'Arquivo separado';
+      const editLabel = editable ? 'Pode ser editada' : 'Somente leitura';
+      const technicalDetails = [
+        `Formato: ${String(track.format || 'desconhecido').toUpperCase()}.`,
+        track.embedded ? `Faixa interna ${Number.isInteger(streamIndex) ? `#${streamIndex}` : ''}.` : `Arquivo: ${track.fileName || trackId}.`,
+        (track.flags || []).length ? `Marcadores: ${(track.flags || []).join(', ')}.` : ''
+      ].filter(Boolean).join(' ');
       return `
       <div class="subtitle-manager-track ${isPreviewing ? 'is-previewing' : ''} ${editable ? '' : 'is-readonly'}">
-        <div><strong>${esc(localTrackTitle(track))}</strong><small>${esc(localTrackSubtitle(track))} · ${esc(readOnlyReason)}</small></div>
+        <div class="subtitle-track-copy"><div class="subtitle-manager-title-with-help"><strong>${esc(localTrackTitle(track))}</strong>${helpHint('Detalhes técnicos', technicalDetails)}</div><small>${esc(locationLabel)} · ${esc(editLabel)}</small></div>
         <div class="subtitle-track-actions">
           <div class="inline-actions">${primary.join('') || '<span class="badge">Somente leitura</span>'}</div>
           ${secondary.length ? `<details class="subtitle-track-more"><summary>Mais ações</summary><div class="inline-actions">${secondary.join('')}</div></details>` : ''}
@@ -592,11 +720,11 @@
   function historyRows() {
     const trackId = state.activeLocalTrackId;
     const entries = trackId && state.status?.history ? state.status.history[trackId] || [] : [];
-    if (!trackId) return '<div class="subtitle-manager-empty">Selecione uma legenda local para visualizar o histórico.</div>';
+    if (!trackId) return '<div class="subtitle-manager-empty">Selecione uma legenda para ver versões anteriores.</div>';
     if (!entries.length) return '<div class="subtitle-manager-empty">Nenhuma versão anterior registrada para esta faixa.</div>';
     return entries.map((entry) => `
       <div class="subtitle-manager-history-row">
-        <div><strong>${esc(entry.sourceLabel || 'Versão anterior')}</strong><small>${esc(entry.createdAt ? new Date(entry.createdAt).toLocaleString('pt-BR') : '')} · offset ${esc(formatOffset(entry.lastAppliedOffsetMs || 0))}</small></div>
+        <div><strong>${esc(entry.sourceLabel || 'Versão anterior')}</strong><small>${esc(entry.createdAt ? new Date(entry.createdAt).toLocaleString('pt-BR') : '')} · ajuste ${esc(formatOffset(entry.lastAppliedOffsetMs || 0))}</small></div>
         <button type="button" class="small" data-subtitle-history-restore="${esc(entry.id)}" data-track-id="${esc(trackId)}" ${entry.valid === false ? 'disabled title="Arquivo histórico ausente"' : ''}>Restaurar</button>
       </div>`).join('');
   }
@@ -670,47 +798,53 @@
     ensureAudioSelection();
     if (useLiveCompatibilityPlayback()) state.liveStreamBaseSeconds = Math.max(0, Number(state.playerTime) || 0);
     const tracks = state.status.tracks || [];
-    const current = tracks.length ? tracks.map((track) => `${localTrackTitle(track)}: ${track.sourceLabel}`).join(' · ') : 'Sem legenda';
+    const editableCount = tracks.filter((track) => track.editable !== false && !track.embedded).length;
+    const embeddedCount = tracks.filter((track) => track.embedded).length;
+    const current = tracks.length
+      ? `${tracks.length} legenda(s) encontrada(s)${editableCount ? ` · ${editableCount} pronta(s) para editar` : ''}${embeddedCount ? ` · ${embeddedCount} dentro do vídeo` : ''}`
+      : 'Nenhuma legenda encontrada';
     const hasProviders = Boolean(state.status?.providers?.youtube?.available || state.status?.providers?.lrclib?.available);
     root.innerHTML = `
       <div class="subtitle-manager-head">
-        <div><span class="page-kicker">Legendas</span><h3>Gerenciador de legendas</h3><p>${esc(current)}</p></div>
+        <div><span class="page-kicker">Legendas</span><h3>Editar e revisar</h3><p>${esc(current)}</p></div>
         <button type="button" class="small" data-subtitle-manager-close>Fechar gerenciador</button>
       </div>
+
+      <div id="subtitleManagerOperationStatus" class="subtitle-operation-host ${state.operation ? '' : 'hidden'}">${operationStatusHtml()}</div>
 
       <div class="subtitle-manager-player-card">
         ${state.status.mediaAvailable ? `
           <video id="subtitleManagerVideo" controls preload="metadata" playsinline></video>
           <div class="subtitle-manager-player-meta">
             <span id="subtitleManagerPreviewLabel">${state.preview ? esc(`${state.preview.sourceLabel || 'Prévia'} · ${state.preview.language || state.targetLanguage}`) : 'Nenhuma faixa em prévia'}</span>
-            <span class="subtitle-manager-player-note">O player é apenas para conferência; o arquivo original não é alterado.</span>
+            <span class="subtitle-manager-player-note">Use o player para conferir antes de salvar.</span>
           </div>
           ${liveTimelineHtml()}
-          ${playerCompatibilityHtml()}` : '<div class="subtitle-manager-empty">Arquivo de vídeo local indisponível para reprodução.</div>'}
+          ${playerCompatibilityHtml()}` : '<div class="subtitle-manager-empty">O arquivo de vídeo não está disponível para reprodução.</div>'}
       </div>
 
       ${visualizationHtml()}
 
       <div class="subtitle-manager-grid">
         <section class="subtitle-manager-section">
-          <div class="subtitle-manager-section-head"><div><h4>Legendas encontradas</h4><p>Teste SRTs diretamente no player ou use as ferramentas de extração, conversão, OCR e remux.</p></div></div>
+          <div class="subtitle-manager-section-head"><div class="subtitle-manager-title-with-help"><h4>Legendas encontradas</h4>${helpHint('Tipos de legenda', 'Legendas em arquivos separados normalmente podem ser testadas e editadas diretamente. Legendas que ficam dentro do vídeo podem ser extraídas primeiro. Formatos baseados em imagem precisam ser transformados em texto antes da edição.')}</div></div>
           <div id="subtitleManagerLocalTracks">${localTrackRows()}</div>
         </section>
         <section class="subtitle-manager-section">
-          <div class="subtitle-manager-section-head"><div><h4>Sincronização rápida</h4><p>Para uma legenda correta que está apenas adiantada ou atrasada por um valor fixo.</p></div></div>
+          <div class="subtitle-manager-section-head"><div class="subtitle-manager-title-with-help"><h4>Ajuste rápido</h4>${helpHint('Ajuste rápido', 'Use quando toda a legenda está adiantada ou atrasada pelo mesmo tempo. Teste no player e salve somente quando estiver satisfeito.')}</div></div>
           <div class="subtitle-manager-offset">
             <div class="inline-actions">
               <button type="button" class="small" data-subtitle-offset="-1000">Adiantar 1 s</button>
               <button type="button" class="small" data-subtitle-offset="-100">Adiantar 100 ms</button>
-              <button type="button" class="small" data-subtitle-offset-reset>Reset</button>
+              <button type="button" class="small" data-subtitle-offset-reset>Voltar ao zero</button>
               <button type="button" class="small" data-subtitle-offset="100">Atrasar 100 ms</button>
               <button type="button" class="small" data-subtitle-offset="1000">Atrasar 1 s</button>
             </div>
-            <label>Offset de teste
+            <label>Ajuste em segundos
               <input id="subtitleManagerOffsetInput" type="number" step="0.001" min="-1800" max="1800" value="${(state.previewOffsetMs / 1000).toFixed(3)}">
             </label>
             <strong id="subtitleManagerOffsetValue">${esc(formatOffset(state.previewOffsetMs))}</strong>
-            <button id="subtitleManagerSaveOffset" type="button" class="small primary" disabled>Salvar ajuste na legenda ativa</button>
+            <button id="subtitleManagerSaveOffset" type="button" class="small primary" disabled>Salvar ajuste</button>
           </div>
         </section>
       </div>
@@ -720,15 +854,15 @@
       ${cueEditorHtml()}
 
       ${hasProviders ? `<section class="subtitle-manager-section subtitle-manager-search">
-        <h4>Pesquisar outra legenda</h4>
+        <div class="subtitle-manager-title-with-help"><h4>Buscar outra legenda</h4>${helpHint('Busca de legendas', 'Esta área consulta as fontes configuradas no aplicativo. Você pode testar um resultado no player antes de aplicá-lo.')}</div>
         ${providerControls()}
         <div id="subtitleManagerResults" class="subtitle-manager-results">${resultRows()}</div>
       </section>` : ''}
 
-      <section class="subtitle-manager-section">
-        <h4>Histórico da faixa</h4>
-        <div id="subtitleManagerHistory">${historyRows()}</div>
-      </section>`;
+      <details class="subtitle-manager-section subtitle-manager-collapsible">
+        <summary><span>Versões anteriores</span><small>Histórico</small></summary>
+        <div class="subtitle-manager-collapsible-body"><div class="subtitle-manager-title-with-help"><span>Histórico da legenda</span>${helpHint('Versões anteriores', 'Antes de alterações importantes, o aplicativo preserva uma versão da legenda para que você possa voltar atrás.')}</div><div id="subtitleManagerHistory">${historyRows()}</div></div>
+      </details>`;
     root.classList.remove('hidden');
     state.opened = true;
     if (state.status.mediaAvailable) {
@@ -805,6 +939,7 @@
     clearTextTrack();
     if (state.jobTimer) clearTimeout(state.jobTimer);
     state.jobTimer = null;
+    stopOperationTimers();
     state.preview = null;
     state.previewOffsetMs = 0;
     state.previewToken = '';
@@ -821,6 +956,7 @@
     state.syncPoints = { a: { subtitleMs: null, mediaMs: null }, b: { subtitleMs: null, mediaMs: null } };
     state.toolAction = null;
     state.activeJob = null;
+    state.operation = null;
     state.playerTime = 0;
     state.liveStreamBaseSeconds = 0;
     state.liveStreamActive = false;
@@ -918,9 +1054,9 @@
         const decision = await state.showDialog({ eyebrow: 'Legendas', title: `Substituir legenda ${language}`, message: 'A legenda atual será preservada no histórico antes da substituição.', confirmLabel: 'Aplicar e preservar anterior' });
         if (!decision.confirmed) return;
       }
-      await state.api(`${state.endpointBase}/subtitle-apply`, {
+      await withOperation({ key: 'apply-candidate', label: 'Aplicando legenda', message: 'Salvando a legenda escolhida...', successMessage: 'Legenda aplicada.' }, () => state.api(`${state.endpointBase}/subtitle-apply`, {
         method: 'POST', body: JSON.stringify({ itemId: state.item.id, provider: state.provider, candidateId: candidate.candidateId, language, offsetMs })
-      });
+      }));
       toast(`Legenda ${language} aplicada com sucesso.`);
       state.activeLocalTrackId = language;
       state.preview = null; state.previewOffsetMs = 0;
@@ -936,9 +1072,9 @@
     try {
       const trackId = state.activeLocalTrackId;
       const delta = state.previewOffsetMs;
-      await state.api(`${state.endpointBase}/subtitle-offset`, {
+      await withOperation({ key: 'save-offset', label: 'Salvando ajuste', message: 'Atualizando os horários da legenda...', successMessage: 'Ajuste salvo.' }, () => state.api(`${state.endpointBase}/subtitle-offset`, {
         method: 'POST', body: JSON.stringify({ itemId: state.item.id, trackId, language: trackId, offsetMs: delta, expectedFingerprint: state.preview.fingerprint || null })
-      });
+      }));
       toast(`Sincronização ${formatOffset(delta)} salva.`);
       state.preview = null; state.previewOffsetMs = 0;
       await refreshStatus(); render(); await previewLocal(trackId);
@@ -961,7 +1097,7 @@
     if (!confirmed) return;
     try {
       const expectedFingerprint = state.preview?.kind === 'local' && state.activeLocalTrackId === trackId ? state.preview.fingerprint || null : null;
-      await state.api(`${state.endpointBase}/subtitle-restore`, { method: 'POST', body: JSON.stringify({ itemId: state.item.id, trackId, language: trackId, historyId, expectedFingerprint }) });
+      await withOperation({ key: 'restore-subtitle', label: 'Restaurando versão', message: 'Recuperando a versão escolhida...', successMessage: 'Versão restaurada.' }, () => state.api(`${state.endpointBase}/subtitle-restore`, { method: 'POST', body: JSON.stringify({ itemId: state.item.id, trackId, language: trackId, historyId, expectedFingerprint }) }));
       toast('Versão anterior restaurada.');
       state.activeLocalTrackId = trackId; state.preview = null; state.previewOffsetMs = 0;
       await refreshStatus(); render(); await previewLocal(trackId);
@@ -984,9 +1120,9 @@
     if (!confirmed) return;
     try {
       const expectedFingerprint = state.preview?.kind === 'local' && state.activeLocalTrackId === trackId ? state.preview.fingerprint || null : null;
-      const response = await state.api(`${state.endpointBase}/subtitle-delete`, {
+      const response = await withOperation({ key: 'delete-subtitle', label: 'Excluindo legenda', message: 'Preservando uma versão anterior e removendo o arquivo...', successMessage: 'Legenda excluída.' }, () => state.api(`${state.endpointBase}/subtitle-delete`, {
         method: 'POST', body: JSON.stringify({ itemId: state.item.id, trackId, language: trackId, expectedFingerprint })
-      });
+      }));
       stopPlayer(); clearTextTrack(); state.preview = null; state.previewOffsetMs = 0;
       state.activeLocalTrackId = response.result?.historyCount ? trackId : '';
       await refreshStatus(); render();
@@ -1000,7 +1136,7 @@
       const button = $('#subtitleManagerCompatiblePreview');
       if (button) { button.disabled = true; button.textContent = 'Criando prévia...'; }
       try {
-        const response = await state.api(`${state.endpointBase}/content-preview-create`, { method: 'POST', body: JSON.stringify({ itemId: state.item.id }) });
+        const response = await withOperation({ key: 'preview', label: 'Preparando reprodução', message: 'Criando uma versão temporária compatível...', successMessage: 'Versão temporária pronta.' }, () => state.api(`${state.endpointBase}/content-preview-create`, { method: 'POST', body: JSON.stringify({ itemId: state.item.id }) }));
         state.previewToken = response.result?.token || '';
         loadPlayerSource();
         toast('Prévia compatível criada.');
@@ -1012,23 +1148,23 @@
     const copyVideo = options.forceFull ? false : Boolean(probe.playback?.copyVideoPossible);
     const key = `${state.item?.id || ''}:${state.audioStreamIndex ?? 'default'}:${copyVideo ? 'copy' : 'full'}`;
     const button = $('#subtitleManagerCompatiblePreview');
-    if (button) { button.disabled = true; button.textContent = copyVideo ? 'Preparando áudio compatível...' : 'Criando prévia H.264 + AAC...'; }
+    if (button) { button.disabled = true; button.textContent = 'Preparando...'; }
     try {
-      const response = await state.api(`${state.endpointBase}/content-preview-create`, {
+      const response = await withOperation({ key: 'compatible-preview', label: 'Preparando reprodução', message: copyVideo ? 'Ajustando o áudio para o navegador...' : 'Criando uma versão temporária para reprodução...', successMessage: 'Versão temporária pronta.' }, () => state.api(`${state.endpointBase}/content-preview-create`, {
         method: 'POST',
         body: JSON.stringify({ itemId: state.item.id, audioStreamIndex: state.audioStreamIndex, copyVideo })
-      });
+      }));
       state.previewToken = response.result?.token || '';
       state.compatibilityKey = key;
       loadPlayerSource();
-      if (!options.silent) toast(response.result?.metadata?.mode === 'full-transcode' || response.result?.mode === 'full-transcode' ? 'Prévia H.264 + AAC criada.' : 'Áudio compatível preparado.');
+      if (!options.silent) toast(response.result?.metadata?.mode === 'full-transcode' || response.result?.mode === 'full-transcode' ? 'Versão temporária para reprodução criada.' : 'Áudio preparado para reprodução.');
       const copy = $('.subtitle-manager-playback-copy');
-      if (copy) copy.innerHTML = '<strong>Compatibilidade de reprodução</strong><span>Prévia compatível ativa. O arquivo original permanece intocado.</span>';
-      if (button) { button.textContent = 'Recriar prévia compatível'; button.disabled = false; }
+      if (copy) copy.innerHTML = '<div class="subtitle-manager-title-with-help"><strong>Reprodução</strong></div><span>Uma versão temporária compatível está em uso. O arquivo original não foi alterado.</span>';
+      if (button) { button.textContent = 'Recriar versão temporária'; button.disabled = false; }
     } catch (error) {
       if (!options.silent) toast(error.message, true);
       else throw error;
-      if (button) { button.disabled = false; button.textContent = 'Tentar prévia compatível'; }
+      if (button) { button.disabled = false; button.textContent = 'Tentar novamente'; }
     }
   }
 
@@ -1046,12 +1182,13 @@
   async function createVisualization(kind) {
     if (!isWorkspaceMode()) return;
     const button = document.querySelector(`[data-subtitle-visualization="${kind}"]`);
-    if (button) { button.disabled = true; button.textContent = 'Gerando...'; }
+    const friendlyName = kind === 'spectrogram' ? 'mapa de frequências' : 'forma de onda';
+    if (button) { button.disabled = true; button.textContent = 'Criando...'; }
     try {
-      const response = await state.api(`${state.endpointBase}/audio-visualization-create`, {
+      const response = await withOperation({ key: `visualization-${kind}`, label: `Criando ${friendlyName}`, message: 'Lendo o áudio do vídeo. Em arquivos remotos isso pode levar mais tempo...', successMessage: `${friendlyName.charAt(0).toUpperCase()}${friendlyName.slice(1)} pronto.` }, () => state.api(`${state.endpointBase}/audio-visualization-create`, {
         method: 'POST',
         body: JSON.stringify({ itemId: state.item.id, audioStreamIndex: state.audioStreamIndex, kind })
-      });
+      }));
       const key = `${kind}:${state.audioStreamIndex == null ? 'default' : state.audioStreamIndex}`;
       state.visualizationTokens[key] = response.result?.token || '';
       const section = $('.subtitle-manager-audio-tools');
@@ -1101,16 +1238,16 @@
     for (let index = 0; index < state.cueDraft.length; index += 1) {
       const cue = state.cueDraft[index];
       if (!String(cue.text || '').trim() || !Number.isFinite(Number(cue.startMs)) || !Number.isFinite(Number(cue.endMs)) || Number(cue.endMs) <= Number(cue.startMs)) {
-        return toast(`Confira o cue #${index + 1}: o texto precisa existir e o fim deve ser posterior ao início.`, true);
+        return toast(`Confira o trecho #${index + 1}: o texto precisa existir e o fim deve ser posterior ao início.`, true);
       }
     }
     const button = $('#subtitleManagerSaveCues');
     if (button) { button.disabled = true; button.textContent = 'Salvando...'; }
     try {
-      await state.api(`${state.endpointBase}/subtitle-cues-save`, {
+      await withOperation({ key: 'save-cues', label: 'Salvando alterações', message: 'Atualizando o arquivo de legenda...', successMessage: 'Alterações salvas.' }, () => state.api(`${state.endpointBase}/subtitle-cues-save`, {
         method: 'POST', body: JSON.stringify({ itemId: state.item.id, trackId: state.activeLocalTrackId, cues: state.cueDraft, expectedFingerprint: state.preview.fingerprint || null })
-      });
-      toast('Alterações dos cues salvas. A versão anterior foi preservada no histórico.');
+      }));
+      toast('Alterações salvas. A versão anterior foi preservada no histórico.');
       const trackId = state.activeLocalTrackId;
       state.preview = null; state.cueDirty = false;
       await refreshStatus();
@@ -1123,7 +1260,7 @@
   }
 
   function syncPayload(mode) {
-    if (!state.preview || state.preview.kind !== 'local') throw new Error('Abra um SRT editável antes de usar a sincronização avançada.');
+    if (!state.preview || state.preview.kind !== 'local') throw new Error('Abra uma legenda editável antes de usar o ajuste avançado.');
     if (mode === 'two-point') {
       const values = ['a', 'b'].map((key) => state.syncPoints[key]);
       if (values.some((point) => !Number.isFinite(Number(point.subtitleMs)) || !Number.isFinite(Number(point.mediaMs)))) throw new Error('Preencha os dois tempos da legenda e do vídeo nos pontos A e B.');
@@ -1140,9 +1277,9 @@
     try {
       const payload = syncPayload(mode);
       state.previewOffsetMs = 0;
-      const response = await state.api(`${state.endpointBase}/subtitle-timing-preview`, {
+      const response = await withOperation({ key: 'timing-preview', label: 'Calculando ajuste', message: 'Preparando uma prévia sem alterar o arquivo...', successMessage: 'Prévia pronta para conferir.' }, () => state.api(`${state.endpointBase}/subtitle-timing-preview`, {
         method: 'POST', body: JSON.stringify({ itemId: state.item.id, trackId: state.activeLocalTrackId, expectedFingerprint: state.preview.fingerprint || null, ...payload })
-      });
+      }));
       state.timingPreview = { ...(response.result || {}), cues: cloneCues(response.result?.cues || []) };
       render();
       renderPreviewCues();
@@ -1162,9 +1299,9 @@
       const payload = state.timingPreview.mode === 'two-point'
         ? { mode: 'two-point', pointA: state.timingPreview.pointA, pointB: state.timingPreview.pointB }
         : { mode: 'fps', sourceFps: state.timingPreview.sourceFps, targetFps: state.timingPreview.targetFps };
-      await state.api(`${state.endpointBase}/subtitle-timing-apply`, {
+      await withOperation({ key: 'timing-apply', label: 'Salvando sincronização', message: 'Aplicando os novos horários à legenda...', successMessage: 'Sincronização salva.' }, () => state.api(`${state.endpointBase}/subtitle-timing-apply`, {
         method: 'POST', body: JSON.stringify({ itemId: state.item.id, trackId: state.activeLocalTrackId, expectedFingerprint: state.preview.fingerprint || null, ...payload })
-      });
+      }));
       const trackId = state.activeLocalTrackId;
       state.timingPreview = null; state.preview = null; state.previewOffsetMs = 0;
       toast('Sincronização avançada aplicada. A versão anterior ficou no histórico.');
@@ -1176,7 +1313,7 @@
 
   function captureSyncCue(point) {
     const cue = state.cueDraft[state.selectedCueIndex];
-    if (!cue) return toast('Selecione um cue no editor primeiro.', true);
+    if (!cue) return toast('Selecione um trecho no editor primeiro.', true);
     state.syncPoints[point].subtitleMs = Number(cue.startMs);
     render();
   }
@@ -1228,6 +1365,10 @@
     try {
       const response = await state.api(`${state.endpointBase}/jobs/${encodeURIComponent(jobId)}`);
       state.activeJob = response.result || null;
+      if (state.activeJob) {
+        const progress = state.activeJob.progress || {};
+        updateOperation(progress.message || 'Processando...', Number.isFinite(Number(progress.percent)) ? Number(progress.percent) : null);
+      }
       const area = $('#subtitleManagerToolActionArea');
       if (area) area.innerHTML = toolActionHtml();
       if (state.activeJob && ['queued', 'running'].includes(state.activeJob.status)) {
@@ -1235,22 +1376,37 @@
         return;
       }
       if (state.activeJob?.status === 'completed') {
-        toast(state.activeJob.kind === 'translate' ? 'Tradução concluída.' : state.activeJob.kind === 'ocr-pgs' ? 'OCR concluído.' : 'Cópia MKV criada com sucesso.');
+        const finishedMessage = state.activeJob.kind === 'translate' ? 'Tradução concluída.' : state.activeJob.kind === 'ocr-pgs' ? 'Legenda transformada em texto.' : 'Cópia do vídeo criada.';
+        finishOperation(finishedMessage);
+        toast(finishedMessage);
         await refreshStatus();
         render();
         await notifyContentChanged({ action: state.activeJob.kind });
       } else if (state.activeJob?.status === 'failed') {
+        finishOperation(state.activeJob.error || 'Não foi possível concluir a operação.', { failed: true, keepMs: 0 });
         toast(state.activeJob.error || 'A tarefa avançada falhou.', true);
       }
-    } catch (error) { toast(error.message, true); }
+    } catch (error) {
+      finishOperation(error.message, { failed: true, keepMs: 0 });
+      toast(error.message, true);
+    }
   }
 
   async function startAdvancedJob(url, payload) {
-    const response = await state.api(url, { method: 'POST', body: JSON.stringify(payload) });
-    state.activeJob = response.result || null;
-    const area = $('#subtitleManagerToolActionArea');
-    if (area) area.innerHTML = toolActionHtml();
-    if (state.activeJob?.id) await pollAdvancedJob(state.activeJob.id);
+    const action = state.toolAction?.kind;
+    const label = action === 'translate' ? 'Traduzindo legenda' : action === 'ocr' ? 'Transformando legenda em texto' : 'Criando cópia do vídeo';
+    const message = action === 'translate' ? 'Preparando a tradução...' : action === 'ocr' ? 'Preparando o reconhecimento do texto...' : 'Preparando a nova cópia...';
+    startOperation(`job-${action || 'advanced'}`, label, message, { percent: 0 });
+    try {
+      const response = await state.api(url, { method: 'POST', body: JSON.stringify(payload) });
+      state.activeJob = response.result || null;
+      const area = $('#subtitleManagerToolActionArea');
+      if (area) area.innerHTML = toolActionHtml();
+      if (state.activeJob?.id) await pollAdvancedJob(state.activeJob.id);
+    } catch (error) {
+      finishOperation(error.message, { failed: true, keepMs: 0 });
+      throw error;
+    }
   }
 
   async function submitToolAction() {
@@ -1258,16 +1414,18 @@
     if (!action || !state.item) return;
     const itemBase = `${state.endpointBase}/items/${encodeURIComponent(state.item.id)}`;
     const replace = Boolean($('#subtitleToolReplace')?.checked);
+    const submit = $('[data-subtitle-tool-submit]');
+    if (submit) submit.disabled = true;
     try {
       if (action.kind === 'extract') {
         const language = $('#subtitleToolLanguage')?.value || action.language;
-        const response = await state.api(`${itemBase}/extract`, { method: 'POST', body: JSON.stringify({ trackId: action.trackId, language, replace, convertToSrt: action.convertToSrt === true }) });
+        const response = await withOperation({ key: 'extract', label: 'Extraindo legenda', message: 'Lendo a faixa dentro do vídeo e criando o arquivo de legenda. Em arquivos remotos isso pode levar mais tempo...', successMessage: 'Legenda extraída.' }, () => state.api(`${itemBase}/extract`, { method: 'POST', body: JSON.stringify({ trackId: action.trackId, language, replace, convertToSrt: action.convertToSrt === true }) }));
         toast(`Legenda extraída: ${response.result?.fileName || 'arquivo criado'}.`);
         await refreshAfterToolMutation({ action: 'extract', trackId: response.result?.fileName || action.trackId });
       } else if (action.kind === 'convert') {
         const language = $('#subtitleToolLanguage')?.value || action.language;
-        const response = await state.api(`${itemBase}/convert`, { method: 'POST', body: JSON.stringify({ trackId: action.trackId, language, replace }) });
-        toast(`Cópia SRT criada: ${response.result?.fileName || 'arquivo criado'}.`);
+        const response = await withOperation({ key: 'convert', label: 'Criando cópia editável', message: 'Convertendo a legenda para um formato editável...', successMessage: 'Cópia editável criada.' }, () => state.api(`${itemBase}/convert`, { method: 'POST', body: JSON.stringify({ trackId: action.trackId, language, replace }) }));
+        toast(`Cópia editável criada: ${response.result?.fileName || 'arquivo criado'}.`);
         await refreshAfterToolMutation({ action: 'convert', trackId: response.result?.fileName || action.trackId });
       } else if (action.kind === 'translate') {
         await startAdvancedJob(`${itemBase}/translate`, {
@@ -1284,7 +1442,11 @@
       } else if (action.kind === 'remux-remove') {
         await startAdvancedJob(`${itemBase}/remux`, { action: 'remove-stream', streamIndex: action.streamIndex, trackId: action.trackId });
       }
-    } catch (error) { toast(error.message, true); }
+    } catch (error) {
+      toast(error.message, true);
+      const currentSubmit = $('[data-subtitle-tool-submit]');
+      if (currentSubmit) currentSubmit.disabled = false;
+    }
   }
 
   function configure(options = {}) {
@@ -1296,6 +1458,7 @@
   }
 
   document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-subtitle-operation-dismiss]')) { dismissOperation(); return; }
     const visualizationSeek = event.target.closest('[data-subtitle-visualization-seek]');
     if (visualizationSeek) { seekFromVisualization(event); return; }
     const openManager = event.target.closest('[data-subtitle-manager-open]');
@@ -1384,7 +1547,7 @@
         loadPlayerSource();
         const currentVideo = $('#subtitleManagerVideo');
         currentVideo?.addEventListener('loadedmetadata', () => { renderPreviewCues(); currentVideo.play().catch(() => {}); }, { once: true });
-        toast('Faixa de áudio alterada. O stream foi reiniciado no mesmo ponto.');
+        toast('Faixa de áudio alterada. A reprodução foi reiniciada no mesmo ponto.');
       } else {
         createCompatiblePreview({ silent: false }).catch((error) => toast(error.message, true));
       }

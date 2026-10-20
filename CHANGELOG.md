@@ -1,5 +1,16 @@
 # Changelog
 
+## 4.2.2
+
+- Simplifica **Ferramentas → Gerenciar legendas** para uso por pessoas leigas: informações essenciais ficam visíveis e explicações técnicas passam para ajuda contextual `?`.
+- Reorganiza recursos pouco usados em áreas opcionais recolhidas, incluindo forma de onda/mapa de frequências, edição detalhada, ajustes avançados e versões anteriores.
+- Substitui rótulos técnicos por linguagem orientada à tarefa, sem remover as capacidades avançadas existentes.
+- Adiciona um status unificado de operação no editor para extração, conversão, visualização de áudio, preview, edição, sincronização, restauração, exclusão e aplicação de legendas.
+- Operações sem percentual confiável exibem barra animada e tempo decorrido; tradução, OCR e remux continuam exibindo percentual real informado pelo job.
+- Corrige a falta de percepção ao extrair uma legenda embutida: o botão é bloqueado durante a ação, o andamento aparece imediatamente e sucesso/erro permanecem visíveis.
+- Simplifica também a listagem do workspace e move formato, índice de stream, nome de arquivo e outras informações de diagnóstico para ajuda contextual.
+- Nenhuma migração: aplicação **v4.2.2**, Universal **v1.3.1**, `configVersion` **12** e todos os estados permanecem nos schemas atuais.
+
 ## 4.2.1
 
 - Troca a preparação antecipada de preview compatível por **streaming de compatibilidade em tempo real** no Gerenciador de Legendas, reduzindo espera e leitura desnecessária em bibliotecas locais e remotas/rclone.

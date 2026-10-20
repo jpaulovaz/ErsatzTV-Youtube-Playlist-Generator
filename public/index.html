@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>ErsatzTV YouTube Downloader</title>
-  <link rel="icon" href="/brand-mark.svg?v=4.2.1" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=4.2.1&amp;rev=scripted-schedules-2">
-  <link rel="stylesheet" href="/scripted-schedules.css?v=4.2.1">
+  <link rel="icon" href="/brand-mark.svg?v=4.2.2" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=4.2.2&amp;rev=scripted-schedules-2">
+  <link rel="stylesheet" href="/scripted-schedules.css?v=4.2.2">
 </head>
 <body class="app-page">
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=4.2.1" alt=""></span>
+        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=4.2.2" alt=""></span>
         <div class="brand-copy">
           <div class="title-line">
             <h1>ErsatzTV YouTube Downloader</h1>
-            <span id="versionBadge" class="version-badge">v4.2.1</span>
+            <span id="versionBadge" class="version-badge">v4.2.2</span>
           </div>
         </div>
       </div>
@@ -664,12 +664,12 @@
 
       <section id="view-subtitle-tools" class="view-panel" data-view-panel="subtitle-tools">
         <div class="page-header page-header-rich">
-          <div><span class="page-kicker">Ferramentas</span><h2>Gerenciar legendas</h2><p class="page-subtitle">Varra qualquer pasta autorizada, assista ao vídeo enquanto ajusta o SRT e siga item por item sem depender de uma Biblioteca gerenciada.</p></div>
+          <div><span class="page-kicker">Ferramentas</span><h2>Gerenciar legendas</h2><p class="page-subtitle">Escolha uma pasta, abra um vídeo e revise as legendas enquanto assiste.</p></div>
           <button id="subtitleWorkspaceScan" type="button" class="primary">Atualizar varredura</button>
         </div>
 
         <section class="card subtitle-workspace-intro">
-          <div class="section-heading"><div><span class="eyebrow">Pasta de trabalho</span><h3>Onde estão os filmes ou séries?</h3><p>O scanner lê subpastas sem seguir links simbólicos. Somente SRT é editado; outros formatos e legendas embutidas são identificados sem alteração.</p></div><span class="context-help" tabindex="0" data-tooltip="Nada é movido para uma Biblioteca. A ferramenta trabalha diretamente nos sidecars da pasta cadastrada e mantém histórico antes de qualquer alteração.">?</span></div>
+          <div class="section-heading"><div><span class="eyebrow">Pasta de trabalho</span><h3>Onde estão os filmes ou séries?</h3></div><span class="context-help" tabindex="0" data-tooltip="A ferramenta trabalha diretamente na pasta escolhida. Ela pode incluir subpastas, não segue links simbólicos e preserva versões anteriores antes de alterações importantes. Formatos que não podem ser editados continuam protegidos.">?</span></div>
           <div class="subtitle-workspace-source-row">
             <label>Pasta cadastrada<select id="subtitleWorkspaceSelect"><option value="">Nenhuma pasta cadastrada</option></select></label>
             <span id="subtitleWorkspaceLastScan" class="muted">Cadastre uma pasta para começar.</span>
@@ -692,9 +692,9 @@
         <section id="subtitleWorkspaceMetrics" class="settings-overview-grid subtitle-workspace-metrics" aria-label="Resumo do acervo"></section>
 
         <section class="card">
-          <div class="section-heading"><div><span class="eyebrow">Triagem</span><h3>Vídeos encontrados</h3><p>Use “Não revisados” como fila de trabalho e marque cada item depois de conferir a sincronização.</p></div></div>
+          <div class="section-heading"><div><span class="eyebrow">Vídeos</span><h3>Escolha o que deseja revisar</h3></div><span class="context-help" tabindex="0" data-tooltip="O filtro Não revisados funciona como uma fila de trabalho. Depois de conferir um vídeo, use Revisado e próximo para seguir para o próximo item.">?</span></div>
           <div class="subtitle-workspace-filterbar">
-            <label>Exibir<select id="subtitleWorkspaceFilter"><option value="unreviewed">Não revisados</option><option value="all">Todos</option><option value="editable">Com SRT editável</option><option value="without-subtitles">Sem legenda externa</option><option value="multiple">Múltiplas legendas</option><option value="readonly">Formato não editável</option><option value="reviewed">Revisados</option><option value="bazarr-linked">Encontrado no Bazarr</option><option value="bazarr-unlinked">Não encontrado no Bazarr</option></select></label>
+            <label>Exibir<select id="subtitleWorkspaceFilter"><option value="unreviewed">Não revisados</option><option value="all">Todos</option><option value="editable">Com legenda editável</option><option value="without-subtitles">Sem legenda separada</option><option value="multiple">Com várias legendas</option><option value="readonly">Somente leitura</option><option value="reviewed">Revisados</option><option value="bazarr-linked">Encontrado no Bazarr</option><option value="bazarr-unlinked">Não encontrado no Bazarr</option></select></label>
             <label>Idioma<select id="subtitleWorkspaceLanguage"><option value="all">Todos os idiomas</option></select></label>
             <label class="wide">Pesquisar<input id="subtitleWorkspaceQuery" type="search" placeholder="Nome do vídeo, arquivo ou pasta"></label>
           </div>
@@ -1020,15 +1020,15 @@
   </dialog>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="/js/destinationForm.js?v=4.2.1"></script>
-  <script src="/js/channelsView.js?v=4.2.1&amp;rev=ersatztv-catalog-1"></script>
-  <script src="/js/scriptedScheduleEditorUtils.js?v=4.2.1"></script>
-  <script src="/js/scriptedSchedulesView.js?v=4.2.1"></script>
-  <script src="/js/helpView.js?v=4.2.1"></script>
-  <script src="/js/subtitleManager.js?v=4.2.1"></script>
-  <script src="/js/subtitleTranslation.js?v=4.2.1"></script>
-  <script src="/js/youtubeManager.js?v=4.2.1"></script>
-  <script src="/js/subtitleWorkspace.js?v=4.2.1"></script>
-  <script src="/app.js?v=4.2.1"></script>
+  <script src="/js/destinationForm.js?v=4.2.2"></script>
+  <script src="/js/channelsView.js?v=4.2.2&amp;rev=ersatztv-catalog-1"></script>
+  <script src="/js/scriptedScheduleEditorUtils.js?v=4.2.2"></script>
+  <script src="/js/scriptedSchedulesView.js?v=4.2.2"></script>
+  <script src="/js/helpView.js?v=4.2.2"></script>
+  <script src="/js/subtitleManager.js?v=4.2.2"></script>
+  <script src="/js/subtitleTranslation.js?v=4.2.2"></script>
+  <script src="/js/youtubeManager.js?v=4.2.2"></script>
+  <script src="/js/subtitleWorkspace.js?v=4.2.2"></script>
+  <script src="/app.js?v=4.2.2"></script>
 </body>
 </html>

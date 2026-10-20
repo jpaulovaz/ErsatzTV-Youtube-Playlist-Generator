@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 4.2.1
+# ErsatzTV YouTube Downloader 4.2.2
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A linha v4 aplica ao **aplicativo inteiro** uma arquitetura orientada por tarefas. A v4.1.x criou o grupo **Ferramentas** e transformou o editor de legendas em um workspace reutilizável para filmes e séries de qualquer pasta autorizada. A v4.2.0 ampliou esse workspace para uma oficina completa de extração, tradução, OCR, remux e sincronização. A **v4.2.1** torna a reprodução mais adequada a bibliotecas locais e remotas (inclusive rclone): MKV com áudio incompatível passa a ser transmitido em tempo real, sem gerar antecipadamente um preview completo, e transcodificações de vídeo podem usar aceleração de hardware com fallback automático para CPU.
+A linha v4 aplica ao **aplicativo inteiro** uma arquitetura orientada por tarefas. A v4.1.x criou o grupo **Ferramentas** e transformou o editor de legendas em um workspace reutilizável para filmes e séries de qualquer pasta autorizada. A v4.2.0 ampliou esse workspace para uma oficina completa de extração, tradução, OCR, remux e sincronização; a v4.2.1 acrescentou reprodução em tempo real e aceleração de hardware. A **v4.2.2** simplifica a tela de revisão: mantém na frente apenas o que é necessário para assistir e corrigir, coloca explicações técnicas atrás de ajuda contextual `?` e mostra andamento visível em toda operação de arquivo, com percentual quando a tarefa fornece progresso real.
 
 ## Experiência v4
 
@@ -50,7 +50,7 @@ Biblioteca local do ErsatzTV
 - NFOs novos incluem `year` + `premiered` em Movies e `aired` em episódios de Clipes musicais.
 - Thumbnail do vídeo como artwork de episódio (`-thumb.jpg`) e `poster.jpg` no nível do artista/Show.
 - Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
-- **Gerenciador de legendas em Ferramentas**: workspaces recursivos de filmes/séries externos, player com seleção de áudio e prévia compatível para MKV, waveform/espectrograma, offset, editor cue por cue, sincronização por dois pontos/FPS, histórico, extração de legendas embutidas, conversão ASS/SSA/VTT → SRT, tradução Gemini, OCR PGS/SUP via Tesseract, criação de cópias MKV e integração opcional com Bazarr.
+- **Gerenciador de legendas em Ferramentas**: workspaces recursivos de filmes/séries externos, player com seleção de áudio e reprodução compatível para MKV, ajuste rápido, edição de texto/horários, forma de onda e mapa de frequências opcionais, ajustes avançados, versões anteriores, extração de legendas embutidas, criação de cópias editáveis, tradução Gemini, reconhecimento de legendas em imagem, criação segura de cópias de vídeo e integração opcional com Bazarr. A interface prioriza linguagem simples e exibe detalhes técnicos somente quando solicitados pelo `?`.
 - **Gerenciador manual de legendas** no Gerenciar conteúdo: player, preview de SRT local/YouTube/LRCLIB, busca manual, offset e histórico de até cinco versões por idioma. O filtro/listagem atual é reconciliado automaticamente após aplicar, restaurar ou excluir uma legenda, inclusive removendo imediatamente um item de **Sem legendas** após aplicação bem-sucedida. Em **Com legendas**, a origem YouTube pode ser refinada por **Enviada pelo canal** ou **Automática**, usando a proveniência persistida de cada faixa.
 - **Tradução em massa de legendas com Gemini**: pré-análise por biblioteca/playlist, fonte local preservada, saída traduzida, bilíngue ou ambas no mesmo job, fila persistente com pausa/retomada/cancelamento e origem Gemini rastreável. A Visão geral acompanha o progresso global da fila.
 - **Gerenciador do YouTube** independente: pesquisa pública, conexão OAuth da conta, playlists próprias, criação/inserção com fila persistente, catálogo de acervo local, recuperação de Video ID, matching assistido e adoção sem redownload por Hardlink/Copy/Move com preflight e rollback.
@@ -107,7 +107,7 @@ node --version
 ## Instalação nova
 
 1. Extraia o pacote completo em uma pasta permanente. O pacote de distribuição não leva uma configuração pessoal.
-2. No primeiro `npm start`, o aplicativo cria automaticamente um `config/config.json` v11 com os padrões atuais. Se preferir pré-configurar caminhos antes da primeira inicialização, copie `config/config.example.json` para `config/config.json` e edite a cópia.
+2. No primeiro `npm start`, o aplicativo cria automaticamente um `config/config.json` v12 com os padrões atuais. Se preferir pré-configurar caminhos antes da primeira inicialização, copie `config/config.example.json` para `config/config.json` e edite a cópia.
 3. Crie o único usuário administrativo local:
 
 ```bash
@@ -140,7 +140,7 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A **v4.2.1** atualiza diretamente uma instalação **v4.2.0**. `configVersion` sobe de 11 para 12 para acrescentar as preferências de reprodução em tempo real e aceleração de hardware. A migração é automática, ativa o streaming compatível e usa detecção de hardware em modo `auto`; se nenhum acelerador funcionar, a aplicação usa CPU sem impedir a reprodução. Consulte [UPGRADE.md](UPGRADE.md).
+A **v4.2.2** atualiza diretamente uma instalação **v4.2.1**. Não há migração de configuração nem de estado: `configVersion` permanece em **12**. A atualização simplifica **Ferramentas → Gerenciar legendas** e acrescenta acompanhamento visível para operações como extração, conversão, forma de onda, mapa de frequências, salvamento, restauração, OCR, tradução e criação de cópias de vídeo. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Reprodução compatível em tempo real
 

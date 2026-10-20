@@ -1,10 +1,10 @@
-# Atualização para 4.2.1
+# Atualização para 4.2.2
 
-A versão 4.2.1 parte da **v4.2.0** e reformula a reprodução usada em **Ferramentas → Gerenciar legendas** para evitar a preparação antecipada de um preview completo quando o navegador não consegue reproduzir o áudio de um MKV. O foco é especialmente útil em bibliotecas montadas por rclone ou outros storages remotos: a compatibilidade é produzida enquanto o usuário assiste e a navegação para outro ponto reinicia o stream próximo daquele instante.
+A versão 4.2.2 parte da **v4.2.1** e concentra a mudança em **Ferramentas → Gerenciar legendas**. Nenhum formato de arquivo, configuração ou estado é migrado. O objetivo é deixar a oficina mais simples de entender e tornar explícito quando uma ação ainda está trabalhando, especialmente em arquivos remotos.
 
 ## Versionamento
 
-- aplicação: **v4.2.1**;
+- aplicação: **v4.2.2**;
 - Universal Scripted Schedules: **v1.3.1**;
 - `configVersion`: **12**;
 - Download state: **5**;
@@ -15,96 +15,57 @@ A versão 4.2.1 parte da **v4.2.0** e reformula a reprodução usada em **Ferram
 - YouTube Account config/state: **1**;
 - Adoption transaction state: **1**.
 
-A única migração de schema é `configVersion 11 → 12`, adicionando o bloco `playback`. Não há migração dos arquivos de estado.
+Não há migração de schema nesta versão.
 
-## O que muda na reprodução
+## Tela mais simples
 
-O Gerenciador de Legendas passa a escolher entre três caminhos:
+A tela mantém à frente o fluxo normal: escolher um vídeo, reproduzir, escolher a legenda e fazer o ajuste necessário. Recursos de uso menos frequente ficam recolhidos e podem ser abertos quando forem necessários.
 
-1. **Direct Play** — usa o arquivo original quando ele já é adequado ao navegador.
-2. **Direct Stream** — para casos como MKV/H.264 + DTS/AC3, mantém o vídeo sem recodificação e converte apenas o áudio para AAC em tempo real.
-3. **Transcode em tempo real** — quando o vídeo também precisa de conversão, produz H.264 + AAC enquanto o usuário assiste. A aplicação tenta um encoder por hardware e volta automaticamente para CPU se o teste real do acelerador falhar.
+As explicações longas e detalhes de diagnóstico foram movidos para botões **?**. Termos internos como codec, índice da faixa e formato continuam disponíveis para diagnóstico, mas deixam de competir visualmente com as ações do dia a dia.
 
-O preview completo da v4.2.0 continua disponível como **fallback manual**. Ele deixa de ser a primeira opção para MKV com áudio incompatível.
+Alguns nomes também foram trocados por descrições de tarefa, por exemplo:
 
-### Navegação/seek
+- waveform → **Forma de onda**;
+- spectrogram → **Mapa de frequências**;
+- cue → **trecho**;
+- OCR → **Transformar em texto**;
+- remux → **Criar cópia do vídeo**;
+- conversão para SRT → **Criar cópia editável**.
 
-O stream compatível não precisa preparar o filme inteiro. O editor mostra uma linha do tempo referente à duração completa da mídia. Ao saltar para outro ponto, o processo atual é encerrado e um novo stream começa próximo do tempo escolhido, mantendo a legenda referenciada ao relógio absoluto do filme.
+## Andamento das operações
 
-Isso reduz leitura e processamento desnecessários em arquivos remotos, embora a latência final continue dependendo do próprio rclone, da origem remota, do cache e da conexão.
+Toda operação relevante feita sobre o vídeo ou a legenda passa a mostrar um cartão de andamento dentro do editor. Ele aparece imediatamente após a confirmação e informa o que está acontecendo.
 
-## Aceleração por hardware
+Isso cobre, entre outras ações:
 
-Em **Configurações → Reprodução de vídeos**, o padrão é:
+- extrair uma legenda de dentro do vídeo;
+- criar uma cópia editável;
+- preparar uma versão temporária para reprodução;
+- criar forma de onda ou mapa de frequências;
+- salvar texto/horários e sincronização;
+- restaurar ou excluir uma legenda;
+- aplicar uma legenda encontrada;
+- traduzir;
+- transformar legenda em imagem em texto;
+- criar cópias de vídeo.
 
-- **Streaming compatível em tempo real:** ativado;
-- **Aceleração:** `Automático (recomendado)`;
-- **Dispositivo VAAPI:** `/dev/dri/renderD128`.
+Quando o backend fornece progresso real — atualmente nos jobs de tradução, reconhecimento de texto e criação de cópias de vídeo — o cartão mostra **percentual**. Em operações síncronas nas quais o FFmpeg ou filesystem não fornece um percentual confiável ao navegador, a interface mostra uma barra animada e o **tempo decorrido**, em vez de inventar uma porcentagem.
 
-O modo automático procura encoders compatíveis na build do FFmpeg e executa um pequeno teste antes de selecionar o backend. A aplicação reconhece, quando disponíveis:
+Ao terminar, o cartão informa sucesso e duração. Em erro, a mensagem permanece visível até ser fechada ou uma nova operação começar.
 
-- NVIDIA NVENC;
-- Intel Quick Sync (QSV);
-- VAAPI em Linux (Intel/AMD);
-- AMD AMF;
-- Apple VideoToolbox.
+## Preciso configurar algo?
 
-Se nenhum backend for validado, o aplicativo usa `libx264` por CPU. Falha de aceleração **não impede** a reprodução.
-
-A aceleração é usada quando há necessidade de recodificar vídeo. No caso mais eficiente — vídeo já compatível e apenas áudio incompatível — o vídeo continua em stream copy e somente o áudio é convertido para AAC pela CPU.
-
-## Preciso configurar algo extra?
-
-### Instalação direta no host
-
-Na configuração padrão, **não é necessário alterar nada no aplicativo**. Se o FFmpeg instalado enxergar um acelerador funcional, `Automático` o utilizará. Caso contrário, haverá fallback para CPU.
-
-### Docker / container
-
-Para usar GPU dentro de um container, o dispositivo e o runtime precisam estar disponíveis para o container. Isso é uma configuração do ambiente, não uma obrigação da aplicação.
-
-**Intel/AMD em Linux (VAAPI/QSV):** normalmente é necessário expor `/dev/dri` e garantir que o usuário do processo tenha permissão sobre os dispositivos `render`/`video`. Exemplo conceitual de Compose:
-
-```yaml
-devices:
-  - /dev/dri:/dev/dri
-```
-
-Se o render node do host for diferente, ajuste **Dispositivo VAAPI** na interface.
-
-**NVIDIA:** é necessário que o host possua driver NVIDIA, que o container tenha acesso à GPU (normalmente via NVIDIA Container Toolkit/runtime) e que a build do FFmpeg contenha NVENC. A aplicação não instala drivers nem modifica o runtime Docker.
-
-Se você não quiser configurar GPU agora, mantenha **Automático**. O aplicativo continuará funcionando pela CPU.
-
-### rclone
-
-Não há configuração nova obrigatória para rclone. O ganho vem do fato de o aplicativo deixar de exigir a geração antecipada do preview completo. Cache/VFS e parâmetros próprios do rclone continuam sob controle da sua montagem atual.
-
-## Migração automática
-
-Ao iniciar a v4.2.1 sobre uma configuração v11, é acrescentado:
-
-```json
-{
-  "playback": {
-    "liveCompatibilityStreaming": true,
-    "hardwareAcceleration": "auto",
-    "vaapiDevice": "/dev/dri/renderD128"
-  }
-}
-```
-
-Todos os demais valores existentes são preservados.
+**Não.** A v4.2.2 não acrescenta nenhuma configuração. Streaming em tempo real, aceleração por hardware, Tesseract, Gemini e Bazarr continuam exatamente com as configurações da v4.2.1.
 
 ## Atualização
 
-Pare o serviço e faça o backup normal da instalação. Depois extraia o update por cima da **v4.2.0**:
+Pare o serviço e faça o backup normal da instalação. Depois extraia o update por cima da **v4.2.1**:
 
 ```bash
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v4.2.0-to-v4.2.1-update.zip -d /caminho/da/aplicacao
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v4.2.1-to-v4.2.2-update.zip -d /caminho/da/aplicacao
 ```
 
-Reinicie o serviço e, se desejar, confira **Configurações → Reprodução de vídeos**. Para validar os arquivos do projeto:
+Reinicie o serviço. Para validar os arquivos do projeto:
 
 ```bash
 npm run verify
