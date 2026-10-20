@@ -1,13 +1,12 @@
-ErsatzTV YouTube Downloader 4.2.4 - pacote de atualização
-Base: v4.2.3
+ErsatzTV YouTube Downloader 4.2.5 - pacote de atualização
+Base: v4.2.4
 
-Este update corrige as acoes avancadas em Ferramentas -> Gerenciar legendas:
-- mantem invisivel no DOM a area que recebe os formularios, em vez de remove-la completamente;
-- faz o primeiro clique em "Extrair para editar" abrir o formulario imediatamente;
-- aplica a mesma correcao a traducao, OCR, conversao e criacao de copias/remux;
-- preserva o player e a posicao atual ao abrir a acao;
-- inclui fallback para DOM antigo em cache;
-- registra no log da aplicacao inicio, conclusao e falha da extracao, com dados suficientes para diagnostico.
+Este update corrige a reproducao e navegacao de MP4 em Ferramentas -> Gerenciar legendas:
+- exibe a barra Navegar no video tambem para reproducao direta;
+- usa a duracao informada pelo navegador quando o FFprobe nao a fornece;
+- evita o falso aviso de ausencia de audio quando a analise tecnica falha;
+- tenta o MP4/M4V/WebM original primeiro quando o probe falha e usa streaming compativel automaticamente se o navegador rejeitar o arquivo;
+- permite nova tentativa de FFprobe depois de falhas temporarias, sem prender o resultado de erro para sempre.
 
 Arquivos incluidos:
 CHANGELOG.md
@@ -18,12 +17,13 @@ public/index.html
 public/login.html
 public/js/subtitleManager.js
 src/tools/subtitleWorkspaceService.js
+test/subtitleWorkspace.test.js
 test/ui-v3.test.js
 MODIFIED_FILES.txt
 UPDATE_CONTENTS.txt
 
-Aplicacao v4.2.4, Universal v1.3.1, configVersion 12, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-workspace state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v4.2.5, Universal v1.3.1, configVersion 12, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-workspace state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 
-Nao existe migracao de configuracao ou estado na v4.2.4. Streaming, aceleracao por hardware, Tesseract, Gemini e Bazarr preservam exatamente a configuracao da v4.2.3.
+Nao existe migracao de configuracao ou estado na v4.2.5. Streaming, aceleracao por hardware, Tesseract, Gemini e Bazarr preservam exatamente a configuracao da v4.2.4.
 
 O pacote nao inclui config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/, tokens, estados operacionais, arquivos de midia ou sidecars.

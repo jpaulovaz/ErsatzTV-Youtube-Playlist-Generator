@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.2.5
+
+- Corrige o caso em que um MP4 reproduzia áudio normalmente no navegador, mas o Gerenciador de Legendas mostrava **Nenhuma faixa de áudio foi detectada** porque a análise técnica por FFprobe havia falhado ou expirado. Nessa situação a interface passa a informar **Áudio automático** em vez de concluir incorretamente que o arquivo não possui áudio.
+- Quando a análise técnica de um MP4/M4V/WebM não termina, o workspace tenta primeiro a reprodução direta no navegador. Se o navegador realmente não conseguir reproduzir o arquivo, o player cai automaticamente para o streaming compatível já existente.
+- A barra **Navegar no vídeo** passa a existir também para reprodução direta de MP4, e não apenas para streams compatíveis. Assim é possível avançar e voltar no filme com o mesmo controle usado nos MKV.
+- Quando o FFprobe não fornece a duração, o player usa a duração informada pelo próprio navegador assim que os metadados do MP4 são carregados; a barra é habilitada automaticamente nesse momento.
+- Resultados de FFprobe com erro deixam de ficar presos indefinidamente no cache do item: falhas são tentadas novamente após um intervalo curto, enquanto análises bem-sucedidas continuam reutilizadas enquanto tamanho e data do arquivo não mudarem.
+- Nenhuma migração: aplicação **v4.2.5**, Universal **v1.3.1**, `configVersion` **12** e todos os estados permanecem nos schemas atuais.
+
 ## 4.2.4
 
 - Corrige a regressão introduzida na simplificação da v4.2.2: a área que recebe os formulários de ações avançadas era removida do DOM quando nenhuma ação estava aberta, enquanto o primeiro clique apenas tentava preencher essa área. O resultado era um clique aparentemente ignorado em **Extrair para editar**, Traduzir, OCR, conversão e remux.

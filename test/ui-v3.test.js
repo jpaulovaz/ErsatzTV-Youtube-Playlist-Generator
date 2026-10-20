@@ -858,6 +858,18 @@ test('v4.1.2 abre o editor de legendas inline sob o item selecionado', () => {
   assert.match(css, /\.subtitle-workspace-inline-editor \{ display: grid; gap: 12px;/);
 });
 
+test('v4.2.5 mantem navegacao no player inclusive para MP4 direto e trata probe incompleto sem falso sem-audio', () => {
+  const manager = read('js/subtitleManager.js');
+
+  assert.match(manager, /function mediaDurationSeconds\(video = \$\('#subtitleManagerVideo'\)\)/);
+  assert.match(manager, /<strong>Navegar no vídeo<\/strong>/);
+  assert.match(manager, /Carregando duração do vídeo/);
+  assert.match(manager, /state\.browserDurationSeconds = Number\(video\.duration\)/);
+  assert.match(manager, /Áudio automático/);
+  assert.match(manager, /state\.forceLiveCompatibility = true/);
+  assert.doesNotMatch(manager, /Nenhuma faixa de áudio foi detectada/);
+});
+
 test('v4.2.4 mantem o host de acoes avancadas no DOM para o primeiro clique funcionar', () => {
   const manager = read('js/subtitleManager.js');
 

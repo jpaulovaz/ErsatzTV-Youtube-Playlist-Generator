@@ -13,6 +13,8 @@ const mediaPreview = require('../mediaPreviewService');
 const advanced = require('./subtitleWorkspaceAdvanced');
 
 const scanJobs = new Map();
+const MEDIA_PROBE_VERSION = 3;
+const MEDIA_PROBE_FAILURE_RETRY_MS = 60 * 1000;
 let mutationChain = Promise.resolve();
 
 function nowIso() { return new Date().toISOString(); }
@@ -285,6 +287,14 @@ function parseRate(value) {
   return Number.isFinite(number) && number > 0 ? number : null;
 }
 
+function playbackAfterProbeFailure(mediaPath) {
+  const ext = path.extname(String(mediaPath || '')).toLowerCase();
+  if (['.mp4', '.m4v', '.webm'].includes(ext)) {
+    return { mode: 'direct', reason: 'browser-first-after-probe-failure', copyVideoPossible: false, probeIncomplete: true };
+  }
+  return { mode: 'full-transcode', reason: 'probe-failed', copyVideoPossible: false, probeIncomplete: true };
+}
+
 function assessPlayback(mediaPath, videoStreams = [], audioStreams = []) {
   const ext = path.extname(String(mediaPath || '')).toLowerCase();
   const video = videoStreams[0] || null;
@@ -305,12 +315,20 @@ function assessPlayback(mediaPath, videoStreams = [], audioStreams = []) {
 
 async function probeMedia(config, workspace, item, mediaPath) {
   const cached = item.probe;
-  if (cached && Number(cached.probeVersion) === 2 && Number(cached.mediaSizeBytes) === Number(item.sizeBytes) && Number(cached.mediaMtimeMs) === Number(item.mtimeMs)) return cached;
+  const cacheMatchesFile = cached
+    && Number(cached.probeVersion) === MEDIA_PROBE_VERSION
+    && Number(cached.mediaSizeBytes) === Number(item.sizeBytes)
+    && Number(cached.mediaMtimeMs) === Number(item.mtimeMs);
+  if (cacheMatchesFile && !cached.error) return cached;
+  if (cacheMatchesFile && cached.error) {
+    const probedAtMs = Date.parse(String(cached.probedAt || ''));
+    if (Number.isFinite(probedAtMs) && Date.now() - probedAtMs < MEDIA_PROBE_FAILURE_RETRY_MS) return cached;
+  }
   const command = String(config?.paths?.ffprobePath || 'ffprobe');
   const result = await runCommand(command, ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', mediaPath], { timeoutMs: 20000 });
   let probe;
   if (result.code !== 0 || result.timedOut) {
-    probe = { probeVersion: 2, mediaSizeBytes: item.sizeBytes, mediaMtimeMs: item.mtimeMs, durationSeconds: null, container: '', videoStreams: [], audioStreams: [], frameRate: null, playback: { mode: 'full-transcode', reason: 'probe-failed', copyVideoPossible: false }, embeddedTracks: [], error: (result.stderr || 'ffprobe falhou').trim().slice(0, 500), probedAt: nowIso() };
+    probe = { probeVersion: MEDIA_PROBE_VERSION, mediaSizeBytes: item.sizeBytes, mediaMtimeMs: item.mtimeMs, durationSeconds: null, container: '', videoStreams: [], audioStreams: [], frameRate: null, playback: playbackAfterProbeFailure(mediaPath), embeddedTracks: [], error: (result.stderr || 'ffprobe falhou').trim().slice(0, 500), probedAt: nowIso() };
   } else {
     let parsed = {};
     try { parsed = JSON.parse(result.stdout || '{}'); } catch {}
@@ -342,7 +360,7 @@ async function probeMedia(config, workspace, item, mediaPath) {
         metadata: { streamIndex: Number(stream.index), title: stream.tags?.title || '', codecLongName: String(stream.codec_long_name || '') }
       }));
     probe = {
-      probeVersion: 2,
+      probeVersion: MEDIA_PROBE_VERSION,
       mediaSizeBytes: item.sizeBytes,
       mediaMtimeMs: item.mtimeMs,
       durationSeconds: Number(parsed.format?.duration) || null,

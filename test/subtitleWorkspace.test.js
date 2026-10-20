@@ -236,6 +236,30 @@ test('workspace edita cues e aplica sincronizacao por dois pontos com historico'
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
 
+test('workspace usa reproducao direta para MP4 quando a analise tecnica falha', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'subtitle-workspace-mp4-probe-fail-'));
+  const media = path.join(root, 'Movie.mp4');
+  const ffprobe = path.join(root, 'fake-ffprobe.sh');
+  await fs.writeFile(media, 'mp4-placeholder');
+  await fs.writeFile(ffprobe, '#!/bin/sh\necho probe-unavailable >&2\nexit 1\n');
+  await fs.chmod(ffprobe, 0o755);
+  try {
+    const workspace = await service.createWorkspace({ name: 'MP4 probe fallback', rootPath: root });
+    await service.startScan(workspace.id); await waitForScan(workspace.id);
+    const item = (await service.listItems(workspace.id, {})).items.find((entry) => entry.fileName === 'Movie.mp4');
+    const cfg = {
+      paths: { ffprobePath: ffprobe, ffmpegPath: '/bin/false' },
+      playback: { liveCompatibilityStreaming: true, hardwareAcceleration: 'off', vaapiDevice: '/dev/dri/renderD128' },
+      bazarr: { enabled: false, url: '', apiKey: '', pathMappings: [] }
+    };
+    const status = await service.getItemStatus(cfg, item.id);
+    assert.equal(status.mediaProbe.playback.mode, 'direct');
+    assert.equal(status.mediaProbe.playback.reason, 'browser-first-after-probe-failure');
+    assert.equal(status.mediaProbe.audioStreams.length, 0);
+    assert.match(status.probeError, /probe-unavailable/);
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
+});
+
 test('workspace detecta MKV H264+DTS como audio-transcode e cria preview AAC escolhendo a faixa', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'subtitle-workspace-mkv-audio-'));
   const media = path.join(root, 'Movie.mkv');

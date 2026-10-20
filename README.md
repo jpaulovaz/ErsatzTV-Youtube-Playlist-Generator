@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 4.2.4
+# ErsatzTV YouTube Downloader 4.2.5
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A linha v4 aplica ao **aplicativo inteiro** uma arquitetura orientada por tarefas. A v4.1.x criou o grupo **Ferramentas** e transformou o editor de legendas em um workspace reutilizável para filmes e séries de qualquer pasta autorizada. A v4.2.0 ampliou esse workspace para uma oficina completa de extração, tradução, OCR, remux e sincronização; a v4.2.1 acrescentou reprodução em tempo real e aceleração de hardware; a v4.2.2 simplificou a tela; a v4.2.3 adotou avisos flutuantes de andamento. A **v4.2.4** corrige uma regressão da interface que podia fazer o primeiro clique em ações como **Extrair para editar** parecer ignorado e acrescenta rastreamento da extração nos Logs do aplicativo.
+A linha v4 aplica ao **aplicativo inteiro** uma arquitetura orientada por tarefas. A v4.1.x criou o grupo **Ferramentas** e transformou o editor de legendas em um workspace reutilizável para filmes e séries de qualquer pasta autorizada. A v4.2.0 ampliou esse workspace para uma oficina completa de extração, tradução, OCR, remux e sincronização; a v4.2.1 acrescentou reprodução em tempo real e aceleração de hardware; a v4.2.2 simplificou a tela; a v4.2.3 adotou avisos flutuantes de andamento. A **v4.2.5** corrige a navegação de MP4 no Gerenciador de Legendas: a barra de avanço/retorno agora também existe em reprodução direta, o navegador pode fornecer a duração quando o FFprobe não consegue, e falhas de análise de áudio deixam de aparecer como um falso aviso de que o arquivo não possui som.
 
 ## Experiência v4
 
@@ -140,7 +140,7 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A **v4.2.4** atualiza diretamente uma instalação **v4.2.3**. Não há migração de configuração nem de estado: `configVersion` permanece em **12**. A atualização mantém a área de ações avançadas presente no DOM, porém invisível até ser necessária, para que o primeiro clique em **Extrair para editar**, Traduzir, OCR, conversão ou criação de cópia sempre abra o formulário correspondente sem recarregar o player. A extração também passa a registrar início, conclusão e falha em **Sistema → Logs**. Consulte [UPGRADE.md](UPGRADE.md).
+A **v4.2.5** atualiza diretamente uma instalação **v4.2.4**. Não há migração de configuração nem de estado: `configVersion` permanece em **12**. A atualização corrige a navegação em MP4 no Gerenciador de Legendas, mantém a barra de avanço/retorno disponível também em reprodução direta e evita o falso aviso de ausência de áudio quando a análise técnica do arquivo não termina. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Reprodução compatível em tempo real
 
@@ -150,7 +150,7 @@ Em **Ferramentas → Gerenciar legendas**, a v4.2.1 prefere não criar um arquiv
 - **Direct Stream** para MKV/H.264 com áudio incompatível: o vídeo é copiado e somente o áudio é convertido para AAC enquanto a reprodução acontece;
 - **Transcode em tempo real** quando o próprio vídeo precisa de conversão. Nesse caso a aplicação tenta o encoder de hardware configurado/descoberto e usa `libx264` por CPU se o teste falhar.
 
-O player possui uma linha do tempo do filme inteiro. Ao pular para outro ponto, o stream é reiniciado próximo daquele instante em vez de preparar todos os minutos anteriores. O **preview completo** permanece disponível como fallback manual para mídias ou conexões problemáticas.
+O player possui uma linha do tempo do filme inteiro tanto em streaming compatível quanto em reprodução direta de MP4. Ao pular para outro ponto em um stream compatível, o FFmpeg reinicia próximo daquele instante em vez de preparar todos os minutos anteriores; em MP4 direto, o navegador usa Range/seek do próprio arquivo. O **preview completo** permanece disponível como fallback manual para mídias ou conexões problemáticas.
 
 Configurações novas (`configVersion` 12):
 

@@ -41,7 +41,9 @@
     operation: null,
     playerTime: 0,
     liveStreamBaseSeconds: 0,
-    liveStreamActive: false
+    liveStreamActive: false,
+    browserDurationSeconds: 0,
+    forceLiveCompatibility: false
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -292,7 +294,22 @@
     if (!isWorkspaceMode() || state.previewToken) return false;
     const playback = getMediaProbe().playback || {};
     if (playback.liveCompatibilityStreaming === false) return false;
+    if (state.forceLiveCompatibility) return true;
     return playback.mode !== 'direct' || selectedAudioDiffersFromDefault();
+  }
+
+  function mediaDurationSeconds(video = $('#subtitleManagerVideo')) {
+    const candidates = [
+      state.status?.durationSeconds,
+      getMediaProbe().durationSeconds,
+      state.browserDurationSeconds,
+      video?.duration
+    ];
+    for (const candidate of candidates) {
+      const value = Number(candidate);
+      if (Number.isFinite(value) && value > 0) return value;
+    }
+    return 0;
   }
 
   function playerMediaTime(video = $('#subtitleManagerVideo')) {
@@ -314,14 +331,20 @@
   function updateLiveTimelineUi() {
     const input = $('#subtitleManagerLiveTimeline');
     const value = $('#subtitleManagerLiveTimelineValue');
-    const duration = Math.max(0, Number(state.status?.durationSeconds || getMediaProbe().durationSeconds) || 0);
+    const duration = mediaDurationSeconds();
     const current = Math.max(0, Math.min(duration || Infinity, Number(state.playerTime) || 0));
-    if (input && document.activeElement !== input) input.value = String(current);
-    if (value) value.textContent = `${formatPlayerClock(current)} / ${formatPlayerClock(duration)}`;
+    if (input) {
+      input.max = String(duration || 1);
+      input.disabled = !(duration > 0);
+      if (document.activeElement !== input) input.value = String(duration > 0 ? current : 0);
+    }
+    if (value) value.textContent = duration > 0
+      ? `${formatPlayerClock(current)} / ${formatPlayerClock(duration)}`
+      : 'Carregando duração do vídeo...';
   }
 
   function seekPlayerToMediaTime(seconds, autoplay = true) {
-    const duration = Math.max(0, Number(state.status?.durationSeconds || getMediaProbe().durationSeconds) || 0);
+    const duration = mediaDurationSeconds();
     const target = Math.max(0, duration > 0 ? Math.min(Number(seconds) || 0, Math.max(0, duration - 0.05)) : (Number(seconds) || 0));
     const video = $('#subtitleManagerVideo');
     state.playerTime = target;
@@ -439,12 +462,15 @@
     const probe = getMediaProbe();
     const playback = probe.playback || {};
     const streams = availableAudioStreams();
+    const probeFailed = Boolean(state.status?.probeError);
     const audioSelect = streams.length ? `
       <label class="subtitle-manager-audio-select">Áudio
         <select id="subtitleManagerAudioStream">
           ${streams.map((stream) => `<option value="${esc(stream.streamIndex)}" ${Number(stream.streamIndex) === Number(state.audioStreamIndex) ? 'selected' : ''}>${esc(audioStreamLabel(stream))}</option>`).join('')}
         </select>
-      </label>` : '<span class="subtitle-manager-player-note">Nenhuma faixa de áudio foi detectada.</span>';
+      </label>` : probeFailed
+      ? `<span class="subtitle-manager-player-note">Áudio automático${helpHint('Faixas de áudio', 'O arquivo está sendo reproduzido, mas o aplicativo não conseguiu listar as faixas de áudio desta vez. A reprodução continua usando a faixa padrão do próprio arquivo.')}</span>`
+      : '<span class="subtitle-manager-player-note">Este arquivo não informou faixas de áudio separadas.</span>';
     const hardware = state.advancedStatus?.playback?.hardwareAcceleration || {};
     const liveEnabled = playback.liveCompatibilityStreaming !== false;
     let message = 'Pronto para reproduzir o arquivo original.';
@@ -482,13 +508,12 @@
   }
 
   function liveTimelineHtml() {
-    if (!useLiveCompatibilityPlayback()) return '';
-    const duration = Math.max(0, Number(state.status?.durationSeconds || 0));
-    if (!duration) return '';
-    const current = Math.max(0, Math.min(duration, Number(state.playerTime) || 0));
+    if (!isWorkspaceMode()) return '';
+    const duration = mediaDurationSeconds();
+    const current = Math.max(0, Math.min(duration || Infinity, Number(state.playerTime) || 0));
     return `<div class="subtitle-manager-live-timeline">
-      <div class="subtitle-manager-live-timeline-head"><div class="subtitle-manager-title-with-help"><strong>Ir para outro ponto</strong>${helpHint('Navegação em arquivos remotos', 'Ao mover este controle, o aplicativo começa a reprodução perto do ponto escolhido. Isso evita preparar o vídeo inteiro antes, especialmente em bibliotecas remotas.')}</div><span id="subtitleManagerLiveTimelineValue">${esc(`${formatPlayerClock(current)} / ${formatPlayerClock(duration)}`)}</span></div>
-      <input id="subtitleManagerLiveTimeline" type="range" min="0" max="${esc(duration)}" step="0.25" value="${esc(current)}" aria-label="Ir para um ponto do vídeo">
+      <div class="subtitle-manager-live-timeline-head"><div class="subtitle-manager-title-with-help"><strong>Navegar no vídeo</strong>${helpHint('Navegação', 'Arraste esta barra para avançar ou voltar no vídeo. Em arquivos remotos, o aplicativo carrega apenas a região escolhida quando isso for necessário.')}</div><span id="subtitleManagerLiveTimelineValue">${duration > 0 ? esc(`${formatPlayerClock(current)} / ${formatPlayerClock(duration)}`) : 'Carregando duração do vídeo...'}</span></div>
+      <input id="subtitleManagerLiveTimeline" type="range" min="0" max="${esc(duration || 1)}" step="0.25" value="${esc(duration > 0 ? current : 0)}" aria-label="Ir para um ponto do vídeo" ${duration > 0 ? '' : 'disabled'}>
     </div>`;
   }
 
@@ -810,18 +835,32 @@
       const video = $('#subtitleManagerVideo');
       if (video) {
         video.addEventListener('loadedmetadata', () => {
+          if (Number.isFinite(Number(video.duration)) && Number(video.duration) > 0) state.browserDurationSeconds = Number(video.duration);
           if (!state.liveStreamActive && Number.isFinite(state.playerTime) && state.playerTime > 0 && state.playerTime < (video.duration || Infinity)) {
             try { video.currentTime = state.playerTime; } catch {}
           }
           renderPreviewCues();
           updateLiveTimelineUi();
         }, { once: true });
+        video.addEventListener('durationchange', () => {
+          if (Number.isFinite(Number(video.duration)) && Number(video.duration) > 0) {
+            state.browserDurationSeconds = Number(video.duration);
+            updateLiveTimelineUi();
+          }
+        });
         video.addEventListener('timeupdate', () => {
           if (!Number.isFinite(video.currentTime)) return;
           state.playerTime = playerMediaTime(video);
           updateLiveTimelineUi();
         });
         video.addEventListener('error', () => {
+          if (isWorkspaceMode() && !state.previewToken && !useLiveCompatibilityPlayback()) {
+            state.forceLiveCompatibility = true;
+            state.liveStreamBaseSeconds = Math.max(0, Number(state.playerTime) || 0);
+            state.liveStreamActive = true;
+            loadPlayerSource();
+            return;
+          }
           const button = $('#subtitleManagerCompatiblePreview');
           if (button) { button.classList.remove('hidden'); button.classList.add('attention'); }
         });
@@ -898,6 +937,8 @@
     state.playerTime = 0;
     state.liveStreamBaseSeconds = 0;
     state.liveStreamActive = false;
+    state.browserDurationSeconds = 0;
+    state.forceLiveCompatibility = false;
     const root = panel();
     if (root) { root.classList.add('hidden'); root.innerHTML = ''; }
   }
@@ -1137,7 +1178,7 @@
   function seekFromVisualization(event) {
     const image = event.target.closest('[data-subtitle-visualization-seek]');
     const video = $('#subtitleManagerVideo');
-    const duration = Math.max(0, Number(state.status?.durationSeconds || 0));
+    const duration = mediaDurationSeconds(video);
     if (!image || !video || !duration) return;
     const rect = image.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)));
@@ -1482,7 +1523,7 @@
   document.addEventListener('input', (event) => {
     if (event.target.id !== 'subtitleManagerLiveTimeline') return;
     const value = $('#subtitleManagerLiveTimelineValue');
-    const duration = Math.max(0, Number(state.status?.durationSeconds || 0));
+    const duration = mediaDurationSeconds();
     const current = Math.max(0, Math.min(duration || Infinity, Number(event.target.value) || 0));
     if (value) value.textContent = `${formatPlayerClock(current)} / ${formatPlayerClock(duration)}`;
   });
