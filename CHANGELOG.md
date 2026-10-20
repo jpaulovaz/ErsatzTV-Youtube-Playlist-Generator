@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.2.4
+
+- Corrige a regressão introduzida na simplificação da v4.2.2: a área que recebe os formulários de ações avançadas era removida do DOM quando nenhuma ação estava aberta, enquanto o primeiro clique apenas tentava preencher essa área. O resultado era um clique aparentemente ignorado em **Extrair para editar**, Traduzir, OCR, conversão e remux.
+- Mantém o host de ações avançadas permanentemente no DOM, porém oculto com `hidden` quando não está em uso. O primeiro clique apenas revela e preenche a área, sem reconstruir o player nem perder a posição do vídeo.
+- Adiciona fallback defensivo para reconstruir o editor caso uma página antiga em cache não contenha o host esperado.
+- Adiciona rastreamento no log da aplicação para extração de legenda: início, conclusão, arquivo gerado, duração e falhas com código/status quando disponíveis.
+- Valida manualmente o backend com FFmpeg real usando MKV com faixa SubRip embutida: extração para SRT concluída e vídeo original preservado.
+- Nenhuma migração: aplicação **v4.2.4**, Universal **v1.3.1**, `configVersion` **12** e todos os estados permanecem nos schemas atuais.
+
 ## 4.2.3
 
 - Corrige a percepção de ação em **Ferramentas → Gerenciar legendas**: ao confirmar extração, conversão, visualização, preview, sincronização ou outra operação sobre o arquivo, o andamento aparece imediatamente no aviso flutuante do canto inferior direito.

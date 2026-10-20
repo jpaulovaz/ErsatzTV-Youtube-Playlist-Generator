@@ -599,8 +599,9 @@
   }
 
   function advancedToolsSectionHtml() {
-    if (!isWorkspaceMode() || (!state.toolAction && !state.activeJob)) return '';
-    return `<section class="subtitle-manager-section subtitle-workspace-advanced-tools"><div class="subtitle-manager-section-head"><div class="subtitle-manager-title-with-help"><h4>Outras ações</h4>${helpHint('Outras ações', 'Aqui ficam as funções menos usadas: extrair uma legenda de dentro do vídeo, criar uma cópia editável, traduzir, transformar uma legenda em imagem em texto ou criar uma nova cópia do vídeo.')}</div></div><div id="subtitleManagerToolActionArea">${toolActionHtml()}</div></section>`;
+    if (!isWorkspaceMode()) return '';
+    const visible = Boolean(state.toolAction || state.activeJob);
+    return `<section class="subtitle-manager-section subtitle-workspace-advanced-tools" ${visible ? '' : 'hidden'}><div class="subtitle-manager-section-head"><div class="subtitle-manager-title-with-help"><h4>Outras ações</h4>${helpHint('Outras ações', 'Aqui ficam as funções menos usadas: extrair uma legenda de dentro do vídeo, criar uma cópia editável, traduzir, transformar uma legenda em imagem em texto ou criar uma nova cópia do vídeo.')}</div></div><div id="subtitleManagerToolActionArea">${toolActionHtml()}</div></section>`;
   }
 
   function localTrackRows() {
@@ -1278,7 +1279,18 @@
     else state.toolAction = { ...base, kind };
     state.activeJob = null;
     const area = $('#subtitleManagerToolActionArea');
-    if (area) { area.innerHTML = toolActionHtml(); area.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    if (area) {
+      const section = area.closest('.subtitle-workspace-advanced-tools');
+      if (section) section.hidden = false;
+      area.innerHTML = toolActionHtml();
+      area.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else {
+      // Defensive fallback: if an older/cached DOM does not contain the hidden action area,
+      // rebuild the editor once so the selected action is never silently lost.
+      render();
+      const renderedArea = $('#subtitleManagerToolActionArea');
+      if (renderedArea) renderedArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   }
 
   function closeToolAction() {
@@ -1287,7 +1299,11 @@
     state.toolAction = null;
     state.activeJob = null;
     const area = $('#subtitleManagerToolActionArea');
-    if (area) area.innerHTML = toolActionHtml();
+    if (area) {
+      area.innerHTML = toolActionHtml();
+      const section = area.closest('.subtitle-workspace-advanced-tools');
+      if (section) section.hidden = true;
+    }
   }
 
   async function refreshAfterToolMutation(change) {

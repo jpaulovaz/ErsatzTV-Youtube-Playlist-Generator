@@ -858,6 +858,17 @@ test('v4.1.2 abre o editor de legendas inline sob o item selecionado', () => {
   assert.match(css, /\.subtitle-workspace-inline-editor \{ display: grid; gap: 12px;/);
 });
 
+test('v4.2.4 mantem o host de acoes avancadas no DOM para o primeiro clique funcionar', () => {
+  const manager = read('js/subtitleManager.js');
+
+  assert.match(manager, /function advancedToolsSectionHtml\(\) \{[\s\S]*if \(!isWorkspaceMode\(\)\) return '';/);
+  assert.match(manager, /const visible = Boolean\(state\.toolAction \|\| state\.activeJob\)/);
+  assert.match(manager, /subtitle-workspace-advanced-tools\" \${visible \? '' : 'hidden'}/);
+  assert.match(manager, /if \(section\) section\.hidden = false/);
+  assert.match(manager, /if \(section\) section\.hidden = true/);
+  assert.match(manager, /Defensive fallback:[\s\S]*render\(\);/);
+});
+
 test('v4.2 amplia a oficina de legendas com compatibilidade, edicao e ferramentas guiadas', () => {
   const html = read('index.html');
   const manager = read('js/subtitleManager.js');

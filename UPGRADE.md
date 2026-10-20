@@ -1,10 +1,10 @@
-# Atualização para 4.2.3
+# Atualização para 4.2.4
 
-A versão 4.2.3 parte da **v4.2.2** e corrige a experiência de andamento em **Ferramentas → Gerenciar legendas**. Não há mudança de configuração, banco/estado ou formato de arquivos.
+A versão 4.2.4 parte da **v4.2.3** e corrige o clique inicial das ações avançadas em **Ferramentas → Gerenciar legendas**. Não há mudança de configuração, banco/estado ou formato de arquivos.
 
 ## Versionamento
 
-- aplicação: **v4.2.3**;
+- aplicação: **v4.2.4**;
 - Universal Scripted Schedules: **v1.3.1**;
 - `configVersion`: **12**;
 - Download state: **5**;
@@ -17,39 +17,53 @@ A versão 4.2.3 parte da **v4.2.2** e corrige a experiência de andamento em **F
 
 Não há migração de schema nesta versão.
 
-## O que muda no Gerenciador de Legendas
+## O problema corrigido
 
-O cartão de andamento que ficava dentro do editor foi removido. As ações passam a usar o mesmo aviso flutuante do canto inferior direito já utilizado nas varreduras do aplicativo.
+Na v4.2.2 a tela foi simplificada e a seção usada para abrir formulários como **Extrair para editar** passou a existir somente depois que uma ação estivesse ativa. Porém o primeiro clique apenas tentava preencher essa seção se ela já existisse. Assim o estado interno mudava, mas nada aparecia na tela.
 
-Ao confirmar uma operação como **Extrair legenda**, o feedback aparece imediatamente:
+A v4.2.4 mantém essa área no DOM de forma invisível (`hidden`) e a revela quando necessário. Isso corrige no primeiro clique:
+
+- Extrair para editar;
+- Salvar no formato original;
+- Criar cópia editável;
+- Traduzir;
+- Transformar em texto (OCR);
+- Criar cópia do vídeo adicionando/removendo legenda.
+
+O player não precisa ser reconstruído para abrir o formulário, portanto a posição atual do vídeo é preservada.
+
+## Diagnóstico de extração
+
+A extração passa a escrever em **Sistema → Logs**:
 
 ```text
-Extraindo legenda
-Lendo a faixa dentro do vídeo e criando o arquivo...
-[spinner]
+Extracao de legenda iniciada no Gerenciador de Legendas.
+Extracao de legenda concluida no Gerenciador de Legendas.
 ```
 
-O botão fica temporariamente bloqueado e muda para **Extraindo...**, evitando cliques duplicados e deixando claro que a ação foi recebida.
+Em falhas aparece:
 
-O mesmo padrão vale para extração, criação de cópia editável, forma de onda, mapa de frequências, preview compatível, salvamento, sincronização, restauração, exclusão, tradução, OCR e criação de cópias de vídeo.
+```text
+Extracao de legenda falhou no Gerenciador de Legendas: ...
+```
 
-Quando a tarefa fornece um percentual real, como tradução/OCR/remux, o aviso também mostra a barra de progresso. Quando não existe percentual confiável, aparece apenas a animação de carregamento; a interface não inventa porcentagens.
-
-Ao finalizar, o aviso informa sucesso ou erro. Extração e conversão exibem também o nome do arquivo criado quando disponível.
+O log inclui item/faixa, arquivo gerado, duração e código/status quando disponíveis. Isso permite distinguir imediatamente um problema de interface de uma falha do FFmpeg/filesystem/rclone.
 
 ## Preciso configurar algo?
 
-**Não.** A v4.2.3 não adiciona configuração. Streaming em tempo real, aceleração por hardware, Tesseract, Gemini e Bazarr permanecem exatamente como estavam na v4.2.2.
+**Não.** A v4.2.4 não adiciona configuração. Streaming em tempo real, aceleração por hardware, Tesseract, Gemini e Bazarr permanecem exatamente como estavam na v4.2.3.
 
 ## Atualização
 
-Pare o serviço e faça o backup normal da instalação. Depois extraia o update por cima da **v4.2.2**:
+Pare o serviço e faça o backup normal da instalação. Depois extraia o update por cima da **v4.2.3**:
 
 ```bash
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v4.2.2-to-v4.2.3-update.zip -d /caminho/da/aplicacao
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v4.2.3-to-v4.2.4-update.zip -d /caminho/da/aplicacao
 ```
 
-Reinicie o serviço. Para validar os arquivos do projeto:
+Reinicie o serviço. Como `subtitleManager.js` recebe um novo cache-buster, um recarregamento normal do navegador deve buscar a versão nova; se o navegador mantiver uma aba antiga aberta, feche-a e abra novamente.
+
+Para validar os arquivos do projeto:
 
 ```bash
 npm run verify

@@ -556,9 +556,38 @@ async function createVisualization(config, payload) {
   return advanced.createVisualization(context, payload);
 }
 
-async function extractEmbeddedTrack(config, payload) {
-  const context = await buildContext(config, payload.itemId);
-  return advanced.extractEmbeddedTrack(context, payload);
+async function extractEmbeddedTrack(config, payload = {}) {
+  const startedAt = Date.now();
+  const itemId = String(payload.itemId || '');
+  const trackId = String(payload.trackId || '');
+  try {
+    const context = await buildContext(config, itemId);
+    await logger.info('Extracao de legenda iniciada no Gerenciador de Legendas.', {
+      itemId,
+      fileName: context.item?.fileName || path.basename(context.mediaPath),
+      trackId,
+      convertToSrt: payload.convertToSrt === true,
+      language: String(payload.language || '') || null
+    });
+    const result = await advanced.extractEmbeddedTrack(context, payload);
+    await logger.info('Extracao de legenda concluida no Gerenciador de Legendas.', {
+      itemId,
+      fileName: context.item?.fileName || path.basename(context.mediaPath),
+      trackId,
+      outputFileName: result?.fileName || null,
+      durationMs: Date.now() - startedAt
+    });
+    return result;
+  } catch (error) {
+    await logger.error(`Extracao de legenda falhou no Gerenciador de Legendas: ${error.message}`, {
+      itemId,
+      trackId,
+      code: error.code || null,
+      statusCode: error.statusCode || null,
+      durationMs: Date.now() - startedAt
+    });
+    throw error;
+  }
 }
 
 async function convertTrackToSrt(config, payload) {
