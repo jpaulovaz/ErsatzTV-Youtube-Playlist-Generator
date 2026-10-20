@@ -887,12 +887,14 @@ test('v4.2 amplia a oficina de legendas com compatibilidade, edicao e ferramenta
   assert.match(manager, /Transformar em texto/);
   assert.match(manager, /Criar cópia do vídeo com esta legenda/);
   assert.match(manager, /Extrair para editar/);
-  assert.match(manager, /subtitleManagerOperationStatus/);
-  assert.match(manager, /subtitle-operation-indeterminate/);
-  assert.match(manager, /Tempo decorrido/);
+  assert.match(manager, /persistent: true/);
+  assert.match(manager, /loading: true/);
+  assert.match(manager, /progress: percent \/ 100/);
   assert.match(manager, /Extraindo legenda/);
   assert.match(manager, /Lendo o áudio do vídeo/);
-  assert.match(manager, /data-subtitle-operation-dismiss/);
+  assert.match(manager, /canto inferior direito/);
+  assert.doesNotMatch(manager, /subtitleManagerOperationStatus/);
+  assert.doesNotMatch(manager, /Tempo decorrido/);
   assert.match(manager, /subtitle-manager-collapsible/);
   assert.match(manager, /helpHint/);
 

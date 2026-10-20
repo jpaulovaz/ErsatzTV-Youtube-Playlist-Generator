@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 4.2.2
+# ErsatzTV YouTube Downloader 4.2.3
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A linha v4 aplica ao **aplicativo inteiro** uma arquitetura orientada por tarefas. A v4.1.x criou o grupo **Ferramentas** e transformou o editor de legendas em um workspace reutilizável para filmes e séries de qualquer pasta autorizada. A v4.2.0 ampliou esse workspace para uma oficina completa de extração, tradução, OCR, remux e sincronização; a v4.2.1 acrescentou reprodução em tempo real e aceleração de hardware. A **v4.2.2** simplifica a tela de revisão: mantém na frente apenas o que é necessário para assistir e corrigir, coloca explicações técnicas atrás de ajuda contextual `?` e mostra andamento visível em toda operação de arquivo, com percentual quando a tarefa fornece progresso real.
+A linha v4 aplica ao **aplicativo inteiro** uma arquitetura orientada por tarefas. A v4.1.x criou o grupo **Ferramentas** e transformou o editor de legendas em um workspace reutilizável para filmes e séries de qualquer pasta autorizada. A v4.2.0 ampliou esse workspace para uma oficina completa de extração, tradução, OCR, remux e sincronização; a v4.2.1 acrescentou reprodução em tempo real e aceleração de hardware; a v4.2.2 simplificou a tela. A **v4.2.3** corrige o feedback das ações: extração, conversão e demais operações passam a usar o aviso flutuante no canto inferior direito, no mesmo padrão das varreduras, com spinner imediato e percentual quando o backend fornece progresso real.
 
 ## Experiência v4
 
@@ -140,7 +140,7 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A **v4.2.2** atualiza diretamente uma instalação **v4.2.1**. Não há migração de configuração nem de estado: `configVersion` permanece em **12**. A atualização simplifica **Ferramentas → Gerenciar legendas** e acrescenta acompanhamento visível para operações como extração, conversão, forma de onda, mapa de frequências, salvamento, restauração, OCR, tradução e criação de cópias de vídeo. Consulte [UPGRADE.md](UPGRADE.md).
+A **v4.2.3** atualiza diretamente uma instalação **v4.2.2**. Não há migração de configuração nem de estado: `configVersion` permanece em **12**. A atualização troca o status interno do Gerenciador de Legendas pelo mesmo aviso flutuante usado nas varreduras e garante feedback imediato ao confirmar extração, conversão, forma de onda, mapa de frequências e demais operações. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Reprodução compatível em tempo real
 

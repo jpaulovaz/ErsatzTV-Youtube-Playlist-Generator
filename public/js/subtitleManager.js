@@ -39,8 +39,6 @@
     activeJob: null,
     jobTimer: null,
     operation: null,
-    operationClockTimer: null,
-    operationClearTimer: null,
     playerTime: 0,
     liveStreamBaseSeconds: 0,
     liveStreamActive: false
@@ -52,108 +50,66 @@
     return state.escapeHtml ? state.escapeHtml(value) : String(value ?? '').replace(/[&<>"']/g, '');
   }
 
-  function toast(message, error = false) {
-    if (state.showToast) state.showToast(message, error);
+  function toast(message, error = false, options = {}) {
+    if (state.showToast) state.showToast(message, error, options);
   }
 
   function helpHint(title, message) {
     return `<details class="subtitle-help"><summary aria-label="Ajuda: ${esc(title)}" title="Ajuda">?</summary><div class="subtitle-help-popover"><strong>${esc(title)}</strong><p>${esc(message)}</p></div></details>`;
   }
 
-  function formatElapsed(ms) {
-    const seconds = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
-    if (seconds < 60) return `${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    return `${minutes}m ${String(seconds % 60).padStart(2, '0')}s`;
+  function operationToastMessage(operation) {
+    const label = String(operation?.label || 'Processando').trim();
+    const message = String(operation?.message || '').trim();
+    return message ? `${label}\n${message}` : label;
   }
 
-  function operationStatusHtml() {
+  function showOperationToast() {
     const operation = state.operation;
-    if (!operation) return '';
-    const running = operation.status === 'running';
-    const failed = operation.status === 'failed';
-    const completed = operation.status === 'completed';
-    const percent = operation.percent != null && Number.isFinite(Number(operation.percent)) ? Math.max(0, Math.min(100, Math.round(Number(operation.percent)))) : null;
-    const elapsed = formatElapsed(Date.now() - Number(operation.startedAt || Date.now()));
-    const statusText = failed ? 'Não foi possível concluir' : completed ? 'Concluído' : 'Em andamento';
-    const progressHtml = running && percent == null
-      ? '<div class="subtitle-operation-indeterminate" aria-label="Operação em andamento"><span></span></div>'
-      : `<progress class="progress-track" max="100" value="${percent == null ? (completed ? 100 : 0) : percent}"></progress>`;
-    return `<div class="subtitle-operation-card ${failed ? 'failed' : completed ? 'completed' : 'running'}" role="status" aria-live="polite">
-      <div class="subtitle-operation-head"><div><strong>${esc(operation.label || 'Processando')}</strong><span>${esc(operation.message || statusText)}</span></div><div class="subtitle-operation-side"><span class="badge ${failed ? 'warn' : completed ? 'ok' : ''}">${esc(statusText)}</span><button type="button" class="subtitle-operation-dismiss" data-subtitle-operation-dismiss aria-label="Fechar status" title="Fechar">×</button></div></div>
-      ${progressHtml}
-      <div class="subtitle-operation-meta"><span>${running ? `Tempo decorrido: ${esc(elapsed)}` : esc(operation.finishedNote || '')}</span>${running && percent != null ? `<strong>${percent}%</strong>` : ''}</div>
-    </div>`;
-  }
-
-  function updateOperationUi() {
-    const host = $('#subtitleManagerOperationStatus');
-    if (!host) return;
-    host.innerHTML = operationStatusHtml();
-    host.classList.toggle('hidden', !state.operation);
-  }
-
-  function stopOperationTimers() {
-    if (state.operationClockTimer) window.clearInterval(state.operationClockTimer);
-    if (state.operationClearTimer) window.clearTimeout(state.operationClearTimer);
-    state.operationClockTimer = null;
-    state.operationClearTimer = null;
+    if (!operation || operation.status !== 'running') return;
+    const percent = operation.percent != null && Number.isFinite(Number(operation.percent))
+      ? Math.max(0, Math.min(100, Number(operation.percent)))
+      : null;
+    toast(operationToastMessage(operation), false, {
+      persistent: true,
+      loading: true,
+      ...(percent == null ? {} : { progress: percent / 100 })
+    });
   }
 
   function startOperation(key, label, message, options = {}) {
-    stopOperationTimers();
     state.operation = {
       key: String(key || 'operation'),
       label: String(label || 'Processando'),
       message: String(message || 'Aguarde...'),
       status: 'running',
-      percent: options.percent != null && Number.isFinite(Number(options.percent)) ? Number(options.percent) : null,
-      startedAt: Date.now(),
-      finishedNote: ''
+      percent: options.percent != null && Number.isFinite(Number(options.percent)) ? Number(options.percent) : null
     };
-    updateOperationUi();
-    state.operationClockTimer = window.setInterval(updateOperationUi, 1000);
+    showOperationToast();
   }
 
   function updateOperation(message, percent = undefined) {
-    if (!state.operation) return;
+    if (!state.operation || state.operation.status !== 'running') return;
     if (message != null) state.operation.message = String(message);
     if (percent !== undefined) state.operation.percent = percent != null && Number.isFinite(Number(percent)) ? Number(percent) : null;
-    updateOperationUi();
+    showOperationToast();
   }
 
-  function finishOperation(message, { failed = false, keepMs = 5000 } = {}) {
-    if (!state.operation) return;
-    if (state.operationClockTimer) window.clearInterval(state.operationClockTimer);
-    state.operationClockTimer = null;
-    state.operation.status = failed ? 'failed' : 'completed';
-    state.operation.message = String(message || (failed ? 'A operação falhou.' : 'Operação concluída.'));
-    state.operation.percent = failed ? state.operation.percent : 100;
-    state.operation.finishedNote = `Duração: ${formatElapsed(Date.now() - Number(state.operation.startedAt || Date.now()))}`;
-    updateOperationUi();
-    if (!failed && keepMs > 0) {
-      state.operationClearTimer = window.setTimeout(() => {
-        state.operation = null;
-        state.operationClearTimer = null;
-        updateOperationUi();
-      }, keepMs);
-    }
-  }
-
-  function dismissOperation() {
-    stopOperationTimers();
+  function finishOperation(message, { failed = false } = {}) {
+    const text = String(message || (failed ? 'Não foi possível concluir a operação.' : 'Operação concluída.'));
     state.operation = null;
-    updateOperationUi();
+    toast(text, failed, { durationMs: failed ? 9000 : 6500 });
   }
 
   async function withOperation({ key, label, message, successMessage }, runner) {
     startOperation(key, label, message);
     try {
       const result = await runner();
-      finishOperation(successMessage || 'Operação concluída.');
+      const finalMessage = typeof successMessage === 'function' ? successMessage(result) : successMessage;
+      finishOperation(finalMessage || 'Operação concluída.');
       return result;
     } catch (error) {
-      finishOperation(error.message || 'Não foi possível concluir a operação.', { failed: true, keepMs: 0 });
+      finishOperation(error.message || 'Não foi possível concluir a operação.', { failed: true });
       throw error;
     }
   }
@@ -617,24 +573,7 @@
     const action = state.toolAction;
     if (!action && !state.activeJob) return '<div class="subtitle-manager-empty">Escolha uma ação na legenda desejada.</div>';
     if (state.activeJob) {
-      const job = state.activeJob;
-      const progress = job.progress || {};
-      const finished = ['completed', 'failed'].includes(job.status);
-      const statusLabel = ({ queued: 'Aguardando', running: 'Em andamento', completed: 'Concluído', failed: 'Não concluído' })[job.status] || job.status;
-      let resultHtml = '';
-      if (job.status === 'completed' && job.result) {
-        if (job.kind === 'translate') {
-          const outputs = Array.isArray(job.result.outputs) ? job.result.outputs : [];
-          resultHtml = outputs.length ? `<div class="subtitle-tool-result"><strong>Arquivos</strong>${outputs.map((output) => `<span>${esc(output.fileName || output.language || output.kind)}${output.skipped ? ' · já existia, mantido' : ' · criado'}</span>`).join('')}</div>` : '';
-        } else if (job.kind === 'ocr-pgs') {
-          resultHtml = `<div class="subtitle-tool-result"><strong>${esc(job.result.fileName || 'Legenda criada')}</strong><span>${esc(job.result.cues || 0)} trechos reconhecidos</span></div>`;
-        } else if (job.kind === 'remux') {
-          resultHtml = `<div class="subtitle-tool-result"><strong>${esc(job.result.fileName || 'Cópia do vídeo criada')}</strong><span>O arquivo original foi preservado.</span></div>`;
-        }
-      }
-      const label = job.kind === 'translate' ? 'Traduzindo legenda' : job.kind === 'ocr-pgs' ? 'Transformando legenda em texto' : 'Criando cópia do vídeo';
-      const progressKnown = progress.percent != null && Number.isFinite(Number(progress.percent));
-      return `<div class="subtitle-tool-action-card"><div class="subtitle-manager-section-head"><div><strong>${esc(label)}</strong><p>${esc(progress.message || (job.status === 'queued' ? 'Aguardando...' : 'Processando...'))}</p></div><span class="badge ${job.status === 'failed' ? 'warn' : (job.status === 'completed' ? 'ok' : '')}">${esc(statusLabel)}</span></div>${progressKnown ? `<progress max="100" value="${esc(progress.percent)}"></progress>` : '<div class="subtitle-operation-indeterminate"><span></span></div>'}${resultHtml}${job.error ? `<div class="subtitle-manager-inline-warning">${esc(job.error)}</div>` : ''}${finished ? '<button type="button" class="small" data-subtitle-tool-close>Fechar</button>' : ''}</div>`;
+      return '<div class="subtitle-manager-empty">Ação iniciada. Acompanhe o andamento no canto inferior direito.</div>';
     }
     const trackName = action.trackId || 'faixa';
     const languageValue = action.language && action.language !== 'und' ? action.language : '';
@@ -810,7 +749,6 @@
         <button type="button" class="small" data-subtitle-manager-close>Fechar gerenciador</button>
       </div>
 
-      <div id="subtitleManagerOperationStatus" class="subtitle-operation-host ${state.operation ? '' : 'hidden'}">${operationStatusHtml()}</div>
 
       <div class="subtitle-manager-player-card">
         ${state.status.mediaAvailable ? `
@@ -939,7 +877,6 @@
     clearTextTrack();
     if (state.jobTimer) clearTimeout(state.jobTimer);
     state.jobTimer = null;
-    stopOperationTimers();
     state.preview = null;
     state.previewOffsetMs = 0;
     state.previewToken = '';
@@ -1376,19 +1313,33 @@
         return;
       }
       if (state.activeJob?.status === 'completed') {
-        const finishedMessage = state.activeJob.kind === 'translate' ? 'Tradução concluída.' : state.activeJob.kind === 'ocr-pgs' ? 'Legenda transformada em texto.' : 'Cópia do vídeo criada.';
+        const completedJob = state.activeJob;
+        let finishedMessage = completedJob.kind === 'translate' ? 'Tradução concluída.' : completedJob.kind === 'ocr-pgs' ? 'Legenda transformada em texto.' : 'Cópia do vídeo criada.';
+        if (completedJob.kind === 'translate') {
+          const files = (completedJob.result?.outputs || []).filter((entry) => !entry.skipped).map((entry) => entry.fileName).filter(Boolean);
+          if (files.length) finishedMessage += `\n${files.join(', ')}`;
+        } else if (completedJob.result?.fileName) {
+          finishedMessage += `\n${completedJob.result.fileName}`;
+        }
         finishOperation(finishedMessage);
-        toast(finishedMessage);
+        const completedKind = completedJob.kind;
+        state.activeJob = null;
+        state.toolAction = null;
         await refreshStatus();
         render();
-        await notifyContentChanged({ action: state.activeJob.kind });
+        await notifyContentChanged({ action: completedKind });
       } else if (state.activeJob?.status === 'failed') {
-        finishOperation(state.activeJob.error || 'Não foi possível concluir a operação.', { failed: true, keepMs: 0 });
-        toast(state.activeJob.error || 'A tarefa avançada falhou.', true);
+        const message = state.activeJob.error || 'Não foi possível concluir a operação.';
+        finishOperation(message, { failed: true });
+        state.activeJob = null;
+        const area = $('#subtitleManagerToolActionArea');
+        if (area) area.innerHTML = toolActionHtml();
       }
     } catch (error) {
-      finishOperation(error.message, { failed: true, keepMs: 0 });
-      toast(error.message, true);
+      finishOperation(error.message, { failed: true });
+      state.activeJob = null;
+      const area = $('#subtitleManagerToolActionArea');
+      if (area) area.innerHTML = toolActionHtml();
     }
   }
 
@@ -1404,7 +1355,7 @@
       if (area) area.innerHTML = toolActionHtml();
       if (state.activeJob?.id) await pollAdvancedJob(state.activeJob.id);
     } catch (error) {
-      finishOperation(error.message, { failed: true, keepMs: 0 });
+      finishOperation(error.message, { failed: true });
       throw error;
     }
   }
@@ -1415,17 +1366,19 @@
     const itemBase = `${state.endpointBase}/items/${encodeURIComponent(state.item.id)}`;
     const replace = Boolean($('#subtitleToolReplace')?.checked);
     const submit = $('[data-subtitle-tool-submit]');
-    if (submit) submit.disabled = true;
+    const originalSubmitLabel = submit?.textContent || '';
+    if (submit) {
+      submit.disabled = true;
+      submit.textContent = action.kind === 'extract' ? 'Extraindo...' : action.kind === 'convert' ? 'Criando...' : 'Iniciando...';
+    }
     try {
       if (action.kind === 'extract') {
         const language = $('#subtitleToolLanguage')?.value || action.language;
-        const response = await withOperation({ key: 'extract', label: 'Extraindo legenda', message: 'Lendo a faixa dentro do vídeo e criando o arquivo de legenda. Em arquivos remotos isso pode levar mais tempo...', successMessage: 'Legenda extraída.' }, () => state.api(`${itemBase}/extract`, { method: 'POST', body: JSON.stringify({ trackId: action.trackId, language, replace, convertToSrt: action.convertToSrt === true }) }));
-        toast(`Legenda extraída: ${response.result?.fileName || 'arquivo criado'}.`);
+        const response = await withOperation({ key: 'extract', label: 'Extraindo legenda', message: 'Lendo a faixa dentro do vídeo e criando o arquivo de legenda. Em arquivos remotos isso pode levar mais tempo...', successMessage: (result) => `Legenda extraída.\n${result.result?.fileName || 'Arquivo criado.'}` }, () => state.api(`${itemBase}/extract`, { method: 'POST', body: JSON.stringify({ trackId: action.trackId, language, replace, convertToSrt: action.convertToSrt === true }) }));
         await refreshAfterToolMutation({ action: 'extract', trackId: response.result?.fileName || action.trackId });
       } else if (action.kind === 'convert') {
         const language = $('#subtitleToolLanguage')?.value || action.language;
-        const response = await withOperation({ key: 'convert', label: 'Criando cópia editável', message: 'Convertendo a legenda para um formato editável...', successMessage: 'Cópia editável criada.' }, () => state.api(`${itemBase}/convert`, { method: 'POST', body: JSON.stringify({ trackId: action.trackId, language, replace }) }));
-        toast(`Cópia editável criada: ${response.result?.fileName || 'arquivo criado'}.`);
+        const response = await withOperation({ key: 'convert', label: 'Criando cópia editável', message: 'Convertendo a legenda para um formato editável...', successMessage: (result) => `Cópia editável criada.\n${result.result?.fileName || 'Arquivo criado.'}` }, () => state.api(`${itemBase}/convert`, { method: 'POST', body: JSON.stringify({ trackId: action.trackId, language, replace }) }));
         await refreshAfterToolMutation({ action: 'convert', trackId: response.result?.fileName || action.trackId });
       } else if (action.kind === 'translate') {
         await startAdvancedJob(`${itemBase}/translate`, {
@@ -1443,9 +1396,11 @@
         await startAdvancedJob(`${itemBase}/remux`, { action: 'remove-stream', streamIndex: action.streamIndex, trackId: action.trackId });
       }
     } catch (error) {
-      toast(error.message, true);
       const currentSubmit = $('[data-subtitle-tool-submit]');
-      if (currentSubmit) currentSubmit.disabled = false;
+      if (currentSubmit) {
+        currentSubmit.disabled = false;
+        currentSubmit.textContent = originalSubmitLabel || currentSubmit.textContent;
+      }
     }
   }
 
@@ -1458,7 +1413,6 @@
   }
 
   document.addEventListener('click', (event) => {
-    if (event.target.closest('[data-subtitle-operation-dismiss]')) { dismissOperation(); return; }
     const visualizationSeek = event.target.closest('[data-subtitle-visualization-seek]');
     if (visualizationSeek) { seekFromVisualization(event); return; }
     const openManager = event.target.closest('[data-subtitle-manager-open]');

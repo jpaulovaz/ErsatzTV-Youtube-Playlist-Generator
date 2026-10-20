@@ -1,10 +1,10 @@
-# Atualização para 4.2.2
+# Atualização para 4.2.3
 
-A versão 4.2.2 parte da **v4.2.1** e concentra a mudança em **Ferramentas → Gerenciar legendas**. Nenhum formato de arquivo, configuração ou estado é migrado. O objetivo é deixar a oficina mais simples de entender e tornar explícito quando uma ação ainda está trabalhando, especialmente em arquivos remotos.
+A versão 4.2.3 parte da **v4.2.2** e corrige a experiência de andamento em **Ferramentas → Gerenciar legendas**. Não há mudança de configuração, banco/estado ou formato de arquivos.
 
 ## Versionamento
 
-- aplicação: **v4.2.2**;
+- aplicação: **v4.2.3**;
 - Universal Scripted Schedules: **v1.3.1**;
 - `configVersion`: **12**;
 - Download state: **5**;
@@ -17,52 +17,36 @@ A versão 4.2.2 parte da **v4.2.1** e concentra a mudança em **Ferramentas → 
 
 Não há migração de schema nesta versão.
 
-## Tela mais simples
+## O que muda no Gerenciador de Legendas
 
-A tela mantém à frente o fluxo normal: escolher um vídeo, reproduzir, escolher a legenda e fazer o ajuste necessário. Recursos de uso menos frequente ficam recolhidos e podem ser abertos quando forem necessários.
+O cartão de andamento que ficava dentro do editor foi removido. As ações passam a usar o mesmo aviso flutuante do canto inferior direito já utilizado nas varreduras do aplicativo.
 
-As explicações longas e detalhes de diagnóstico foram movidos para botões **?**. Termos internos como codec, índice da faixa e formato continuam disponíveis para diagnóstico, mas deixam de competir visualmente com as ações do dia a dia.
+Ao confirmar uma operação como **Extrair legenda**, o feedback aparece imediatamente:
 
-Alguns nomes também foram trocados por descrições de tarefa, por exemplo:
+```text
+Extraindo legenda
+Lendo a faixa dentro do vídeo e criando o arquivo...
+[spinner]
+```
 
-- waveform → **Forma de onda**;
-- spectrogram → **Mapa de frequências**;
-- cue → **trecho**;
-- OCR → **Transformar em texto**;
-- remux → **Criar cópia do vídeo**;
-- conversão para SRT → **Criar cópia editável**.
+O botão fica temporariamente bloqueado e muda para **Extraindo...**, evitando cliques duplicados e deixando claro que a ação foi recebida.
 
-## Andamento das operações
+O mesmo padrão vale para extração, criação de cópia editável, forma de onda, mapa de frequências, preview compatível, salvamento, sincronização, restauração, exclusão, tradução, OCR e criação de cópias de vídeo.
 
-Toda operação relevante feita sobre o vídeo ou a legenda passa a mostrar um cartão de andamento dentro do editor. Ele aparece imediatamente após a confirmação e informa o que está acontecendo.
+Quando a tarefa fornece um percentual real, como tradução/OCR/remux, o aviso também mostra a barra de progresso. Quando não existe percentual confiável, aparece apenas a animação de carregamento; a interface não inventa porcentagens.
 
-Isso cobre, entre outras ações:
-
-- extrair uma legenda de dentro do vídeo;
-- criar uma cópia editável;
-- preparar uma versão temporária para reprodução;
-- criar forma de onda ou mapa de frequências;
-- salvar texto/horários e sincronização;
-- restaurar ou excluir uma legenda;
-- aplicar uma legenda encontrada;
-- traduzir;
-- transformar legenda em imagem em texto;
-- criar cópias de vídeo.
-
-Quando o backend fornece progresso real — atualmente nos jobs de tradução, reconhecimento de texto e criação de cópias de vídeo — o cartão mostra **percentual**. Em operações síncronas nas quais o FFmpeg ou filesystem não fornece um percentual confiável ao navegador, a interface mostra uma barra animada e o **tempo decorrido**, em vez de inventar uma porcentagem.
-
-Ao terminar, o cartão informa sucesso e duração. Em erro, a mensagem permanece visível até ser fechada ou uma nova operação começar.
+Ao finalizar, o aviso informa sucesso ou erro. Extração e conversão exibem também o nome do arquivo criado quando disponível.
 
 ## Preciso configurar algo?
 
-**Não.** A v4.2.2 não acrescenta nenhuma configuração. Streaming em tempo real, aceleração por hardware, Tesseract, Gemini e Bazarr continuam exatamente com as configurações da v4.2.1.
+**Não.** A v4.2.3 não adiciona configuração. Streaming em tempo real, aceleração por hardware, Tesseract, Gemini e Bazarr permanecem exatamente como estavam na v4.2.2.
 
 ## Atualização
 
-Pare o serviço e faça o backup normal da instalação. Depois extraia o update por cima da **v4.2.1**:
+Pare o serviço e faça o backup normal da instalação. Depois extraia o update por cima da **v4.2.2**:
 
 ```bash
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v4.2.1-to-v4.2.2-update.zip -d /caminho/da/aplicacao
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v4.2.2-to-v4.2.3-update.zip -d /caminho/da/aplicacao
 ```
 
 Reinicie o serviço. Para validar os arquivos do projeto:

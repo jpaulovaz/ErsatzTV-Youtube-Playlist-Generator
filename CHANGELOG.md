@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.2.3
+
+- Corrige a percepção de ação em **Ferramentas → Gerenciar legendas**: ao confirmar extração, conversão, visualização, preview, sincronização ou outra operação sobre o arquivo, o andamento aparece imediatamente no aviso flutuante do canto inferior direito.
+- Remove o cartão de andamento preso dentro do editor, incluindo tempo decorrido e barra interna, para usar o mesmo padrão visual já adotado pelas varreduras da biblioteca/gerenciadores.
+- Operações sem percentual confiável exibem o spinner flutuante enquanto trabalham; jobs que fornecem percentual real (tradução, OCR e criação de cópias de vídeo) atualizam a barra de progresso no mesmo aviso.
+- O botão de extração muda para **Extraindo...** e fica bloqueado enquanto a solicitação está ativa, evitando a sensação de clique ignorado e cliques duplicados em arquivos remotos/rclone.
+- Sucesso e erro também são informados no aviso flutuante; extração/conversão exibem o nome do arquivo criado quando disponível.
+- Nenhuma migração: aplicação **v4.2.3**, Universal **v1.3.1**, `configVersion` **12** e todos os estados permanecem nos schemas atuais.
+
 ## 4.2.2
 
 - Simplifica **Ferramentas → Gerenciar legendas** para uso por pessoas leigas: informações essenciais ficam visíveis e explicações técnicas passam para ajuda contextual `?`.

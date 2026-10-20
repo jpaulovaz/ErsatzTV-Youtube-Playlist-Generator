@@ -1,15 +1,13 @@
-ErsatzTV YouTube Downloader 4.2.2 - pacote de atualização
-Base: v4.2.1
+ErsatzTV YouTube Downloader 4.2.3 - pacote de atualização
+Base: v4.2.2
 
-Este update simplifica a experiência do Gerenciador de Legendas e torna visível o andamento das operações:
-- linguagem orientada a tarefas para usuários leigos;
-- explicações e detalhes técnicos movidos para ajuda contextual ?;
-- recursos opcionais recolhidos para reduzir excesso de informação;
-- status unificado para ações sobre vídeo e legendas;
-- barra animada + tempo decorrido quando não existe percentual confiável;
-- percentual real nos jobs de tradução, reconhecimento de texto e criação de cópias de vídeo;
-- feedback imediato durante extração de legenda embutida, conversão, forma de onda, mapa de frequências, preview, edição, sincronização, restauração e exclusão;
-- listagem do workspace simplificada, mantendo detalhes técnicos acessíveis sob demanda.
+Este update corrige o feedback das operacoes em Ferramentas -> Gerenciar legendas:
+- remove o cartao de andamento preso dentro do editor e o contador de tempo decorrido;
+- usa o mesmo aviso flutuante do canto inferior direito ja usado nas varreduras do aplicativo;
+- mostra spinner imediatamente ao iniciar extracao, conversao, forma de onda, mapa de frequencias, preview, salvamento, sincronizacao, restauracao e exclusao;
+- usa percentual real no aviso flutuante quando o job fornece progresso, como traducao, OCR e criacao de copias de video;
+- muda o botao de extracao para "Extraindo..." e bloqueia cliques duplicados enquanto a operacao esta ativa;
+- informa sucesso/erro no mesmo aviso e mostra o nome do arquivo criado em extracao/conversao quando disponivel.
 
 Arquivos incluidos:
 CHANGELOG.md
@@ -20,13 +18,12 @@ public/index.html
 public/login.html
 public/styles.css
 public/js/subtitleManager.js
-public/js/subtitleWorkspace.js
 test/ui-v3.test.js
 MODIFIED_FILES.txt
 UPDATE_CONTENTS.txt
 
-Aplicacao v4.2.2, Universal v1.3.1, configVersion 12, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-workspace state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v4.2.3, Universal v1.3.1, configVersion 12, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-workspace state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 
-Nao existe migracao de configuracao ou estado na v4.2.2. Streaming, aceleracao por hardware, Tesseract, Gemini e Bazarr preservam exatamente a configuracao da v4.2.1.
+Nao existe migracao de configuracao ou estado na v4.2.3. Streaming, aceleracao por hardware, Tesseract, Gemini e Bazarr preservam exatamente a configuracao da v4.2.2.
 
 O pacote nao inclui config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/, tokens, estados operacionais, arquivos de midia ou sidecars.
