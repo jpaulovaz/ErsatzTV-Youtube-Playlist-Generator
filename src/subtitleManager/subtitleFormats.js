@@ -91,6 +91,112 @@ function cuesToVtt(input) {
   return `WEBVTT\n\n${cues.map((cue) => `${formatVttTimestamp(cue.startMs)} --> ${formatVttTimestamp(cue.endMs)}\n${cue.text}`).join('\n\n')}\n`;
 }
 
+function parseFlexibleTimestamp(value) {
+  const raw = String(value || '').trim();
+  const srt = parseSrtTimestamp(raw.replace('.', ','));
+  if (srt != null) return srt;
+  const match = /^(?:(\d{1,3}):)?(\d{1,2}):(\d{2})(?:[.,](\d{1,3}))?$/.exec(raw);
+  if (!match) return null;
+  const hours = Number(match[1] || 0);
+  const minutes = Number(match[2] || 0);
+  const seconds = Number(match[3] || 0);
+  const millis = Number(String(match[4] || '0').padEnd(3, '0').slice(0, 3));
+  if (minutes > 59 || seconds > 59) return null;
+  return (((hours * 60 + minutes) * 60) + seconds) * 1000 + millis;
+}
+
+function parseVtt(value) {
+  const text = assertSubtitleText(normalizeNewlines(value)).replace(/^\uFEFF/, '').trim();
+  if (!text) return [];
+  const body = text.replace(/^WEBVTT[^\n]*\n?/, '').trim();
+  const blocks = body.split(/\n{2,}/);
+  const cues = [];
+  for (const block of blocks) {
+    const lines = block.split('\n').map((line) => line.replace(/\s+$/g, ''));
+    if (!lines.length) continue;
+    if (/^(NOTE|STYLE|REGION)(?:\s|$)/.test(lines[0])) continue;
+    let index = lines.findIndex((line) => line.includes('-->'));
+    if (index < 0) continue;
+    const match = /^\s*(.*?)\s*-->\s*(.*?)(?:\s+[^ ]+=.*)?\s*$/.exec(lines[index]);
+    if (!match) continue;
+    const startMs = parseFlexibleTimestamp(match[1]);
+    const endToken = String(match[2]).trim().split(/\s+/)[0];
+    const endMs = parseFlexibleTimestamp(endToken);
+    if (startMs == null || endMs == null || endMs <= startMs) continue;
+    const cueText = lines.slice(index + 1).join('\n').trim();
+    if (!cueText) continue;
+    cues.push({ startMs, endMs, text: cueText });
+  }
+  return normalizeCues(cues);
+}
+
+function assTimestampToMs(value) {
+  const match = /^\s*(\d{1,3}):(\d{2}):(\d{2})[.](\d{1,2})\s*$/.exec(String(value || ''));
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3]);
+  const centis = Number(String(match[4]).padEnd(2, '0').slice(0, 2));
+  if (minutes > 59 || seconds > 59) return null;
+  return (((hours * 60 + minutes) * 60) + seconds) * 1000 + centis * 10;
+}
+
+function stripAssFormatting(value) {
+  return normalizeNewlines(value)
+    .replace(/\{[^}]*\}/g, '')
+    .replace(/\\N/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\\h/g, ' ')
+    .trim();
+}
+
+function parseAss(value) {
+  const text = assertSubtitleText(normalizeNewlines(value)).replace(/^\uFEFF/, '');
+  const lines = text.split('\n');
+  let inEvents = false;
+  let fields = ['layer', 'start', 'end', 'style', 'name', 'marginl', 'marginr', 'marginv', 'effect', 'text'];
+  const cues = [];
+  for (const rawLine of lines) {
+    const line = String(rawLine || '').trim();
+    if (/^\[Events\]$/i.test(line)) { inEvents = true; continue; }
+    if (/^\[.*\]$/.test(line)) { inEvents = false; continue; }
+    if (!inEvents) continue;
+    if (/^Format\s*:/i.test(line)) {
+      fields = line.slice(line.indexOf(':') + 1).split(',').map((part) => part.trim().toLowerCase());
+      continue;
+    }
+    if (!/^Dialogue\s*:/i.test(line)) continue;
+    const payload = line.slice(line.indexOf(':') + 1).trim();
+    const parts = [];
+    let cursor = payload;
+    for (let i = 0; i < fields.length - 1; i += 1) {
+      const comma = cursor.indexOf(',');
+      if (comma < 0) { parts.push(cursor); cursor = ''; }
+      else { parts.push(cursor.slice(0, comma)); cursor = cursor.slice(comma + 1); }
+    }
+    parts.push(cursor);
+    const record = {};
+    fields.forEach((field, index) => { record[field] = parts[index] == null ? '' : parts[index]; });
+    const startMs = assTimestampToMs(record.start);
+    const endMs = assTimestampToMs(record.end);
+    const cueText = stripAssFormatting(record.text);
+    if (startMs == null || endMs == null || endMs <= startMs || !cueText) continue;
+    cues.push({ startMs, endMs, text: cueText });
+  }
+  return normalizeCues(cues);
+}
+
+function parseTextSubtitle(value, format = 'srt') {
+  const key = String(format || 'srt').toLowerCase();
+  if (key === 'srt' || key === 'subrip') return parseSrt(value);
+  if (key === 'vtt' || key === 'webvtt') return parseVtt(value);
+  if (key === 'ass' || key === 'ssa') return parseAss(value);
+  const error = new Error(`Formato textual de legenda nao suportado: ${key || 'desconhecido'}.`);
+  error.statusCode = 409;
+  error.code = 'SUBTITLE_TEXT_FORMAT_UNSUPPORTED';
+  throw error;
+}
+
 function parseLrcTimestamp(value) {
   const match = /^(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?$/.exec(String(value || '').trim());
   if (!match) return null;
@@ -135,6 +241,10 @@ module.exports = {
   parseSrtTimestamp,
   formatSrtTimestamp,
   parseSrt,
+  parseVtt,
+  parseAss,
+  parseTextSubtitle,
+  stripAssFormatting,
   writeSrt,
   cuesToVtt,
   parseLrc,

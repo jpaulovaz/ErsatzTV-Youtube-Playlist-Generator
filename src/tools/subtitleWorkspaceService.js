@@ -9,6 +9,8 @@ const scanner = require('./subtitleWorkspaceScanner');
 const subtitleCore = require('../subtitleManager/subtitleCore');
 const subtitleManagerState = require('../subtitleManager/subtitleManagerState');
 const bazarrClient = require('../integrations/bazarrClient');
+const mediaPreview = require('../mediaPreviewService');
+const advanced = require('./subtitleWorkspaceAdvanced');
 
 const scanJobs = new Map();
 let mutationChain = Promise.resolve();
@@ -272,18 +274,60 @@ function sidecarToDescriptor(sidecar) {
   };
 }
 
+function parseRate(value) {
+  const raw = String(value || '').trim();
+  if (!raw || raw === '0/0') return null;
+  if (raw.includes('/')) {
+    const [a, b] = raw.split('/').map(Number);
+    return Number.isFinite(a) && Number.isFinite(b) && b ? a / b : null;
+  }
+  const number = Number(raw);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+function assessPlayback(mediaPath, videoStreams = [], audioStreams = []) {
+  const ext = path.extname(String(mediaPath || '')).toLowerCase();
+  const video = videoStreams[0] || null;
+  const audio = audioStreams.find((entry) => entry.default) || audioStreams[0] || null;
+  const videoCodec = String(video?.codec || '').toLowerCase();
+  const audioCodec = String(audio?.codec || '').toLowerCase();
+  const pixFmt = String(video?.pixFmt || '').toLowerCase();
+  const profile = String(video?.profile || '').toLowerCase();
+  const h264BrowserSafe = videoCodec === 'h264'
+    && (!pixFmt || ['yuv420p', 'yuvj420p'].includes(pixFmt))
+    && !/(high 10|high 4:2:2|high 4:4:4|cavlc 4:4:4)/i.test(profile);
+  const directMp4 = ['.mp4', '.m4v'].includes(ext) && h264BrowserSafe && (!audio || ['aac', 'mp3'].includes(audioCodec));
+  const directWebm = ext === '.webm' && ['vp8', 'vp9', 'av1'].includes(videoCodec) && (!audio || ['opus', 'vorbis'].includes(audioCodec));
+  if (directMp4 || directWebm) return { mode: 'direct', reason: 'container-codecs-supported', copyVideoPossible: h264BrowserSafe };
+  if (h264BrowserSafe) return { mode: 'audio-transcode', reason: ext === '.mkv' ? 'matroska-browser-compatibility' : 'audio-or-container-compatibility', copyVideoPossible: true };
+  return { mode: 'full-transcode', reason: 'video-container-or-codec-compatibility', copyVideoPossible: false };
+}
+
 async function probeMedia(config, workspace, item, mediaPath) {
   const cached = item.probe;
-  if (cached && Number(cached.mediaSizeBytes) === Number(item.sizeBytes) && Number(cached.mediaMtimeMs) === Number(item.mtimeMs)) return cached;
+  if (cached && Number(cached.probeVersion) === 2 && Number(cached.mediaSizeBytes) === Number(item.sizeBytes) && Number(cached.mediaMtimeMs) === Number(item.mtimeMs)) return cached;
   const command = String(config?.paths?.ffprobePath || 'ffprobe');
   const result = await runCommand(command, ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', mediaPath], { timeoutMs: 20000 });
   let probe;
   if (result.code !== 0 || result.timedOut) {
-    probe = { mediaSizeBytes: item.sizeBytes, mediaMtimeMs: item.mtimeMs, durationSeconds: null, embeddedTracks: [], error: (result.stderr || 'ffprobe falhou').trim().slice(0, 500), probedAt: nowIso() };
+    probe = { probeVersion: 2, mediaSizeBytes: item.sizeBytes, mediaMtimeMs: item.mtimeMs, durationSeconds: null, container: '', videoStreams: [], audioStreams: [], frameRate: null, playback: { mode: 'full-transcode', reason: 'probe-failed', copyVideoPossible: false }, embeddedTracks: [], error: (result.stderr || 'ffprobe falhou').trim().slice(0, 500), probedAt: nowIso() };
   } else {
     let parsed = {};
     try { parsed = JSON.parse(result.stdout || '{}'); } catch {}
-    const embeddedTracks = (Array.isArray(parsed.streams) ? parsed.streams : [])
+    const streams = Array.isArray(parsed.streams) ? parsed.streams : [];
+    const videoStreams = streams.filter((stream) => stream.codec_type === 'video').map((stream, ordinal) => ({
+      streamIndex: Number(stream.index), ordinal, codec: String(stream.codec_name || ''), profile: String(stream.profile || ''),
+      pixFmt: String(stream.pix_fmt || ''), level: Number(stream.level) || null,
+      width: Number(stream.width) || null, height: Number(stream.height) || null,
+      frameRate: parseRate(stream.avg_frame_rate) || parseRate(stream.r_frame_rate),
+      default: Boolean(stream.disposition?.default), title: String(stream.tags?.title || ''), language: String(stream.tags?.language || 'und')
+    }));
+    const audioStreams = streams.filter((stream) => stream.codec_type === 'audio').map((stream, ordinal) => ({
+      streamIndex: Number(stream.index), ordinal, codec: String(stream.codec_name || ''), profile: String(stream.profile || ''),
+      channels: Number(stream.channels) || null, channelLayout: String(stream.channel_layout || ''), sampleRate: Number(stream.sample_rate) || null,
+      default: Boolean(stream.disposition?.default), title: String(stream.tags?.title || ''), language: String(stream.tags?.language || 'und')
+    }));
+    const embeddedTracks = streams
       .filter((stream) => stream.codec_type === 'subtitle')
       .map((stream) => ({
         trackId: `embedded:${stream.index}`,
@@ -295,12 +339,18 @@ async function probeMedia(config, workspace, item, mediaPath) {
         embedded: true,
         sourceLabel: `Embutida · ${String(stream.codec_name || 'legenda').toUpperCase()} · somente leitura`,
         selectable: false,
-        metadata: { streamIndex: stream.index, title: stream.tags?.title || '' }
+        metadata: { streamIndex: Number(stream.index), title: stream.tags?.title || '', codecLongName: String(stream.codec_long_name || '') }
       }));
     probe = {
+      probeVersion: 2,
       mediaSizeBytes: item.sizeBytes,
       mediaMtimeMs: item.mtimeMs,
       durationSeconds: Number(parsed.format?.duration) || null,
+      container: String(parsed.format?.format_name || ''),
+      videoStreams,
+      audioStreams,
+      frameRate: videoStreams[0]?.frameRate || null,
+      playback: assessPlayback(mediaPath, videoStreams, audioStreams),
       embeddedTracks,
       error: null,
       probedAt: nowIso()
@@ -395,6 +445,7 @@ async function getItemStatus(config, itemId) {
     providers: {},
     queryDefaults: { artist: '', track: context.item.fileName, album: '' },
     durationSeconds: probe.durationSeconds,
+    mediaProbe: { container: probe.container || '', videoStreams: probe.videoStreams || [], audioStreams: probe.audioStreams || [], frameRate: probe.frameRate || null, playback: probe.playback || null },
     probeError: probe.error || null,
     workspace: publicWorkspace(context.workspace),
     reviewStatus: context.item.reviewStatus,
@@ -416,6 +467,21 @@ async function applyOffset(config, payload) {
   return subtitleCore.applyOffset(context, payload);
 }
 
+async function replaceCues(config, payload) {
+  const context = await buildContext(config, payload.itemId);
+  return subtitleCore.replaceCues(context, payload);
+}
+
+async function previewTimingTransform(config, payload) {
+  const context = await buildContext(config, payload.itemId);
+  return subtitleCore.previewTimingTransform(context, payload);
+}
+
+async function applyTimingTransform(config, payload) {
+  const context = await buildContext(config, payload.itemId);
+  return subtitleCore.applyTimingTransform(context, payload);
+}
+
 async function restoreHistory(config, payload) {
   const context = await buildContext(config, payload.itemId);
   return subtitleCore.restoreHistory(context, payload);
@@ -431,9 +497,64 @@ async function streamMedia(config, itemId, req, res, previewToken = '') {
   return subtitleCore.streamMedia(context, req, res, previewToken);
 }
 
-async function createCompatiblePreview(config, itemId) {
+async function createCompatiblePreview(config, payload) {
+  const itemId = typeof payload === 'string' ? payload : payload?.itemId;
   const context = await buildContext(config, itemId);
-  return subtitleCore.createCompatiblePreview(context);
+  const probe = await probeMedia(config, context.workspace, context.item, context.mediaPath);
+  const audioStreamIndex = mediaPreview.normalizeOptionalStreamIndex(typeof payload === 'object' ? payload.audioStreamIndex : null);
+  const copyVideoRequested = typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload, 'copyVideo')
+    ? payload.copyVideo === true
+    : Boolean(probe.playback?.copyVideoPossible);
+  const result = await mediaPreview.createCompatiblePreview({
+    config, itemId: context.itemId, mediaPath: context.mediaPath,
+    audioStreamIndex,
+    copyVideo: copyVideoRequested
+  });
+  return { ...result, recommendedMode: probe.playback?.mode || null };
+}
+
+async function createVisualization(config, payload) {
+  const context = await buildContext(config, payload.itemId);
+  return advanced.createVisualization(context, payload);
+}
+
+async function extractEmbeddedTrack(config, payload) {
+  const context = await buildContext(config, payload.itemId);
+  return advanced.extractEmbeddedTrack(context, payload);
+}
+
+async function convertTrackToSrt(config, payload) {
+  const context = await buildContext(config, payload.itemId);
+  return advanced.convertTrackToSrt(context, payload);
+}
+
+async function startOcrJob(config, payload) {
+  const context = await buildContext(config, payload.itemId);
+  return advanced.startOcrJob(context, payload);
+}
+
+async function startTranslationJob(config, payload) {
+  const context = await buildContext(config, payload.itemId);
+  return advanced.startTranslationJob(context, payload);
+}
+
+async function startRemuxJob(config, payload) {
+  const context = await buildContext(config, payload.itemId);
+  return advanced.startRemuxJob(context, payload);
+}
+
+async function getAdvancedStatus(config) {
+  return advanced.getAdvancedStatus(config);
+}
+
+function getAdvancedJob(jobId) {
+  const job = advanced.getJob(jobId);
+  if (!job) {
+    const error = new Error('Tarefa avancada nao encontrada ou expirada.');
+    error.statusCode = 404;
+    throw error;
+  }
+  return job;
 }
 
 async function setReviewStatus(itemId, reviewed) {
@@ -597,10 +718,21 @@ module.exports = {
   getItemStatus,
   previewLocal,
   applyOffset,
+  replaceCues,
+  previewTimingTransform,
+  applyTimingTransform,
   restoreHistory,
   deleteLocalSubtitle,
   streamMedia,
   createCompatiblePreview,
+  createVisualization,
+  extractEmbeddedTrack,
+  convertTrackToSrt,
+  startOcrJob,
+  startTranslationJob,
+  startRemuxJob,
+  getAdvancedStatus,
+  getAdvancedJob,
   setReviewStatus,
   bazarrSearch,
   bazarrDownload,

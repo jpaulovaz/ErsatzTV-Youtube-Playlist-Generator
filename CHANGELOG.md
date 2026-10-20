@@ -1,5 +1,20 @@
 # Changelog
 
+## 4.2.0
+
+- Expande **Ferramentas → Gerenciar legendas** para uma oficina completa, mantendo o editor inline introduzido na v4.1.2 e priorizando ações guiadas para usuários não técnicos.
+- Analisa contêiner, vídeo e faixas de áudio via FFprobe. MKV/H.264 com áudio incompatível pode gerar automaticamente uma prévia com vídeo copiado e áudio AAC; formatos de vídeo incompatíveis oferecem conversão H.264 + AAC sob comando do usuário.
+- Adiciona seletor de faixa de áudio e mantém a criação manual de prévia compatível como fallback, evitando o caso em que o navegador mostra imagem mas não reproduz som.
+- Adiciona **waveform** e **espectrograma** sob demanda, com clique para navegar ao ponto correspondente no player.
+- Adiciona editor SRT cue por cue para início, fim e texto, usando o mesmo histórico e a mesma proteção por fingerprint contra alterações externas.
+- Adiciona **sincronização por dois pontos** e **correção de FPS**, ambas com pré-visualização antes da gravação.
+- Permite extrair legendas textuais embutidas como sidecar e criar cópia SRT editável de ASS/SSA/VTT, sempre preservando a origem.
+- Reutiliza o núcleo de **Tradução Gemini** das Bibliotecas no workspace externo, com saídas traduzida/bilíngue, batching, validação e proveniência compartilhados.
+- Adiciona OCR de **PGS/SUP** com Tesseract para produzir SRT revisável; `configVersion` sobe de **10 para 11** apenas para adicionar `paths.tesseractPath`, padrão `/usr/bin/tesseract`.
+- Adiciona remux seguro para criar uma nova cópia MKV adicionando uma legenda externa ou removendo uma legenda embutida. O original não é substituído, a cópia usa stream copy e é validada com FFprobe antes de ser aceita.
+- ASS/SSA → SRT é uma conversão explícita e pode perder estilos/posicionamento que o SRT não representa; a interface deixa essa limitação clara e nunca substitui o original silenciosamente.
+- Aplicação **v4.2.0**, Universal **v1.3.1**, `configVersion` **11**; Download state **5**, Subtitle Manager state **1**, Subtitle Workspace state **1**, Subtitle Translation config/state **1**, YouTube Manager state **1**, YouTube Account config/state **1** e Adoption transaction state **1** permanecem nos schemas atuais.
+
 ## 4.1.2
 
 - Em **Ferramentas → Gerenciar legendas**, o editor deixa de abrir no fim da página e passa a ser inserido imediatamente abaixo do vídeo selecionado.

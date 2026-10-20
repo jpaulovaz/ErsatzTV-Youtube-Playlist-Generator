@@ -1,27 +1,56 @@
-ErsatzTV YouTube Downloader 4.1.2 - pacote de atualização
-Base: v4.1.1
+ErsatzTV YouTube Downloader 4.2.0 - pacote de atualização
+Base: v4.1.2
 
-Este update melhora a interface de Ferramentas -> Gerenciar legendas:
-- o editor passa a abrir imediatamente abaixo do video selecionado;
-- o bloco inline inclui navegacao, player, sincronizacao, historico e Bazarr opcional;
-- trocar de item reposiciona o mesmo editor sem rolagem automatica;
-- Fechar gerenciador encerra o contexto inline inteiro;
-- os cards da triagem recebem mais espacamento e o item aberto ganha destaque visual;
-- nenhum schema ou configVersion foi alterado.
+Este update amplia Ferramentas -> Gerenciar legendas:
+- analise FFprobe e selecao de faixa de audio;
+- previa compativel para MKV/audio com AAC e fallback H.264 + AAC;
+- waveform e espectrograma sob demanda;
+- editor SRT cue por cue;
+- sincronizacao por dois pontos e correcao de FPS com preview;
+- extracao de legendas embutidas e conversao ASS/SSA/VTT para copia SRT;
+- traducao no workspace reutilizando o mesmo core Gemini das Bibliotecas;
+- OCR PGS/SUP via Tesseract;
+- criacao validada de copia MKV adicionando/removendo legenda, sem substituir o original;
+- Ajuda e Configuracoes atualizadas para os novos recursos.
 
 Arquivos incluidos:
 CHANGELOG.md
 README.md
 UPGRADE.md
+config/config.example.json
 package.json
 public/index.html
 public/login.html
 public/styles.css
-public/js/subtitleWorkspace.js
+public/js/helpView.js
+public/js/subtitleManager.js
+scripts/verify-release.js
+src/config.js
+src/mediaPreviewService.js
+src/routes/subtitleManagerRoutes.js
+src/routes/subtitleWorkspaceRoutes.js
+src/subtitleManager/pgsOcr.js
+src/subtitleManager/subtitleCore.js
+src/subtitleManager/subtitleFormats.js
+src/subtitleManager/subtitleManagerService.js
+src/subtitleManager/subtitleTiming.js
+src/subtitleTranslation/translationService.js
+src/tools/subtitleWorkspaceAdvanced.js
+src/tools/subtitleWorkspaceService.js
+test/channels.test.js
+test/config.test.js
+test/configFile.test.js
+test/pgsOcr.test.js
+test/subtitleFormats.test.js
+test/subtitleManager.test.js
+test/subtitleTranslation.test.js
+test/subtitleWorkspace.test.js
 test/ui-v3.test.js
 MODIFIED_FILES.txt
 UPDATE_CONTENTS.txt
 
-Aplicacao v4.1.2, Universal v1.3.1, configVersion 10, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-workspace state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v4.2.0, Universal v1.3.1, configVersion 11, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-workspace state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+
+A migracao 10 -> 11 adiciona somente paths.tesseractPath com padrao /usr/bin/tesseract. OCR e opcional; os demais recursos do Gerenciador de Legendas continuam funcionando sem Tesseract.
 
 O pacote nao inclui config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/, tokens, estados operacionais, arquivos de midia ou sidecars.

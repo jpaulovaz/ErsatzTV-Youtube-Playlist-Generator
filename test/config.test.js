@@ -50,7 +50,7 @@ function currentConfig(overrides = {}) {
   };
 }
 
-test('normalizes the current v10 configuration without legacy fallbacks', () => {
+test('normalizes the current v11 configuration without legacy fallbacks', () => {
   const config = normalizeConfig(currentConfig({
     paths: {
       ...currentConfig().paths,
@@ -59,7 +59,7 @@ test('normalizes the current v10 configuration without legacy fallbacks', () => 
     playlists: [library({ libraryId: 27, channelNumber: 421, channelName: 'JohnFlix', mediaProfile: 'music_clips' })]
   }));
 
-  assert.equal(config.configVersion, 10);
+  assert.equal(config.configVersion, 11);
   assert.equal(config.paths.cookiesPath, '/srv/secrets/cookies.txt');
   assert.equal(config.downloads.maxHeight, 720);
   assert.equal(config.downloads.concurrentDownloads, 1);

@@ -12,7 +12,7 @@ const CONFIG_DIR = process.env.ERSATZTV_CONFIG_DIR
   ? path.resolve(process.env.ERSATZTV_CONFIG_DIR)
   : path.join(ROOT_DIR, 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
-const CONFIG_VERSION = 10;
+const CONFIG_VERSION = 11;
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const DEFAULT_MAX_HEIGHT = 1080;
@@ -33,6 +33,7 @@ const DEFAULT_CONFIG = {
     ytDlpPath: '/usr/local/bin/yt-dlp',
     ffmpegPath: '/usr/bin/ffmpeg',
     ffprobePath: '/usr/bin/ffprobe',
+    tesseractPath: '/usr/bin/tesseract',
     cookiesPath: ''
   },
   downloads: {
@@ -258,6 +259,7 @@ function normalizeConfig(raw) {
       ytDlpPath: String(rawPaths.ytDlpPath || DEFAULT_CONFIG.paths.ytDlpPath).trim() || DEFAULT_CONFIG.paths.ytDlpPath,
       ffmpegPath: String(rawPaths.ffmpegPath || DEFAULT_CONFIG.paths.ffmpegPath).trim() || DEFAULT_CONFIG.paths.ffmpegPath,
       ffprobePath: String(rawPaths.ffprobePath || DEFAULT_CONFIG.paths.ffprobePath).trim() || DEFAULT_CONFIG.paths.ffprobePath,
+      tesseractPath: String(rawPaths.tesseractPath || DEFAULT_CONFIG.paths.tesseractPath).trim() || DEFAULT_CONFIG.paths.tesseractPath,
       cookiesPath: String(rawPaths.cookiesPath || '').trim()
     },
     downloads: buildDownloadsConfig(rawConfig),
@@ -337,7 +339,8 @@ function validateConfig(config) {
   const requiredTools = [
     ['yt-dlp', config.paths.ytDlpPath],
     ['ffmpeg', config.paths.ffmpegPath],
-    ['ffprobe', config.paths.ffprobePath]
+    ['ffprobe', config.paths.ffprobePath],
+    ['tesseract', config.paths.tesseractPath]
   ];
   for (const [label, value] of requiredTools) {
     if (!String(value || '').trim()) throw new Error(`O caminho do ${label} nao pode ficar vazio.`);
@@ -398,17 +401,24 @@ async function loadConfig() {
   await ensureConfigFile();
   const content = await fs.readFile(CONFIG_PATH, 'utf8');
   let raw = JSON.parse(content);
-  const rawVersion = Number(raw.configVersion);
-  if (rawVersion === 9 && CONFIG_VERSION === 10) {
+  let rawVersion = Number(raw.configVersion);
+  let migrated = false;
+  if (rawVersion === 9) {
     raw = { ...raw, configVersion: 10, bazarr: raw.bazarr && typeof raw.bazarr === 'object' ? raw.bazarr : clone(DEFAULT_CONFIG.bazarr) };
-    const migrated = validateConfig(normalizeConfig(raw));
-    await atomicWriteJson(CONFIG_PATH, migrated);
-    return migrated;
+    rawVersion = 10;
+    migrated = true;
+  }
+  if (rawVersion === 10) {
+    raw = { ...raw, configVersion: 11, paths: { ...(raw.paths || {}), tesseractPath: String(raw.paths?.tesseractPath || DEFAULT_CONFIG.paths.tesseractPath) } };
+    rawVersion = 11;
+    migrated = true;
   }
   if (rawVersion !== CONFIG_VERSION) {
     throw new Error(`config.json usa configVersion ${raw.configVersion ?? 'ausente'}. Esta versao aceita configVersion ${CONFIG_VERSION}; atualize a configuracao por uma versao intermediaria compativel.`);
   }
-  return validateConfig(normalizeConfig(raw));
+  const normalized = validateConfig(normalizeConfig(raw));
+  if (migrated) await atomicWriteJson(CONFIG_PATH, normalized);
+  return normalized;
 }
 
 async function saveConfig(config) {

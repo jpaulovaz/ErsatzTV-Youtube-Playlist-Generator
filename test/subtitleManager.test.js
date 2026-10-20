@@ -7,7 +7,7 @@ const { Writable } = require('node:stream');
 const { once } = require('node:events');
 const service = require('../src/subtitleManager/subtitleManagerService');
 const stateStore = require('../src/subtitleManager/subtitleManagerState');
-const { parseRange, streamFile } = require('../src/mediaPreviewService');
+const { parseRange, streamFile, normalizeOptionalStreamIndex, contentType } = require('../src/mediaPreviewService');
 
 async function fixture() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'subtitle-manager-'));
@@ -71,6 +71,15 @@ test('restoreHistory recupera a versão anterior e preserva undo', async () => {
 test('parseRange suporta seek e rejeita range inválido', () => {
   assert.deepEqual(parseRange('bytes=10-19', 100), { start: 10, end: 19 });
   assert.deepEqual(parseRange('bytes=100-120', 100), { invalid: true });
+});
+
+
+test('preview de midia trata audio ausente como default e reconhece PNG de waveform', () => {
+  assert.equal(normalizeOptionalStreamIndex(null), null);
+  assert.equal(normalizeOptionalStreamIndex(undefined), null);
+  assert.equal(normalizeOptionalStreamIndex(''), null);
+  assert.equal(normalizeOptionalStreamIndex('3'), 3);
+  assert.equal(contentType('/tmp/waveform.png'), 'image/png');
 });
 
 test('preview de candidato LRCLIB não modifica sidecar ativo', async () => {

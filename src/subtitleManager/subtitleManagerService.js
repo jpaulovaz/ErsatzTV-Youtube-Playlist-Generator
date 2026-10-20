@@ -298,6 +298,21 @@ async function applyOffset(args, payload) {
   return subtitleCore.applyOffset(managedCoreContext(context), payload);
 }
 
+async function replaceCues(args, payload) {
+  const context = await resolveContext(args);
+  return subtitleCore.replaceCues(managedCoreContext(context), payload);
+}
+
+async function previewTimingTransform(args, payload) {
+  const context = await resolveContext(args);
+  return subtitleCore.previewTimingTransform(managedCoreContext(context), payload);
+}
+
+async function applyTimingTransform(args, payload) {
+  const context = await resolveContext(args);
+  return subtitleCore.applyTimingTransform(managedCoreContext(context), payload);
+}
+
 async function restoreHistory(args, payload) {
   const context = await resolveContext(args);
   return subtitleCore.restoreHistory(managedCoreContext(context), payload);
@@ -377,6 +392,9 @@ module.exports = {
   previewLocal,
   applyCandidate,
   applyOffset,
+  replaceCues,
+  previewTimingTransform,
+  applyTimingTransform,
   restoreHistory,
   deleteLocalSubtitle,
   registerManagedDownload,

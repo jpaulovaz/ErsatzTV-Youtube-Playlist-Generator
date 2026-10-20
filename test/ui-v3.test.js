@@ -857,3 +857,41 @@ test('v4.1.2 abre o editor de legendas inline sob o item selecionado', () => {
   assert.match(css, /\.subtitle-workspace-item\.selected/);
   assert.match(css, /\.subtitle-workspace-inline-editor \{ display: grid; gap: 12px;/);
 });
+
+test('v4.2 amplia a oficina de legendas com compatibilidade, edicao e ferramentas guiadas', () => {
+  const html = read('index.html');
+  const manager = read('js/subtitleManager.js');
+  const css = read('styles.css');
+  const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'subtitleWorkspaceRoutes.js'), 'utf8');
+  const advanced = fs.readFileSync(path.join(__dirname, '..', 'src', 'tools', 'subtitleWorkspaceAdvanced.js'), 'utf8');
+  const translation = fs.readFileSync(path.join(__dirname, '..', 'src', 'subtitleTranslation', 'translationService.js'), 'utf8');
+  const ocr = fs.readFileSync(path.join(__dirname, '..', 'src', 'subtitleManager', 'pgsOcr.js'), 'utf8');
+
+  assert.match(html, /name="paths\.tesseractPath"/);
+  assert.match(manager, /id="subtitleManagerAudioStream"/);
+  assert.match(manager, /audio-visualization-create/);
+  assert.match(manager, /Waveform/);
+  assert.match(manager, /Espectrograma/);
+  assert.match(manager, /subtitle-cues-save/);
+  assert.match(manager, /subtitle-timing-preview/);
+  assert.match(manager, /Sincronização por dois pontos/);
+  assert.match(manager, /Correção de FPS/);
+  assert.match(manager, /data-subtitle-tool-open/);
+  assert.match(manager, />Traduzir</);
+  assert.match(manager, /OCR para SRT/);
+  assert.match(manager, /Adicionar a uma cópia MKV/);
+  assert.match(manager, /Extrair como SRT/);
+
+  assert.match(routes, /advanced-status/);
+  assert.match(routes, /parts\[0\] === 'jobs'/);
+  assert.match(routes, /\['extract', 'convert', 'ocr', 'translate', 'remux'\]/);
+  assert.match(advanced, /startRemuxJob/);
+  assert.match(translation, /translateSrtContent/);
+  assert.match(ocr, /ocrPgsBuffer/);
+
+  assert.match(css, /\.subtitle-manager-playback-tools/);
+  assert.match(css, /\.subtitle-cue-editor/);
+  assert.match(css, /\.subtitle-tool-action-card/);
+  assert.match(css, /\.subtitle-manager-visual-card/);
+  assert.match(css, /\.subtitle-tool-result/);
+});

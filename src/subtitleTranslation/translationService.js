@@ -199,6 +199,102 @@ async function translateBatchResilient(provider, providerConfig, request, expect
   }
 }
 
+async function translateSrtContent({
+  jobId,
+  checkpointItemId,
+  sourceContent,
+  sourceLanguage,
+  targetLanguage,
+  outputMode = 'translated',
+  context = {},
+  onProgress = null
+}) {
+  const normalizedSourceLanguage = normalizeSourceLanguage(sourceLanguage);
+  const normalizedTargetLanguage = normalizeTargetLanguage(targetLanguage);
+  if (normalizedSourceLanguage.toLowerCase() === normalizedTargetLanguage.toLowerCase()) {
+    const error = new Error('Legenda-fonte e idioma de destino precisam ser diferentes.');
+    error.statusCode = 400;
+    throw error;
+  }
+  const normalizedOutputMode = normalizeOutputMode(outputMode);
+  const sourceHash = hashText(sourceContent);
+  const cues = parseSrt(sourceContent);
+  if (!cues.length) {
+    const error = new Error('Legenda-fonte nao possui cues validos.');
+    error.statusCode = 422;
+    throw error;
+  }
+  const providerConfig = await translationConfig.load();
+  if (!providerConfig.apiKey) {
+    const error = new Error('Configure a API key do Gemini antes de iniciar a traducao.');
+    error.statusCode = 400;
+    error.code = 'TRANSLATION_NOT_CONFIGURED';
+    throw error;
+  }
+  const provider = providers[providerConfig.provider];
+  if (!provider) throw new Error('Provider de traducao nao suportado.');
+  const checkpointKey = String(checkpointItemId || 'item');
+  const checkpoint = jobId ? await translationState.loadCheckpoint(jobId, checkpointKey) : null;
+  const validCheckpoint = checkpoint && checkpoint.sourceHash === sourceHash && checkpoint.model === providerConfig.model
+    && checkpoint.sourceLanguage === normalizedSourceLanguage && checkpoint.targetLanguage === normalizedTargetLanguage;
+  const translations = new Map(validCheckpoint && Array.isArray(checkpoint.translations)
+    ? checkpoint.translations.map((entry) => [String(entry.id), String(entry.text)]) : []);
+  const pending = cues.map((cue, index) => ({ id: String(index + 1), text: cue.text }))
+    .filter((cue) => isTranslatableText(cue.text) && !translations.has(cue.id));
+  const batchSize = Math.max(20, Math.min(1000, providerConfig.batchSize || 300));
+  let completed = pending.length - pending.filter((cue) => !translations.has(cue.id)).length;
+  for (let offset = 0; offset < pending.length; offset += batchSize) {
+    const batch = pending.slice(offset, offset + batchSize);
+    const maskedBatch = batch.map(maskCueTags);
+    const tagMap = new Map(maskedBatch.map((cue) => [String(cue.id), cue.tags]));
+    const translated = await translateBatchResilient(provider, providerConfig, {
+      sourceLanguage: normalizedSourceLanguage,
+      targetLanguage: normalizedTargetLanguage,
+      context: {
+        title: String(context.title || ''),
+        artist: String(context.artist || ''),
+        mediaProfile: String(context.mediaProfile || 'external_workspace')
+      },
+      cues: maskedBatch.map(({ id, text }) => ({ id, text }))
+    }, batch.map((cue) => cue.id));
+    for (const [id, text] of translated) translations.set(id, restoreCueTags(id, text, tagMap));
+    completed += batch.length;
+    if (jobId) {
+      await translationState.saveCheckpoint(jobId, checkpointKey, {
+        version: 1,
+        itemId: checkpointKey,
+        sourceHash,
+        model: providerConfig.model,
+        sourceLanguage: normalizedSourceLanguage,
+        targetLanguage: normalizedTargetLanguage,
+        outputMode: normalizedOutputMode,
+        updatedAt: nowIso(),
+        translations: [...translations].map(([id, text]) => ({ id, text }))
+      });
+    }
+    if (typeof onProgress === 'function') {
+      await onProgress({ current: Math.min(completed, pending.length), total: pending.length, percent: pending.length ? Math.round((Math.min(completed, pending.length) / pending.length) * 100) : 100 });
+    }
+  }
+  for (let index = 0; index < cues.length; index += 1) {
+    const id = String(index + 1);
+    if (!translations.has(id)) translations.set(id, cues[index].text);
+  }
+  const rendered = {};
+  for (const output of requestedOutputs(normalizedOutputMode, normalizedTargetLanguage)) {
+    rendered[output.kind] = renderValidatedSrt(cues, translations, output.kind);
+  }
+  return {
+    sourceHash,
+    model: providerConfig.model,
+    cues: cues.length,
+    sourceLanguage: normalizedSourceLanguage,
+    targetLanguage: normalizedTargetLanguage,
+    outputMode: normalizedOutputMode,
+    rendered
+  };
+}
+
 async function translateItem({ jobId, destination, downloadManager, itemId, options }) {
   const item = allItems(downloadManager, destination).find((entry) => entry.id === itemId);
   if (!item || !isActiveContentItem(item) || !item.targetPath || !await pathExists(item.targetPath)) throw new Error('Item deixou de estar ativo durante a traducao.');
@@ -218,41 +314,21 @@ async function translateItem({ jobId, destination, downloadManager, itemId, opti
   }
   if (!outputsToWrite.length) return { skipped: true, reason: 'target-exists' };
 
-  const providerConfig = await translationConfig.load();
-  const provider = providers[providerConfig.provider];
-  if (!provider) throw new Error('Provider de traducao nao suportado.');
-  const checkpoint = await translationState.loadCheckpoint(jobId, itemId);
-  const validCheckpoint = checkpoint && checkpoint.sourceHash === sourceHash && checkpoint.model === providerConfig.model
-    && checkpoint.sourceLanguage === options.sourceLanguage && checkpoint.targetLanguage === options.targetLanguage;
-  const translations = new Map(validCheckpoint && Array.isArray(checkpoint.translations) ? checkpoint.translations.map((entry) => [String(entry.id), String(entry.text)]) : []);
-  const pending = cues.map((cue, index) => ({ id: String(index + 1), text: cue.text })).filter((cue) => isTranslatableText(cue.text) && !translations.has(cue.id));
-  const batchSize = Math.max(20, Math.min(1000, providerConfig.batchSize || 300));
-  for (let offset = 0; offset < pending.length; offset += batchSize) {
-    const batch = pending.slice(offset, offset + batchSize);
-    const maskedBatch = batch.map(maskCueTags);
-    const tagMap = new Map(maskedBatch.map((cue) => [String(cue.id), cue.tags]));
-    const translated = await translateBatchResilient(provider, providerConfig, {
-      sourceLanguage: options.sourceLanguage,
-      targetLanguage: options.targetLanguage,
-      context: { title: item.trackTitle || item.title || '', artist: item.artist || item.channelTitle || '', mediaProfile: item.mediaProfile || destination.mediaProfile },
-      cues: maskedBatch.map(({ id, text }) => ({ id, text }))
-    }, batch.map((cue) => cue.id));
-    for (const [id, text] of translated) translations.set(id, restoreCueTags(id, text, tagMap));
-    await translationState.saveCheckpoint(jobId, itemId, {
-      version: 1, itemId, sourceHash, model: providerConfig.model, sourceLanguage: options.sourceLanguage,
-      targetLanguage: options.targetLanguage, outputMode, updatedAt: nowIso(),
-      translations: [...translations].map(([id, text]) => ({ id, text }))
-    });
-  }
-  for (let index = 0; index < cues.length; index += 1) {
-    const id = String(index + 1);
-    if (!translations.has(id)) translations.set(id, cues[index].text);
-  }
-
-  const renderedByKind = new Map();
-  for (const output of outputsToWrite) {
-    if (!renderedByKind.has(output.kind)) renderedByKind.set(output.kind, renderValidatedSrt(cues, translations, output.kind));
-  }
+  const translation = await translateSrtContent({
+    jobId,
+    checkpointItemId: itemId,
+    sourceContent,
+    sourceLanguage: options.sourceLanguage,
+    targetLanguage: options.targetLanguage,
+    outputMode,
+    context: {
+      title: item.trackTitle || item.title || '',
+      artist: item.artist || item.channelTitle || '',
+      mediaProfile: item.mediaProfile || destination.mediaProfile
+    }
+  });
+  const providerConfig = { model: translation.model };
+  const renderedByKind = new Map(Object.entries(translation.rendered || {}).map(([kind, value]) => [kind, value]));
 
   const written = [];
   for (const output of outputsToWrite) {
@@ -283,6 +359,8 @@ module.exports = {
   getLanguageCounts,
   buildPlan,
   translateItem,
+  translateSrtContent,
+  translateBatchResilient,
   normalizeSourceLanguage,
   normalizeTargetLanguage,
   normalizeOutputMode,

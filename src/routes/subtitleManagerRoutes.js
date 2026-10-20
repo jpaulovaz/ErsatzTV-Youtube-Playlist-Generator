@@ -2,7 +2,7 @@ const subtitleManager = require('../subtitleManager/subtitleManagerService');
 
 const ACTIONS = new Set([
   'content-media', 'subtitle-status', 'subtitle-search', 'subtitle-preview', 'subtitle-preview-local',
-  'subtitle-apply', 'subtitle-offset', 'subtitle-restore', 'subtitle-delete', 'content-preview-create'
+  'subtitle-apply', 'subtitle-offset', 'subtitle-cues-save', 'subtitle-timing-preview', 'subtitle-timing-apply', 'subtitle-restore', 'subtitle-delete', 'content-preview-create'
 ]);
 
 async function handleSubtitleManagerAction({ req, res, url, deps, config, destination, action }) {
@@ -30,6 +30,9 @@ async function handleSubtitleManagerAction({ req, res, url, deps, config, destin
   else if (action === 'subtitle-preview-local') result = await subtitleManager.previewLocal(args, payload);
   else if (action === 'subtitle-apply') result = await subtitleManager.applyCandidate(args, payload);
   else if (action === 'subtitle-offset') result = await subtitleManager.applyOffset(args, payload);
+  else if (action === 'subtitle-cues-save') result = await subtitleManager.replaceCues(args, payload);
+  else if (action === 'subtitle-timing-preview') result = await subtitleManager.previewTimingTransform(args, payload);
+  else if (action === 'subtitle-timing-apply') result = await subtitleManager.applyTimingTransform(args, payload);
   else if (action === 'subtitle-restore') result = await subtitleManager.restoreHistory(args, payload);
   else if (action === 'subtitle-delete') result = await subtitleManager.deleteLocalSubtitle(args, payload);
   else if (action === 'content-preview-create') result = await subtitleManager.createCompatiblePreview(args);

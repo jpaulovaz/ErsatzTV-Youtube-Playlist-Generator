@@ -2,7 +2,8 @@ const workspaceService = require('../tools/subtitleWorkspaceService');
 
 const EDITOR_ACTIONS = new Set([
   'content-media', 'subtitle-status', 'subtitle-preview-local', 'subtitle-offset',
-  'subtitle-restore', 'subtitle-delete', 'content-preview-create'
+  'subtitle-cues-save', 'subtitle-timing-preview', 'subtitle-timing-apply',
+  'subtitle-restore', 'subtitle-delete', 'content-preview-create', 'audio-visualization-create'
 ]);
 
 function decodePart(value) {
@@ -26,9 +27,13 @@ async function handleEditorAction(req, res, url, deps, config, action) {
   let result;
   if (action === 'subtitle-preview-local') result = await workspaceService.previewLocal(config, payload);
   else if (action === 'subtitle-offset') result = await workspaceService.applyOffset(config, payload);
+  else if (action === 'subtitle-cues-save') result = await workspaceService.replaceCues(config, payload);
+  else if (action === 'subtitle-timing-preview') result = await workspaceService.previewTimingTransform(config, payload);
+  else if (action === 'subtitle-timing-apply') result = await workspaceService.applyTimingTransform(config, payload);
   else if (action === 'subtitle-restore') result = await workspaceService.restoreHistory(config, payload);
   else if (action === 'subtitle-delete') result = await workspaceService.deleteLocalSubtitle(config, payload);
-  else if (action === 'content-preview-create') result = await workspaceService.createCompatiblePreview(config, payload.itemId);
+  else if (action === 'content-preview-create') result = await workspaceService.createCompatiblePreview(config, payload);
+  else if (action === 'audio-visualization-create') result = await workspaceService.createVisualization(config, payload);
   else return false;
   deps.sendJson(res, 200, { ok: true, result });
   return true;
@@ -43,6 +48,15 @@ async function handleSubtitleWorkspaceRoutes(req, res, url, deps) {
 
   if (parts.length === 1 && EDITOR_ACTIONS.has(parts[0])) {
     return handleEditorAction(req, res, url, deps, config, parts[0]);
+  }
+
+  if (parts.length === 1 && parts[0] === 'advanced-status' && req.method === 'GET') {
+    deps.sendJson(res, 200, { ok: true, result: await workspaceService.getAdvancedStatus(config) });
+    return true;
+  }
+  if (parts.length === 2 && parts[0] === 'jobs' && req.method === 'GET') {
+    deps.sendJson(res, 200, { ok: true, result: workspaceService.getAdvancedJob(parts[1]) });
+    return true;
   }
 
   if (req.method === 'POST' && parts.length === 2 && parts[0] === 'bazarr' && parts[1] === 'test') {
@@ -94,6 +108,18 @@ async function handleSubtitleWorkspaceRoutes(req, res, url, deps) {
     if (parts.length === 3 && parts[2] === 'review-status' && req.method === 'POST') {
       const payload = await deps.readJson(req);
       deps.sendJson(res, 200, { ok: true, result: await workspaceService.setReviewStatus(itemId, payload.reviewed === true) });
+      return true;
+    }
+    if (parts.length === 3 && req.method === 'POST' && ['extract', 'convert', 'ocr', 'translate', 'remux'].includes(parts[2])) {
+      const payload = await deps.readJson(req);
+      payload.itemId = itemId;
+      let result;
+      if (parts[2] === 'extract') result = await workspaceService.extractEmbeddedTrack(config, payload);
+      else if (parts[2] === 'convert') result = await workspaceService.convertTrackToSrt(config, payload);
+      else if (parts[2] === 'ocr') result = await workspaceService.startOcrJob(config, payload);
+      else if (parts[2] === 'translate') result = await workspaceService.startTranslationJob(config, payload);
+      else if (parts[2] === 'remux') result = await workspaceService.startRemuxJob(config, payload);
+      deps.sendJson(res, ['ocr', 'translate', 'remux'].includes(parts[2]) ? 202 : 200, { ok: true, result });
       return true;
     }
     if (parts.length === 4 && parts[2] === 'bazarr' && req.method === 'POST') {

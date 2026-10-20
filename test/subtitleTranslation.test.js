@@ -255,3 +255,30 @@ test('translation filtered scope respects YouTube manual versus automatic subtit
   });
   assert.deepEqual(plan.eligibleItems.map((item) => item.itemId), ['manual-item']);
 });
+
+test('translation core reutilizavel traduz SRT sem depender de Biblioteca ou Download Manager', async () => {
+  await translationConfig.save({ apiKey: 'shared-core-key', model: 'gemini-3.6-flash', batchSize: 100, concurrency: 1, maxAttempts: 1 });
+  const previous = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers(),
+    text: async () => JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ translations: [{ id: '1', text: 'Texto traduzido' }] }) }] } }] })
+  });
+  try {
+    const source = '1\n00:00:02,000 --> 00:00:04,500\nSource text\n';
+    const result = await translationService.translateSrtContent({
+      sourceContent: source,
+      sourceLanguage: 'en',
+      targetLanguage: 'pt-BR',
+      outputMode: 'translated',
+      context: { title: 'Arquivo externo', mediaProfile: 'external_workspace' }
+    });
+    assert.equal(result.sourceLanguage, 'en');
+    assert.equal(result.targetLanguage, 'pt-BR');
+    assert.equal(result.cues, 1);
+    const cues = parseSrt(result.rendered.translated.content);
+    assert.equal(cues[0].text, 'Texto traduzido');
+    assert.deepEqual([cues[0].startMs, cues[0].endMs], [2000, 4500]);
+  } finally { global.fetch = previous; }
+});

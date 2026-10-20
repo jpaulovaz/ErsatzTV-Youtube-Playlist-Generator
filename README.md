@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 4.1.2
+# ErsatzTV YouTube Downloader 4.2.0
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A linha v4 aplica ao **aplicativo inteiro** uma arquitetura orientada por tarefas. A v4.1.x acrescenta o grupo **Ferramentas** e transforma o editor de legendas já usado nas Bibliotecas em um workspace reutilizável para filmes e séries existentes em qualquer pasta autorizada, com integração opcional ao Bazarr. A v4.1.1 substituiu o bloqueio rígido de caminhos amplos por uma confirmação explícita. A v4.1.2 melhora a ergonomia do **Gerenciar legendas**: o editor passa a abrir diretamente abaixo do vídeo selecionado, sem exigir rolagem até o fim da lista, e os cards ganham maior espaçamento visual.
+A linha v4 aplica ao **aplicativo inteiro** uma arquitetura orientada por tarefas. A v4.1.x criou o grupo **Ferramentas** e transformou o editor de legendas em um workspace reutilizável para filmes e séries de qualquer pasta autorizada. A **v4.2.0** amplia esse workspace para uma oficina completa: compatibilidade de reprodução para MKV/áudio, seleção de faixa sonora, waveform/espectrograma, edição de cues, sincronização por dois pontos/FPS, extração de faixas embutidas, conversão textual para SRT, tradução Gemini, OCR de PGS/SUP e criação segura de cópias MKV.
 
 ## Experiência v4
 
@@ -50,7 +50,7 @@ Biblioteca local do ErsatzTV
 - NFOs novos incluem `year` + `premiered` em Movies e `aired` em episódios de Clipes musicais.
 - Thumbnail do vídeo como artwork de episódio (`-thumb.jpg`) e `poster.jpg` no nível do artista/Show.
 - Legendas SRT externas opcionais por biblioteca, com suporte a legendas manuais e automáticas do YouTube.
-- **Gerenciador de legendas em Ferramentas**: workspaces recursivos de filmes/séries externos, filtros de triagem, player, offset, histórico, revisão anterior/próximo, detecção de formatos/legendas embutidas e integração opcional com Bazarr para busca/download/sincronização.
+- **Gerenciador de legendas em Ferramentas**: workspaces recursivos de filmes/séries externos, player com seleção de áudio e prévia compatível para MKV, waveform/espectrograma, offset, editor cue por cue, sincronização por dois pontos/FPS, histórico, extração de legendas embutidas, conversão ASS/SSA/VTT → SRT, tradução Gemini, OCR PGS/SUP via Tesseract, criação de cópias MKV e integração opcional com Bazarr.
 - **Gerenciador manual de legendas** no Gerenciar conteúdo: player, preview de SRT local/YouTube/LRCLIB, busca manual, offset e histórico de até cinco versões por idioma. O filtro/listagem atual é reconciliado automaticamente após aplicar, restaurar ou excluir uma legenda, inclusive removendo imediatamente um item de **Sem legendas** após aplicação bem-sucedida. Em **Com legendas**, a origem YouTube pode ser refinada por **Enviada pelo canal** ou **Automática**, usando a proveniência persistida de cada faixa.
 - **Tradução em massa de legendas com Gemini**: pré-análise por biblioteca/playlist, fonte local preservada, saída traduzida, bilíngue ou ambas no mesmo job, fila persistente com pausa/retomada/cancelamento e origem Gemini rastreável. A Visão geral acompanha o progresso global da fila.
 - **Gerenciador do YouTube** independente: pesquisa pública, conexão OAuth da conta, playlists próprias, criação/inserção com fila persistente, catálogo de acervo local, recuperação de Video ID, matching assistido e adoção sem redownload por Hardlink/Copy/Move com preflight e rollback.
@@ -91,6 +91,7 @@ Biblioteca local do ErsatzTV
 - Para buscar letras sincronizadas no **LRCLIB**, o servidor precisa ter saída HTTPS para `https://lrclib.net`; nenhuma API key do LRCLIB é necessária.
 - Opcional, para **Tradução de legendas**: uma Gemini API key (`GEMINI_API_KEY` recomendado) e saída HTTPS para `https://generativelanguage.googleapis.com`.
 - Opcional: Bazarr acessível por HTTP/HTTPS e sua API Key para pesquisa/download/sincronização dentro de **Ferramentas → Gerenciar legendas**; o editor local não depende dele.
+- Opcional, para **OCR de PGS/SUP**: Tesseract OCR e os pacotes de idioma desejados. O caminho padrão é `/usr/bin/tesseract` e pode ser alterado em Configurações.
 - Opcional: `cookies.txt` em formato Netscape para vídeos que exigem sessão.
 
 Exemplo de verificação:
@@ -106,7 +107,7 @@ node --version
 ## Instalação nova
 
 1. Extraia o pacote completo em uma pasta permanente. O pacote de distribuição não leva uma configuração pessoal.
-2. No primeiro `npm start`, o aplicativo cria automaticamente um `config/config.json` v10 com os padrões atuais. Se preferir pré-configurar caminhos antes da primeira inicialização, copie `config/config.example.json` para `config/config.json` e edite a cópia.
+2. No primeiro `npm start`, o aplicativo cria automaticamente um `config/config.json` v11 com os padrões atuais. Se preferir pré-configurar caminhos antes da primeira inicialização, copie `config/config.example.json` para `config/config.json` e edite a cópia.
 3. Crie o único usuário administrativo local:
 
 ```bash
@@ -139,7 +140,7 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A v4.1.0 atualiza diretamente uma instalação **v4.0.3**. `configVersion` sobe de 9 para 10 exclusivamente para a integração opcional com Bazarr; a migração é automática e mantém Bazarr desativado até você configurá-lo. Os demais schemas permanecem compatíveis. Consulte [UPGRADE.md](UPGRADE.md).
+A **v4.2.0** atualiza diretamente uma instalação **v4.1.2**. `configVersion` sobe de 10 para 11 somente para acrescentar `paths.tesseractPath`, usado pelo OCR opcional de PGS/SUP. A migração é automática e preserva os demais valores e estados. Consulte [UPGRADE.md](UPGRADE.md).
 
 ## Gerenciador do YouTube
 

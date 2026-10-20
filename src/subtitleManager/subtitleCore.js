@@ -3,8 +3,8 @@ const path = require('path');
 const crypto = require('crypto');
 const stateStore = require('./subtitleManagerState');
 const historyService = require('./subtitleHistoryService');
-const { parseSrt, writeSrt, cuesToVtt } = require('./subtitleFormats');
-const { shiftCues, normalizeOffsetMs } = require('./subtitleTiming');
+const { parseSrt, writeSrt, cuesToVtt, normalizeCues } = require('./subtitleFormats');
+const { shiftCues, normalizeOffsetMs, twoPointTransform, fpsTransform } = require('./subtitleTiming');
 const mediaPreview = require('../mediaPreviewService');
 const { pathExists } = require('../utils');
 
@@ -295,6 +295,113 @@ async function applyOffset(context, payload) {
   };
 }
 
+async function replaceCues(context, payload) {
+  if (!context.activeWritable) {
+    const error = new Error('Editar cues exige um item ativo e gravavel.');
+    error.statusCode = 409;
+    throw error;
+  }
+  const trackId = normalizeTrackId(payload.trackId || payload.language);
+  const track = await resolveEditableTrack(context, trackId);
+  await assertUnchanged(track.filePath, payload.expectedFingerprint || null);
+  const cues = normalizeCues(payload.cues);
+  if (!cues.length) {
+    const error = new Error('A legenda precisa manter pelo menos um cue valido.');
+    error.statusCode = 422;
+    throw error;
+  }
+  const state = await stateStore.load();
+  const itemState = stateStore.ensureItem(state, context.itemId);
+  await backupAndRegister(state, itemState, context, track, 'cue-edit');
+  await atomicWriteText(track.filePath, writeSrt(cues));
+  const previous = itemState.tracks[trackId] || {
+    provider: track.provider || 'local',
+    sourceType: track.sourceType || 'unregistered',
+    sourceLabel: track.sourceLabel || 'Arquivo local · origem não registrada',
+    metadata: track.metadata || {}
+  };
+  itemState.tracks[trackId] = { ...previous, appliedAt: nowIso() };
+  await stateStore.save(state);
+  if (typeof context.afterMutation === 'function') await context.afterMutation({ action: 'cue-edit', trackId });
+  return { trackId, cues: cues.length, fingerprint: await fingerprintFile(track.filePath), historyCount: (itemState.history[trackId] || []).length };
+}
+
+function computeTimingTransform(cues, payload = {}) {
+  const mode = String(payload.mode || '').trim();
+  if (mode === 'two-point') return { mode, ...twoPointTransform(cues, payload.pointA || {}, payload.pointB || {}) };
+  if (mode === 'fps') return { mode, ...fpsTransform(cues, payload.sourceFps, payload.targetFps) };
+  const error = new Error('Modo de sincronizacao avancada invalido.');
+  error.statusCode = 400;
+  throw error;
+}
+
+async function previewTimingTransform(context, payload) {
+  const trackId = normalizeTrackId(payload.trackId || payload.language);
+  const track = await resolveEditableTrack(context, trackId);
+  await assertUnchanged(track.filePath, payload.expectedFingerprint || null);
+  const text = await fs.readFile(track.filePath, 'utf8');
+  const cues = parseSrt(text);
+  if (!cues.length) {
+    const error = new Error('Nao foi possivel interpretar o SRT ativo com seguranca.');
+    error.statusCode = 422;
+    throw error;
+  }
+  const transformed = computeTimingTransform(cues, payload);
+  return { ...transformed, trackId, vtt: cuesToVtt(transformed.cues), fingerprint: await fingerprintFile(track.filePath) };
+}
+
+async function applyTimingTransform(context, payload) {
+  if (!context.activeWritable) {
+    const error = new Error('Aplicar sincronizacao exige um item ativo e gravavel.');
+    error.statusCode = 409;
+    throw error;
+  }
+  const trackId = normalizeTrackId(payload.trackId || payload.language);
+  const track = await resolveEditableTrack(context, trackId);
+  await assertUnchanged(track.filePath, payload.expectedFingerprint || null);
+  const text = await fs.readFile(track.filePath, 'utf8');
+  const cues = parseSrt(text);
+  if (!cues.length) {
+    const error = new Error('Nao foi possivel interpretar o SRT ativo com seguranca.');
+    error.statusCode = 422;
+    throw error;
+  }
+  const transformed = computeTimingTransform(cues, payload);
+  const state = await stateStore.load();
+  const itemState = stateStore.ensureItem(state, context.itemId);
+  await backupAndRegister(state, itemState, context, track, transformed.mode === 'fps' ? 'fps-sync' : 'two-point-sync');
+  await atomicWriteText(track.filePath, writeSrt(transformed.cues));
+  const previous = itemState.tracks[trackId] || {
+    provider: track.provider || 'local',
+    sourceType: track.sourceType || 'unregistered',
+    sourceLabel: track.sourceLabel || 'Arquivo local · origem não registrada',
+    metadata: track.metadata || {}
+  };
+  itemState.tracks[trackId] = { ...previous, appliedAt: nowIso(), lastAppliedOffsetMs: 0 };
+  await stateStore.save(state);
+  if (typeof context.afterMutation === 'function') await context.afterMutation({ action: transformed.mode, trackId });
+  return { ...transformed, trackId, cues: transformed.cues.length, fingerprint: await fingerprintFile(track.filePath), historyCount: (itemState.history[trackId] || []).length };
+}
+
+async function registerTrackMetadata(context, trackId, metadata = {}) {
+  const id = normalizeTrackId(trackId);
+  const state = await stateStore.load();
+  const itemState = stateStore.ensureItem(state, context.itemId);
+  const previous = itemState.tracks[id] || {};
+  itemState.tracks[id] = {
+    ...previous,
+    provider: metadata.provider || previous.provider || 'local',
+    providerId: metadata.providerId ?? previous.providerId ?? null,
+    sourceType: metadata.sourceType || previous.sourceType || 'generated',
+    sourceLabel: metadata.sourceLabel || previous.sourceLabel || 'Arquivo local · gerada pelo aplicativo',
+    appliedAt: nowIso(),
+    lastAppliedOffsetMs: Number(metadata.lastAppliedOffsetMs ?? previous.lastAppliedOffsetMs) || 0,
+    metadata: { ...(previous.metadata || {}), ...(metadata.metadata || {}) }
+  };
+  await stateStore.save(state);
+  return itemState.tracks[id];
+}
+
 async function restoreHistory(context, payload) {
   if (!context.activeWritable) {
     const error = new Error('Restaurar legenda exige um item ativo e gravavel.');
@@ -412,6 +519,10 @@ module.exports = {
   previewLocal,
   backupTrack,
   applyOffset,
+  replaceCues,
+  previewTimingTransform,
+  applyTimingTransform,
+  registerTrackMetadata,
   restoreHistory,
   deleteLocalSubtitle,
   streamMedia,

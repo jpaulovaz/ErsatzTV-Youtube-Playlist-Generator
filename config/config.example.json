@@ -1,5 +1,5 @@
 {
-  "configVersion": 10,
+  "configVersion": 11,
   "server": {
     "host": "0.0.0.0",
     "port": 3099
@@ -10,6 +10,7 @@
     "ytDlpPath": "/usr/local/bin/yt-dlp",
     "ffmpegPath": "/usr/bin/ffmpeg",
     "ffprobePath": "/usr/bin/ffprobe",
+    "tesseractPath": "/usr/bin/tesseract",
     "cookiesPath": ""
   },
   "downloads": {
