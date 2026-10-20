@@ -2485,9 +2485,10 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
 .subtitle-workspace-source-row > span { align-self: center; justify-self: end; }
 .subtitle-workspace-metrics { margin: 14px 0; }
 .subtitle-workspace-filterbar { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(160px, .55fr) minmax(260px, 1.5fr); gap: 10px; align-items: end; margin-bottom: 10px; }
-.subtitle-workspace-list { display: grid; gap: 8px; margin-top: 10px; }
+.subtitle-workspace-list { display: grid; gap: 12px; margin-top: 10px; }
 .subtitle-workspace-item { border: 1px solid var(--line-soft); border-radius: 10px; overflow: hidden; background: rgba(255,255,255,.02); }
 .subtitle-workspace-item.reviewed { opacity: .82; }
+.subtitle-workspace-item.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-border); }
 .subtitle-workspace-item-main { width: 100%; display: grid; grid-template-columns: 34px minmax(0,1fr) auto; gap: 10px; align-items: center; padding: 11px 12px; border: 0; background: transparent; text-align: left; color: inherit; }
 .subtitle-workspace-item-main:hover { background: rgba(255,255,255,.035); }
 .subtitle-workspace-item-index { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line-soft); border-radius: 8px; color: var(--muted); font-size: 11px; }
@@ -2501,6 +2502,7 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
 .subtitle-workspace-nav-copy { min-width: 0; display: grid; gap: 3px; }
 .subtitle-workspace-nav-copy > span, .subtitle-workspace-nav-copy > small { color: var(--muted); font-size: 10.5px; }
 .subtitle-workspace-nav-copy > strong, .subtitle-workspace-nav-copy > small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subtitle-workspace-inline-editor { display: grid; gap: 12px; min-width: 0; }
 #subtitleWorkspaceManagerPanel.subtitle-manager-panel { margin-top: 0; padding-top: 16px; border: 1px solid var(--line); }
 .subtitle-workspace-bazarr { display: grid; gap: 10px; }
 .subtitle-workspace-bazarr-results { display: grid; gap: 7px; }

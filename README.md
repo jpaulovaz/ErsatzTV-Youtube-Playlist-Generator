@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 4.1.1
+# ErsatzTV YouTube Downloader 4.1.2
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A linha v4 aplica ao **aplicativo inteiro** uma arquitetura orientada por tarefas. A v4.1.x acrescenta o grupo **Ferramentas** e transforma o editor de legendas já usado nas Bibliotecas em um workspace reutilizável para filmes e séries existentes em qualquer pasta autorizada, com integração opcional ao Bazarr. A v4.1.1 substitui o bloqueio rígido de caminhos amplos por uma confirmação explícita: mountpoints dedicados como `/gay_movies` podem ser usados normalmente, enquanto caminhos muito amplos exibem um aviso antes do cadastro.
+A linha v4 aplica ao **aplicativo inteiro** uma arquitetura orientada por tarefas. A v4.1.x acrescenta o grupo **Ferramentas** e transforma o editor de legendas já usado nas Bibliotecas em um workspace reutilizável para filmes e séries existentes em qualquer pasta autorizada, com integração opcional ao Bazarr. A v4.1.1 substituiu o bloqueio rígido de caminhos amplos por uma confirmação explícita. A v4.1.2 melhora a ergonomia do **Gerenciar legendas**: o editor passa a abrir diretamente abaixo do vídeo selecionado, sem exigir rolagem até o fim da lista, e os cards ganham maior espaçamento visual.
 
 ## Experiência v4
 

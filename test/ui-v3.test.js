@@ -842,3 +842,18 @@ test('v4.1 organiza Ferramentas e expoe Gerenciar legendas com Bazarr opcional',
   assert.match(help, /Bazarr é opcional/);
   assert.match(css, /subtitle-workspace/);
 });
+
+test('v4.1.2 abre o editor de legendas inline sob o item selecionado', () => {
+  const html = read('index.html');
+  const workspace = read('js/subtitleWorkspace.js');
+  const css = read('styles.css');
+
+  assert.match(html, /id="subtitleWorkspaceInlineEditor"/);
+  assert.match(workspace, /function placeInlineEditor\(itemId = state\.selectedItemId\)/);
+  assert.match(workspace, /article\.insertAdjacentElement\('afterend', host\)/);
+  assert.match(workspace, /function closeInlineEditor\(\)/);
+  assert.match(workspace, /event\.target\.closest\('\[data-subtitle-manager-close\]'\)/);
+  assert.match(css, /\.subtitle-workspace-list \{ display: grid; gap: 12px;/);
+  assert.match(css, /\.subtitle-workspace-item\.selected/);
+  assert.match(css, /\.subtitle-workspace-inline-editor \{ display: grid; gap: 12px;/);
+});

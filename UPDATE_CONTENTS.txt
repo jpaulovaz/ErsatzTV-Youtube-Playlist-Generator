@@ -1,12 +1,12 @@
-ErsatzTV YouTube Downloader 4.1.1 - pacote de atualização
-Base: v4.1.0
+ErsatzTV YouTube Downloader 4.1.2 - pacote de atualização
+Base: v4.1.1
 
-Este update corrige o cadastro de caminhos amplos em Ferramentas -> Gerenciar legendas:
-- mountpoints de primeiro nivel, como /gay_movies, deixam de ser bloqueados;
-- caminhos amplos geram um modal de alerta e podem ser confirmados pelo usuario;
-- a confirmacao e exigida somente no cadastro; as varreduras posteriores usam o workspace normalmente;
-- continuam bloqueados caminhos inexistentes, nao absolutos e raizes que sejam symlink;
-- o scanner continua sem seguir symlinks internos e as operacoes continuam confinadas a raiz cadastrada;
+Este update melhora a interface de Ferramentas -> Gerenciar legendas:
+- o editor passa a abrir imediatamente abaixo do video selecionado;
+- o bloco inline inclui navegacao, player, sincronizacao, historico e Bazarr opcional;
+- trocar de item reposiciona o mesmo editor sem rolagem automatica;
+- Fechar gerenciador encerra o contexto inline inteiro;
+- os cards da triagem recebem mais espacamento e o item aberto ganha destaque visual;
 - nenhum schema ou configVersion foi alterado.
 
 Arquivos incluidos:
@@ -16,13 +16,12 @@ UPGRADE.md
 package.json
 public/index.html
 public/login.html
+public/styles.css
 public/js/subtitleWorkspace.js
-src/tools/subtitleWorkspaceService.js
-test/subtitleWorkspace.test.js
 test/ui-v3.test.js
 MODIFIED_FILES.txt
 UPDATE_CONTENTS.txt
 
-Aplicacao v4.1.1, Universal v1.3.1, configVersion 10, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-workspace state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v4.1.2, Universal v1.3.1, configVersion 10, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-workspace state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 
 O pacote nao inclui config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/, tokens, estados operacionais, arquivos de midia ou sidecars.

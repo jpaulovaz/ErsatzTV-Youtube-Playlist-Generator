@@ -102,29 +102,81 @@
     }).join('') + (tracks.length > 5 ? `<span class="badge">+${tracks.length - 5}</span>` : '');
   }
 
+  function inlineEditorHost() {
+    return $('#subtitleWorkspaceInlineEditor');
+  }
+
+  function parkInlineEditorHost() {
+    const host = inlineEditorHost();
+    const list = $('#subtitleWorkspaceList');
+    if (!host || !list || host.parentElement !== list) return;
+    list.insertAdjacentElement('afterend', host);
+  }
+
+  function updateItemSelectionUi() {
+    const list = $('#subtitleWorkspaceList');
+    if (!list) return;
+    for (const article of list.querySelectorAll('[data-workspace-item]')) {
+      const selected = article.dataset.workspaceItem === state.selectedItemId;
+      article.classList.toggle('selected', selected);
+      const button = article.querySelector('[data-workspace-open]');
+      if (button) button.setAttribute('aria-expanded', selected ? 'true' : 'false');
+    }
+  }
+
+  function placeInlineEditor(itemId = state.selectedItemId) {
+    const host = inlineEditorHost();
+    const list = $('#subtitleWorkspaceList');
+    if (!host || !list || !itemId) return false;
+    const article = Array.from(list.querySelectorAll('[data-workspace-item]')).find((entry) => entry.dataset.workspaceItem === itemId);
+    if (!article) return false;
+    article.insertAdjacentElement('afterend', host);
+    host.classList.remove('hidden');
+    updateItemSelectionUi();
+    return true;
+  }
+
+  function closeInlineEditor() {
+    global.SubtitleManagerUI?.close?.();
+    state.selectedItemId = '';
+    state.bazarrCandidates = [];
+    state.bazarrMatch = null;
+    renderEditorNavigator();
+    renderBazarrArea();
+    parkInlineEditorHost();
+    inlineEditorHost()?.classList.add('hidden');
+    updateItemSelectionUi();
+  }
+
   function renderItems() {
     const list = $('#subtitleWorkspaceList');
     if (!list) return;
+    parkInlineEditorHost();
     state.itemMap = new Map(state.items.map((item) => [item.id, item]));
     if (!activeWorkspace()) {
       list.innerHTML = '<div class="empty-state"><strong>Cadastre uma pasta</strong><span>Informe uma pasta de filmes ou séries para localizar vídeos e suas legendas externas.</span></div>';
+      inlineEditorHost()?.classList.add('hidden');
       return;
     }
     if (!state.items.length) {
       const scanned = Boolean(activeWorkspace()?.lastScanAt);
       list.innerHTML = `<div class="empty-state"><strong>${scanned ? 'Nenhum vídeo neste filtro' : 'Pasta ainda não varrida'}</strong><span>${scanned ? 'Altere os filtros ou atualize a varredura.' : 'Clique em Atualizar varredura para catalogar vídeos e sidecars.'}</span></div>`;
+      if (!state.selectedItemId) inlineEditorHost()?.classList.add('hidden');
       return;
     }
     list.innerHTML = state.items.map((item, index) => {
       const reviewed = item.reviewStatus === 'reviewed';
-      return `<article class="subtitle-workspace-item ${reviewed ? 'reviewed' : ''}" data-workspace-item="${esc(item.id)}">
-        <button type="button" class="subtitle-workspace-item-main" data-workspace-open="${esc(item.id)}">
+      const selected = item.id === state.selectedItemId;
+      return `<article class="subtitle-workspace-item ${reviewed ? 'reviewed' : ''} ${selected ? 'selected' : ''}" data-workspace-item="${esc(item.id)}">
+        <button type="button" class="subtitle-workspace-item-main" data-workspace-open="${esc(item.id)}" aria-expanded="${selected ? 'true' : 'false'}">
           <span class="subtitle-workspace-item-index">${index + 1}</span>
           <span class="subtitle-workspace-item-copy"><strong>${esc(item.fileName)}</strong><small>${esc(item.relativePath)}</small><span class="subtitle-workspace-badges">${sidecarBadges(item)}</span></span>
           <span class="subtitle-workspace-review ${reviewed ? 'ok' : ''}">${reviewed ? '✓ Revisado' : 'Não revisado'}</span>
         </button>
       </article>`;
     }).join('');
+    if (state.selectedItemId && state.itemMap.has(state.selectedItemId)) placeInlineEditor(state.selectedItemId);
+    else updateItemSelectionUi();
   }
 
   function renderFiltersMeta(result) {
@@ -335,6 +387,7 @@
     state.selectedItemId = itemId;
     state.bazarrCandidates = [];
     state.bazarrMatch = null;
+    placeInlineEditor(itemId);
     renderEditorNavigator();
     global.SubtitleManagerUI?.setContext?.({
       item: { id: item.id, name: item.fileName, title: item.fileName, fileName: item.fileName },
@@ -374,7 +427,7 @@
     await loadItems();
     if (reviewed && advance && state.filter === 'unreviewed') {
       const next = state.items[Math.min(currentIndex, state.items.length - 1)];
-      if (next) await openItem(next.id); else { global.SubtitleManagerUI?.close?.(); state.selectedItemId = ''; renderEditorNavigator(); renderBazarrArea(); }
+      if (next) await openItem(next.id); else closeInlineEditor();
       return;
     }
     if (reviewed && advance) {
@@ -433,21 +486,28 @@
 
   function bind() {
     $('#subtitleWorkspaceSelect')?.addEventListener('change', async (event) => {
-      stopScanPolling(); state.activeWorkspaceId = event.target.value || ''; persistWorkspace(); state.selectedItemId = ''; global.SubtitleManagerUI?.close?.(); await loadItems(); if (state.activeWorkspaceId) await resumeScanPolling(state.activeWorkspaceId);
+      stopScanPolling(); closeInlineEditor(); state.activeWorkspaceId = event.target.value || ''; persistWorkspace(); await loadItems(); if (state.activeWorkspaceId) await resumeScanPolling(state.activeWorkspaceId);
     });
     $('#subtitleWorkspaceAdd')?.addEventListener('click', () => createWorkspace().catch((error) => toast(error.message, true)));
     $('#subtitleWorkspaceRemove')?.addEventListener('click', () => removeWorkspace().catch((error) => toast(error.message, true)));
     $('#subtitleWorkspaceScan')?.addEventListener('click', () => startScan().catch((error) => toast(error.message, true)));
     $('#subtitleWorkspaceMore')?.addEventListener('click', () => loadItems({ append: true }).catch((error) => toast(error.message, true)));
-    $('#subtitleWorkspaceFilter')?.addEventListener('change', async (event) => { state.filter = event.target.value; await loadItems(); });
-    $('#subtitleWorkspaceLanguage')?.addEventListener('change', async (event) => { state.language = event.target.value; await loadItems(); });
+    $('#subtitleWorkspaceFilter')?.addEventListener('change', async (event) => { closeInlineEditor(); state.filter = event.target.value; await loadItems(); });
+    $('#subtitleWorkspaceLanguage')?.addEventListener('change', async (event) => { closeInlineEditor(); state.language = event.target.value; await loadItems(); });
     let queryTimer = null;
     $('#subtitleWorkspaceQuery')?.addEventListener('input', (event) => {
+      closeInlineEditor();
       state.query = event.target.value || '';
       if (queryTimer) clearTimeout(queryTimer);
       queryTimer = setTimeout(() => loadItems().catch((error) => toast(error.message, true)), 250);
     });
     $('#view-subtitle-tools')?.addEventListener('click', (event) => {
+      if (event.target.closest('[data-subtitle-manager-close]')) {
+        event.preventDefault();
+        event.stopPropagation();
+        closeInlineEditor();
+        return;
+      }
       const open = event.target.closest('[data-workspace-open]');
       if (open) { openItem(open.dataset.workspaceOpen).catch((error) => toast(error.message, true)); return; }
       const nav = event.target.closest('[data-workspace-nav]');

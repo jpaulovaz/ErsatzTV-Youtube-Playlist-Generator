@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.1.2
+
+- Em **Ferramentas → Gerenciar legendas**, o editor deixa de abrir no fim da página e passa a ser inserido imediatamente abaixo do vídeo selecionado.
+- O mesmo bloco inline acompanha **Anterior/Próximo**, **Revisado e próximo**, player, controles de sincronização, histórico e integração Bazarr; trocar de item reposiciona o editor sem rolagem automática.
+- **Fechar gerenciador** agora encerra todo o contexto inline do workspace e devolve a lista ao estado normal.
+- Aumenta o espaçamento entre os cards da triagem e destaca visualmente o item atualmente aberto, melhorando a leitura da fila.
+- Nenhuma alteração de schema: aplicação **v4.1.2**, Universal **v1.3.1**, `configVersion` **10**, Download state **5**, Subtitle Manager state **1**, Subtitle Workspace state **1** e demais estados preservados.
+
 ## 4.1.1
 
 - Corrige o cadastro de workspaces de **Gerenciar legendas** em mountpoints diretamente sob a raiz, como `/gay_movies` ou `/movies`.
