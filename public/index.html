@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>ErsatzTV YouTube Downloader</title>
-  <link rel="icon" href="/brand-mark.svg?v=4.2.0" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=4.2.0&amp;rev=scripted-schedules-2">
-  <link rel="stylesheet" href="/scripted-schedules.css?v=4.2.0">
+  <link rel="icon" href="/brand-mark.svg?v=4.2.1" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=4.2.1&amp;rev=scripted-schedules-2">
+  <link rel="stylesheet" href="/scripted-schedules.css?v=4.2.1">
 </head>
 <body class="app-page">
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=4.2.0" alt=""></span>
+        <span class="brand-mark" aria-hidden="true"><img src="/brand-mark.svg?v=4.2.1" alt=""></span>
         <div class="brand-copy">
           <div class="title-line">
             <h1>ErsatzTV YouTube Downloader</h1>
-            <span id="versionBadge" class="version-badge">v4.2.0</span>
+            <span id="versionBadge" class="version-badge">v4.2.1</span>
           </div>
         </div>
       </div>
@@ -752,9 +752,37 @@
             </div>
           </details>
 
-          <details class="settings-accordion" data-settings-keywords="downloads qualidade resolução disco thumbnails scan">
+          <details class="settings-accordion" data-settings-keywords="reprodução player mkv streaming hardware gpu nvidia nvenc intel qsv vaapi amd amf videotoolbox">
             <summary>
               <span class="settings-index">02</span>
+              <span class="settings-summary-copy">
+                <strong>Reprodução de vídeos</strong><small>Streaming compatível e aceleração por hardware para o Gerenciador de Legendas.</small>
+              </span>
+              <span class="accordion-chevron" aria-hidden="true"></span>
+            </summary>
+            <div class="settings-panel">
+              <div class="form-grid two">
+                <label class="check-row wide"><input name="playback.liveCompatibilityStreaming" type="checkbox"><span>Usar streaming compatível em tempo real (recomendado para MKV e mídia remota)</span></label>
+                <label>Aceleração de vídeo
+                  <select name="playback.hardwareAcceleration">
+                    <option value="auto">Automática (recomendado)</option>
+                    <option value="off">Desativada · usar CPU</option>
+                    <option value="nvenc">NVIDIA NVENC</option>
+                    <option value="qsv">Intel Quick Sync</option>
+                    <option value="vaapi">VAAPI (Intel/AMD no Linux)</option>
+                    <option value="amf">AMD AMF</option>
+                    <option value="videotoolbox">Apple VideoToolbox</option>
+                  </select>
+                </label>
+                <label>Dispositivo VAAPI<input name="playback.vaapiDevice" type="text" placeholder="/dev/dri/renderD128"><small>Normalmente não precisa mudar. Só é usado quando VAAPI estiver ativo.</small></label>
+              </div>
+              <p class="settings-hint">Em modo Automático, o aplicativo testa os encoders do FFmpeg e usa GPU somente quando precisa converter vídeo. Se nada funcionar, volta para CPU. Quando apenas o áudio do MKV é incompatível, o vídeo é copiado sem recodificação e o AAC é criado enquanto você assiste.</p>
+            </div>
+          </details>
+
+          <details class="settings-accordion" data-settings-keywords="downloads qualidade resolução disco thumbnails scan">
+            <summary>
+              <span class="settings-index">03</span>
               <span class="settings-summary-copy">
                 <strong>Downloads</strong><small>Qualidade, reserva de disco e ações ao concluir.</small>
               </span>
@@ -784,7 +812,7 @@
           <div class="settings-group-label"><span>Integrações</span><small>Serviços externos usados pelo aplicativo.</small></div>
           <details class="settings-accordion" data-settings-keywords="youtube api key cache modo timeout">
             <summary>
-              <span class="settings-index">03</span>
+              <span class="settings-index">04</span>
               <span class="settings-summary-copy">
                 <strong>YouTube Data API</strong><small>Descoberta pública, cache e chave da API.</small>
               </span>
@@ -809,7 +837,7 @@
 
           <details class="settings-accordion" data-settings-keywords="ersatztv url api key conexão timeout">
             <summary>
-              <span class="settings-index">04</span>
+              <span class="settings-index">05</span>
               <span class="settings-summary-copy">
                 <strong>ErsatzTV</strong><small>Servidor, credencial e diagnóstico de conexão.</small>
               </span>
@@ -833,7 +861,7 @@
 
           <details id="bazarrSettings" class="settings-accordion" data-settings-keywords="bazarr legendas subtitles sonarr radarr api key caminho path mapping sincronização">
             <summary>
-              <span class="settings-index">05</span>
+              <span class="settings-index">06</span>
               <span class="settings-summary-copy"><strong>Bazarr</strong><small>Busca, download e sincronização opcionais para a ferramenta Gerenciar legendas.</small></span>
               <span class="accordion-chevron" aria-hidden="true"></span>
             </summary>
@@ -853,7 +881,7 @@
           <div class="settings-group-label"><span>Automação</span><small>Rotinas que funcionam sem intervenção manual.</small></div>
           <details class="settings-accordion" data-settings-keywords="agendador scheduler intervalo canais startup atualização periódica">
             <summary>
-              <span class="settings-index">06</span>
+              <span class="settings-index">07</span>
               <span class="settings-summary-copy">
                 <strong>Agendadores</strong><small>Busca periódica de Bibliotecas e atualização de Canais.</small>
               </span>
@@ -878,7 +906,7 @@
 
           <details class="settings-accordion" data-settings-keywords="tradução legendas gemini modelo batch concorrência timeout idioma bilíngue">
             <summary>
-              <span class="settings-index">07</span>
+              <span class="settings-index">08</span>
               <span class="settings-summary-copy"><strong>Tradução de legendas</strong><small>Gemini, idioma de destino e processamento em lote.</small></span>
               <span class="accordion-chevron" aria-hidden="true"></span>
             </summary>
@@ -902,7 +930,7 @@
           <div class="settings-group-label"><span>Avançado</span><small>Use somente quando precisar adaptar o yt-dlp ao seu ambiente.</small></div>
           <details class="settings-accordion settings-advanced" data-settings-keywords="yt-dlp avançado user agent runtime javascript deno node ejs">
             <summary>
-              <span class="settings-index">08</span>
+              <span class="settings-index">09</span>
               <span class="settings-summary-copy">
                 <strong>yt-dlp avançado</strong><small>Runtime, User-Agent e componentes EJS.</small>
               </span>
@@ -992,15 +1020,15 @@
   </dialog>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="/js/destinationForm.js?v=4.2.0"></script>
-  <script src="/js/channelsView.js?v=4.2.0&amp;rev=ersatztv-catalog-1"></script>
-  <script src="/js/scriptedScheduleEditorUtils.js?v=4.2.0"></script>
-  <script src="/js/scriptedSchedulesView.js?v=4.2.0"></script>
-  <script src="/js/helpView.js?v=4.2.0"></script>
-  <script src="/js/subtitleManager.js?v=4.2.0"></script>
-  <script src="/js/subtitleTranslation.js?v=4.2.0"></script>
-  <script src="/js/youtubeManager.js?v=4.2.0"></script>
-  <script src="/js/subtitleWorkspace.js?v=4.2.0"></script>
-  <script src="/app.js?v=4.2.0"></script>
+  <script src="/js/destinationForm.js?v=4.2.1"></script>
+  <script src="/js/channelsView.js?v=4.2.1&amp;rev=ersatztv-catalog-1"></script>
+  <script src="/js/scriptedScheduleEditorUtils.js?v=4.2.1"></script>
+  <script src="/js/scriptedSchedulesView.js?v=4.2.1"></script>
+  <script src="/js/helpView.js?v=4.2.1"></script>
+  <script src="/js/subtitleManager.js?v=4.2.1"></script>
+  <script src="/js/subtitleTranslation.js?v=4.2.1"></script>
+  <script src="/js/youtubeManager.js?v=4.2.1"></script>
+  <script src="/js/subtitleWorkspace.js?v=4.2.1"></script>
+  <script src="/app.js?v=4.2.1"></script>
 </body>
 </html>

@@ -12,7 +12,7 @@ const CONFIG_DIR = process.env.ERSATZTV_CONFIG_DIR
   ? path.resolve(process.env.ERSATZTV_CONFIG_DIR)
   : path.join(ROOT_DIR, 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
-const CONFIG_VERSION = 11;
+const CONFIG_VERSION = 12;
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const DEFAULT_MAX_HEIGHT = 1080;
@@ -20,6 +20,7 @@ const ALLOWED_MAX_HEIGHTS = new Set([360, 480, 720, 1080, 1440, 2160]);
 const JS_RUNTIME_MODES = new Set(['disabled', 'deno', 'node', 'custom']);
 const EJS_COMPONENT_OPTIONS = new Set(['none', 'ejs:github', 'ejs:npm']);
 const YOUTUBE_API_READ_MODES = new Set(['api', 'ytdlp']);
+const HARDWARE_ACCELERATION_MODES = new Set(['auto', 'off', 'nvenc', 'qsv', 'vaapi', 'amf', 'videotoolbox']);
 
 const DEFAULT_CONFIG = {
   configVersion: CONFIG_VERSION,
@@ -35,6 +36,11 @@ const DEFAULT_CONFIG = {
     ffprobePath: '/usr/bin/ffprobe',
     tesseractPath: '/usr/bin/tesseract',
     cookiesPath: ''
+  },
+  playback: {
+    liveCompatibilityStreaming: true,
+    hardwareAcceleration: 'auto',
+    vaapiDevice: '/dev/dri/renderD128'
   },
   downloads: {
     maxHeight: DEFAULT_MAX_HEIGHT,
@@ -238,6 +244,7 @@ function normalizeConfig(raw) {
   const rawConfig = raw && typeof raw === 'object' ? raw : {};
   const rawServer = rawConfig.server && typeof rawConfig.server === 'object' ? rawConfig.server : {};
   const rawPaths = rawConfig.paths && typeof rawConfig.paths === 'object' ? rawConfig.paths : {};
+  const rawPlayback = rawConfig.playback && typeof rawConfig.playback === 'object' ? rawConfig.playback : {};
   const rawApi = rawConfig.youtubeApi && typeof rawConfig.youtubeApi === 'object' ? rawConfig.youtubeApi : {};
   const rawErsatz = rawConfig.ersatztv && typeof rawConfig.ersatztv === 'object' ? rawConfig.ersatztv : {};
   const rawBazarr = rawConfig.bazarr && typeof rawConfig.bazarr === 'object' ? rawConfig.bazarr : {};
@@ -261,6 +268,13 @@ function normalizeConfig(raw) {
       ffprobePath: String(rawPaths.ffprobePath || DEFAULT_CONFIG.paths.ffprobePath).trim() || DEFAULT_CONFIG.paths.ffprobePath,
       tesseractPath: String(rawPaths.tesseractPath || DEFAULT_CONFIG.paths.tesseractPath).trim() || DEFAULT_CONFIG.paths.tesseractPath,
       cookiesPath: String(rawPaths.cookiesPath || '').trim()
+    },
+    playback: {
+      liveCompatibilityStreaming: rawPlayback.liveCompatibilityStreaming !== false,
+      hardwareAcceleration: HARDWARE_ACCELERATION_MODES.has(String(rawPlayback.hardwareAcceleration || '').trim().toLowerCase())
+        ? String(rawPlayback.hardwareAcceleration).trim().toLowerCase()
+        : DEFAULT_CONFIG.playback.hardwareAcceleration,
+      vaapiDevice: String(rawPlayback.vaapiDevice || DEFAULT_CONFIG.playback.vaapiDevice).trim() || DEFAULT_CONFIG.playback.vaapiDevice
     },
     downloads: buildDownloadsConfig(rawConfig),
     youtubeApi: {
@@ -413,6 +427,11 @@ async function loadConfig() {
     rawVersion = 11;
     migrated = true;
   }
+  if (rawVersion === 11) {
+    raw = { ...raw, configVersion: 12, playback: raw.playback && typeof raw.playback === 'object' ? raw.playback : clone(DEFAULT_CONFIG.playback) };
+    rawVersion = 12;
+    migrated = true;
+  }
   if (rawVersion !== CONFIG_VERSION) {
     throw new Error(`config.json usa configVersion ${raw.configVersion ?? 'ausente'}. Esta versao aceita configVersion ${CONFIG_VERSION}; atualize a configuracao por uma versao intermediaria compativel.`);
   }
@@ -438,6 +457,7 @@ module.exports = {
   JS_RUNTIME_MODES,
   EJS_COMPONENT_OPTIONS,
   YOUTUBE_API_READ_MODES,
+  HARDWARE_ACCELERATION_MODES,
   normalizeMaxHeight,
   normalizeConfig,
   normalizeBazarrPathMappings,

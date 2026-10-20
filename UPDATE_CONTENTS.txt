@@ -1,17 +1,17 @@
-ErsatzTV YouTube Downloader 4.2.0 - pacote de atualização
-Base: v4.1.2
+ErsatzTV YouTube Downloader 4.2.1 - pacote de atualização
+Base: v4.2.0
 
-Este update amplia Ferramentas -> Gerenciar legendas:
-- analise FFprobe e selecao de faixa de audio;
-- previa compativel para MKV/audio com AAC e fallback H.264 + AAC;
-- waveform e espectrograma sob demanda;
-- editor SRT cue por cue;
-- sincronizacao por dois pontos e correcao de FPS com preview;
-- extracao de legendas embutidas e conversao ASS/SSA/VTT para copia SRT;
-- traducao no workspace reutilizando o mesmo core Gemini das Bibliotecas;
-- OCR PGS/SUP via Tesseract;
-- criacao validada de copia MKV adicionando/removendo legenda, sem substituir o original;
-- Ajuda e Configuracoes atualizadas para os novos recursos.
+Este update reformula a reprodução do Gerenciador de Legendas para bibliotecas locais e remotas:
+- streaming compatível em tempo real, sem preparar um preview completo antes de tocar;
+- Direct Play para mídia já compatível;
+- Direct Stream para MKV/H.264 com vídeo em copy e áudio AAC convertido enquanto assiste;
+- transcode H.264 + AAC sob demanda quando o vídeo também é incompatível;
+- aceleração de vídeo com detecção/teste de NVENC, QSV, VAAPI, AMF e VideoToolbox;
+- fallback automático para CPU quando o hardware não estiver disponível ou falhar antes da saída;
+- linha do tempo absoluta e seek que reinicia o stream próximo do ponto escolhido;
+- troca de faixa de áudio preservando a posição atual;
+- preview completo mantido como fallback manual;
+- Configurações e Ajuda atualizadas para streaming e aceleração.
 
 Arquivos incluidos:
 CHANGELOG.md
@@ -27,30 +27,20 @@ public/js/subtitleManager.js
 scripts/verify-release.js
 src/config.js
 src/mediaPreviewService.js
-src/routes/subtitleManagerRoutes.js
 src/routes/subtitleWorkspaceRoutes.js
-src/subtitleManager/pgsOcr.js
-src/subtitleManager/subtitleCore.js
-src/subtitleManager/subtitleFormats.js
-src/subtitleManager/subtitleManagerService.js
-src/subtitleManager/subtitleTiming.js
-src/subtitleTranslation/translationService.js
 src/tools/subtitleWorkspaceAdvanced.js
 src/tools/subtitleWorkspaceService.js
 test/channels.test.js
 test/config.test.js
 test/configFile.test.js
-test/pgsOcr.test.js
-test/subtitleFormats.test.js
-test/subtitleManager.test.js
-test/subtitleTranslation.test.js
+test/mediaPreviewService.test.js
 test/subtitleWorkspace.test.js
 test/ui-v3.test.js
 MODIFIED_FILES.txt
 UPDATE_CONTENTS.txt
 
-Aplicacao v4.2.0, Universal v1.3.1, configVersion 11, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-workspace state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
+Aplicacao v4.2.1, Universal v1.3.1, configVersion 12, Scripted Schedules schema 1, download state 5, subtitle-manager state 1, subtitle-workspace state 1, subtitle-translation config/state 1, youtube-manager state 1, youtube-account config/state 1, adoption transaction state 1.
 
-A migracao 10 -> 11 adiciona somente paths.tesseractPath com padrao /usr/bin/tesseract. OCR e opcional; os demais recursos do Gerenciador de Legendas continuam funcionando sem Tesseract.
+A migracao 11 -> 12 adiciona apenas playback.liveCompatibilityStreaming=true, playback.hardwareAcceleration=auto e playback.vaapiDevice=/dev/dri/renderD128. Nenhum backend de GPU e obrigatorio; sem hardware validado o aplicativo usa CPU.
 
 O pacote nao inclui config/config.json, config/auth.json, config/subtitle-translation.json, config/youtube-account.json, data/, tokens, estados operacionais, arquivos de midia ou sidecars.

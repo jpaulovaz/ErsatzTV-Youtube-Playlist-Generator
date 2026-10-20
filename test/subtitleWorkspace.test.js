@@ -250,9 +250,14 @@ test('workspace detecta MKV H264+DTS como audio-transcode e cria preview AAC esc
     const workspace = await service.createWorkspace({ name: 'MKV audio', rootPath: root });
     await service.startScan(workspace.id); await waitForScan(workspace.id);
     const item = (await service.listItems(workspace.id, {})).items.find((entry) => entry.fileName === 'Movie.mkv');
-    const cfg = { paths: { ffprobePath: ffprobe, ffmpegPath: ffmpeg }, bazarr: { enabled: false, url: '', apiKey: '', pathMappings: [] } };
+    const cfg = {
+      paths: { ffprobePath: ffprobe, ffmpegPath: ffmpeg },
+      playback: { liveCompatibilityStreaming: true, hardwareAcceleration: 'off', vaapiDevice: '/dev/dri/renderD128' },
+      bazarr: { enabled: false, url: '', apiKey: '', pathMappings: [] }
+    };
     const status = await service.getItemStatus(cfg, item.id);
     assert.equal(status.mediaProbe.playback.mode, 'audio-transcode');
+    assert.equal(status.mediaProbe.playback.liveCompatibilityStreaming, true);
     assert.equal(status.mediaProbe.audioStreams[0].codec, 'dts');
     assert.ok(Math.abs(status.mediaProbe.frameRate - 23.976) < 0.01);
     const preview = await service.createCompatiblePreview(cfg, { itemId: item.id, audioStreamIndex: 1 });

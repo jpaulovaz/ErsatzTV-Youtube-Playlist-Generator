@@ -3,7 +3,7 @@ const workspaceService = require('../tools/subtitleWorkspaceService');
 const EDITOR_ACTIONS = new Set([
   'content-media', 'subtitle-status', 'subtitle-preview-local', 'subtitle-offset',
   'subtitle-cues-save', 'subtitle-timing-preview', 'subtitle-timing-apply',
-  'subtitle-restore', 'subtitle-delete', 'content-preview-create', 'audio-visualization-create'
+  'subtitle-restore', 'subtitle-delete', 'content-preview-create', 'audio-visualization-create', 'content-live'
 ]);
 
 function decodePart(value) {
@@ -15,6 +15,13 @@ async function handleEditorAction(req, res, url, deps, config, action) {
   const queryId = String(url.searchParams.get('id') || '').trim();
   if ((req.method === 'GET' || req.method === 'HEAD') && action === 'content-media') {
     await workspaceService.streamMedia(config, queryId, req, res, url.searchParams.get('previewToken') || '');
+    return true;
+  }
+  if ((req.method === 'GET' || req.method === 'HEAD') && action === 'content-live') {
+    await workspaceService.streamCompatibleMedia(config, queryId, req, res, {
+      audioStreamIndex: url.searchParams.get('audioStreamIndex'),
+      startSeconds: url.searchParams.get('start')
+    });
     return true;
   }
   if (req.method === 'GET' && action === 'subtitle-status') {

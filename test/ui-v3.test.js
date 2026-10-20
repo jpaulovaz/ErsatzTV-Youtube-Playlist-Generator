@@ -868,7 +868,13 @@ test('v4.2 amplia a oficina de legendas com compatibilidade, edicao e ferramenta
   const ocr = fs.readFileSync(path.join(__dirname, '..', 'src', 'subtitleManager', 'pgsOcr.js'), 'utf8');
 
   assert.match(html, /name="paths\.tesseractPath"/);
+  assert.match(html, /name="playback\.liveCompatibilityStreaming"/);
+  assert.match(html, /name="playback\.hardwareAcceleration"/);
+  assert.match(html, /name="playback\.vaapiDevice"/);
   assert.match(manager, /id="subtitleManagerAudioStream"/);
+  assert.match(manager, /\/content-live/);
+  assert.match(manager, /subtitleManagerLiveTimeline/);
+  assert.match(manager, /Streaming em tempo real ativo/);
   assert.match(manager, /audio-visualization-create/);
   assert.match(manager, /Waveform/);
   assert.match(manager, /Espectrograma/);

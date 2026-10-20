@@ -38,7 +38,9 @@
     toolAction: null,
     activeJob: null,
     jobTimer: null,
-    playerTime: 0
+    playerTime: 0,
+    liveStreamBaseSeconds: 0,
+    liveStreamActive: false
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -147,9 +149,15 @@
       return;
     }
     const Ctor = cueCtor();
+    const baseMs = state.liveStreamActive ? Math.round((Number(state.liveStreamBaseSeconds) || 0) * 1000) : 0;
     for (const cue of visiblePreviewCues()) {
-      const start = Math.max(0, (Number(cue.startMs) + state.previewOffsetMs) / 1000);
-      const rawEnd = Math.max(0, (Number(cue.endMs) + state.previewOffsetMs) / 1000);
+      const absoluteStartMs = Number(cue.startMs) + state.previewOffsetMs;
+      const absoluteEndMs = Number(cue.endMs) + state.previewOffsetMs;
+      const shiftedStartMs = absoluteStartMs - baseMs;
+      const shiftedEndMs = absoluteEndMs - baseMs;
+      if (shiftedEndMs <= 0) continue;
+      const start = Math.max(0, shiftedStartMs / 1000);
+      const rawEnd = Math.max(0, shiftedEndMs / 1000);
       const end = Math.max(start + 0.25, rawEnd);
       try { track.addCue(new Ctor(start, end, String(cue.text || ''))); } catch {}
     }
@@ -180,13 +188,22 @@
   function mediaUrl() {
     if (!state.item || !state.endpointBase) return '';
     const params = new URLSearchParams({ id: state.item.id });
-    if (state.previewToken) params.set('previewToken', state.previewToken);
+    if (state.previewToken) {
+      params.set('previewToken', state.previewToken);
+      return `${state.endpointBase}/content-media?${params.toString()}`;
+    }
+    if (useLiveCompatibilityPlayback()) {
+      if (state.audioStreamIndex != null) params.set('audioStreamIndex', String(state.audioStreamIndex));
+      params.set('start', String(Math.max(0, Number(state.liveStreamBaseSeconds) || 0)));
+      return `${state.endpointBase}/content-live?${params.toString()}`;
+    }
     return `${state.endpointBase}/content-media?${params.toString()}`;
   }
 
   function loadPlayerSource() {
     const video = $('#subtitleManagerVideo');
     if (!video || !state.status?.mediaAvailable) return;
+    state.liveStreamActive = useLiveCompatibilityPlayback();
     video.src = mediaUrl();
     video.load();
   }
@@ -197,6 +214,76 @@
 
   function getMediaProbe() {
     return state.status?.mediaProbe || {};
+  }
+
+  function defaultAudioStream() {
+    const streams = availableAudioStreams();
+    return streams.find((entry) => entry.default) || streams[0] || null;
+  }
+
+  function selectedAudioDiffersFromDefault() {
+    const base = defaultAudioStream();
+    if (!base || state.audioStreamIndex == null) return false;
+    return Number(base.streamIndex) !== Number(state.audioStreamIndex);
+  }
+
+  function useLiveCompatibilityPlayback() {
+    if (!isWorkspaceMode() || state.previewToken) return false;
+    const playback = getMediaProbe().playback || {};
+    if (playback.liveCompatibilityStreaming === false) return false;
+    return playback.mode !== 'direct' || selectedAudioDiffersFromDefault();
+  }
+
+  function playerMediaTime(video = $('#subtitleManagerVideo')) {
+    if (!video || !Number.isFinite(Number(video.currentTime))) return Math.max(0, Number(state.playerTime) || 0);
+    const local = Math.max(0, Number(video.currentTime) || 0);
+    return state.liveStreamActive ? Math.max(0, (Number(state.liveStreamBaseSeconds) || 0) + local) : local;
+  }
+
+  function formatPlayerClock(seconds) {
+    const total = Math.max(0, Math.floor(Number(seconds) || 0));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    return hours > 0
+      ? `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+      : `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+
+  function updateLiveTimelineUi() {
+    const input = $('#subtitleManagerLiveTimeline');
+    const value = $('#subtitleManagerLiveTimelineValue');
+    const duration = Math.max(0, Number(state.status?.durationSeconds || getMediaProbe().durationSeconds) || 0);
+    const current = Math.max(0, Math.min(duration || Infinity, Number(state.playerTime) || 0));
+    if (input && document.activeElement !== input) input.value = String(current);
+    if (value) value.textContent = `${formatPlayerClock(current)} / ${formatPlayerClock(duration)}`;
+  }
+
+  function seekPlayerToMediaTime(seconds, autoplay = true) {
+    const duration = Math.max(0, Number(state.status?.durationSeconds || getMediaProbe().durationSeconds) || 0);
+    const target = Math.max(0, duration > 0 ? Math.min(Number(seconds) || 0, Math.max(0, duration - 0.05)) : (Number(seconds) || 0));
+    const video = $('#subtitleManagerVideo');
+    state.playerTime = target;
+    if (!video) return;
+    if (useLiveCompatibilityPlayback()) {
+      state.liveStreamBaseSeconds = target;
+      state.liveStreamActive = true;
+      state.textTrack = null;
+      video.src = mediaUrl();
+      video.load();
+      video.addEventListener('loadedmetadata', () => {
+        renderPreviewCues();
+        updateLiveTimelineUi();
+        if (autoplay) video.play().catch(() => {});
+      }, { once: true });
+      return;
+    }
+    state.liveStreamActive = false;
+    try {
+      video.currentTime = target;
+      if (autoplay) video.play().catch(() => {});
+    } catch {}
+    updateLiveTimelineUi();
   }
 
   function availableAudioStreams() {
@@ -294,26 +381,47 @@
           ${streams.map((stream) => `<option value="${esc(stream.streamIndex)}" ${Number(stream.streamIndex) === Number(state.audioStreamIndex) ? 'selected' : ''}>${esc(audioStreamLabel(stream))}</option>`).join('')}
         </select>
       </label>` : '<span class="subtitle-manager-player-note">Nenhuma faixa de áudio foi detectada.</span>';
+    const hardware = state.advancedStatus?.playback?.hardwareAcceleration || {};
+    const liveEnabled = playback.liveCompatibilityStreaming !== false;
     let message = 'O arquivo será reproduzido diretamente pelo navegador.';
     let tone = 'ok';
-    let buttonLabel = 'Criar prévia compatível';
+    let buttonLabel = 'Criar preview completo (opcional)';
     if (state.previewToken) {
-      message = 'Prévia compatível ativa. O vídeo original permanece intocado.';
+      message = 'Preview completo ativo. O vídeo original permanece intocado.';
       tone = 'ok';
-      buttonLabel = 'Recriar prévia compatível';
+      buttonLabel = 'Recriar preview completo';
+    } else if (useLiveCompatibilityPlayback() && playback.mode === 'audio-transcode' && !selectedAudioDiffersFromDefault()) {
+      message = 'Streaming em tempo real ativo: o vídeo é mantido sem recodificação e somente o áudio é convertido para AAC enquanto você assiste. Não é necessário preparar o filme inteiro.';
+      tone = 'ok';
+    } else if (useLiveCompatibilityPlayback()) {
+      const acceleration = hardware.available ? `${hardware.label} será usado quando o vídeo precisar ser convertido.` : 'Se o vídeo precisar ser convertido, o fallback será feito pela CPU.';
+      message = `Streaming em tempo real ativo. ${acceleration}`;
+      tone = hardware.available ? 'ok' : 'warn';
     } else if (playback.mode === 'audio-transcode') {
-      message = 'Este arquivo pode ficar sem som no navegador. O app prepara automaticamente uma prévia com áudio AAC, sem alterar o original.';
+      message = liveEnabled ? 'Este arquivo precisa de áudio compatível.' : 'Streaming em tempo real está desativado; use um preview completo com áudio AAC.';
       tone = 'warn';
-      buttonLabel = 'Preparar áudio compatível agora';
+      buttonLabel = 'Preparar preview com áudio AAC';
     } else if (playback.mode === 'full-transcode') {
-      message = 'Este vídeo usa container ou codec que pode não funcionar no navegador. Uma prévia H.264 + AAC resolve a reprodução sem alterar o original.';
+      message = liveEnabled ? 'Este vídeo precisa de conversão para o navegador.' : 'Streaming em tempo real está desativado; crie um preview H.264 + AAC.';
       tone = 'warn';
-      buttonLabel = 'Criar prévia H.264 + AAC';
+      buttonLabel = 'Criar preview H.264 + AAC';
     }
     return `<div class="subtitle-manager-playback-tools">
       <div class="subtitle-manager-playback-copy ${tone}"><strong>Compatibilidade de reprodução</strong><span>${esc(message)}</span></div>
       ${audioSelect}
       <button id="subtitleManagerCompatiblePreview" type="button" class="small">${esc(buttonLabel)}</button>
+    </div>`;
+  }
+
+  function liveTimelineHtml() {
+    if (!useLiveCompatibilityPlayback()) return '';
+    const duration = Math.max(0, Number(state.status?.durationSeconds || 0));
+    if (!duration) return '';
+    const current = Math.max(0, Math.min(duration, Number(state.playerTime) || 0));
+    return `<div class="subtitle-manager-live-timeline">
+      <div class="subtitle-manager-live-timeline-head"><strong>Linha do tempo do vídeo</strong><span id="subtitleManagerLiveTimelineValue">${esc(`${formatPlayerClock(current)} / ${formatPlayerClock(duration)}`)}</span></div>
+      <input id="subtitleManagerLiveTimeline" type="range" min="0" max="${esc(duration)}" step="0.25" value="${esc(current)}" aria-label="Ir para um ponto do vídeo">
+      <small>O áudio compatível é criado enquanto você assiste. Arrastar esta linha reinicia o stream diretamente no ponto escolhido, sem preparar o filme inteiro.</small>
     </div>`;
   }
 
@@ -558,8 +666,9 @@
     const root = panel();
     if (!root || !state.status) return;
     const existingVideo = $('#subtitleManagerVideo');
-    if (existingVideo && Number.isFinite(existingVideo.currentTime)) state.playerTime = existingVideo.currentTime;
+    if (existingVideo && Number.isFinite(existingVideo.currentTime)) state.playerTime = playerMediaTime(existingVideo);
     ensureAudioSelection();
+    if (useLiveCompatibilityPlayback()) state.liveStreamBaseSeconds = Math.max(0, Number(state.playerTime) || 0);
     const tracks = state.status.tracks || [];
     const current = tracks.length ? tracks.map((track) => `${localTrackTitle(track)}: ${track.sourceLabel}`).join(' · ') : 'Sem legenda';
     const hasProviders = Boolean(state.status?.providers?.youtube?.available || state.status?.providers?.lrclib?.available);
@@ -576,6 +685,7 @@
             <span id="subtitleManagerPreviewLabel">${state.preview ? esc(`${state.preview.sourceLabel || 'Prévia'} · ${state.preview.language || state.targetLanguage}`) : 'Nenhuma faixa em prévia'}</span>
             <span class="subtitle-manager-player-note">O player é apenas para conferência; o arquivo original não é alterado.</span>
           </div>
+          ${liveTimelineHtml()}
           ${playerCompatibilityHtml()}` : '<div class="subtitle-manager-empty">Arquivo de vídeo local indisponível para reprodução.</div>'}
       </div>
 
@@ -627,11 +737,17 @@
       const video = $('#subtitleManagerVideo');
       if (video) {
         video.addEventListener('loadedmetadata', () => {
-          if (Number.isFinite(state.playerTime) && state.playerTime > 0 && state.playerTime < (video.duration || Infinity)) {
+          if (!state.liveStreamActive && Number.isFinite(state.playerTime) && state.playerTime > 0 && state.playerTime < (video.duration || Infinity)) {
             try { video.currentTime = state.playerTime; } catch {}
           }
+          renderPreviewCues();
+          updateLiveTimelineUi();
         }, { once: true });
-        video.addEventListener('timeupdate', () => { if (Number.isFinite(video.currentTime)) state.playerTime = video.currentTime; });
+        video.addEventListener('timeupdate', () => {
+          if (!Number.isFinite(video.currentTime)) return;
+          state.playerTime = playerMediaTime(video);
+          updateLiveTimelineUi();
+        });
         video.addEventListener('error', () => {
           const button = $('#subtitleManagerCompatiblePreview');
           if (button) { button.classList.remove('hidden'); button.classList.add('attention'); }
@@ -706,6 +822,8 @@
     state.toolAction = null;
     state.activeJob = null;
     state.playerTime = 0;
+    state.liveStreamBaseSeconds = 0;
+    state.liveStreamActive = false;
     const root = panel();
     if (root) { root.classList.add('hidden'); root.innerHTML = ''; }
   }
@@ -915,8 +1033,9 @@
   }
 
   async function maybeEnsureCompatiblePlayback() {
-    if (!isWorkspaceMode() || state.previewToken) return;
+    if (!isWorkspaceMode() || state.previewToken || useLiveCompatibilityPlayback()) return;
     const playback = getMediaProbe().playback || {};
+    if (playback.liveCompatibilityStreaming !== false) return;
     if (playback.mode !== 'audio-transcode') return;
     const key = `${state.item?.id || ''}:${state.audioStreamIndex ?? 'default'}:copy`;
     if (state.compatibilityKey === key) return;
@@ -943,11 +1062,11 @@
   function seekFromVisualization(event) {
     const image = event.target.closest('[data-subtitle-visualization-seek]');
     const video = $('#subtitleManagerVideo');
-    if (!image || !video || !Number.isFinite(video.duration) || !video.duration) return;
+    const duration = Math.max(0, Number(state.status?.durationSeconds || 0));
+    if (!image || !video || !duration) return;
     const rect = image.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)));
-    video.currentTime = ratio * video.duration;
-    video.play().catch(() => {});
+    seekPlayerToMediaTime(ratio * duration, true);
   }
 
   function seekCue(index) {
@@ -956,7 +1075,7 @@
     if (!cue || !video) return;
     state.selectedCueIndex = Number(index);
     state.playerTime = Math.max(0, cue.startMs / 1000);
-    try { video.currentTime = state.playerTime; video.play().catch(() => {}); } catch {}
+    seekPlayerToMediaTime(state.playerTime, true);
     for (const row of document.querySelectorAll('[data-cue-row]')) row.classList.toggle('selected', Number(row.dataset.cueRow) === state.selectedCueIndex);
   }
 
@@ -1065,8 +1184,9 @@
   function captureSyncMedia(point) {
     const video = $('#subtitleManagerVideo');
     if (!video || !Number.isFinite(video.currentTime)) return toast('O player ainda não possui um tempo válido.', true);
-    state.syncPoints[point].mediaMs = Math.round(video.currentTime * 1000);
-    state.playerTime = video.currentTime;
+    const mediaTime = playerMediaTime(video);
+    state.syncPoints[point].mediaMs = Math.round(mediaTime * 1000);
+    state.playerTime = mediaTime;
     render();
   }
 
@@ -1226,8 +1346,20 @@
     if (event.target.closest('#subtitleManagerCompatiblePreview')) { createCompatiblePreview(); }
   });
 
+  document.addEventListener('input', (event) => {
+    if (event.target.id !== 'subtitleManagerLiveTimeline') return;
+    const value = $('#subtitleManagerLiveTimelineValue');
+    const duration = Math.max(0, Number(state.status?.durationSeconds || 0));
+    const current = Math.max(0, Math.min(duration || Infinity, Number(event.target.value) || 0));
+    if (value) value.textContent = `${formatPlayerClock(current)} / ${formatPlayerClock(duration)}`;
+  });
+
   document.addEventListener('change', (event) => {
-    if (event.target.id === 'subtitleManagerProvider') {
+    if (event.target.id === 'subtitleManagerLiveTimeline') {
+      const video = $('#subtitleManagerVideo');
+      const autoplay = Boolean(video && !video.paused);
+      seekPlayerToMediaTime(Number(event.target.value) || 0, autoplay);
+    } else if (event.target.id === 'subtitleManagerProvider') {
       state.provider = event.target.value;
       state.searchResults = [];
       const root = panel(); if (root) render();
@@ -1242,11 +1374,20 @@
       setPreviewOffset(Number(event.target.value) * 1000);
     } else if (event.target.id === 'subtitleManagerAudioStream') {
       const video = $('#subtitleManagerVideo');
-      if (video && Number.isFinite(video.currentTime)) state.playerTime = video.currentTime;
+      if (video && Number.isFinite(video.currentTime)) state.playerTime = playerMediaTime(video);
       state.audioStreamIndex = Number(event.target.value);
       state.previewToken = '';
       state.compatibilityKey = '';
-      createCompatiblePreview({ silent: false }).catch((error) => toast(error.message, true));
+      if (useLiveCompatibilityPlayback()) {
+        state.liveStreamBaseSeconds = Math.max(0, Number(state.playerTime) || 0);
+        state.textTrack = null;
+        loadPlayerSource();
+        const currentVideo = $('#subtitleManagerVideo');
+        currentVideo?.addEventListener('loadedmetadata', () => { renderPreviewCues(); currentVideo.play().catch(() => {}); }, { once: true });
+        toast('Faixa de áudio alterada. O stream foi reiniciado no mesmo ponto.');
+      } else {
+        createCompatiblePreview({ silent: false }).catch((error) => toast(error.message, true));
+      }
     } else if (event.target.matches('[data-subtitle-cue-time], [data-subtitle-cue-text]')) {
       updateCueDraftField(event.target);
     } else if (event.target.matches('[data-sync-field]')) {

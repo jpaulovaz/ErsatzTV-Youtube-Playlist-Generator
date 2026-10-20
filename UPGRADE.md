@@ -1,12 +1,12 @@
-# Atualização para 4.2.0
+# Atualização para 4.2.1
 
-A versão 4.2.0 parte da **v4.1.2** e transforma **Ferramentas → Gerenciar legendas** em uma oficina completa de conferência, edição, conversão e preparação de legendas. O foco é permitir que uma pessoa sem conhecimento de codecs ou contêineres consiga assistir, ouvir, extrair, traduzir e corrigir uma legenda sem alterar o arquivo de vídeo original por acidente.
+A versão 4.2.1 parte da **v4.2.0** e reformula a reprodução usada em **Ferramentas → Gerenciar legendas** para evitar a preparação antecipada de um preview completo quando o navegador não consegue reproduzir o áudio de um MKV. O foco é especialmente útil em bibliotecas montadas por rclone ou outros storages remotos: a compatibilidade é produzida enquanto o usuário assiste e a navegação para outro ponto reinicia o stream próximo daquele instante.
 
 ## Versionamento
 
-- aplicação: **v4.2.0**;
+- aplicação: **v4.2.1**;
 - Universal Scripted Schedules: **v1.3.1**;
-- `configVersion`: **11**;
+- `configVersion`: **12**;
 - Download state: **5**;
 - Subtitle Manager state: **1**;
 - Subtitle Workspace state: **1**;
@@ -15,77 +15,96 @@ A versão 4.2.0 parte da **v4.1.2** e transforma **Ferramentas → Gerenciar leg
 - YouTube Account config/state: **1**;
 - Adoption transaction state: **1**.
 
-A única migração de configuração desta versão é `configVersion 10 → 11`, adicionando `paths.tesseractPath` com o padrão `/usr/bin/tesseract`. Não há migração dos arquivos de estado.
+A única migração de schema é `configVersion 11 → 12`, adicionando o bloco `playback`. Não há migração dos arquivos de estado.
 
-## O que muda
+## O que muda na reprodução
 
-### Reprodução de MKV e áudio
+O Gerenciador de Legendas passa a escolher entre três caminhos:
 
-Ao abrir um vídeo no Gerenciador de Legendas, o FFprobe identifica contêiner, vídeo e faixas de áudio. A interface mostra a faixa de áudio escolhida e decide entre três comportamentos:
+1. **Direct Play** — usa o arquivo original quando ele já é adequado ao navegador.
+2. **Direct Stream** — para casos como MKV/H.264 + DTS/AC3, mantém o vídeo sem recodificação e converte apenas o áudio para AAC em tempo real.
+3. **Transcode em tempo real** — quando o vídeo também precisa de conversão, produz H.264 + AAC enquanto o usuário assiste. A aplicação tenta um encoder por hardware e volta automaticamente para CPU se o teste real do acelerador falhar.
 
-- reprodução direta quando o navegador deve suportar o arquivo;
-- prévia compatível com **vídeo copiado + áudio AAC** quando o vídeo já é adequado, mas o contêiner/áudio pode falhar no navegador;
-- prévia **H.264 + AAC** sob comando do usuário quando também é necessário converter o vídeo.
+O preview completo da v4.2.0 continua disponível como **fallback manual**. Ele deixa de ser a primeira opção para MKV com áudio incompatível.
 
-O botão de prévia compatível permanece disponível como alternativa manual. O arquivo original não é substituído.
+### Navegação/seek
 
-### Edição e sincronização avançada
+O stream compatível não precisa preparar o filme inteiro. O editor mostra uma linha do tempo referente à duração completa da mídia. Ao saltar para outro ponto, o processo atual é encerrado e um novo stream começa próximo do tempo escolhido, mantendo a legenda referenciada ao relógio absoluto do filme.
 
-- waveform e espectrograma gerados sob demanda pelo FFmpeg;
-- clique na visualização para navegar até o ponto correspondente do vídeo;
-- editor de cues SRT com início, fim e texto;
-- sincronização por dois pontos com pré-visualização antes de salvar;
-- correção explícita de FPS com pré-visualização;
-- histórico/fingerprint continuam protegendo contra sobrescrita de alterações externas.
+Isso reduz leitura e processamento desnecessários em arquivos remotos, embora a latência final continue dependendo do próprio rclone, da origem remota, do cache e da conexão.
 
-### Extração, conversão, tradução e OCR
+## Aceleração por hardware
 
-- faixas textuais embutidas podem ser extraídas para SRT;
-- ASS/SSA/VTT externos podem gerar uma **cópia SRT editável**, preservando o original;
-- SRT externo pode ser traduzido no próprio workspace usando o mesmo núcleo Gemini das Bibliotecas;
-- PGS/SUP pode ser convertido para SRT por OCR com Tesseract;
-- idioma desconhecido (`und`) exige confirmação do usuário em vez de ser presumido.
+Em **Configurações → Reprodução de vídeos**, o padrão é:
 
-A conversão ASS/SSA → SRT simplifica recursos que SRT não representa, como estilos, posicionamento, karaokê e efeitos. Por isso o arquivo original é sempre preservado.
+- **Streaming compatível em tempo real:** ativado;
+- **Aceleração:** `Automático (recomendado)`;
+- **Dispositivo VAAPI:** `/dev/dri/renderD128`.
 
-### Cópias MKV
+O modo automático procura encoders compatíveis na build do FFmpeg e executa um pequeno teste antes de selecionar o backend. A aplicação reconhece, quando disponíveis:
 
-O menu das faixas permite criar uma **nova cópia MKV** adicionando uma legenda externa ou removendo uma legenda embutida. O fluxo usa stream copy, preserva metadados/capítulos, valida a nova cópia com FFprobe e remove o resultado se a validação falhar. O arquivo original não é substituído.
+- NVIDIA NVENC;
+- Intel Quick Sync (QSV);
+- VAAPI em Linux (Intel/AMD);
+- AMD AMF;
+- Apple VideoToolbox.
 
-## Dependência opcional para OCR
+Se nenhum backend for validado, o aplicativo usa `libx264` por CPU. Falha de aceleração **não impede** a reprodução.
 
-O restante do Gerenciador de Legendas funciona sem Tesseract. Para usar **OCR de PGS/SUP**, instale o Tesseract no host/container do aplicativo e confirme o caminho em **Configurações → Caminho do Tesseract OCR**.
+A aceleração é usada quando há necessidade de recodificar vídeo. No caso mais eficiente — vídeo já compatível e apenas áudio incompatível — o vídeo continua em stream copy e somente o áudio é convertido para AAC pela CPU.
 
-Para conferir a instalação:
+## Preciso configurar algo extra?
 
-```bash
-/usr/bin/tesseract --version
-/usr/bin/tesseract --list-langs
+### Instalação direta no host
+
+Na configuração padrão, **não é necessário alterar nada no aplicativo**. Se o FFmpeg instalado enxergar um acelerador funcional, `Automático` o utilizará. Caso contrário, haverá fallback para CPU.
+
+### Docker / container
+
+Para usar GPU dentro de um container, o dispositivo e o runtime precisam estar disponíveis para o container. Isso é uma configuração do ambiente, não uma obrigação da aplicação.
+
+**Intel/AMD em Linux (VAAPI/QSV):** normalmente é necessário expor `/dev/dri` e garantir que o usuário do processo tenha permissão sobre os dispositivos `render`/`video`. Exemplo conceitual de Compose:
+
+```yaml
+devices:
+  - /dev/dri:/dev/dri
 ```
 
-Pacotes de idioma precisam existir no Tesseract para o idioma desejado. Quando o pacote solicitado não estiver disponível, a interface/backend aplica o fallback disponível e informa o idioma OCR usado no resultado.
+Se o render node do host for diferente, ajuste **Dispositivo VAAPI** na interface.
 
-## Atualização
+**NVIDIA:** é necessário que o host possua driver NVIDIA, que o container tenha acesso à GPU (normalmente via NVIDIA Container Toolkit/runtime) e que a build do FFmpeg contenha NVENC. A aplicação não instala drivers nem modifica o runtime Docker.
 
-Pare o serviço e faça o backup normal da instalação. Depois extraia o update por cima da **v4.1.2**:
+Se você não quiser configurar GPU agora, mantenha **Automático**. O aplicativo continuará funcionando pela CPU.
 
-```bash
-unzip -o /caminho/ErsatzTV-YouTube-Downloader-v4.1.2-to-v4.2.0-update.zip -d /caminho/da/aplicacao
-```
+### rclone
 
-Reinicie o serviço. No primeiro carregamento, `configVersion 10` é convertido automaticamente para `11` e recebe:
+Não há configuração nova obrigatória para rclone. O ganho vem do fato de o aplicativo deixar de exigir a geração antecipada do preview completo. Cache/VFS e parâmetros próprios do rclone continuam sob controle da sua montagem atual.
+
+## Migração automática
+
+Ao iniciar a v4.2.1 sobre uma configuração v11, é acrescentado:
 
 ```json
 {
-  "paths": {
-    "tesseractPath": "/usr/bin/tesseract"
+  "playback": {
+    "liveCompatibilityStreaming": true,
+    "hardwareAcceleration": "auto",
+    "vaapiDevice": "/dev/dri/renderD128"
   }
 }
 ```
 
-Os demais valores existentes são preservados.
+Todos os demais valores existentes são preservados.
 
-Por fim, valide:
+## Atualização
+
+Pare o serviço e faça o backup normal da instalação. Depois extraia o update por cima da **v4.2.0**:
+
+```bash
+unzip -o /caminho/ErsatzTV-YouTube-Downloader-v4.2.0-to-v4.2.1-update.zip -d /caminho/da/aplicacao
+```
+
+Reinicie o serviço e, se desejar, confira **Configurações → Reprodução de vídeos**. Para validar os arquivos do projeto:
 
 ```bash
 npm run verify

@@ -2,17 +2,28 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
-const { runCommand } = require('./processUtils');
+const { spawn } = require('child_process');
+const { runCommand, killProcessTree } = require('./processUtils');
 const { PREVIEW_DIR } = require('./subtitleManager/subtitleManagerState');
 
 const PREVIEW_TTL_MS = 30 * 60 * 1000;
+const HARDWARE_CACHE_TTL_MS = 10 * 60 * 1000;
 const previews = new Map();
+const hardwareCache = new Map();
 let cleanupStarted = false;
 
 const MIME_TYPES = {
   '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm', '.mkv': 'video/x-matroska',
   '.mov': 'video/quicktime', '.avi': 'video/x-msvideo', '.ts': 'video/mp2t', '.png': 'image/png'
 };
+
+const HARDWARE_PROFILES = Object.freeze({
+  nvenc: { encoder: 'h264_nvenc', label: 'NVIDIA NVENC' },
+  qsv: { encoder: 'h264_qsv', label: 'Intel Quick Sync' },
+  vaapi: { encoder: 'h264_vaapi', label: 'VAAPI' },
+  amf: { encoder: 'h264_amf', label: 'AMD AMF' },
+  videotoolbox: { encoder: 'h264_videotoolbox', label: 'Apple VideoToolbox' }
+});
 
 async function ensureCleanPreviewDir() {
   if (cleanupStarted) return;
@@ -21,11 +32,15 @@ async function ensureCleanPreviewDir() {
   await fsp.mkdir(PREVIEW_DIR, { recursive: true });
 }
 
-
 function normalizeOptionalStreamIndex(value) {
   if (value === null || value === undefined || value === '') return null;
   const numeric = Number(value);
   return Number.isInteger(numeric) && numeric >= 0 ? numeric : null;
+}
+
+function normalizeHardwareMode(value) {
+  const mode = String(value || 'auto').trim().toLowerCase();
+  return ['auto', 'off', ...Object.keys(HARDWARE_PROFILES)].includes(mode) ? mode : 'auto';
 }
 
 function contentType(filePath) {
@@ -97,6 +112,219 @@ async function registerPreviewFile({ itemId, filePath, kind = 'media', metadata 
   return { token, kind, metadata, expiresAt: new Date(expiresAtMs).toISOString() };
 }
 
+function autoHardwareCandidates() {
+  if (process.platform === 'darwin') return ['videotoolbox'];
+  if (process.platform === 'win32') return ['nvenc', 'qsv', 'amf'];
+  return ['nvenc', 'qsv', 'vaapi', 'amf'];
+}
+
+function hardwareSmokeArgs(mode, vaapiDevice) {
+  const common = ['-hide_banner', '-loglevel', 'error'];
+  const source = ['-f', 'lavfi', '-i', 'color=c=black:s=64x64:r=1', '-frames:v', '1'];
+  if (mode === 'vaapi') {
+    return [...common, '-vaapi_device', vaapiDevice, ...source, '-vf', 'format=nv12,hwupload', '-c:v', 'h264_vaapi', '-f', 'null', '-'];
+  }
+  if (mode === 'qsv') return [...common, ...source, '-vf', 'format=nv12', '-c:v', 'h264_qsv', '-f', 'null', '-'];
+  if (mode === 'nvenc') return [...common, ...source, '-c:v', 'h264_nvenc', '-f', 'null', '-'];
+  if (mode === 'amf') return [...common, ...source, '-c:v', 'h264_amf', '-f', 'null', '-'];
+  if (mode === 'videotoolbox') return [...common, ...source, '-c:v', 'h264_videotoolbox', '-f', 'null', '-'];
+  return [];
+}
+
+async function detectHardwareAcceleration(config, options = {}) {
+  const requested = normalizeHardwareMode(config?.playback?.hardwareAcceleration);
+  const ffmpegPath = String(config?.paths?.ffmpegPath || 'ffmpeg');
+  const vaapiDevice = String(config?.playback?.vaapiDevice || '/dev/dri/renderD128');
+  const cacheKey = `${ffmpegPath}|${requested}|${vaapiDevice}`;
+  const cached = hardwareCache.get(cacheKey);
+  if (!options.refresh && cached && Date.now() - cached.cachedAtMs < HARDWARE_CACHE_TTL_MS) return { ...cached.value };
+
+  const base = {
+    requested,
+    available: false,
+    selected: 'software',
+    encoder: 'libx264',
+    label: 'CPU (libx264)',
+    fallback: false,
+    reason: requested === 'off' ? 'A aceleracao por hardware esta desativada.' : 'Nenhum acelerador compativel foi validado.',
+    attempted: [],
+    testedAt: new Date().toISOString()
+  };
+  if (requested === 'off') {
+    hardwareCache.set(cacheKey, { cachedAtMs: Date.now(), value: base });
+    return { ...base };
+  }
+
+  const encoderList = await runCommand(ffmpegPath, ['-hide_banner', '-encoders'], { timeoutMs: 5000 }).catch((error) => ({ code: -1, stdout: '', stderr: error.message }));
+  const advertised = `${encoderList.stdout || ''}\n${encoderList.stderr || ''}`;
+  const candidates = requested === 'auto' ? autoHardwareCandidates() : [requested];
+  for (const mode of candidates) {
+    const profile = HARDWARE_PROFILES[mode];
+    if (!profile) continue;
+    if (!advertised.includes(profile.encoder)) {
+      base.attempted.push({ mode, ok: false, reason: `${profile.encoder} nao aparece na build do FFmpeg.` });
+      continue;
+    }
+    const smoke = await runCommand(ffmpegPath, hardwareSmokeArgs(mode, vaapiDevice), { timeoutMs: 5000 }).catch((error) => ({ code: -1, stderr: error.message }));
+    if (smoke.code === 0 && !smoke.timedOut) {
+      const value = {
+        ...base,
+        available: true,
+        selected: mode,
+        encoder: profile.encoder,
+        label: profile.label,
+        reason: requested === 'auto' ? `${profile.label} validado automaticamente.` : `${profile.label} validado.`,
+        attempted: [...base.attempted, { mode, ok: true, reason: 'Teste de encode concluido.' }]
+      };
+      hardwareCache.set(cacheKey, { cachedAtMs: Date.now(), value });
+      return { ...value };
+    }
+    const reason = String(smoke.stderr || '').trim().split('\n').slice(-2).join(' ').slice(0, 300) || 'Teste do encoder falhou.';
+    base.attempted.push({ mode, ok: false, reason });
+  }
+
+  base.fallback = requested !== 'auto';
+  if (requested !== 'auto') base.reason = `${HARDWARE_PROFILES[requested]?.label || requested} nao ficou disponivel; o aplicativo usara CPU.`;
+  hardwareCache.set(cacheKey, { cachedAtMs: Date.now(), value: base });
+  return { ...base };
+}
+
+function softwareVideoArgs() {
+  return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p'];
+}
+
+function hardwareVideoArgs(hardware, config) {
+  const mode = hardware?.selected || 'software';
+  if (mode === 'nvenc') return ['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', '23', '-b:v', '0', '-pix_fmt', 'yuv420p'];
+  if (mode === 'qsv') return ['-vf', 'format=nv12', '-c:v', 'h264_qsv', '-preset', 'veryfast', '-global_quality', '23'];
+  if (mode === 'vaapi') return ['-vf', 'format=nv12,hwupload', '-c:v', 'h264_vaapi', '-qp', '23'];
+  if (mode === 'amf') return ['-c:v', 'h264_amf', '-quality', 'speed', '-rc', 'cqp', '-qp_i', '23', '-qp_p', '23'];
+  if (mode === 'videotoolbox') return ['-c:v', 'h264_videotoolbox', '-realtime', '1', '-b:v', '6000k', '-pix_fmt', 'yuv420p'];
+  return softwareVideoArgs(config);
+}
+
+function buildLiveStreamArgs({ mediaPath, audioStreamIndex = null, startSeconds = 0, copyVideo = false, hardware = null, config = {} }) {
+  const start = Math.max(0, Number(startSeconds) || 0);
+  const selectedAudioStreamIndex = normalizeOptionalStreamIndex(audioStreamIndex);
+  const audioMap = selectedAudioStreamIndex != null ? `0:${selectedAudioStreamIndex}?` : '0:a:0?';
+  const args = ['-hide_banner', '-loglevel', 'warning'];
+  const useCopy = copyVideo && start < 0.25;
+  const preciseSeek = start >= 0.25;
+  let fineSeek = 0;
+  if (preciseSeek) {
+    const fastSeek = Math.max(0, start - 5);
+    fineSeek = start - fastSeek;
+    if (fastSeek > 0) args.push('-ss', fastSeek.toFixed(3));
+  }
+  if (!useCopy && hardware?.selected === 'vaapi') args.push('-vaapi_device', String(config?.playback?.vaapiDevice || '/dev/dri/renderD128'));
+  args.push('-i', mediaPath);
+  if (fineSeek > 0) args.push('-ss', fineSeek.toFixed(3));
+  args.push('-map', '0:v:0', '-map', audioMap, '-sn', '-dn', '-map_metadata', '-1');
+  if (useCopy) args.push('-c:v', 'copy');
+  else args.push(...hardwareVideoArgs(hardware, config));
+  args.push('-c:a', 'aac', '-b:a', '192k', '-ac', '2', '-max_muxing_queue_size', '2048', '-movflags', 'frag_keyframe+default_base_moof+omit_tfhd_offset', '-f', 'mp4', 'pipe:1');
+  return { args, mode: useCopy ? 'audio-transcode-live' : (hardware?.selected && hardware.selected !== 'software' ? 'hardware-transcode-live' : 'software-transcode-live'), preciseSeek };
+}
+
+function liveHeaders(metadata) {
+  return {
+    'Content-Type': 'video/mp4',
+    'Cache-Control': 'private, no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Accel-Buffering': 'no',
+    'X-ErsatzTV-Playback-Mode': metadata.mode,
+    'X-ErsatzTV-Hardware': metadata.hardware || 'software'
+  };
+}
+
+function spawnLiveAttempt({ command, args, req, res, metadata }) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { shell: false, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
+    let started = false;
+    let finished = false;
+    let stderr = '';
+
+    const detachListeners = () => {
+      req.off('aborted', abort);
+      res.off('close', abort);
+    };
+    const abort = () => {
+      if (finished) return;
+      killProcessTree(child);
+    };
+    req.once('aborted', abort);
+    res.once('close', abort);
+
+    child.stderr.on('data', (chunk) => {
+      stderr = `${stderr}${chunk.toString()}`.slice(-12000);
+    });
+    child.on('error', (error) => {
+      finished = true;
+      detachListeners();
+      reject(error);
+    });
+    child.stdout.once('data', (firstChunk) => {
+      if (finished || req.aborted || res.destroyed) return;
+      started = true;
+      if (!res.headersSent) res.writeHead(200, liveHeaders(metadata));
+      res.write(firstChunk);
+      child.stdout.pipe(res);
+    });
+    child.on('close', (code, signal) => {
+      finished = true;
+      detachListeners();
+      if (started) {
+        if (!res.writableEnded && !res.destroyed) res.end();
+        resolve({ started: true, code, signal, stderr });
+        return;
+      }
+      resolve({ started: false, code, signal, stderr });
+    });
+  });
+}
+
+async function streamCompatibleMedia({ config, req, res, mediaPath, audioStreamIndex = null, startSeconds = 0, copyVideo = false }) {
+  const start = Math.max(0, Number(startSeconds) || 0);
+  const selectedAudioStreamIndex = normalizeOptionalStreamIndex(audioStreamIndex);
+  const hardware = copyVideo && start < 0.25
+    ? { selected: 'software', encoder: 'copy', label: 'Video original', available: false }
+    : await detectHardwareAcceleration(config);
+  let build = buildLiveStreamArgs({ mediaPath, audioStreamIndex: selectedAudioStreamIndex, startSeconds: start, copyVideo, hardware, config });
+
+  if (req.method === 'HEAD') {
+    res.writeHead(200, liveHeaders({ mode: build.mode, hardware: hardware.selected }));
+    res.end();
+    return { mode: build.mode, hardware };
+  }
+
+  let result = await spawnLiveAttempt({
+    command: String(config?.paths?.ffmpegPath || 'ffmpeg'),
+    args: build.args,
+    req,
+    res,
+    metadata: { mode: build.mode, hardware: hardware.selected }
+  });
+
+  if (!result.started && hardware.selected !== 'software' && !req.aborted && !res.destroyed) {
+    const fallback = { selected: 'software', encoder: 'libx264', label: 'CPU (libx264)', available: false, fallback: true };
+    build = buildLiveStreamArgs({ mediaPath, audioStreamIndex: selectedAudioStreamIndex, startSeconds: start, copyVideo: false, hardware: fallback, config });
+    result = await spawnLiveAttempt({
+      command: String(config?.paths?.ffmpegPath || 'ffmpeg'),
+      args: build.args,
+      req,
+      res,
+      metadata: { mode: build.mode, hardware: 'software' }
+    });
+  }
+
+  if (!result.started && !res.headersSent && !res.destroyed) {
+    const message = String(result.stderr || '').trim().split('\n').slice(-5).join('\n').slice(0, 3000) || `ffmpeg terminou com codigo ${result.code}`;
+    res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(`Nao foi possivel iniciar a reproducao compativel.\n${message}`);
+  }
+  return { mode: build.mode, hardware, started: result.started };
+}
+
 async function createCompatiblePreview({ config, itemId, mediaPath, audioStreamIndex = null, copyVideo = false }) {
   await ensureCleanPreviewDir();
   purgeExpired();
@@ -154,6 +382,7 @@ async function createAudioVisualization({ config, itemId, mediaPath, audioStream
 
 async function clearAllPreviews() {
   previews.clear();
+  hardwareCache.clear();
   await fsp.rm(PREVIEW_DIR, { recursive: true, force: true }).catch(() => {});
   cleanupStarted = false;
 }
@@ -165,4 +394,21 @@ function resolvePreview(token, itemId) {
   return entry;
 }
 
-module.exports = { PREVIEW_TTL_MS, normalizeOptionalStreamIndex, streamFile, createCompatiblePreview, createAudioVisualization, resolvePreview, ensureCleanPreviewDir, clearAllPreviews, contentType, parseRange };
+module.exports = {
+  PREVIEW_TTL_MS,
+  HARDWARE_CACHE_TTL_MS,
+  normalizeOptionalStreamIndex,
+  normalizeHardwareMode,
+  streamFile,
+  streamCompatibleMedia,
+  createCompatiblePreview,
+  createAudioVisualization,
+  resolvePreview,
+  ensureCleanPreviewDir,
+  clearAllPreviews,
+  contentType,
+  parseRange,
+  detectHardwareAcceleration,
+  buildLiveStreamArgs,
+  hardwareVideoArgs
+};

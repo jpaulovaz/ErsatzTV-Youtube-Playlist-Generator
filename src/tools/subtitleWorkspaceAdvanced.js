@@ -486,7 +486,23 @@ async function getAdvancedStatus(config) {
     tesseract = { available: languages.length > 0, languages };
   } catch {}
   const translation = translationConfig.publicStatus(await translationConfig.load());
-  return { tesseract, translation };
+  const hardwareAcceleration = await mediaPreview.detectHardwareAcceleration(config).catch((error) => ({
+    requested: String(config?.playback?.hardwareAcceleration || 'auto'),
+    available: false,
+    selected: 'software',
+    encoder: 'libx264',
+    label: 'CPU (libx264)',
+    fallback: true,
+    reason: String(error?.message || error)
+  }));
+  return {
+    tesseract,
+    translation,
+    playback: {
+      liveCompatibilityStreaming: config?.playback?.liveCompatibilityStreaming !== false,
+      hardwareAcceleration
+    }
+  };
 }
 
 module.exports = {

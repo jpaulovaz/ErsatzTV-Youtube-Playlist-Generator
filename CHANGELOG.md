@@ -1,5 +1,18 @@
 # Changelog
 
+## 4.2.1
+
+- Troca a preparação antecipada de preview compatível por **streaming de compatibilidade em tempo real** no Gerenciador de Legendas, reduzindo espera e leitura desnecessária em bibliotecas locais e remotas/rclone.
+- Mantém **Direct Play** para arquivos compatíveis e adiciona **Direct Stream** para MKV/H.264 com áudio incompatível: vídeo em stream copy e áudio AAC produzido enquanto o usuário assiste.
+- Quando o vídeo também exige conversão, o stream H.264 + AAC é produzido sob demanda e pode usar encoder por hardware; se a validação do acelerador ou a tentativa de transcode falhar antes de iniciar a saída, o backend volta automaticamente para CPU.
+- Adiciona detecção com teste real para NVIDIA NVENC, Intel QSV, VAAPI, AMD AMF e Apple VideoToolbox, de acordo com plataforma, build do FFmpeg e dispositivos expostos ao processo.
+- Adiciona uma linha do tempo absoluta para streams compatíveis: ao saltar para outro instante, o FFmpeg reinicia próximo do ponto solicitado e as cues continuam sincronizadas ao tempo real do filme.
+- Selecionar outra faixa de áudio preserva a posição atual e reinicia o stream compatível em vez de gerar um arquivo de áudio/preview completo.
+- O **preview completo** permanece disponível como fallback manual para mídias ou conexões que se beneficiem de um arquivo temporário completo.
+- Adiciona em **Configurações → Reprodução de vídeos** o streaming em tempo real, modo de aceleração (`auto/off/nvenc/qsv/vaapi/amf/videotoolbox`) e dispositivo VAAPI.
+- `configVersion` sobe de **11 para 12** somente para acrescentar o bloco `playback`; a migração é automática e ativa `liveCompatibilityStreaming`, `hardwareAcceleration: auto` e `/dev/dri/renderD128` como VAAPI padrão.
+- Aplicação **v4.2.1**, Universal **v1.3.1**, `configVersion` **12**; Download state **5**, Subtitle Manager state **1**, Subtitle Workspace state **1**, Subtitle Translation config/state **1**, YouTube Manager state **1**, YouTube Account config/state **1** e Adoption transaction state **1** permanecem nos schemas atuais.
+
 ## 4.2.0
 
 - Expande **Ferramentas → Gerenciar legendas** para uma oficina completa, mantendo o editor inline introduzido na v4.1.2 e priorizando ações guiadas para usuários não técnicos.

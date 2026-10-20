@@ -2529,6 +2529,11 @@ progress.mini-progress::-moz-progress-bar { background: var(--accent); }
 .subtitle-manager-section-head h4, .subtitle-manager-section-head h5 { margin:0; }
 .subtitle-manager-section-head p { margin:0; color:var(--muted); font-size:9.5px; max-width:720px; line-height:1.45; }
 .subtitle-manager-player-note { color:var(--muted); font-size:9px; }
+.subtitle-manager-live-timeline { display:grid; gap:6px; padding:9px; border:1px solid rgba(255,255,255,.075); border-radius:9px; background:rgba(255,255,255,.018); }
+.subtitle-manager-live-timeline-head { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:10px; }
+.subtitle-manager-live-timeline-head span { color:var(--muted); font-variant-numeric:tabular-nums; }
+.subtitle-manager-live-timeline input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
+.subtitle-manager-live-timeline small { color:var(--muted); font-size:9px; line-height:1.45; }
 .subtitle-manager-playback-tools { display:grid; grid-template-columns:minmax(0,1fr) minmax(220px,360px) auto; align-items:end; gap:9px; padding:9px; border:1px solid rgba(255,255,255,.075); border-radius:9px; background:rgba(255,255,255,.025); }
 .subtitle-manager-playback-copy { display:grid; gap:3px; min-width:0; }
 .subtitle-manager-playback-copy strong { font-size:10px; }

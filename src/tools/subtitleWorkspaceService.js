@@ -445,7 +445,16 @@ async function getItemStatus(config, itemId) {
     providers: {},
     queryDefaults: { artist: '', track: context.item.fileName, album: '' },
     durationSeconds: probe.durationSeconds,
-    mediaProbe: { container: probe.container || '', videoStreams: probe.videoStreams || [], audioStreams: probe.audioStreams || [], frameRate: probe.frameRate || null, playback: probe.playback || null },
+    mediaProbe: {
+      container: probe.container || '',
+      videoStreams: probe.videoStreams || [],
+      audioStreams: probe.audioStreams || [],
+      frameRate: probe.frameRate || null,
+      playback: {
+        ...(probe.playback || {}),
+        liveCompatibilityStreaming: config?.playback?.liveCompatibilityStreaming !== false
+      }
+    },
     probeError: probe.error || null,
     workspace: publicWorkspace(context.workspace),
     reviewStatus: context.item.reviewStatus,
@@ -495,6 +504,35 @@ async function deleteLocalSubtitle(config, payload) {
 async function streamMedia(config, itemId, req, res, previewToken = '') {
   const context = await buildContext(config, itemId);
   return subtitleCore.streamMedia(context, req, res, previewToken);
+}
+
+
+async function streamCompatibleMedia(config, itemId, req, res, options = {}) {
+  const context = await buildContext(config, itemId);
+  const probe = await probeMedia(config, context.workspace, context.item, context.mediaPath);
+  if (config?.playback?.liveCompatibilityStreaming === false) {
+    const error = new Error('Streaming compativel em tempo real esta desativado nas Configuracoes.');
+    error.statusCode = 409;
+    throw error;
+  }
+  const requestedAudioIndex = mediaPreview.normalizeOptionalStreamIndex(options.audioStreamIndex);
+  const validAudio = requestedAudioIndex == null
+    ? null
+    : (probe.audioStreams || []).find((stream) => Number(stream.streamIndex) === requestedAudioIndex);
+  const defaultAudio = (probe.audioStreams || []).find((stream) => stream.default) || (probe.audioStreams || [])[0] || null;
+  const audioStreamIndex = validAudio ? requestedAudioIndex : (defaultAudio ? Number(defaultAudio.streamIndex) : null);
+  const duration = Number(probe.durationSeconds) || 0;
+  const requestedStart = Math.max(0, Number(options.startSeconds) || 0);
+  const startSeconds = duration > 0 ? Math.min(requestedStart, Math.max(0, duration - 0.05)) : requestedStart;
+  return mediaPreview.streamCompatibleMedia({
+    config,
+    req,
+    res,
+    mediaPath: context.mediaPath,
+    audioStreamIndex,
+    startSeconds,
+    copyVideo: Boolean(probe.playback?.copyVideoPossible)
+  });
 }
 
 async function createCompatiblePreview(config, payload) {
@@ -724,6 +762,7 @@ module.exports = {
   restoreHistory,
   deleteLocalSubtitle,
   streamMedia,
+  streamCompatibleMedia,
   createCompatiblePreview,
   createVisualization,
   extractEmbeddedTrack,

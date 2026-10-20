@@ -26,6 +26,7 @@ function currentConfig(overrides = {}) {
       ffprobePath: '/usr/bin/ffprobe',
       cookiesPath: ''
     },
+    playback: { liveCompatibilityStreaming: true, hardwareAcceleration: 'auto', vaapiDevice: '/dev/dri/renderD128' },
     downloads: {
       maxHeight: 720,
       jsRuntimeMode: 'deno',
@@ -50,7 +51,7 @@ function currentConfig(overrides = {}) {
   };
 }
 
-test('normalizes the current v11 configuration without legacy fallbacks', () => {
+test('normalizes the current v12 configuration without legacy fallbacks', () => {
   const config = normalizeConfig(currentConfig({
     paths: {
       ...currentConfig().paths,
@@ -59,8 +60,11 @@ test('normalizes the current v11 configuration without legacy fallbacks', () => 
     playlists: [library({ libraryId: 27, channelNumber: 421, channelName: 'JohnFlix', mediaProfile: 'music_clips' })]
   }));
 
-  assert.equal(config.configVersion, 11);
+  assert.equal(config.configVersion, 12);
   assert.equal(config.paths.cookiesPath, '/srv/secrets/cookies.txt');
+  assert.equal(config.playback.liveCompatibilityStreaming, true);
+  assert.equal(config.playback.hardwareAcceleration, 'auto');
+  assert.equal(config.playback.vaapiDevice, '/dev/dri/renderD128');
   assert.equal(config.downloads.maxHeight, 720);
   assert.equal(config.downloads.concurrentDownloads, 1);
   assert.equal(config.playlists[0].libraryId, 27);

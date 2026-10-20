@@ -1,8 +1,8 @@
-# ErsatzTV YouTube Downloader 4.2.0
+# ErsatzTV YouTube Downloader 4.2.1
 
 Aplicativo Node.js para descobrir conteúdo do YouTube, manter uma fila persistente de downloads locais e entregar mídia pronta ao ErsatzTV.
 
-A linha v4 aplica ao **aplicativo inteiro** uma arquitetura orientada por tarefas. A v4.1.x criou o grupo **Ferramentas** e transformou o editor de legendas em um workspace reutilizável para filmes e séries de qualquer pasta autorizada. A **v4.2.0** amplia esse workspace para uma oficina completa: compatibilidade de reprodução para MKV/áudio, seleção de faixa sonora, waveform/espectrograma, edição de cues, sincronização por dois pontos/FPS, extração de faixas embutidas, conversão textual para SRT, tradução Gemini, OCR de PGS/SUP e criação segura de cópias MKV.
+A linha v4 aplica ao **aplicativo inteiro** uma arquitetura orientada por tarefas. A v4.1.x criou o grupo **Ferramentas** e transformou o editor de legendas em um workspace reutilizável para filmes e séries de qualquer pasta autorizada. A v4.2.0 ampliou esse workspace para uma oficina completa de extração, tradução, OCR, remux e sincronização. A **v4.2.1** torna a reprodução mais adequada a bibliotecas locais e remotas (inclusive rclone): MKV com áudio incompatível passa a ser transmitido em tempo real, sem gerar antecipadamente um preview completo, e transcodificações de vídeo podem usar aceleração de hardware com fallback automático para CPU.
 
 ## Experiência v4
 
@@ -140,7 +140,29 @@ O projeto não usa dependências npm externas nesta versão; `npm install` não 
 
 Use o pacote `update`, extraindo-o por cima da instalação atual. Esse pacote não contém `config/config.json`, `config/auth.json` nem o conteúdo de `data/`, portanto preserva configuração, autenticação e estado operacional.
 
-A **v4.2.0** atualiza diretamente uma instalação **v4.1.2**. `configVersion` sobe de 10 para 11 somente para acrescentar `paths.tesseractPath`, usado pelo OCR opcional de PGS/SUP. A migração é automática e preserva os demais valores e estados. Consulte [UPGRADE.md](UPGRADE.md).
+A **v4.2.1** atualiza diretamente uma instalação **v4.2.0**. `configVersion` sobe de 11 para 12 para acrescentar as preferências de reprodução em tempo real e aceleração de hardware. A migração é automática, ativa o streaming compatível e usa detecção de hardware em modo `auto`; se nenhum acelerador funcionar, a aplicação usa CPU sem impedir a reprodução. Consulte [UPGRADE.md](UPGRADE.md).
+
+## Reprodução compatível em tempo real
+
+Em **Ferramentas → Gerenciar legendas**, a v4.2.1 prefere não criar um arquivo compatível completo antes de tocar. O fluxo é:
+
+- **Direct Play** quando navegador, contêiner, vídeo e áudio já são adequados;
+- **Direct Stream** para MKV/H.264 com áudio incompatível: o vídeo é copiado e somente o áudio é convertido para AAC enquanto a reprodução acontece;
+- **Transcode em tempo real** quando o próprio vídeo precisa de conversão. Nesse caso a aplicação tenta o encoder de hardware configurado/descoberto e usa `libx264` por CPU se o teste falhar.
+
+O player possui uma linha do tempo do filme inteiro. Ao pular para outro ponto, o stream é reiniciado próximo daquele instante em vez de preparar todos os minutos anteriores. O **preview completo** permanece disponível como fallback manual para mídias ou conexões problemáticas.
+
+Configurações novas (`configVersion` 12):
+
+```json
+"playback": {
+  "liveCompatibilityStreaming": true,
+  "hardwareAcceleration": "auto",
+  "vaapiDevice": "/dev/dri/renderD128"
+}
+```
+
+`hardwareAcceleration: "auto"` testa o encoder de verdade antes de usá-lo. São reconhecidos NVENC (NVIDIA), Quick Sync/QSV (Intel), VAAPI (Linux Intel/AMD), AMF (AMD) e VideoToolbox (macOS), conforme o suporte da build do FFmpeg e o acesso do processo ao dispositivo. Nenhum desses backends é obrigatório.
 
 ## Gerenciador do YouTube
 
